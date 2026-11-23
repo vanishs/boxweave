@@ -427,6 +427,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if err != nil {
 				return nil, state.Receipt{}, err
 			}
+			// Preserve the admitted caller intent for legacy replay; materialize
+			// the default only for an actually new native Create.
+			in.InstanceOptions = in.InstanceOptions.ForCreate()
 			var nativeID string
 			var reserved native.VerifiedStaticPeerBinding
 			effect := func(ctx context.Context) (string, error) {

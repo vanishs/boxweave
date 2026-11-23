@@ -31,3 +31,21 @@ func TestCreateNativeResourceShapeMustMatchOriginalIntent(t *testing.T) {
 		})
 	}
 }
+
+func TestPR178CreateShapeRequiresPersistedAutostartDefault(t *testing.T) {
+	in := createBoxInput{Name: "autostart-default", CPU: 2, MemoryMiB: 768, DiskGiB: 4}
+	in.InstanceOptions = in.InstanceOptions.ForCreate()
+	observed := native.BoxState{CPU: "2", Memory: "768MiB", RootDiskSize: "4GiB",
+		NativeOptions: map[string]string{"boot.autostart": "true"}}
+	if !exactCreateNativeShape(observed, in) {
+		t.Fatal("valid native default rejected")
+	}
+	observed.NativeOptions["boot.autostart"] = "false"
+	if exactCreateNativeShape(observed, in) {
+		t.Fatal("native false accepted for default true")
+	}
+	delete(observed.NativeOptions, "boot.autostart")
+	if exactCreateNativeShape(observed, in) {
+		t.Fatal("native unset accepted for default true")
+	}
+}
