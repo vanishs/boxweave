@@ -99,19 +99,6 @@ func main() {
 		WHERE operation_id=? AND resource_key LIKE 'create-pin:%'`, original.OriginalID).Scan(&pins)
 	check(err == nil && pins == 4, "original modern Create is missing one or more address reservations")
 
-	db, err := sql.Open("sqlite3", "file:"+copiedDB+"?mode=ro&_foreign_keys=on")
-	check(err == nil, "copy read-only inspection unavailable")
-	defer db.Close()
-	var actor, tokenID string
-	var intent []byte
-	err = db.QueryRowContext(ctx, `SELECT actor_id,token_id,safe_intent FROM operations WHERE id=?`, original.OriginalID).Scan(
-		&actor, &tokenID, &intent)
-	check(err == nil && actor == tokenID, "original owner credential unknown")
-	var pins int
-	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operation_resource_claims
-		WHERE operation_id=? AND resource_key LIKE 'create-pin:%'`, original.OriginalID).Scan(&pins)
-	check(err == nil && pins == 4, "original modern Create is missing one or more address reservations")
-
 	// Exercise the actual N3 staged recovery path, not a fixture-only UUID
 	// insert. Native operations are only OBSERVED; all writes go to the copy.
 	svc := recovery.Service{Store: ledger, Native: nativeReader, Layer: project}
