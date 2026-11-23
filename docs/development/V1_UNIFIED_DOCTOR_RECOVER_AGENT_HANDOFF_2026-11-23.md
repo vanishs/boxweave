@@ -32,7 +32,7 @@ Then immediately implement/test the first safe slice on the PR branch where tool
 
 - `doctor` performs zero state mutation even if DB path is absent/corrupt or concurrent with service WAL; no daemon worker startup recovery or schema initialization, no unintended permission escalation.
 - Existing `status`, `doctor` basic mode, `recover` old flags, 22 MCP tools and #177 uninstall behavior stay backward-compatible.
-- Findings distinguish `CONFIRMED` vs `UNVERIFIED`, bounded vs full scan, resolved history vs current issue, Business M**CP** vs Host operator repair; secrets and foreign Project state never leak.
+- Findings distinguish `CONFIRMED` vs `UNVERIFIED`, bounded vs full scan, resolved history vs current issue, MCP business recovery vs Host operator repair; secrets and foreign Project state never leak.
 - A private Host installer failure/Root journal is not silently considered fixed through MCP. Approval string, plan fingerprint, idempotency and original native/SQLite proof remain enforced.
 - No claim of packet/PRS/quota PASS without independent real witness; no 1024 actual native instances required for this scoped feature.
 - No automatic branch merge, release, public Tunnel modification, or physical L0 install. If later Host tests are needed, provide a minimum exact, read-only command and explicit scope for separate Owner approval.
