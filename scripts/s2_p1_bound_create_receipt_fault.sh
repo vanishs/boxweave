@@ -46,14 +46,15 @@ test "$attempt" -lt 40
 actor BW_S2_BOUND_LAB="$lab" BW_S2_BOUND_TOKEN="$token" \
   BW_S2_BOUND_PROJECT="$project" "$work/s2-bound-create-probe" \
   > "$work/bound-receipt-result.txt"
+# Emit only explicit non-secret acceptance markers before checking them,
+# so a failed assertion has a diagnosable CI trace.
+grep '^S4_A_' "$work/bound-receipt-result.txt"
 grep -Fqx S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_UNBOUND_UNKNOWN_NO_REDISPATCH=PASS \
   "$work/bound-receipt-result.txt"
 grep -Fqx S4_A_REAL_UNBOUND_UNKNOWN_DIFFERENT_KEY_CREATE_DELETE_REFUSED=PASS \
   "$work/bound-receipt-result.txt"
-
-grep -Fqx S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_COPY_ONLY_BIND_ORIGINAL_UNCHANGED=PASS \
+grep -Fqx S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_COPY_ONLY_STAGED_RECOVERY_ORIGINAL_UNCHANGED=PASS \
   "$work/bound-receipt-result.txt"
-grep '^S4_A_' "$work/bound-receipt-result.txt"
 
 name=bw-s2-p1-bound-final-110u
 uuid="$(sudo python3 - "$lab/original.json" <<'PY'
