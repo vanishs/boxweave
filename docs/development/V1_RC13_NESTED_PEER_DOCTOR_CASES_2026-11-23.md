@@ -4,6 +4,21 @@
 
 **Owner decision:** file these observations under the existing **single `doctor` (read-only) / `recover` (evidence-bound, approved) design**. An independent Draft PR handles any actual runtime changes. Do not add a third repair engine, generic Host shell, OAuth bypass or automatic native replay.
 
+## Execution dependency and historical-only taxonomy (owner correction 2026-11-23)
+
+**DO NOT IMPLEMENT THE PROPOSED DIAGNOSTIC CODES IN THIS RC13 INCIDENT MATRIX YET.** Owner has required [#178](https://github.com/vanishs/boxweave/pull/178) to first deliver new Box default `boot.autostart=true`, preserve autostart across Peer changes, run routine Peer grants/revokes automatically through authorized MCP after safe initial setup, and avoid interrupting unrelated Boxes/network services. Only **after #178's final implementation, safety verification and integration** may #177's unified Doctor/Recover feature be developed. See [new #178 product contract](https://github.com/vanishs/boxweave/blob/fix/rc13-peer-blast-radius-lifecycle-20261123/docs/development/V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md) and [#177 design dependency](V1_UNIFIED_DOCTOR_RECOVER_DESIGN_2026-11-23.md).
+
+All D1–D10 rows below document **RC13-specific historical observations and initial proposals**, **not** final Doctor requirements. Their `Required new Doctor behavior` entries are **SUSPENDED/PROVISIONAL** where they depend on a one-original manual Root helper, `ADMITTED` state, project-wide barrier, persisted `boot.autostart=false`, root permission source or old network architecture. These can become **false-positive diagnosis or unsafe recovery suggestions** after #178 redesign.
+
+Before coding in #177, rerun a source/authorization/state-machine mapping against the **accepted final #178 version**:
+- What is the real installed helper model, authority boundary and routine MCP grant/revoke workflow? Never demand obsolete Host commands for an automatic operation.
+- Is the new autostart default true and what value is explicitly configured? Compare actual observed final state with intended user policy, not with RC13's old `false`.
+- Does changing a peer trigger any native NIC stop or whole-project barrier? Do not treat an old full-bridge stop as normal if the new architecture guarantees no unrelated Box interruption.
+- Which pending/terminal/UNKNOWN operations, claims, helper journals and audit evidence actually exist? Generate version-aware findings only from those facts.
+- Preserve architecture-independent observations: proxy-device verification is not Guest HTTP reachability; Guest Exec `guest_exit_code` is distinct from durable Operation terminal state; actual packets are separate from ACL/native readback; scope/secrets/coverage must remain correct.
+
+**Retain every original timestamp/ID and negative packet result below as regression evidence, not as an implementation mandate.** Do not infer #178 completed merely because this report has been updated.
+
 ## 1. Verified end-to-end baseline — not a hypothetical failure
 
 L0 `rc13test-cli` (UUID `bf276e23-35f9-4be2-9fbc-0ceb3de39f7c`, `10.249.1.18`) → confirmed directional Peer → L0 `rc13test-ser` (UUID `ea6951dc-9b3f-416b-8c2b-0c40e8fc746a`, `10.249.1.9:18080`) → L1 independently installed Incus **7.6** and BoxWeave **RC13**, `port_forward_create` bound to **L1** `0.0.0.0:18080` → L2 owned `rc13inner-http` (UUID `fa4ea366-f3b8-4827-b43a-6084eb93f345`, `127.0.0.1:8000`), Python HTTP response `INNER_RC13_HTTP_OK`.
