@@ -26,13 +26,15 @@ type NativePeerGuardObservedOwner struct {
 func nativePeerGuardOwnedURL(raw, kind, name, project string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || u == nil || u.Scheme != "" || u.Host != "" ||
+		u.User != nil || u.Opaque != "" || u.RawPath != "" ||
 		u.Fragment != "" || u.RawFragment != "" ||
 		u.Path != "/1.0/"+kind+"/"+name {
 		return false
 	}
 	query, err := url.ParseQuery(u.RawQuery)
 	if err != nil || len(query) != 1 || len(query["project"]) != 1 ||
-		query.Get("project") != project {
+		query.Get("project") != project ||
+		u.RawQuery != "project="+url.QueryEscape(project) {
 		return false
 	}
 	return true
@@ -118,7 +120,12 @@ func NativePeerGuardValidateScopedInventory(project, bridge string,
 		if err = native.ValidatePeerACLBox(o.Instance, project, bridge, aclName, b, false); err != nil {
 			return nil, fmt.Errorf("native peer identity/anti-spoof/lease check %q: %w", name, err)
 		}
-		if (o.ACL.Project != "" && o.ACL.Project != project) ||
+		// The ACL object lives in Root's default Project, while the
+		// exact UsedBy instance belongs to the restricted target Project.
+		// Incus 7.6's native cross-Project response was independently
+		// confirmed in a throwaway Project. Never infer ACL ownership
+		// from the UsedBy Project alone.
+		if o.ACL.Project != "default" ||
 			o.ACL.Name != aclName || len(o.ACL.UsedBy) != 1 ||
 			!nativePeerGuardOwnedURL(o.ACL.UsedBy[0], "instances", name, project) {
 			return nil, fmt.Errorf("native peer ACL not exclusively used by pinned Box %q", name)

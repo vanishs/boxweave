@@ -124,3 +124,8 @@ Added `network_peer_guard_journal.go` + composition and tests. One exact immutab
 ## Multi-ACL per-Box SQLite ledger and 1024 row acceptance
 
 Shared old Peer SQLite model requires all Boxes' `network_bindings.acl` to be identical; that is incompatible with per-Box native ACLs. New independent pure name package `internal/peerscope` is shared by `state` and `install`, and new `ReadCompleteScopedNetworkAuditLedger` verifies **one exact derived ACL per Box**, full native identity and dual-stack fenced addresses, foreign and history refusal. Existing shared-ACL reader/Peer handlers are deliberately unchanged. Tests cover valid three-Box and negative partial migration, SQLite UNIQUE MAC/IP, and 1,024 row positive / 1,025th refused. Full isolated `make verify` `8db75190dc9b2f65d26e1eac9864b9b0` Guest exit 0. [Read-only multi-ACL report and migration blockers](V1_PR178_PER_BOX_SQLITE_LEDGER_DESIGN_2026-11-23.md). No production migration or MCP Root dispatch enabled; keep #178 Draft.
+
+
+## Root ACL default Project provenance correction
+
+Actual disposable Incus 7.6 cross-Project testing proved the root-created ACL and network object have native `Project=default`, while tenant references in `UsedBy` are canonically `?project=<tenant>`; the old pure inventory fixture incorrectly modeled ACL.Project as the tenant. Updated strict root-native ACL checker and expanded URL canonicalization tests without loosening foreign Project/bridge ownership checks. Targeted tests and full isolated `make verify` `165e02d1a31c8e471d6d2fd9c16e2815` Guest exit 0; temporary Project/ACL deleted. [Full native evidence](V1_PR178_ROOT_DEFAULT_ACL_NATIVE_PROVENANCE_2026-11-23.md). No production network mutation or MCP Root integration enabled.

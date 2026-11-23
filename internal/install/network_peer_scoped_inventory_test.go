@@ -50,7 +50,7 @@ func pr178ScopedInventoryFixture() (
 			},
 			ACL: &api.NetworkACL{
 				NetworkACLPost: api.NetworkACLPost{Name: acl},
-				Project:        "user-1001",
+				Project:        "default",
 				UsedBy:         []string{entry},
 			},
 			ACLTag: "etag-for-" + b.Name,
@@ -111,6 +111,14 @@ func TestPR178NativeScopedGuardRejectsIncompleteAndForeignInventory(t *testing.T
 			a := o["pr178-a"]
 			a.ACL.UsedBy = append(a.ACL.UsedBy, "/1.0/instances/pr178-b?project=user-1001")
 			o["pr178-a"] = a
+		}},
+		{"acl-tenant-scoped-not-root", func(c *[]native.PeerACLBox, n *[]string, o map[string]NativePeerGuardObservedOwner, u *[]string) {
+			a := o["pr178-a"]
+			a.ACL.Project = "user-1001"
+			o["pr178-a"] = a
+		}},
+		{"noncanonical-project-query", func(c *[]native.PeerACLBox, n *[]string, o map[string]NativePeerGuardObservedOwner, u *[]string) {
+			(*u)[0] = "/1.0/profiles/default?project=%75ser-1001"
 		}},
 		{"acl-foreign-project", func(c *[]native.PeerACLBox, n *[]string, o map[string]NativePeerGuardObservedOwner, u *[]string) {
 			a := o["pr178-a"]
