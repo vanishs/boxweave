@@ -56,6 +56,17 @@ jobs:
           # does not compile it. Catch future verifier/API drift before RC.
           CGO_ENABLED=1 go build -trimpath -o "$RUNNER_TEMP/s2-unknown-create-bind-probe" ./scripts/s2_unknown_create_binding_probe.go
           CGO_ENABLED=1 go build -trimpath -o "$RUNNER_TEMP/s2-bound-create-finalization-probe" ./scripts/s2_p1_bound_create_receipt_fault_probe.go
+          # A prior S2 native release was blocked by a stale shell PASS label
+          # even though its isolated Go verifier completed. Check the contract.
+          python3 - <<'PY_S2_MARKERS'
+          import pathlib, re
+          shell = pathlib.Path("scripts/s2_p1_bound_create_receipt_fault.sh").read_text()
+          probe = pathlib.Path("scripts/s2_p1_bound_create_receipt_fault_probe.go").read_text()
+          markers = re.findall(r"grep -Fqx (S4_A_[A-Z0-9_]+)=PASS", shell)
+          assert len(markers) >= 3, markers
+          assert all(f'"{marker}=PASS"' in probe for marker in markers), markers
+          PY_S2_MARKERS
+          sh -n scripts/s2_p1_bound_create_receipt_fault.sh
           sh -n install.sh
           python3 -m unittest -v scripts/test_v1_release_manifest.py
       - name: Do not treat a source VERSION as a published release
