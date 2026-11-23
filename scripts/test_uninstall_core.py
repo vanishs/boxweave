@@ -621,6 +621,66 @@ class FakeHost(unittest.TestCase):
             u.inspect("full", "user-1001", [], None, guided=True)
         self.assertTrue((u.BACKUP / "unexpected").exists())
 
+    def prepare_interrupted_native_retirement(self):
+        self.install_retirement_fixture()
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"], plan["blockers"])
+        u.audited_write({"status": "STARTED", "scope": "full",
+                         "host_sha256": plan["host_machine_id_sha256"],
+                         "review_sha256": plan["review_sha256"],
+                         "actions": plan["actions"],
+                         "historical_released_exec": plan["sqlite"]["historical_released_exec"],
+                         "historical_released_other": plan["sqlite"]["historical_released_other"]})
+        archive = u.archive_controller(plan)
+        self.assertEqual(u.audit_status()["status"], "STARTED")
+        return plan, archive
+
+    def test_interrupted_retirement_exact_archive_resume_and_audit(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        receipt, old_plan = u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertTrue(receipt["ready"])
+        self.assertEqual(receipt["phase"], "ARCHIVED_BEFORE_NATIVE_ROLLBACK")
+        self.assertEqual(old_plan["review_sha256"], plan["review_sha256"])
+        self.assertEqual(self.cmds, [])
+        result = u.resume_interrupted_retirement(old_plan, archive)
+        self.assertEqual(result["outcome"], "COMPLETE")
+        self.assertEqual(result["retirement_archive"], archive)
+        self.assertEqual(u.audit_status()["status"], "COMPLETE")
+        self.assertFalse(u.STATE.exists())
+        self.assertFalse(u.BINARY.exists())
+        self.assertFalse(u.NATIVE.exists())
+        self.assertEqual(len(list(u.RETIRED.glob("retired-*"))), 1)
+        self.assertTrue((Path(archive) / "review.json").is_file())
+
+    def test_interrupted_resume_rejects_archive_drift_without_effect(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        (Path(archive) / "boxweave.bin").write_bytes(b"drift")
+        with self.assertRaisesRegex(u.UninstallError, "copy changed"):
+            u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertEqual(self.cmds, [])
+        self.assertEqual(u.audit_status()["status"], "STARTED")
+        self.assertTrue(u.NATIVE.exists())
+
+    def test_interrupted_resume_rejects_original_audit_drift(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        audit = json.loads(u.AUDIT.read_text())
+        audit["review_sha256"] = "c" * 64
+        u.AUDIT.write_text(json.dumps(audit))
+        with self.assertRaisesRegex(u.UninstallError, "audit and archived plan disagree"):
+            u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertEqual(self.cmds, [])
+        self.assertTrue(u.BINARY.exists())
+
+    def test_interrupted_resume_rejects_native_inflight(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        native = json.loads(u.NATIVE.read_text())
+        native["status"] = "ROLLBACK_IN_FLIGHT"
+        u.NATIVE.write_text(json.dumps(native))
+        with self.assertRaises(u.UninstallError):
+            u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertEqual(self.cmds, [])
+        self.assertEqual(u.audit_status()["status"], "STARTED")
+
     def test_guided_native_dependency_and_live_operation_refusals(self):
         entry = {"name": "bw-example", "type": "container", "status": "Running",
                  "config": {"volatile.uuid": self.box},
