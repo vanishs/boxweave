@@ -55,6 +55,7 @@ jobs:
           # The S2 native verifier is build-tagged 'ignore', so go test ./...
           # does not compile it. Catch future verifier/API drift before RC.
           CGO_ENABLED=1 go build -trimpath -o "$RUNNER_TEMP/s2-unknown-create-bind-probe" ./scripts/s2_unknown_create_binding_probe.go
+          CGO_ENABLED=1 go build -trimpath -o "$RUNNER_TEMP/s2-bound-create-finalization-probe" ./scripts/s2_p1_bound_create_receipt_fault_probe.go
           sh -n install.sh
           python3 -m unittest -v scripts/test_v1_release_manifest.py
       - name: Do not treat a source VERSION as a published release
