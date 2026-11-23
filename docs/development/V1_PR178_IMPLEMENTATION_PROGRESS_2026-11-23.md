@@ -94,3 +94,8 @@ At commit `7151831092a776a0dfd99042cd5fe8482836b56c`: `v1 S1 source checks` run 
 ## Scoped compiler and native conntrack research (second implementation slice)
 
 New pure compiler/test source and complete disposable Incus 7.6 dual-stack + long-lived-flow evidence: [PR #178 scoped ACL experiment](V1_PR178_SCOPED_POLICY_EXPERIMENT_2026-11-23.md). **Security finding:** per-Box DROP alone denied new A→B but left preexisting A→B TCP alive; after exact A/B conntrack purge the stream stopped while C/D's TCP/HTTP remained healthy. No production per-Box writer or Root/MCP path is enabled; full no-interruption acceptance is still BLOCKED. Clean isolated Box full `make verify` passed on second code slice; separately run exact-head CI when submitted.
+
+
+## Separate pre-Incus bridge kernel guard candidate
+
+Source files `internal/install/network_peer_scoped_guard.go` and tests compile a strict bridge-family nftables policy. A/B live grant/revoke and dual-stack packets were confirmed separately from Incus's own ACLs while the C/D long-lived HTTP/TCP monitor had zero failures. Hardened full-subnet and IPv6 link-local unicast rule tests passed. Exact evidence, original operations and remaining safety gates: [PR178 guard lab report](V1_PR178_SCOPED_KERNEL_GUARD_PROTOTYPE_2026-11-23.md). This is **only a pure compiler**: no production nft writer, Root authority, MCP hook, guard boot persistence, ownership verifier or migration. Existing shared-ACL barrier untouched; full Peer acceptance still BLOCKED. Isolated Box full `make verify` operation `c6e78141ee0be4d2a5b03588deb11320` Guest exit 0; exact-code-commit CI should be checked separately.
