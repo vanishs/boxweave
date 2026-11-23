@@ -2,7 +2,7 @@ name: S4-B3 original-scoped PRS grant native dual-stack (disposable)
 
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120, feat/v1-network-reliability-20261122]
     paths:
       - internal/state/network_recovery*.go
       - internal/recovery/**
@@ -43,13 +43,13 @@ permissions:
 
 jobs:
   native-grant:
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'))
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' || github.ref == 'refs/heads/feat/v1-network-reliability-20261122'))
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON((github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') && '["grant_ack_lost"]' || '["normal", "after_acl_fault", "after_resume_fault", "before_completion_fault", "installed_normal", "multi_revoke", "multi_regrant", "installed_mcp", "grant_ack_lost"]') }}
+        scenario: ${{ fromJSON((github.ref == 'refs/heads/feat/v1-network-reliability-20261122' && '["installed_mcp", "grant_ack_lost"]') || ((github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') && '["grant_ack_lost"]' || '["normal", "after_acl_fault", "after_resume_fault", "before_completion_fault", "installed_normal", "multi_revoke", "multi_regrant", "installed_mcp", "grant_ack_lost"]')) }}
     steps:
       - uses: actions/checkout@v4
         with:

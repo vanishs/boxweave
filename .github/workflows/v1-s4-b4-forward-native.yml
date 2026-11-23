@@ -1,7 +1,7 @@
 name: S4-B4 disposable native instance proxy TCP/UDP
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120, feat/v1-forward-all-20261121]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120, feat/v1-forward-all-20261121, feat/v1-network-reliability-20261122]
     paths:
       - internal/state/network_recovery*.go
       - internal/recovery/**
@@ -37,7 +37,7 @@ permissions:
   contents: read
 jobs:
   owned-proxy-native:
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') || github.ref == 'refs/heads/feat/v1-forward-all-20261121')
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') || github.ref == 'refs/heads/feat/v1-forward-all-20261121' || github.ref == 'refs/heads/feat/v1-network-reliability-20261122')
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
