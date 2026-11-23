@@ -21,6 +21,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/recovery"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
@@ -156,10 +157,11 @@ func main() {
 		OR (action='box_create' AND id!=?)`, originalID).Scan(&unexpected)
 	ensure(err == nil && unexpected == 0, "rejected mutation inserted another original")
 
-	// Exercise explicit reviewed identity binding ONLY on a consistent backup.
-	// This is not a product retry, adoption, state resolution or lock release.
+	// Exercise the real N3 staged Create recovery on an isolated backup.
+	// This is not a product retry, native adoption or mutation of the live
+	// UNKNOWN ledger. The test-only receipt trigger is removed ONLY in copy.
 	copyDir := filepath.Join(dir, "atomic-bind-copy")
-	ensure(os.Mkdir(copyDir, 0700) == nil, "isolated identity-review copy directory unavailable")
+	ensure(os.Mkdir(copyDir, 0700) == nil, "isolated recovery copy directory unavailable")
 	copyDB := filepath.Join(copyDir, "ledger.sqlite")
 	backup := exec.CommandContext(ctx, "python3", "-c", `import os,sqlite3,sys
 with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True) as src:
@@ -169,13 +171,14 @@ with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True) as src:
 os.chmod(sys.argv[2],0o600)`, filepath.Join(dir, "ledger.sqlite"), copyDB)
 	ensure(backup.Run() == nil, "consistent standalone SQLite backup unavailable")
 	copyStore, err := state.Open(copyDB)
-	ensure(err == nil, "isolated identity-review backup refused")
+	ensure(err == nil, "isolated staged recovery backup refused")
 	defer copyStore.Close()
 	snap, err := copyStore.CreateRecoveryInspect(ctx, originalID)
 	ensure(err == nil && snap.NativeOperationID == nativeID && snap.Project == project && snap.Name == name,
 		"copy lost original unbound UNKNOWN identity")
 	readback, err := reader.ObserveOwnedBox(ctx, name, uuid)
-	ensure(err == nil && readback.State == "PRESENT_UUID_CONFIRMED", "independent native readback unavailable")
+	ensure(err == nil && readback.State == "PRESENT_UUID_CONFIRMED" && readback.Fingerprint != "",
+		"independent native readback unavailable")
 	challenge, err := copyStore.IssueCreateBindingChallenge(ctx, snap, "ci-atomic-create-verifier", readback.Fingerprint)
 	ensure(err == nil, "copy-only review challenge refused")
 	err = copyStore.BindUnknownCreatedBox(ctx, snap, "ci-atomic-create-verifier", challenge, uuid,
@@ -183,14 +186,54 @@ os.chmod(sys.argv[2],0o600)`, filepath.Join(dir, "ledger.sqlite"), copyDB)
 	ensure(err != nil, "copy-only binding accepted forged observation")
 	err = copyStore.BindUnknownCreatedBox(ctx, snap, "ci-atomic-create-verifier", challenge, uuid,
 		readback.Fingerprint, "independent original native identity verified", true)
-	ensure(err == nil, "copy-only exact identity binding refused")
+	ensure(errors.Is(err, state.ErrResourceLocked), "modern pinned Create accepted obsolete UUID-only binding")
 	copyOriginal, err := copyStore.Get(ctx, originalID)
-	ensure(err == nil && copyOriginal.State == "UNKNOWN" && copyOriginal.BoxUUID == uuid &&
+	ensure(err == nil && copyOriginal.State == "UNKNOWN" && copyOriginal.BoxUUID == "" &&
 		copyOriginal.NativeOperationID == nativeID && copyOriginal.NextAction.Kind == "HOST_LOCAL_REVIEW",
-		"copy-only binding resolved UNKNOWN or lost immutable native identity")
-	err = copyStore.BindUnknownCreatedBox(ctx, snap, "ci-atomic-create-verifier", challenge, uuid,
-		readback.Fingerprint, "replayed binding challenge must be refused", true)
-	ensure(errors.Is(err, state.ErrConflict), "copy-only original binding challenge replay accepted")
+		"legacy UUID-only refusal changed original UNKNOWN or its native ACK")
+
+	var pinClaims int
+	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operation_resource_claims
+		WHERE operation_id=? AND resource_key LIKE 'create-pin:%'`, originalID).Scan(&pinClaims)
+	ensure(err == nil && pinClaims == 4, "original staged Create lost a prospective address claim")
+	svc := recovery.Service{Store: copyStore, Native: reader, Layer: project}
+	diagnosis, err := svc.Inspect(ctx, originalID, "")
+	ensure(err == nil && diagnosis.View.Disposition == "SAFE_RECOVER" &&
+		diagnosis.View.ProposedAction == state.RecoverySettle &&
+		diagnosis.View.Reason == "CREATE_ORIGINAL_POSTSTATE_VERIFIED" &&
+		diagnosis.View.ObservedNativeUUID == uuid &&
+		diagnosis.View.ClaimProtection == "RETAINED",
+		"original native terminal, static lease/marker or staged address pin not verified")
+	var actor, tokenID string
+	err = db.QueryRowContext(ctx, "SELECT actor_id,token_id FROM operations WHERE id=?", originalID).Scan(&actor, &tokenID)
+	ensure(err == nil && actor == tokenID, "original authenticated owner not recorded")
+	request := state.RecoveryRequest{
+		Layer: project, ActorID: actor, TokenID: tokenID,
+		OriginalID: originalID, Key: "s2-native-final-rollback-copy-reconcile-001",
+		WorkRef: "ci/staged-create-fault", AgentRef: "ci-atomic-create-verifier",
+	}
+	settled, err := svc.Reconcile(ctx, request)
+	ensure(err == nil && settled.Recovery != nil && settled.Recovery.Disposition == "SETTLED" &&
+		settled.Recovery.Receipt.State == "SUCCEEDED" && !settled.NativeRetried,
+		"staged Create finalization rollback could not be recovered atomically on copy")
+	copyOriginal, err = copyStore.Get(ctx, originalID)
+	ensure(err == nil && copyOriginal.State == "SUCCEEDED" && copyOriginal.BoxUUID == uuid &&
+		copyOriginal.NativeOperationID == nativeID, "copied original native ACK, UUID or success state was altered")
+	copySQL, err := sql.Open("sqlite3", "file:"+copyDB+"?mode=ro&_foreign_keys=on")
+	ensure(err == nil, "read-only recovered copy unavailable")
+	defer copySQL.Close()
+	var copyOwned, binding, fences int
+	err = copySQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM owned_boxes WHERE uuid=? AND project=? AND state='OWNED'", uuid, project).Scan(&copyOwned)
+	ensure(err == nil && copyOwned == 1, "copy recovery missed original exact ownership")
+	err = copySQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM network_bindings WHERE project=? AND box_uuid=? AND state='PINNED'", project, uuid).Scan(&binding)
+	ensure(err == nil && binding == 1, "copy recovery missed original static network binding")
+	err = copySQL.QueryRowContext(ctx, `SELECT COUNT(*) FROM network_address_fences
+		WHERE project=? AND box_uuid=? AND operation_id=? AND state='RESERVED'`, project, uuid, originalID).Scan(&fences)
+	ensure(err == nil && fences == 2, "copy recovery missed an original dual-stack fence")
+	repeated, err := svc.Reconcile(ctx, request)
+	ensure(err == nil && repeated.Recovery != nil && repeated.Recovery.Receipt.Duplicate &&
+		repeated.Recovery.Receipt.ID == settled.Recovery.Receipt.ID && !repeated.NativeRetried,
+		"copy recovery replay issued another original native mutation")
 	var originalUUID, originalState string
 	err = db.QueryRowContext(ctx, "SELECT box_uuid,state FROM operations WHERE id=?", originalID).Scan(&originalUUID, &originalState)
 	ensure(err == nil && originalUUID == "" && originalState == "UNKNOWN", "copy-only review changed original journal")
@@ -206,5 +249,5 @@ os.chmod(sys.argv[2],0o600)`, filepath.Join(dir, "ledger.sqlite"), copyDB)
 	fmt.Printf("S4_A_ATOMIC_ROLLBACK_CREATE_BW_ID=%s NATIVE_ID=%s BOX_UUID=%s PROJECT=%s\n", originalID, nativeID, uuid, project)
 	fmt.Println("S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_UNBOUND_UNKNOWN_NO_REDISPATCH=PASS")
 	fmt.Println("S4_A_REAL_UNBOUND_UNKNOWN_DIFFERENT_KEY_CREATE_DELETE_REFUSED=PASS")
-	fmt.Println("S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_COPY_ONLY_BIND_ORIGINAL_UNCHANGED=PASS")
+	fmt.Println("S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_COPY_ONLY_STAGED_RECOVERY_ORIGINAL_UNCHANGED=PASS")
 }
