@@ -787,7 +787,7 @@ def archive_controller(plan):
     return str(dest)
 
 
-def apply_with_serve_lock(plan):
+def apply_with_serve_lock(plan, preserved_archive=None):
     # Stopping may legitimately checkpoint WAL; recheck native and SQLite
     # semantic blockers, not a fabricated claim that WAL bytes are immutable.
     after = inspect_sqlite(STATE / "ledger.sqlite", guided=plan.get("guided", False))
@@ -796,7 +796,7 @@ def apply_with_serve_lock(plan):
         raise UninstallError("SQLite ledger changed during stop; preserve evidence")
     if plan.get("guided") and inspect_exec_archive(plan["service_user_uid"]) != plan.get("exec_archive"):
         raise UninstallError("exec archive changed after approval")
-    archive = archive_controller(plan) if plan.get("guided") else None
+    archive = preserved_archive or (archive_controller(plan) if plan.get("guided") else None)
     if plan["scope"] == "full":
         guided = plan.get("guided", False)
         if guided:
@@ -895,12 +895,124 @@ def apply_with_serve_lock(plan):
             "retirement_archive": archive, "retained": plan["retained"]}
 
 
+def inspect_interrupted_retirement(project, archive_path):
+    """Read-only, narrowly bound recovery of a stopped, fully archived phase.
+
+    Only a completed original guided archive, original STARTED audit and
+    pre-rollback APPLIED native journal are accepted. No partially dispatched
+    native rollback, deleted controller artifact or unknown Box is replayed.
+    """
+    if not VALID_NAME.fullmatch(project):
+        raise UninstallError("exact project required for retirement recovery")
+    archive = Path(archive_path)
+    if not archive.is_absolute() or archive.parent != RETIRED or not re.fullmatch(r"retired-[a-z0-9_]{8}", archive.name):
+        raise UninstallError("exact original private retirement archive path required")
+    for directory in (RETIRED, archive):
+        info = directory.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+            raise UninstallError("untrusted retirement directory")
+    audit = read_json(AUDIT)
+    if audit_status()["status"] != "STARTED" or not isinstance(audit, dict):
+        raise UninstallError("no original STARTED retirement audit")
+    review_path = archive / "review.json"
+    plan = read_json(review_path)
+    if not isinstance(plan, dict):
+        raise UninstallError("archived original review is absent")
+    proof = file_fingerprint(review_path)
+    if proof is None or proof["mode"] != 0o600:
+        raise UninstallError("unsafe original review")
+    require_root_owned(review_path)
+    if (not plan.get("guided") or plan.get("scope") != "full" or
+            not plan.get("ready") or plan.get("project") != project or
+            plan.get("host_machine_id_sha256") != machine_sha() or
+            not VALID_SHA.fullmatch(plan.get("review_sha256", ""))):
+        raise UninstallError("archive is not a reviewed full retirement for this Host")
+    inputs = {k: v for k, v in plan.items()
+              if k not in ("review_sha256", "actions", "ready", "retained")}
+    if sha(canonical(inputs)) != plan["review_sha256"]:
+        raise UninstallError("original retirement plan hash mismatch")
+    if (audit.get("review_sha256") != plan["review_sha256"] or
+            audit.get("host_sha256") != plan["host_machine_id_sha256"] or
+            audit.get("scope") != "full" or audit.get("actions") != plan["actions"] or
+            audit.get("historical_released_exec") != plan["sqlite"]["historical_released_exec"] or
+            audit.get("historical_released_other") != plan["sqlite"]["historical_released_other"]):
+        raise UninstallError("original STARTED audit and archived plan disagree")
+    if plan["incus_instances"] or plan["sqlite"]["boxes"]:
+        raise UninstallError("resume does not replay prior Box deletion; manual native review required")
+    if plan["native_prepare"]["status"] != "APPLIED" or systemd_status() != "inactive":
+        raise UninstallError("resume limited to inactive controller before native rollback")
+    now = inspect("full", project, [], None, guided=True)
+    if now["blockers"] != ["PRIOR_UNINSTALL_INTERRUPTED_REVIEW_ORIGINAL_AUDIT"]:
+        raise UninstallError("unresolved blockers beyond original interrupted audit")
+    for key in ("host_machine_id_sha256", "sqlite", "incus_instances", "native_prepare",
+                "unit", "binary", "exec_archive", "installer_backup", "allowlist"):
+        if now[key] != plan[key]:
+            raise UninstallError("retirement recovery source drift: " + key)
+    if ((now["retirement_verifier"] or {}).get("unit") !=
+            (plan["retirement_verifier"] or {}).get("unit")):
+        raise UninstallError("retirement verifier drift")
+    for item in plan["state_files"]:
+        if item["name"] not in ("ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm"):
+            fresh = next((x for x in now["state_files"] if x["name"] == item["name"]), None)
+            if fresh != item:
+                raise UninstallError("controller state changed after original archive")
+    names = {"review.json", "boxweave.bin", "boxweave.service", "native-prepare.json"}
+    proofs = [(archive / "boxweave.bin", BINARY),
+              (archive / "boxweave.service", UNIT),
+              (archive / "native-prepare.json", NATIVE)]
+    for item in plan["state_files"]:
+        name = "state-" + item["name"]
+        if item["name"] in ("ledger.sqlite-wal", "ledger.sqlite-shm") and not (archive / name).exists():
+            if (STATE / item["name"]).exists():
+                raise UninstallError("missing original WAL/SHM archive")
+            continue
+        names.add(name)
+        proofs.append((archive / name, STATE / item["name"]))
+    for item in (plan.get("exec_archive") or {}).get("files", []):
+        name = "exec-" + item["name"]
+        names.add(name)
+        proofs.append((archive / name, STATE / EXEC_ARCHIVE_NAME / item["name"]))
+    for item in (plan.get("installer_backup") or {}).get("files", []):
+        name = "installer-backup-" + item["name"]
+        names.add(name)
+        proofs.append((archive / name, BACKUP / item["name"]))
+    if plan.get("retirement_verifier"):
+        names.add(RETIREMENT_UNIT.name)
+        proofs.append((archive / RETIREMENT_UNIT.name, RETIREMENT_UNIT))
+    if {entry.name for entry in archive.iterdir()} != names:
+        raise UninstallError("archived original file inventory changed")
+    for saved, source in proofs:
+        proof = file_fingerprint(saved)
+        original = file_fingerprint(source)
+        if proof is None or original is None or proof["mode"] != 0o600 or proof["sha256"] != original["sha256"]:
+            raise UninstallError("original private retirement copy changed")
+        require_root_owned(saved)
+    return {"ready": True, "phase": "ARCHIVED_BEFORE_NATIVE_ROLLBACK",
+            "project": project, "retirement_archive": str(archive),
+            "original_review_sha256": plan["review_sha256"],
+            "original_uninstall_audit_sha256": audit_status()["sha256"]}, plan
+
+
+def resume_interrupted_retirement(plan, archive):
+    # Caller must have independently approved the matching, fresh read-only phase.
+    if systemd_status() != "inactive":
+        raise UninstallError("stopped original service required for retirement resume")
+    require_retirement_stopped(plan)
+    with hold_stopped_serve_lock(plan):
+        result = apply_with_serve_lock(plan, preserved_archive=str(archive))
+    audited_complete(plan["review_sha256"], result)
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned host uninstall (no implicit deletion)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
     action.add_argument("--full", action="store_true", help="guided full retirement with terminal review and backup")
+    action.add_argument("--resume-plan", action="store_true", help="read-only review of a stopped, archived STARTED retirement")
+    action.add_argument("--resume", action="store_true", help="explicit terminal-approved continuation of the exact archived STARTED retirement")
+    parser.add_argument("--retirement-archive", help="exact root-private original retirement archive for resume")
     parser.add_argument("--guided-full-plan", action="store_true",
                         help="with --plan --scope full: use the same guided read-only archive/inventory checks as --full")
     parser.add_argument("--scope", choices=SCOPES, help="service | controller | full (never shared Incus)")
@@ -913,6 +1025,33 @@ def main(argv=None):
     if not args.plan and not args.apply and not args.full:
         parser.print_help()
         return 0 if not any((args.scope, args.project, args.box_uuid)) else 2
+    if args.resume_plan or args.resume:
+        if (args.scope or args.guided_full_plan or args.full or args.plan or args.apply or
+                args.box_uuid or args.native_prepare_sha256 or
+                args.confirm_host_sha256 or args.confirm_review_sha256 or
+                not args.retirement_archive):
+            parser.error("resume requires only --project and --retirement-archive")
+        args.project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
+        if os.geteuid() != 0 or sys.platform != "linux":
+            raise UninstallError("root on the original Host required for retirement recovery")
+        snapshot, original = inspect_interrupted_retirement(args.project, args.retirement_archive)
+        if args.resume_plan:
+            print(json.dumps(snapshot, indent=2, sort_keys=True))
+            return 0
+        print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
+        with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+            out.write("Type RESUME " + args.project + " to continue the original audited retirement: ")
+            out.flush()
+            if inp.readline().strip() != "RESUME " + args.project:
+                raise UninstallError("interrupted retirement continuation not approved")
+        fresh, original = inspect_interrupted_retirement(args.project, args.retirement_archive)
+        if fresh != snapshot:
+            raise UninstallError("interrupted retirement evidence changed since approval")
+        print(json.dumps(resume_interrupted_retirement(original, args.retirement_archive),
+                         indent=2, sort_keys=True))
+        return 0
+    if args.retirement_archive:
+        parser.error("--retirement-archive requires --resume or --resume-plan")
     if args.guided_full_plan and (not args.plan or args.scope != "full"):
         parser.error("--guided-full-plan requires --plan --scope full")
     if args.full:
