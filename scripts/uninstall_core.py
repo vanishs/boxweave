@@ -1022,7 +1022,7 @@ def main(argv=None):
     parser.add_argument("--confirm-host-sha256", help="apply: exact machine SHA printed by plan")
     parser.add_argument("--confirm-review-sha256", help="apply: exact immutable inventory review SHA")
     args = parser.parse_args(argv)
-    if not args.plan and not args.apply and not args.full:
+    if not args.plan and not args.apply and not args.full and not args.resume_plan and not args.resume:
         parser.print_help()
         return 0 if not any((args.scope, args.project, args.box_uuid)) else 2
     if args.resume_plan or args.resume:
