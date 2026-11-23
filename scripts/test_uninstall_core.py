@@ -531,6 +531,61 @@ class FakeHost(unittest.TestCase):
         self.insert("UPDATE operations SET state='FAILED' WHERE id=?", ("d"*32,))
         self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
 
+    def test_guided_plan_reads_exec_archive_without_any_mutation(self):
+        directory = u.STATE / u.EXEC_ARCHIVE_NAME
+        directory.mkdir(mode=0o700)
+        entry = directory / ("a" * 32 + ".stderr")
+        entry.write_bytes(b"original-output")
+        entry.chmod(0o600)
+        original = u.inspect_exec_archive
+        # CI synthetic user != host's dedicated uid; preserve all other checks.
+        with mock.patch.object(u, "inspect_exec_archive",
+                               side_effect=lambda uid: original(directory.stat().st_uid)), \
+                mock.patch.object(u.os, "geteuid", return_value=0), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(u.main(["--plan", "--guided-full-plan", "--scope", "full",
+                                     "--project", "user-1001"]), 0)
+        data = json.loads(output.getvalue())
+        self.assertTrue(data["ready"])
+        self.assertEqual(data["scope"], "full")
+        self.assertTrue(data["guided"])
+        self.assertEqual(len(data["exec_archive"]["files"]), 1)
+        self.assertEqual(entry.read_bytes(), b"original-output")
+        self.assertFalse(u.AUDIT.exists())
+        self.assertEqual(self.cmds, [])
+
+    def test_guided_terminal_timeout_and_released_historical_start(self):
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("s"*32, "user-1001", self.box, "UNKNOWN", "expired", "box_start", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("w"*32, "user-1001", self.box, "TIMED_OUT", "", "box_wait_ready", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("d"*32, "user-1001", self.box, "SUCCEEDED", "native", "box_delete", self.box))
+        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?,?,?)",
+                    (self.box, "user-1001", "retired", "DELETED", 20, self.box, "d"*32))
+        # No RELEASED proof => fail closed even though native Box no longer exists.
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+        self.insert("INSERT INTO recovery_audit VALUES(?,?,?,?,?)",
+                    (1, "s"*32, "RELEASED", 10, "a"*64))
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"], plan["blockers"])
+        self.assertEqual(plan["sqlite"]["unresolved_operations"], 0)
+        self.assertEqual(len(plan["sqlite"]["historical_released_other"]), 1)
+        self.assertFalse(self.plan("full")["ready"])
+        self.insert("UPDATE operations SET state='FAILED' WHERE id=?", ("d"*32,))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+
+    def test_guided_released_unknown_cannot_bypass_network_original(self):
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("p"*32, "user-1001", self.box, "UNKNOWN", "expired", "box_peer_set", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("d"*32, "user-1001", self.box, "SUCCEEDED", "native", "box_delete", self.box))
+        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?,?,?)",
+                    (self.box, "user-1001", "retired", "DELETED", 20, self.box, "d"*32))
+        self.insert("INSERT INTO recovery_audit VALUES(?,?,?,?,?)",
+                    (1, "p"*32, "RELEASED", 10, "a"*64))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+
     def test_guided_native_dependency_and_live_operation_refusals(self):
         entry = {"name": "bw-example", "type": "container", "status": "Running",
                  "config": {"volatile.uuid": self.box},
