@@ -129,3 +129,8 @@ Shared old Peer SQLite model requires all Boxes' `network_bindings.acl` to be id
 ## Root ACL default Project provenance correction
 
 Actual disposable Incus 7.6 cross-Project testing proved the root-created ACL and network object have native `Project=default`, while tenant references in `UsedBy` are canonically `?project=<tenant>`; the old pure inventory fixture incorrectly modeled ACL.Project as the tenant. Updated strict root-native ACL checker and expanded URL canonicalization tests without loosening foreign Project/bridge ownership checks. Targeted tests and full isolated `make verify` `165e02d1a31c8e471d6d2fd9c16e2815` Guest exit 0; temporary Project/ACL deleted. [Full native evidence](V1_PR178_ROOT_DEFAULT_ACL_NATIVE_PROVENANCE_2026-11-23.md). No production network mutation or MCP Root integration enabled.
+
+
+## V2 scoped Peer original and atomic staging
+
+Added **v2-only** `ScopedPeerOriginalIntent`, a read-only claimed-original `ReadRootScopedPeerOriginal` and UNKNOWN recovery-only checker, five exact bridge guard/per-Box ACL/per-Box UUID claims, full same-transaction SQLite/actor/token/dual-stack proof, and an **internal-only atomic StageScopedPeerOriginal**. Unrelated C/D grant policies are preserved; regrant records a durable explicit DROP-before marker and produces separate `RevokedBefore`/`RevokedAfter` views. Old v1 Peer/root API and MCP unchanged and refuse v2. Extensive grant/revoke/UNKNOWN/admission/foreign/partial/lease negative tests and full isolated `make verify` original `8e98aa38b6749aa46672aaa54dca176c` **Guest exit 0**. [Complete code/evidence/remaining issues](V1_PR178_SCOPED_V2_ORIGINAL_AND_ATOMIC_STAGE_2026-11-23.md). STILL no installed Root writer, safe shared→per-Box migration or automatic MCP dispatch; keep Draft.

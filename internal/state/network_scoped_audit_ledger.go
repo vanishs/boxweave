@@ -46,6 +46,25 @@ func (s *Store) ReadCompleteScopedNetworkAuditLedger(ctx context.Context, projec
 		return zero, err
 	}
 	defer tx.Rollback()
+	out, err := readCompleteScopedNetworkAuditLedgerTx(ctx, tx, project, bridge)
+	if err != nil {
+		return zero, err
+	}
+	if err := tx.Commit(); err != nil {
+		return zero, err
+	}
+	return out, nil
+}
+
+// readCompleteScopedNetworkAuditLedgerTx preserves the entire inventory,
+// including MAC and two address fences per Box, under ONE SQLite snapshot.
+// A separate scoped Peer staging transaction uses this exact helper to
+// atomically prove the entire Project before committing a pending direction.
+func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	var zero ScopedNetworkAuditLedger
+	if tx == nil || !strings.HasPrefix(project, "user-") || !auditName(project) || !auditName(bridge) {
+		return zero, ErrInvalid
+	}
 
 	// A migration cannot silently proceed past deleted or archived
 	// historical leases whose ACL shape has not been separately proved.
@@ -198,8 +217,5 @@ func (s *Store) ReadCompleteScopedNetworkAuditLedger(ctx context.Context, projec
 	slices.SortFunc(result.Boxes, func(a, b ScopedNetworkAuditBinding) int {
 		return strings.Compare(a.UUID, b.UUID)
 	})
-	if err = tx.Commit(); err != nil {
-		return zero, err
-	}
 	return result, nil
 }
