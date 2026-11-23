@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/vanishs/boxweave/internal/install"
 	"github.com/vanishs/boxweave/internal/native"
 	"github.com/vanishs/boxweave/internal/state"
 )
@@ -72,17 +73,20 @@ type Service struct {
 }
 
 type HostStatus struct {
-	TrackingID      string                    `json:"tracking_id"`
-	Version         string                    `json:"version"`
-	Commit          string                    `json:"commit"`
-	BinarySHA256    string                    `json:"binary_sha256,omitempty"`
-	GoVersion       string                    `json:"go_version"`
-	SchemaVersion   int                       `json:"schema_version"`
-	MCPReady        bool                      `json:"mcp_ready"`
-	Native          native.Status             `json:"native"`
-	Ready           bool                      `json:"ready"`
-	Attention       *attentionSnapshot        `json:"attention,omitempty"`
-	ProjectCapacity *state.ProjectBoxCapacity `json:"project_capacity,omitempty"`
+	TrackingID            string                      `json:"tracking_id"`
+	Version               string                      `json:"version"`
+	Commit                string                      `json:"commit"`
+	BinarySHA256          string                      `json:"binary_sha256,omitempty"`
+	GoVersion             string                      `json:"go_version"`
+	SchemaVersion         int                         `json:"schema_version"`
+	MCPReady              bool                        `json:"mcp_ready"`
+	Native                native.Status               `json:"native"`
+	Ready                 bool                        `json:"ready"`
+	Attention             *attentionSnapshot          `json:"attention,omitempty"`
+	ProjectCapacity       *state.ProjectBoxCapacity   `json:"project_capacity,omitempty"`
+	AddressCapacity       *native.AddressCapacity     `json:"address_capacity,omitempty"`
+	AddressRetirement     *state.IPv4RetirementStatus `json:"address_retirement,omitempty"`
+	AddressCapacityStatus string                      `json:"address_capacity_status,omitempty"`
 }
 
 func newTrackingID() (string, error) {
@@ -116,6 +120,25 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.ProjectCapacity = &cap
 	}
 	out.Ready = out.MCPReady && out.Native.Ready
+	if out.MCPReady {
+		if retirement, e := s.Store.ReadIPv4RetirementStatus(ctx, s.Native.Project); e == nil {
+			if retirement.Pending > 0 && !install.NativeRetirementSocketPresent() {
+				retirement.LastDeferredReason = "RETIREMENT_HELPER_NOT_CONFIGURED"
+			}
+			out.AddressRetirement = &retirement
+		}
+	}
+	if out.Ready {
+		if capacity, e := s.Native.ReadCreateAddressCapacity(ctx, s.Store.ReadCreateAddressHolds); e == nil {
+			out.AddressCapacity = &capacity
+			out.AddressCapacityStatus = "OBSERVED"
+			if capacity.RemainingIPv4UpperBound == 0 {
+				out.AddressCapacityStatus = "EXHAUSTED"
+			}
+		} else {
+			out.AddressCapacityStatus = "UNVERIFIED"
+		}
+	}
 	return out
 }
 func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request) (*auth.TokenInfo, error) {
@@ -154,7 +177,7 @@ func (s *Service) Handler() http.Handler {
 			return result, err
 		}
 	})
-	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies; project_capacity counts owned and unresolved Create slots, not native address/storage availability or permission to dispatch; no foreign inventory.", Annotations: readToolAnnotations()},
+	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies; project_capacity counts owned and unresolved Create slots, not native address/storage availability or permission to dispatch; address_capacity reports scoped IPv4 snapshot upper bound, never an allocation guarantee; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			principal, err := s.requestPrincipal(req)
 			if err != nil {
@@ -245,5 +268,6 @@ func (s *Service) ListenAndServe() error {
 	gcCtx, gcCancel := context.WithCancel(context.Background())
 	defer gcCancel()
 	go s.execGCLoop(gcCtx)
+	go s.ipv4RetirementLoop(gcCtx)
 	return server.ListenAndServe()
 }

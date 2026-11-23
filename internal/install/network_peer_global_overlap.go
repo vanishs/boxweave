@@ -42,7 +42,11 @@ func nativePeerGlobalNetworkScopeSnapshot(ctx context.Context, root incus.Instan
 
 func nativePeerGlobalNetworkScopeFromInventory(scope NativePeerBridgeAuditTarget,
 	networks []api.Network, instances []api.Instance) (string, error) {
-	if scope.Project == "" || scope.Bridge == "" || len(scope.Boxes) < 2 ||
+	return nativeNetworkScopeFromInventory(scope, networks, instances, 2)
+}
+func nativeNetworkScopeFromInventory(scope NativePeerBridgeAuditTarget,
+	networks []api.Network, instances []api.Instance, minBoxes int) (string, error) {
+	if scope.Project == "" || scope.Bridge == "" || len(scope.Boxes) < minBoxes ||
 		len(networks) == 0 || len(networks) > 512 || len(instances) > 4096 {
 		return "", errors.New("incomplete or unbounded host-wide network inventory")
 	}

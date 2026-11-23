@@ -3,6 +3,7 @@
 package install
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,32 +15,41 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
+	"syscall"
+	"time"
 )
 
 type Plan struct {
-	User           string
-	StateDir       string
-	BinaryPath     string
-	UnitPath       string
-	SourceBinary   string
-	Project        string
-	Socket         string
-	Version        string
-	ExpectedDigest string
+	User                string
+	StateDir            string
+	BinaryPath          string
+	UnitPath            string
+	SourceBinary        string
+	Project             string
+	Socket              string
+	Version             string
+	ExpectedDigest      string
+	RetirementTarget    *NativePrepareTarget
+	RetirementReviewSHA string
 }
 type Manifest struct {
-	Schema          int    `json:"schema"`
-	Version         string `json:"version"`
-	BuildCommit     string `json:"build_commit,omitempty"`
-	BinarySHA256    string `json:"binary_sha256"`
-	UnitSHA256      string `json:"unit_sha256"`
-	ServiceActive   bool   `json:"service_active"`
-	BinaryPath      string `json:"binary_path"`
-	StateDir        string `json:"state_dir"`
-	ServiceUser     string `json:"service_user"`
-	Project         string `json:"native_project"`
-	Socket          string `json:"native_socket"`
-	RestartRequired bool   `json:"restart_required"`
+	Schema                    int    `json:"schema"`
+	Version                   string `json:"version"`
+	BuildCommit               string `json:"build_commit,omitempty"`
+	BinarySHA256              string `json:"binary_sha256"`
+	UnitSHA256                string `json:"unit_sha256"`
+	ServiceActive             bool   `json:"service_active"`
+	BinaryPath                string `json:"binary_path"`
+	StateDir                  string `json:"state_dir"`
+	ServiceUser               string `json:"service_user"`
+	Project                   string `json:"native_project"`
+	Socket                    string `json:"native_socket"`
+	RestartRequired           bool   `json:"restart_required"`
+	RetirementUnitSHA256      string `json:"retirement_unit_sha256,omitempty"`
+	RetirementBridge          string `json:"retirement_bridge,omitempty"`
+	RetirementACL             string `json:"retirement_acl,omitempty"`
+	RetirementNativeReviewSHA string `json:"retirement_native_review_sha256,omitempty"`
 }
 
 const manifestSchema = 2
@@ -184,6 +194,9 @@ func Status(p Plan) (Manifest, error) {
 			return m, errors.New("installed executable version/commit mismatch")
 		}
 	}
+	if err = verifyInstalledRetirementUnit(m); err != nil {
+		return m, err
+	}
 	m.ServiceActive = serviceActive() == nil
 	return m, nil
 }
@@ -192,7 +205,11 @@ func Status(p Plan) (Manifest, error) {
 // unit byte-for-byte, including legacy absence of this opt-in. An operator
 // drop-in may narrow the effective startup policy. Manual serve stays local.
 func unit(p Plan) string {
-	return "[Unit]\nDescription=BoxWeave v1 local MCP controller\nAfter=network.target incus.service\n\n[Service]\n" +
+	header := "[Unit]\nDescription=BoxWeave v1 local MCP controller\nAfter=network.target incus.service\n"
+	if p.RetirementTarget != nil {
+		header += "Wants=boxweave-ipv4-retirement.service\n"
+	}
+	return header + "\n[Service]\n" +
 		"Type=simple\nUser=" + p.User + "\nUMask=0077\n" +
 		"Environment=BOXWEAVE_FORWARD_EXTERNAL_ALLOW=all\n" +
 		"ExecStart=" + p.BinaryPath + " serve -db " + p.StateDir + "/ledger.sqlite -incus-socket " + p.Socket + " -project " + p.Project + " -listen 127.0.0.1:18650\n" +
@@ -274,6 +291,9 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 		if old.BinarySHA256 != h {
 			return Manifest{}, errors.New("different binary: explicit inspected upgrade required")
 		}
+		if p.RetirementTarget != nil && (old.RetirementBridge != p.RetirementTarget.Network || old.RetirementACL != p.RetirementTarget.ACL || old.RetirementNativeReviewSHA != p.RetirementReviewSHA) {
+			return Manifest{}, errors.New("existing installer retirement scope differs; no adoption")
+		}
 		return old, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Manifest{}, err
@@ -285,6 +305,32 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 		return Manifest{}, errors.New("existing state directory not governed by a verified manifest; refuse adoption")
 	} else if !errors.Is(e, os.ErrNotExist) {
 		return Manifest{}, e
+	}
+	retirementBody := ""
+	if p.RetirementTarget != nil {
+		if e := verifyRetirementExecutables(); e != nil {
+			return Manifest{}, e
+		}
+		t := *p.RetirementTarget
+		if p.User != "boxweave" || t.Project != p.Project || !validRetirementReviewSHA(p.RetirementReviewSHA) {
+			return Manifest{}, errors.New("exact reviewed native retirement scope required")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		reviewed, e := NativePreparePlanReview(ctx, t)
+		cancel()
+		if e != nil || reviewed.ReviewSHA256 != p.RetirementReviewSHA {
+			return Manifest{}, errors.New("native retirement scope review drifted")
+		}
+		retirementBody, e = NativePeerRootUnitText(NativePeerRootScope{DBPath: nativePeerRootInstalledDB, Project: p.Project, Bridge: t.Network, ACL: t.ACL, Approved: true, RetirementReview: true, RetirementCompact: true})
+		if e != nil {
+			return Manifest{}, e
+		}
+		if _, e = os.Lstat(nativeRetirementUnitPath); !errors.Is(e, os.ErrNotExist) {
+			return Manifest{}, errors.New("existing retirement unit not owned by fresh installation")
+		}
+		if _, e = os.Lstat(nativeRetirementSocketPath); !errors.Is(e, os.ErrNotExist) {
+			return Manifest{}, errors.New("existing retirement socket requires review")
+		}
 	}
 	fmt.Fprintln(os.Stderr, "Fresh install: external Forward policy defaults to all; explicit external binds may expose public interfaces. Default bind is loopback; native Project authorization is unchanged.")
 	if err = os.MkdirAll(p.StateDir, 0700); err != nil {
@@ -305,6 +351,38 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	}
 	digestUnit := sha256.Sum256([]byte(unit(p)))
 	m := Manifest{Schema: manifestSchema, Version: build.Version, BuildCommit: build.Commit, BinarySHA256: h, UnitSHA256: hex.EncodeToString(digestUnit[:]), BinaryPath: p.BinaryPath, StateDir: p.StateDir, ServiceUser: p.User, Project: p.Project, Socket: p.Socket, RestartRequired: true}
+	if retirementBody != "" {
+		dig := sha256.Sum256([]byte(retirementBody))
+		m.RetirementUnitSHA256 = hex.EncodeToString(dig[:])
+		m.RetirementBridge = p.RetirementTarget.Network
+		m.RetirementACL = p.RetirementTarget.ACL
+		m.RetirementNativeReviewSHA = p.RetirementReviewSHA
+		// Never overwrite or adopt an independently installed privileged unit.
+		f, e := os.OpenFile(nativeRetirementUnitPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if e != nil {
+			return m, e
+		}
+		_, e = f.WriteString(retirementBody)
+		if e == nil {
+			e = f.Sync()
+		}
+		cerr := f.Close()
+		if e != nil {
+			return m, e
+		}
+		if cerr != nil {
+			return m, cerr
+		}
+		dir, e := os.Open(filepath.Dir(nativeRetirementUnitPath))
+		if e != nil {
+			return m, e
+		}
+		e = dir.Sync()
+		dir.Close()
+		if e != nil {
+			return m, e
+		}
+	}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return m, err
@@ -321,4 +399,78 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	// systemctl daemon-reload/enable/start and effective native verification are
 	// separate explicit local actions. A staged unit is NOT installed acceptance.
 	return m, nil
+}
+
+func validRetirementReviewSHA(s string) bool {
+	return len(s) == 64 && strings.Trim(s, "0123456789abcdef") == ""
+}
+func verifyInstalledRetirementUnit(m Manifest) error {
+	if m.RetirementUnitSHA256 == "" {
+		if m.RetirementBridge != "" || m.RetirementACL != "" || m.RetirementNativeReviewSHA != "" {
+			return errors.New("incomplete retirement installer identity")
+		}
+		return nil
+	}
+	if !validRetirementReviewSHA(m.RetirementUnitSHA256) || m.RetirementBridge == "" || m.RetirementACL == "" || !validRetirementReviewSHA(m.RetirementNativeReviewSHA) {
+		return errors.New("invalid retirement installer identity")
+	}
+	st, e := os.Lstat(nativeRetirementUnitPath)
+	if e != nil {
+		return e
+	}
+	owner, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != 0 || !st.Mode().IsRegular() || st.Mode().Perm()&0022 != 0 || owner.Nlink != 1 {
+		return errors.New("untrusted retirement installer unit")
+	}
+	h, e := sha(nativeRetirementUnitPath)
+	if e != nil || h != m.RetirementUnitSHA256 {
+		return errors.New("retirement unit digest mismatch")
+	}
+	// This is an independently generated fixed-scope unit, not trust in a
+	// service-account writable manifest alone.
+	body, e := NativePeerRootUnitText(NativePeerRootScope{DBPath: nativePeerRootInstalledDB, Project: m.Project, Bridge: m.RetirementBridge, ACL: m.RetirementACL, Approved: true, RetirementReview: true, RetirementCompact: true})
+	if e != nil {
+		return e
+	}
+	expected := sha256.Sum256([]byte(body))
+	if hex.EncodeToString(expected[:]) != h {
+		return errors.New("retirement unit differs from fixed installer scope")
+	}
+	return nil
+}
+
+func verifyRetirementNativePrepared(m Manifest) error {
+	if m.RetirementUnitSHA256 == "" {
+		return nil
+	}
+	st, e := os.Lstat(nativePrepareJournalPath)
+	if e != nil {
+		return e
+	}
+	own, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || own.Uid != 0 || own.Nlink != 1 || !st.Mode().IsRegular() || st.Mode().Perm() != 0600 {
+		return errors.New("untrusted root native prepare record")
+	}
+	r, e := NativePrepareStatus()
+	if e != nil {
+		return e
+	}
+	if r.Status != "APPLIED" || r.Plan.Target.Project != m.Project || r.Plan.Target.Network != m.RetirementBridge || r.Plan.Target.ACL != m.RetirementACL || r.Plan.ReviewSHA256 != m.RetirementNativeReviewSHA || nativePrepareDigest(r.Plan) != r.Plan.ReviewSHA256 {
+		return errors.New("retirement verifier requires exact APPLIED native preparation")
+	}
+	return nil
+}
+
+func verifyRetirementExecutables() error {
+	for _, path := range []string{"/usr/sbin/ip", "/usr/sbin/bridge", "/usr/sbin/nft", "/usr/sbin/conntrack"} {
+		st, e := os.Stat(path)
+		if e != nil {
+			return fmt.Errorf("required retirement reader unavailable: %s", path)
+		}
+		own, ok := st.Sys().(*syscall.Stat_t)
+		if !ok || own.Uid != 0 || !st.Mode().IsRegular() || st.Mode().Perm()&0022 != 0 || st.Mode().Perm()&0111 == 0 {
+			return fmt.Errorf("untrusted retirement reader: %s", path)
+		}
+	}
+	return nil
 }

@@ -209,6 +209,9 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	} else if !errors.Is(err, ErrNotFound) {
 		return RecoveryRecord{}, err
 	}
+	if e = requireNoIPv4Compaction(ctx, tx, r.Layer); e != nil {
+		return RecoveryRecord{}, e
+	}
 	nowTarget, e := readRecoveryTarget(ctx, tx, r.Layer, r.OriginalID)
 	if e != nil {
 		return RecoveryRecord{}, e

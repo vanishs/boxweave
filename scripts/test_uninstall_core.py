@@ -29,6 +29,8 @@ class FakeHost(unittest.TestCase):
             "NATIVE": root / "native-prep.json",
             "SCRIPTLET": root / "scriptlet.json",
             "ROOT_UNIT": root / "units" / "boxweave-native-peer-root.service",
+            "RETIREMENT_UNIT": root / "units" / "boxweave-ipv4-retirement.service",
+            "RETIREMENT_SOCKET": root / "retirement.sock",
             "AUDIT": root / "uninstall-audit.json",
             "BACKUP": root / "installer-backup",
             "RETIRED": root / "retired",
@@ -138,6 +140,59 @@ class FakeHost(unittest.TestCase):
 
     def plan(self, scope="service", boxes=(), digest=None):
         return u.inspect(scope, "user-1001", list(boxes), digest)
+
+    def install_retirement_fixture(self):
+        self.insert("UPDATE schema_version SET version=6")
+        self.insert("CREATE TABLE network_ipv4_compactions (project TEXT, delete_operation_id TEXT)")
+        bridge, acl, digest = "incusbr-1001", "bw-test-1001", "a"*64
+        unit = u.retirement_unit_body("user-1001", bridge, acl)
+        u.RETIREMENT_UNIT.write_bytes(unit)
+        u.RETIREMENT_UNIT.chmod(0o644)
+        manifest = u.STATE / "install-manifest.json"
+        data = json.loads(manifest.read_text())
+        data.update(retirement_unit_sha256=u.sha(unit), retirement_bridge=bridge,
+                    retirement_acl=acl, retirement_native_review_sha256=digest)
+        manifest.write_text(json.dumps(data))
+        u.NATIVE.write_text(json.dumps({"schema": 1, "status": "APPLIED", "plan": {
+            "target": {"project": "user-1001", "network": bridge, "acl": acl}, "review_sha256": digest}}))
+        u.NATIVE.chmod(0o600)
+        p = mock.patch.object(u, "retirement_service_state", return_value="inactive")
+        p.start()
+        self.addCleanup(p.stop)
+        return digest
+
+    def test_schema6_owned_retirement_full_cleanup(self):
+        digest = self.install_retirement_fixture()
+        plan = self.plan("full", digest=digest)
+        self.assertTrue(plan["ready"], plan["blockers"])
+        self.assertEqual(plan["sqlite"]["version"], 6)
+        self.assertEqual(plan["retirement_verifier"]["state"], "inactive")
+        out = u.apply(plan)
+        self.assertEqual(out["outcome"], "COMPLETE")
+        self.assertFalse(u.RETIREMENT_UNIT.exists())
+        self.assertFalse(u.BINARY.exists())
+        self.assertFalse(u.STATE.exists())
+        self.assertIn(["systemctl", "disable", u.RETIREMENT_UNIT.name], self.cmds)
+
+    def test_schema6_compaction_protects_all_uninstall_scopes(self):
+        digest = self.install_retirement_fixture()
+        self.insert("INSERT INTO network_ipv4_compactions VALUES(?,?)", ("user-1001", "b"*32))
+        for scope in ("service", "controller", "full"):
+            p = self.plan(scope, digest=digest if scope=="full" else None)
+            self.assertFalse(p["ready"])
+            self.assertIn("IPV4_COMPACTION_PROTECTED:1", p["blockers"])
+        self.assertEqual(self.cmds, [])
+        self.assertTrue(u.RETIREMENT_UNIT.exists())
+
+    def test_schema6_retirement_unit_drift_and_orphan_refused(self):
+        digest = self.install_retirement_fixture()
+        plan = self.plan("full", digest=digest)
+        u.RETIREMENT_UNIT.write_bytes(u.RETIREMENT_UNIT.read_bytes()+b"# altered")
+        with self.assertRaisesRegex(u.UninstallError, "identity changed"):
+            self.plan("full", digest=digest)
+        with self.assertRaisesRegex(u.UninstallError, "not stopped or changed"):
+            u.apply(plan)
+        self.assertTrue(u.BINARY.exists())
 
     def test_help_default_is_read_only(self):
         with mock.patch("sys.stdout") as output:

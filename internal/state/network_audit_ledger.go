@@ -42,6 +42,12 @@ func auditMAC(s string) bool {
 // snapshot, never authorization to change ACL, run root shell or release IPs.
 // Existing S1 databases lacking pinned bindings deliberately return failure.
 func (s *Store) ReadCompleteNetworkAuditLedger(ctx context.Context, project, bridge, acl string) (NetworkAuditLedger, error) {
+	return s.readCompleteNetworkAuditLedger(ctx, project, bridge, acl, false)
+}
+
+// Empty snapshots are useful for verified retirement of the final guest,
+// but do not relax the ordinary Peer grant precondition.
+func (s *Store) readCompleteNetworkAuditLedger(ctx context.Context, project, bridge, acl string, allowEmpty bool) (NetworkAuditLedger, error) {
 	var zero NetworkAuditLedger
 	if s == nil || s.db == nil || !auditName(project) || project == "default" || !auditName(bridge) || !auditName(acl) {
 		return zero, ErrInvalid
@@ -76,14 +82,14 @@ func (s *Store) ReadCompleteNetworkAuditLedger(ctx context.Context, project, bri
 	if err != nil {
 		return zero, err
 	}
-	if len(bindings) == 0 {
+	if len(bindings) == 0 && !allowEmpty {
 		return zero, ErrResourceLocked
 	}
 	historical, err := verifiedDeletedNetworkBindings(ctx, tx, project, bridge, acl)
 	if err != nil {
 		return zero, ErrResourceLocked
 	}
-	rows, err = tx.QueryContext(ctx, "SELECT box_uuid,incarnation,nic,bridge,acl,mac,ipv4,ipv6,state FROM network_bindings WHERE project=?", project)
+	rows, err = tx.QueryContext(ctx, "SELECT box_uuid,incarnation,nic,bridge,acl,mac,ipv4,ipv6,state FROM network_bindings n WHERE project=? AND NOT EXISTS (SELECT 1 FROM network_ipv4_retirements r WHERE r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation)", project)
 	if err != nil {
 		return zero, err
 	}

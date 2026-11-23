@@ -20,7 +20,7 @@ def run() -> dict:
         tools = mcp.all_tools()
         report.check("activity_tool_advertised", "box_activity_get" in tools)
         status = mcp.host_status()
-        report.check("schema_v5", status["schema_version"] == 5)
+        report.check("schema_v6", status["schema_version"] == 6)
         overview = mcp.activity("overview", limit=5)
         report.check("overview_bounded", overview["source"] == "SQLITE_SNAPSHOT")
         issues = mcp.activity("issues", limit=5)

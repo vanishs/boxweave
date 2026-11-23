@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vanishs/boxweave/internal/state"
 	"io"
 	"os"
 	"os/exec"
@@ -19,12 +20,13 @@ import (
 const serviceName = "boxweave.service"
 
 type BackupReceipt struct {
-	Schema             int
-	Previous           Manifest
-	PreviousUnitSHA256 string
-	PreviousDBSHA256   string
-	PreviousWALSHA256  string
-	PreviousSHMSHA256  string
+	Schema                  int
+	Previous                Manifest
+	PreviousUnitSHA256      string
+	PreviousDBSHA256        string
+	PreviousWALSHA256       string
+	PreviousSHMSHA256       string
+	RetirementWitnessSHA256 string `json:",omitempty"`
 }
 
 func localApproval(p Plan, approved bool) error {
@@ -98,12 +100,20 @@ func Activate(p Plan, approved bool) (Manifest, error) {
 	if err != nil {
 		return m, err
 	}
+	if err = verifyRetirementNativePrepared(m); err != nil {
+		return m, err
+	}
 	if err = doctorAsService(p, p.BinaryPath); err != nil {
 		return m, err
 	}
 	if m.RestartRequired {
 		if err = runLocal("systemctl", "daemon-reload"); err != nil {
 			return m, err
+		}
+		if m.RetirementUnitSHA256 != "" {
+			if _, err = retirementUnitProperties(); err != nil {
+				return m, err
+			}
 		}
 		if err = runLocal("systemctl", "enable", "--now", serviceName); err != nil {
 			return m, err
@@ -169,11 +179,19 @@ func copyIfPresent(src, dst string) (string, error) {
 	return copyChecked(src, dst)
 }
 func snapshot(p Plan, old Manifest) (BackupReceipt, error) {
+	witness := ""
+	if old.RetirementUnitSHA256 != "" {
+		var e error
+		witness, e = installedRetirementRollbackWitness(p)
+		if e != nil {
+			return BackupReceipt{}, e
+		}
+	}
 	dir := backupDir(p)
 	if err := os.Mkdir(dir, 0700); err != nil {
 		return BackupReceipt{}, fmt.Errorf("backup exists or unavailable: %w", err)
 	}
-	b := BackupReceipt{Schema: 1, Previous: old}
+	b := BackupReceipt{Schema: 1, Previous: old, RetirementWitnessSHA256: witness}
 	var err error
 	if _, err = copyChecked(p.BinaryPath, filepath.Join(dir, "binary")); err != nil {
 		return b, err
@@ -259,6 +277,9 @@ func Upgrade(p Plan, approved bool) (Manifest, error) {
 		return old, errors.New("pending backup must be reviewed before another upgrade")
 	}
 	if err = runLocal("systemctl", "stop", serviceName); err != nil {
+		return old, err
+	}
+	if err = verifyRetirementStopped(old); err != nil {
 		return old, err
 	}
 	b, err := snapshot(p, old)
@@ -354,6 +375,15 @@ func Rollback(p Plan, approved bool) (Manifest, error) {
 	if err = runLocal("systemctl", "stop", serviceName); err != nil {
 		return Manifest{}, err
 	}
+	if err = verifyRetirementStopped(b.Previous); err != nil {
+		return b.Previous, err
+	}
+	if b.Previous.RetirementUnitSHA256 != "" {
+		current, e := installedRetirementRollbackWitness(p)
+		if e != nil || !validRetirementReviewSHA(b.RetirementWitnessSHA256) || current != b.RetirementWitnessSHA256 {
+			return b.Previous, errors.New("retirement archive or protected compaction changed since backup; preserve controller and native evidence")
+		}
+	}
 	dir := backupDir(p)
 	if err = restore(filepath.Join(dir, "binary"), p.BinaryPath, 0755); err != nil {
 		return Manifest{}, err
@@ -389,4 +419,38 @@ func Rollback(p Plan, approved bool) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return Activate(p, true)
+}
+
+func verifyRetirementStopped(m Manifest) error {
+	if m.RetirementUnitSHA256 == "" {
+		return nil
+	}
+	// PartOf stops the root helper with the controller. Verify the actual
+	// service and socket before replacing the shared executable or database.
+	raw, e := exec.Command("systemctl", "show", "-p", "ActiveState", "-p", "MainPID", "--value", nativeRetirementUnitName).Output()
+	if e != nil {
+		return e
+	}
+	lines := strings.Fields(string(raw))
+	if len(lines) != 2 {
+		return errors.New("retirement verifier stop state unverified")
+	}
+	if !(lines[0] == "0" && (lines[1] == "inactive" || lines[1] == "failed") || lines[1] == "0" && (lines[0] == "inactive" || lines[0] == "failed")) {
+		return errors.New("retirement verifier not stopped")
+	}
+	if _, e = os.Lstat(nativeRetirementSocketPath); !errors.Is(e, os.ErrNotExist) {
+		return errors.New("retirement verifier socket still present")
+	}
+	return nil
+}
+
+func installedRetirementRollbackWitness(p Plan) (string, error) {
+	db, e := state.OpenNetworkAuditReadOnly(filepath.Join(p.StateDir, "ledger.sqlite"))
+	if e != nil {
+		return "", e
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return db.ReadIPv4RetirementRollbackWitness(ctx, p.Project)
 }

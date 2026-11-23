@@ -1,6 +1,8 @@
 package native
 
 import (
+	"errors"
+	"fmt"
 	"github.com/lxc/incus/v7/shared/api"
 	"net/netip"
 	"testing"
@@ -64,5 +66,38 @@ func TestPeerStatePrefixesRedacted(t *testing.T) {
 	}
 	if !PeerManagedNICPolicy("") || !PeerManagedNICPolicy("managed") {
 		t.Fatal("default")
+	}
+}
+
+func TestCreateAddressCapacityExhaustionIsTypedAndPreDispatch(t *testing.T) {
+	p4 := netip.MustParsePrefix("10.28.8.1/21")
+	p6 := netip.MustParsePrefix("fd28::1/64")
+	used := map[netip.Addr]bool{}
+	macs := map[string]bool{}
+	allocated := 0
+	for i := 0; i < 2045; i++ {
+		b, e := chooseCreatePeerBinding("bw", "bw-acl", fmt.Sprint(i), p4, p6, used, macs, func(v VerifiedStaticPeerBinding) (bool, error) { return true, nil })
+		if e != nil {
+			t.Fatal(i, e)
+		}
+		a, c := netip.MustParseAddr(b.IPv4), netip.MustParseAddr(b.IPv6)
+		if used[a] || used[c] || macs[b.MAC] || a == p4.Addr() || !p4.Contains(a) {
+			t.Fatal("collision", b)
+		}
+		used[a], used[c], macs[b.MAC] = true, true, true
+		allocated++
+	}
+	if allocated != 2045 {
+		t.Fatal(allocated)
+	}
+	calls := 0
+	_, e := chooseCreatePeerBinding("bw", "bw-acl", "exhausted", p4, p6, used, macs, func(v VerifiedStaticPeerBinding) (bool, error) { calls++; return true, nil })
+	if !errors.Is(e, ErrNetworkAddressCapacityExhausted) || CapabilityDenialClass(e) != "NETWORK_ADDRESS_CAPACITY_EXHAUSTED" || calls != 0 {
+		t.Fatal(e, calls)
+	}
+	// A clean native inventory alone cannot override a durable historical claim.
+	_, e = chooseCreatePeerBinding("bw", "bw-acl", "historical", netip.MustParsePrefix("10.1.2.1/30"), p6, map[netip.Addr]bool{}, map[string]bool{}, func(v VerifiedStaticPeerBinding) (bool, error) { return false, nil })
+	if !errors.Is(e, ErrNetworkAddressCapacityExhausted) {
+		t.Fatal(e)
 	}
 }

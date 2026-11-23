@@ -6,14 +6,15 @@ import (
 )
 
 var (
-	ErrProjectProxyDenied          = fmt.Errorf("PROJECT_PROXY_DENIED: restricted.devices.proxy=allow requires host approval: %w", ErrNativeUnsupported)
-	ErrProjectNestingDenied        = fmt.Errorf("PROJECT_NESTING_DENIED: restricted.containers.nesting=allow required: %w", ErrNativeUnsupported)
-	ErrProjectInterceptionDenied   = fmt.Errorf("PROJECT_INTERCEPTION_DENIED: restricted.containers.interception=allow requires host approval: %w", ErrNativeUnsupported)
-	ErrProjectLowlevelDenied       = fmt.Errorf("PROJECT_LOWLEVEL_DENIED: restricted.containers.lowlevel=allow requires separate host review: %w", ErrNativeUnsupported)
-	ErrForwardPolicyDenied         = fmt.Errorf("FORWARD_EXTERNAL_POLICY_DENIED: effective host service policy does not permit this external bind: %w", ErrNativeUnsupported)
-	ErrForwardAddressUnverified    = fmt.Errorf("FORWARD_HOST_ADDRESS_UNVERIFIED: address not uniquely verified on an allowed active host interface: %w", ErrNativeUnsupported)
-	ErrIDMapReservationUnavailable = fmt.Errorf("IDMAP_RESERVATION_UNAVAILABLE: persistent UID/GID reservation is not implemented: %w", ErrNativeUnsupported)
-	ErrPrivilegedBoxDenied         = fmt.Errorf("PRIVILEGED_BOX_DENIED: privileged guests are not supported by this confined runtime: %w", ErrNativeUnsupported)
+	ErrNetworkAddressCapacityExhausted = fmt.Errorf("NETWORK_ADDRESS_CAPACITY_EXHAUSTED: no verified unreserved dual-stack address tuple remains: %w", ErrNativeUnsupported)
+	ErrProjectProxyDenied              = fmt.Errorf("PROJECT_PROXY_DENIED: restricted.devices.proxy=allow requires host approval: %w", ErrNativeUnsupported)
+	ErrProjectNestingDenied            = fmt.Errorf("PROJECT_NESTING_DENIED: restricted.containers.nesting=allow required: %w", ErrNativeUnsupported)
+	ErrProjectInterceptionDenied       = fmt.Errorf("PROJECT_INTERCEPTION_DENIED: restricted.containers.interception=allow requires host approval: %w", ErrNativeUnsupported)
+	ErrProjectLowlevelDenied           = fmt.Errorf("PROJECT_LOWLEVEL_DENIED: restricted.containers.lowlevel=allow requires separate host review: %w", ErrNativeUnsupported)
+	ErrForwardPolicyDenied             = fmt.Errorf("FORWARD_EXTERNAL_POLICY_DENIED: effective host service policy does not permit this external bind: %w", ErrNativeUnsupported)
+	ErrForwardAddressUnverified        = fmt.Errorf("FORWARD_HOST_ADDRESS_UNVERIFIED: address not uniquely verified on an allowed active host interface: %w", ErrNativeUnsupported)
+	ErrIDMapReservationUnavailable     = fmt.Errorf("IDMAP_RESERVATION_UNAVAILABLE: persistent UID/GID reservation is not implemented: %w", ErrNativeUnsupported)
+	ErrPrivilegedBoxDenied             = fmt.Errorf("PRIVILEGED_BOX_DENIED: privileged guests are not supported by this confined runtime: %w", ErrNativeUnsupported)
 )
 
 // CapabilityDenialClass maps only known pre-dispatch failures to durable diagnostics.
@@ -22,6 +23,7 @@ func CapabilityDenialClass(err error) string {
 		err   error
 		class string
 	}{
+		{ErrNetworkAddressCapacityExhausted, "NETWORK_ADDRESS_CAPACITY_EXHAUSTED"},
 		{ErrProjectProxyDenied, "PROJECT_PROXY_DENIED"},
 		{ErrProjectNestingDenied, "PROJECT_NESTING_DENIED"},
 		{ErrProjectInterceptionDenied, "PROJECT_INTERCEPTION_DENIED"},

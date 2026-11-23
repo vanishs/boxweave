@@ -1381,3 +1381,12 @@ Owner directed sequential reconciliation, S4-A CI, ordinary PR merge and control
 ## 2026-11-21 — Project capability diagnostics and reviewed Proxy preparation
 
 See [capability decision and evidence](V1_PROJECT_CAPABILITIES_2026-11-21.md). Source tests passed in a disposable development Box; installed native acceptance pending. No physical host policy change or unverified merge.
+
+### 2026-11-22 — N2 continuation (partial)
+Local regression, authenticated MCP/PRS exact retirement, revoked Forward cascade and restart-only reuse verified in nested disposable Incus. Full evidence and remaining Peer/scale/installation gaps in V1_NETWORK_RELIABILITY_AND_CAPACITY_2026-11-22.md. No PR push/release or physical-host changes.
+
+- 2026-11-22 PT N2 partial: persistent fair queue/257 state reuse cycles and five Go packages PASS; native /29 five-slot Peer grant/revoke and original Delete restart/resume PASS, same IPv4 new UUID denied old access; journal/narrow staging tests PASS. See V1_NETWORK_RELIABILITY_AND_CAPACITY_2026-11-22.md for exact provenance and remaining gates. No push/CI or physical Host mutation.
+
+- 2026-11-22 PT — N2 continuation: local retirement helper installer integration, timed retry and diagnostics implemented; Go full suite PASS, 28 existing uninstall fixtures PASS. Actual MCP stop-to-recycle succeeded with unchanged service PIDs. Last-delete negative IPv6 cache corrected and original archived with pending=0 on temporary native lab services. Clean installed acceptance blocked by inherited LXC global systemd drop-in; guard retained. Detailed operation evidence in V1_NETWORK_RELIABILITY_AND_CAPACITY_2026-11-22.md. No push/CI/physical host change.
+
+- 2026-11-22 N2: Box-first production bootstrap /21 and regression PASS; nested prestart denial proven; exact-head clean installed lifecycle workflow added. Final acceptance pending. See V1_NETWORK_RELIABILITY_AND_CAPACITY_2026-11-22.md.

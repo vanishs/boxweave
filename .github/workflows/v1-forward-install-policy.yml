@@ -60,5 +60,5 @@ jobs:
             grep -Fxq FORWARD_INSTALL_PROJECT_PROXY_DENIAL=PASS "$RUNNER_TEMP/forward-install.log"
             grep -Fxq FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_ROLLBACK=PASS "$RUNNER_TEMP/forward-install.log"
           else
-            grep -Fxq "FORWARD_INSTALL_UPGRADE_ROLLBACK_PRESERVED=$FORWARD_INSTALL_MODE PASS" "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq "FORWARD_INSTALL_INCOMPATIBLE_SCHEMA_PRESERVED=$FORWARD_INSTALL_MODE PASS" "$RUNNER_TEMP/forward-install.log"
           fi

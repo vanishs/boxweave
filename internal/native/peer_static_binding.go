@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/netip"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/lxc/incus/v7/shared/api"
@@ -164,10 +165,18 @@ type ReserveCreatePeerBinding func(VerifiedStaticPeerBinding) (bool, error)
 // in the exact dedicated managed bridge. Never treat a merely observed
 // dynamic lease as a static IP. The Incus Create request supplies both
 // static addresses and the exact MAC in one native effect.
-func selectCreatePeerBinding(c incus.InstanceServer, project string, proj *api.Project, devices api.DevicesMap, original string, reserve ReserveCreatePeerBinding) (VerifiedStaticPeerBinding, error) {
-	var zero VerifiedStaticPeerBinding
+type ReadCreatePeerHolds func(context.Context, string, string) (networklimits.AddressHolds, error)
+
+type createPeerInventory struct {
+	bridge, acl string
+	p4, p6      netip.Prefix
+	holds       networklimits.AddressHolds
+}
+
+func readCreatePeerInventory(c incus.InstanceServer, project string, proj *api.Project, devices api.DevicesMap) (createPeerInventory, error) {
+	var zero createPeerInventory
 	nic := devices["eth0"]
-	if !nicPrivate(devices) || nic["type"] != "nic" || nic["name"] != "eth0" || nic["ipv4.address"] != "" || nic["ipv6.address"] != "" || nic["hwaddr"] != "" || proj == nil || proj.Config["restricted"] != "true" || !PeerManagedNICPolicy(proj.Config["restricted.devices.nic"]) || proj.Config["restricted.networks.access"] != nic["network"] || !c.HasExtension("network_leases") || original == "" || reserve == nil {
+	if !nicPrivate(devices) || nic["type"] != "nic" || nic["name"] != "eth0" || nic["ipv4.address"] != "" || nic["ipv6.address"] != "" || nic["hwaddr"] != "" || proj == nil || proj.Config["restricted"] != "true" || !PeerManagedNICPolicy(proj.Config["restricted.devices.nic"]) || proj.Config["restricted.networks.access"] != nic["network"] || !c.HasExtension("network_leases") {
 		return zero, ErrUnsafeNetwork
 	}
 	nw, etag, err := c.GetNetwork(nic["network"])
@@ -213,14 +222,26 @@ func selectCreatePeerBinding(c incus.InstanceServer, project string, proj *api.P
 	if len(names) > networklimits.MaxProjectBoxes {
 		return zero, ErrNativeUnsupported
 	}
-	for _, name := range names {
-		inst, _, e := c.GetInstance(name)
-		if e != nil {
-			return zero, e
+	instances, err := c.GetInstances(api.InstanceTypeAny)
+	if err != nil {
+		return zero, err
+	}
+	if len(instances) != len(names) {
+		return zero, ErrUnsafeNetwork
+	}
+	actual := make([]string, 0, len(instances))
+	for _, inst := range instances {
+		if inst.Name == "" || (inst.Project != "" && inst.Project != project) {
+			return zero, ErrUnsafeNetwork
 		}
-		if inst == nil {
-			return zero, ErrUnverified
-		}
+		actual = append(actual, inst.Name)
+	}
+	slices.Sort(names)
+	slices.Sort(actual)
+	if !slices.Equal(names, actual) || len(slices.Compact(slices.Clone(actual))) != len(actual) {
+		return zero, ErrUnsafeNetwork
+	}
+	for _, inst := range instances {
 		for dev, d := range inst.ExpandedDevices {
 			if d["type"] != "nic" || d["network"] != nw.Name {
 				continue
@@ -245,7 +266,92 @@ func selectCreatePeerBinding(c incus.InstanceServer, project string, proj *api.P
 			}
 		}
 	}
-	return chooseCreatePeerBinding(nw.Name, nic["security.acls"], original, p4, p6, usedIP, usedMAC, reserve)
+	return createPeerInventory{nw.Name, nic["security.acls"], p4, p6, networklimits.AddressHolds{IPs: usedIP, MACs: usedMAC}}, nil
+}
+
+func (i *createPeerInventory) mergeHolds(ctx context.Context, project string, read ReadCreatePeerHolds) error {
+	if read == nil {
+		return ErrUnsafeNetwork
+	}
+	h, e := read(ctx, project, i.bridge)
+	if e != nil {
+		return e
+	}
+	for ip := range h.IPs {
+		i.holds.IPs[ip] = true
+	}
+	for mac := range h.MACs {
+		i.holds.MACs[mac] = true
+	}
+	return nil
+}
+
+func selectCreatePeerBinding(ctx context.Context, c incus.InstanceServer, project string, proj *api.Project, devices api.DevicesMap, original string, reserve ReserveCreatePeerBinding, read ReadCreatePeerHolds) (VerifiedStaticPeerBinding, error) {
+	var zero VerifiedStaticPeerBinding
+	if original == "" || reserve == nil {
+		return zero, ErrUnsafeNetwork
+	}
+	i, e := readCreatePeerInventory(c, project, proj, devices)
+	if e != nil {
+		return zero, e
+	}
+	if e = i.mergeHolds(ctx, project, read); e != nil {
+		return zero, e
+	}
+	return chooseCreatePeerBinding(i.bridge, i.acl, original, i.p4, i.p6, i.holds.IPs, i.holds.MACs, reserve)
+}
+
+// AddressCapacity describes IPv4 candidates in the current confined native
+// and durable ledger snapshot, NOT authorization to allocate or a guarantee
+// of dual-stack, storage or compute availability.
+type AddressCapacity struct {
+	IPv4Prefix              string `json:"ipv4_prefix"`
+	NominalIPv4             int    `json:"nominal_ipv4"`
+	BlockedIPv4             int    `json:"blocked_ipv4"`
+	RemainingIPv4UpperBound int    `json:"remaining_ipv4_upper_bound"`
+}
+
+func (i createPeerInventory) capacity() AddressCapacity {
+	out := AddressCapacity{IPv4Prefix: i.p4.String(), NominalIPv4: (1 << (32 - i.p4.Bits())) - 3}
+	first := i.p4.Masked().Addr()
+	last := binary.BigEndian.Uint32(first.AsSlice()) + uint32(1<<(32-i.p4.Bits())) - 1
+	for a := range i.holds.IPs {
+		if a.Is4() && i.p4.Contains(a) && a != first && a != i.p4.Addr() && binary.BigEndian.Uint32(a.AsSlice()) != last {
+			out.BlockedIPv4++
+		}
+	}
+	out.RemainingIPv4UpperBound = max(0, out.NominalIPv4-out.BlockedIPv4)
+	return out
+}
+
+func (r Reader) ReadCreateAddressCapacity(ctx context.Context, read ReadCreatePeerHolds) (AddressCapacity, error) {
+	var zero AddressCapacity
+	c, e := r.confined(ctx)
+	if e != nil {
+		return zero, e
+	}
+	proj, _, e := c.GetProject(r.Project)
+	if e != nil {
+		return zero, e
+	}
+	p, _, e := c.GetProfile("default")
+	if e != nil || p == nil {
+		return zero, ErrUnsafeNetwork
+	}
+	// Reconstruct the exact private NIC as used by Create, without resolving
+	// or downloading an image, changing native state, or reserving an IP.
+	devices, e := ownedPrivateNICEgress(api.DevicesMap{}, p.Devices, true)
+	if e != nil {
+		return zero, e
+	}
+	i, e := readCreatePeerInventory(c, r.Project, proj, devices)
+	if e != nil {
+		return zero, e
+	}
+	if e = i.mergeHolds(ctx, r.Project, read); e != nil {
+		return zero, e
+	}
+	return i.capacity(), nil
 }
 
 // PeerManagedNICPolicy follows the documented Incus v7.6 default.
@@ -340,5 +446,5 @@ func chooseCreatePeerBinding(bridge, acl, original string, p4, p6 netip.Prefix, 
 			return b, nil
 		}
 	}
-	return zero, ErrNativeUnsupported
+	return zero, ErrNetworkAddressCapacityExhausted
 }

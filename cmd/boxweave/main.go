@@ -69,6 +69,8 @@ func run() error {
 	peerTarget := f.String("peer-target-uuid", "", "exact original owned target UUID, only for root-local read-only peer review")
 	peerOriginal := f.String("operation-id", "", "root peer handoff: immutable original claimed operation ID")
 	peerSHA := f.String("peer-plan-sha256", "", "root peer handoff: exact reviewed root-only plan digest")
+	retirementReview := f.Bool("retirement-review", false, "enable fixed-Project read-only original Delete retirement proof in the existing root helper")
+	retirementCompact := f.Bool("retirement-compact", false, "approve fixed-Project original-Delete ACL tombstone compaction in the local root helper; requires retirement-review")
 
 	prepareSHA := f.String("native-prepare-sha256", "", "operator-reviewed exact native prepare plan/journal digest")
 	scriptletWriter := f.String("scriptlet-writer-fingerprint", "", "exact existing restricted TLS certificate fingerprint for a single owned native ACL")
@@ -174,14 +176,17 @@ func run() error {
 		if !*approveLocal {
 			return errors.New("explicit host-local root unit approval required")
 		}
-		if *peerOriginal == "" || *peerSHA == "" || *project == "" || *prepareNetwork == "" || *prepareACL == "" {
-			return errors.New("fixed original, digest, Project, bridge and ACL required")
+		if *project == "" || *prepareNetwork == "" || *prepareACL == "" ||
+			(*peerOriginal == "") != (*peerSHA == "") ||
+			(*peerOriginal == "" && !*retirementReview) ||
+			(*retirementCompact && !*retirementReview) {
+			return errors.New("fixed Project, bridge and ACL plus exact original approval or explicit retirement scope required")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 		defer cancel()
 		if err := install.NativePeerRootUnitStage(ctx, install.NativePeerRootScope{
 			DBPath: *db, Project: *project, Bridge: *prepareNetwork, ACL: *prepareACL,
-			OriginalID: *peerOriginal, ApprovedPlanSHA: *peerSHA, Approved: true,
+			OriginalID: *peerOriginal, ApprovedPlanSHA: *peerSHA, RetirementReview: *retirementReview, RetirementCompact: *retirementCompact, Approved: true,
 		}); err != nil {
 			return err
 		}
@@ -226,7 +231,7 @@ func run() error {
 		return install.NativePeerRootServe(ctx, install.NativePeerRootScope{
 			DBPath: *db, Project: *project, Bridge: *prepareNetwork,
 			ACL: *prepareACL, Approved: *approveLocal,
-			OriginalID: *peerOriginal, ApprovedPlanSHA: *peerSHA,
+			OriginalID: *peerOriginal, ApprovedPlanSHA: *peerSHA, RetirementReview: *retirementReview, RetirementCompact: *retirementCompact,
 		})
 	}
 	if command == "native-peer-root-request" {
@@ -401,6 +406,15 @@ func run() error {
 			BinaryPath: "/usr/local/bin/boxweave", UnitPath: "/etc/systemd/system/boxweave.service",
 			SourceBinary: *sourceBinary, Project: *project, Socket: *socket, Version: version,
 			ExpectedDigest: *digest}
+		if command == "install-stage" && (*retirementReview || *retirementCompact) {
+			if !*retirementReview || !*retirementCompact {
+				return errors.New("fresh retirement install requires both explicit retirement scope flags")
+			}
+			p.RetirementTarget = &install.NativePrepareTarget{Project: *project, Pool: *preparePool, Network: *prepareNetwork, ACL: *prepareACL}
+			p.RetirementReviewSHA = *prepareSHA
+		} else if command != "install-stage" && (*retirementReview || *retirementCompact) {
+			return errors.New("retirement installer scope is fresh-stage only")
+		}
 		var m install.Manifest
 		var err error
 		switch command {
