@@ -52,6 +52,9 @@ jobs:
       - name: Source validation and external distribution negative tests
         run: |
           make verify
+          # The S2 native verifier is build-tagged 'ignore', so go test ./...
+          # does not compile it. Catch future verifier/API drift before RC.
+          CGO_ENABLED=1 go build -trimpath -o "$RUNNER_TEMP/s2-unknown-create-bind-probe" ./scripts/s2_unknown_create_binding_probe.go
           sh -n install.sh
           python3 -m unittest -v scripts/test_v1_release_manifest.py
       - name: Do not treat a source VERSION as a published release
