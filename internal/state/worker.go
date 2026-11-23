@@ -107,7 +107,12 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		// remained inaccessible. Best-effort mark either possible journal
 		// state UNKNOWN; NEVER retry the native effect or release its lock.
 		markErr := w.Store.NativeAckUnknown(context.Background(), operationID, nativeID)
-		if errors.Is(markErr, ErrState) {
+		if markErr != nil {
+			// A failed ACK and failed receipt-preserving fallback do NOT
+			// leave an apparently running operation indefinitely when a
+			// state-only UNKNOWN can still be committed. Race-safe against
+			// either prior commit outcome; no native effect is repeated.
+			_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_ACK_DURABILITY_UNVERIFIED")
 			_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "NATIVE_ACK_DURABILITY_UNVERIFIED")
 		}
 		return

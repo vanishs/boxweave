@@ -24,6 +24,17 @@ type IPv4RetirementCandidate struct {
 	RequiresPeerCompaction               bool
 }
 
+// retirementCreateEvidence is evaluated only for an exact successful Create
+// (alias c). A lost ACK has no native ID: require its atomic original event,
+// separate exact recovery receipt and matching audit, never a generic RELEASED
+// claim. Delete and independent Root/kernel retirement proof remain mandatory.
+const retirementCreateEvidence = `(c.native_operation_id!='' OR (
+ EXISTS (SELECT 1 FROM operation_events e WHERE e.operation_id=c.id AND e.state='SUCCEEDED' AND e.safe_detail='RECOVERY_CREATE_ACK_LOST_PIN_ATOMIC_NO_REPLAY')
+ AND EXISTS (SELECT 1 FROM operations rr JOIN recovery_audit a ON a.operation_id=c.id AND a.at=rr.created_at AND a.reviewer=rr.actor_id AND a.decision='RECOVERY_SETTLED' AND length(a.evidence_digest)=64 AND a.evidence_digest NOT GLOB '*[^0-9a-f]*'
+ JOIN operation_events re ON re.operation_id=rr.id AND re.state='SUCCEEDED' AND re.safe_detail='SETTLED:CREATE_ACK_LOST_STATIC_POSTSTATE_VERIFIED'
+ WHERE json_valid(rr.safe_intent) AND json_extract(rr.safe_intent,'$.original_operation_id')=c.id AND COALESCE(json_extract(rr.safe_intent,'$.stream'),'')='' AND rr.layer=c.layer AND rr.action='operation_recover' AND rr.state='SUCCEEDED' AND rr.resource_key='recovery:'||c.id AND rr.box_uuid=c.box_uuid AND rr.incarnation=c.incarnation)
+))`
+
 func validRetirementProofSHA(s string) bool {
 	if len(s) != 64 || s != strings.ToLower(s) {
 		return false
@@ -119,10 +130,10 @@ func readIPv4RetirementCandidate(ctx context.Context, tx *sql.Tx, project, origi
 	}
 	b := out.Binding
 	var count int
-	if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations WHERE layer=? AND action='box_create' AND box_uuid=? AND incarnation=? AND state='SUCCEEDED' AND native_operation_id!='' AND resource_key='box:'||?", project, b.UUID, b.Incarnation, b.Name).Scan(&count); e != nil || count != 1 {
+	if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations c WHERE layer=? AND action='box_create' AND box_uuid=? AND incarnation=? AND state='SUCCEEDED' AND resource_key='box:'||?", project, b.UUID, b.Incarnation, b.Name).Scan(&count); e != nil || count != 1 {
 		return IPv4RetirementCandidate{}, ErrResourceLocked
 	}
-	if e = tx.QueryRowContext(ctx, "SELECT id FROM operations WHERE layer=? AND action='box_create' AND box_uuid=? AND incarnation=? AND state='SUCCEEDED' AND native_operation_id!='' AND resource_key='box:'||?", project, b.UUID, b.Incarnation, b.Name).Scan(&out.CreateOperationID); e != nil || !validHexID(out.CreateOperationID) {
+	if e = tx.QueryRowContext(ctx, "SELECT id FROM operations c WHERE layer=? AND action='box_create' AND box_uuid=? AND incarnation=? AND state='SUCCEEDED' AND resource_key='box:'||? AND "+retirementCreateEvidence, project, b.UUID, b.Incarnation, b.Name).Scan(&out.CreateOperationID); e != nil || !validHexID(out.CreateOperationID) {
 		return IPv4RetirementCandidate{}, ErrResourceLocked
 	}
 	pin := VerifiedCreateBinding{Bridge: out.Bridge, ACL: out.ACL, MAC: b.MAC, IPv4: b.IPv4, IPv6: b.IPv6}
@@ -292,7 +303,7 @@ func verifyIPv4RetirementHistory(ctx context.Context, tx *sql.Tx, project, bridg
  FROM network_ipv4_retirements r
  JOIN owned_boxes b ON b.project=r.project AND b.uuid=r.box_uuid AND b.incarnation=r.incarnation AND b.state='DELETED' AND b.deleted_by_operation_id=r.delete_operation_id
  JOIN network_bindings n ON n.project=r.project AND n.box_uuid=r.box_uuid AND n.incarnation=r.incarnation AND n.nic='eth0' AND n.state='RELEASED' AND n.bridge=r.bridge AND n.acl=r.acl AND n.mac=r.mac AND n.ipv4=r.ipv4 AND n.ipv6=r.ipv6
- JOIN operations c ON c.id=r.create_operation_id AND c.layer=r.project AND c.box_uuid=r.box_uuid AND c.incarnation=r.incarnation AND c.action='box_create' AND c.state='SUCCEEDED' AND c.native_operation_id!='' AND c.resource_key='box:'||b.name
+ JOIN operations c ON c.id=r.create_operation_id AND c.layer=r.project AND c.box_uuid=r.box_uuid AND c.incarnation=r.incarnation AND c.action='box_create' AND c.state='SUCCEEDED' AND `+retirementCreateEvidence+` AND c.resource_key='box:'||b.name
  JOIN operations d ON d.id=r.delete_operation_id AND d.layer=r.project AND d.box_uuid=r.box_uuid AND d.incarnation=r.incarnation AND d.action='box_delete' AND d.state='SUCCEEDED' AND d.native_operation_id!='' AND d.resource_key='box:'||b.name
  WHERE r.project=?
  AND NOT EXISTS (SELECT 1 FROM network_address_fences f WHERE f.project=r.project AND f.box_uuid=r.box_uuid AND f.incarnation=r.incarnation)

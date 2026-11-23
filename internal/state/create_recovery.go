@@ -158,6 +158,19 @@ func (s *Store) BindUnknownCreatedBox(ctx context.Context, r CreateRecoverySnaps
 // Both local review and deterministic MCP identity binding keep UNKNOWN
 // and its original resource protection unchanged.
 func bindUnknownCreateTx(ctx context.Context, tx *sql.Tx, id, project, name string, updatedAt int64, uuid, detail string) error {
+	// Modern staged Creates cannot be bound without their exact pin and both
+	// fences. This also guards the older host-local identity-only path.
+	var claims int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", id).Scan(&claims); err != nil {
+		return err
+	}
+	var intent string
+	if err := tx.QueryRowContext(ctx, "SELECT safe_intent FROM operations WHERE id=?", id).Scan(&intent); err != nil {
+		return err
+	}
+	if claims != 0 || requiresVerifiedCreateBinding(intent) {
+		return ErrResourceLocked
+	}
 	now := time.Now().UnixNano()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO owned_boxes(uuid,project,name,incarnation,state,created_at)
         VALUES(?,?,?,?,'OWNED',?)`, uuid, project, name, uuid, now); err != nil {
@@ -178,4 +191,20 @@ func bindUnknownCreateTx(ctx context.Context, tx *sql.Tx, id, project, name stri
 		return err
 	}
 	return nil
+}
+
+// Only the old identity-only contract used name/start alone. Current native
+// Create always persists normalized options. Missing modern pin claims are
+// corruption, not permission to fall back to identity-only binding.
+func requiresVerifiedCreateBinding(intent string) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal([]byte(intent), &fields) != nil || fields == nil {
+		return true
+	}
+	for k := range fields {
+		if k != "name" && k != "start" {
+			return true
+		}
+	}
+	return false
 }

@@ -15,11 +15,13 @@ type RecoveryTarget struct {
 	ID, TrackingID, Action, State, NativeID, UUID, Incarnation, ErrorClass string
 	Layer, Resource, SafeIntent, Name, OwnedState                          string
 	UpdatedAt                                                              int64
-	Released, DependentDelete                                              bool
+	Released, DependentDelete, CreatePinStaged, CreatePinRequired          bool
 	Forward                                                                ForwardClaim
 	ForwardReady                                                           bool
 	Peer                                                                   RecoveryPeerClaim
 	PeerReady                                                              bool
+	LifecycleBinding                                                       VerifiedCreateBinding
+	LifecyclePinStatus                                                     string
 }
 
 func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id string) (RecoveryTarget, error) {
@@ -30,14 +32,18 @@ func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id str
 	e := q.QueryRowContext(ctx, `SELECT o.id,o.tracking_id,o.action,o.state,o.native_operation_id,o.box_uuid,o.incarnation,o.error_class,
  o.layer,o.resource_key,o.safe_intent,o.updated_at,COALESCE(b.name,''),COALESCE(b.state,''),
  EXISTS(SELECT 1 FROM recovery_audit a WHERE a.operation_id=o.id AND a.decision='RELEASED'),
- EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.layer=o.layer AND c.resource_key='delete-project:'||o.layer)
+ EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.layer=o.layer AND c.resource_key='delete-project:'||o.layer),
+ EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.resource_key LIKE 'create-pin:%')
  FROM operations o LEFT JOIN owned_boxes b ON b.uuid=o.box_uuid AND b.incarnation=o.incarnation AND b.project=o.layer
- WHERE o.id=? AND o.layer=?`, id, layer).Scan(&t.ID, &t.TrackingID, &t.Action, &t.State, &t.NativeID, &t.UUID, &t.Incarnation, &t.ErrorClass, &t.Layer, &t.Resource, &t.SafeIntent, &t.UpdatedAt, &t.Name, &t.OwnedState, &t.Released, &t.DependentDelete)
+ WHERE o.id=? AND o.layer=?`, id, layer).Scan(&t.ID, &t.TrackingID, &t.Action, &t.State, &t.NativeID, &t.UUID, &t.Incarnation, &t.ErrorClass, &t.Layer, &t.Resource, &t.SafeIntent, &t.UpdatedAt, &t.Name, &t.OwnedState, &t.Released, &t.DependentDelete, &t.CreatePinStaged)
 	if errors.Is(e, sql.ErrNoRows) {
 		return t, ErrNotFound
 	}
 	if e != nil {
 		return t, e
+	}
+	if t.Action == "box_create" {
+		t.CreatePinRequired = requiresVerifiedCreateBinding(t.SafeIntent)
 	}
 	if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
 		var in struct {
@@ -59,11 +65,26 @@ func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id str
 			return t, e
 		}
 	}
+	if t.State == "UNKNOWN" && t.OwnedState == "OWNED" && (t.Action == "box_start" || t.Action == "box_stop" || t.Action == "box_update") {
+		t.LifecycleBinding, t.LifecyclePinStatus, e = readLifecycleRecoveryPin(ctx, q, t)
+		if e != nil {
+			return t, e
+		}
+	}
 	return t, nil
 }
 
 func (s *Store) ReadRecoveryTarget(ctx context.Context, layer, id string) (RecoveryTarget, error) {
-	return readRecoveryTarget(ctx, s.db, layer, id)
+	tx, e := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if e != nil {
+		return RecoveryTarget{}, e
+	}
+	defer tx.Rollback()
+	t, e := readRecoveryTarget(ctx, tx, layer, id)
+	if e != nil {
+		return t, e
+	}
+	return t, tx.Commit()
 }
 
 // RecoveryRequest is built by an authenticated handler or the existing
@@ -77,9 +98,12 @@ type RecoveryProof struct {
 	StdoutPath, StderrPath                    string
 	Forward                                   ForwardClaim
 	Peer                                      RootPeerResult
+	CreateBinding                             VerifiedCreateBinding
+	LifecycleBinding                          VerifiedCreateBinding
 }
 
 const (
+	RecoveryRepairPin = "REPAIR_PIN"
 	RecoverySettle    = "SETTLE"
 	RecoveryBind      = "BIND_IDENTITY"
 	RecoveryApproval  = "APPROVAL_REQUIRED"
@@ -230,7 +254,15 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	now := time.Now().UnixNano()
 	outcome := p.Kind
 	success := false
-	if p.Kind == RecoverySettle && t.Action == "box_peer_set" {
+	if p.Kind == RecoveryRepairPin {
+		if r.Stream != "" || t.Action != "box_create" || t.State != "SUCCEEDED" {
+			return RecoveryRecord{}, ErrResourceLocked
+		}
+		if e = finishCreatePinRepairTx(ctx, tx, t, p); e != nil {
+			return RecoveryRecord{}, e
+		}
+		outcome, success = "SETTLED", true
+	} else if p.Kind == RecoverySettle && t.Action == "box_peer_set" {
 		if r.Stream != "" {
 			return RecoveryRecord{}, ErrResourceLocked
 		}
@@ -278,6 +310,14 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 				return RecoveryRecord{}, e
 			}
 			outcome = "IDENTITY_BOUND"
+		} else if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
+			if !validCreateRecoveryReason(t, p) || p.NativeID != t.NativeID || p.Fingerprint == "" {
+				return RecoveryRecord{}, ErrInvalid
+			}
+			if e = finishRecoveryCreateTx(ctx, tx, t, p); e != nil {
+				return RecoveryRecord{}, e
+			}
+			outcome = "SETTLED"
 		} else {
 			if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" || p.UUID != t.UUID || t.NativeID == "" || p.NativeID != t.NativeID || p.Fingerprint == "" || p.Reason != "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED" {
 				return RecoveryRecord{}, ErrInvalid
@@ -297,6 +337,9 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 				}
 				e = finishVerifiedExecTx(ctx, tx, t.ID, box, t.NativeID, p.StdoutPath, p.StderrPath, *p.Exit, "UNKNOWN", "RECOVERY_EXEC_TERMINAL_NO_REPLAY")
 			case "box_start", "box_stop", "box_update":
+				if (t.LifecyclePinStatus != "PINNED" && t.LifecyclePinStatus != "LEGACY_UNPINNED") || p.LifecycleBinding != t.LifecycleBinding {
+					return RecoveryRecord{}, ErrResourceLocked
+				}
 				if parent != "" {
 					if e = recoveryClaimKeys(ctx, tx, t, []string{t.Resource, deleteParentKey(parent)}); e != nil {
 						return RecoveryRecord{}, e
@@ -331,7 +374,7 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 		phase, errClass = "SUCCEEDED", ""
 	}
 	uuid, inc := t.UUID, t.Incarnation
-	if outcome == "IDENTITY_BOUND" {
+	if outcome == "IDENTITY_BOUND" || (outcome == "SETTLED" && t.Action == "box_create") {
 		uuid, inc = p.UUID, p.UUID
 	}
 	_, e = tx.ExecContext(ctx, `INSERT INTO operations(id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,intent_digest,safe_intent,work_ref,agent_ref,resource_key,box_uuid,incarnation,state,error_class,created_at,updated_at)

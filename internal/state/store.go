@@ -814,6 +814,11 @@ func (s *Store) transition(ctx context.Context, id, expected, next, nativeID, er
 		if err := settleForwardNoEffectTx(ctx, tx, id); err != nil {
 			return err
 		}
+		if expected == "DISPATCHING" {
+			if err := releasePreDispatchCreatePinsTx(ctx, tx, id); err != nil {
+				return err
+			}
+		}
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)", id, time.Now().UnixNano(), next, errClass); err != nil {
 		return err

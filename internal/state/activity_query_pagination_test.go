@@ -56,7 +56,7 @@ func TestActivityIssuesCoverPeerForwardFenceAndRealBoxUUID(t *testing.T) {
 		}
 	}
 	if len(seen) != 3 || !seen["PEER_ACTIVE_DEPENDENCY"] ||
-		!seen["ADDRESS_FENCE_DEPENDENCY"] || !seen["FORWARD_DEPENDENCY"] {
+		!seen["NETWORK_ORPHAN_ADDRESS_FENCE"] || !seen["FORWARD_DEPENDENCY"] {
 		t.Fatalf("network blockers lost: %+v", seen)
 	}
 	foreign, err := s.ReadActivity(ctx, ActivityQuery{
