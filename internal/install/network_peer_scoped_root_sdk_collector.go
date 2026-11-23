@@ -50,6 +50,9 @@ type nativePeerScopedRootReadResult struct {
 	NativeACLBefore NativePeerScopedACLPreimageWitness
 	NetworkETag     string
 	InstanceETags   map[string]string
+	// Full independently collected native Box/ACL objects are required by
+	// the subsequent exact host sysfs bridge-port preflight.
+	observed map[string]NativePeerGuardObservedOwner
 }
 
 // nativePeerScopedRootReadSnapshot obtains data ONLY through a Root SDK
@@ -168,6 +171,7 @@ func nativePeerScopedRootReadOnlyWithDriver(ctx context.Context, r nativePeerSco
 	return nativePeerScopedRootReadResult{
 		Original: proof, Plan: plan, NativeACLBefore: preimage,
 		NetworkETag: first.NetworkETag, InstanceETags: first.InstanceETags,
+		observed: first.Evidence.Observed,
 	}, nil
 }
 
