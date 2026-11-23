@@ -2,6 +2,17 @@
 
 **Status: proposal / development specification, not implemented.** Read [source RCA](V1_RC13_PEER_ROOT_RCA_2026-11-23.md) before editing. Owner asked for detailed repair documents and an independent Draft PR; this is **not** permission to change the installed L0 Host or relax native policy.
 
+## 0. Updated owner decision: THIS OVERRIDES EARLIER CONSERVATIVE RC13 RECOMMENDATIONS
+
+**Read the [new authoritative acceptance/dependency contract](V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md) before planning or coding.** Previous notes below about keeping `boot.autostart=false`, preserving a full-bridge STOP during successful normal operation, or manual Host intervention per Peer original are **historical safety requirements of the immutable RC13 implementation, not acceptable final product behavior**. Owner now requires:
+
+- New Box defaults to `boot.autostart=true` and successful Peer changes preserve actual user-intended autostart state.
+- Routine authorized Peer grant/revoke and safe supported recoveries are fully MCP-driven after trusted initial installation. No per-operation manual Host commands; bounded least-privilege mediator, no generic root service.
+- No stopping/restarting or dropping running network services on unrelated Boxes for normal A→B changes; fail closed if non-disruptive native policy cannot yet be independently proven.
+- New unified Doctor/Recover development in PR #177 **waits until #178 has produced and integrated verified runtime semantics**, so the diagnostic contract is not generated from obsolete RC13 behavior. Existing #177 uninstall recovery stays intact.
+
+**Delivery priority changes:** first architectural audit + safety experiments → default autostart + preservation → MCP bounded automation → non-disruptive native policy; all must be demonstrated before #178 claims full completion. An impact warning is useful but **not a substitute** for no unrelated-Box downtime.
+
 ## 1. Engineering objective and explicit non-goals
 
 Make Peer root operations **understandable, auditable and safely repeatable across separately approved originals** without compromising the current complete-bridge stop/ACL/nft/conntrack safety proof. The current run completed the intended authorization and chained Forward. Do not call working Forward a defect or sacrifice fail-closed safety to avoid workload restart.
@@ -29,7 +40,7 @@ For the **MCP client** `box_peer_set` and subsequent `operation_get`, distinguis
 
 At admission: explicitly state full bridge affected, potential temporary stop of **unrelated** owned Boxes and volatile listeners. Before applying: show approved digest and exact impacts in root-only plan. On success: persist safe event summary (`ROOT_PEER_BARRIER_APPLIED`, `AFFECTED_CONSUMERS=n`, `AUTOSTART_RETAINED_FALSE`, `RUNNING_RESUMED=n`) with immutable original, sanitized data and typed coverage. On UNKNOWN: retain full claims, guarded status and Root journal; do not mark previous running state restored. Do not mistake root service `active` for original terminal success.
 
-**Initial acceptable scope:** observability and test coverage **without changing current Stop or autostart semantics**. This is lower risk and does not alter the accepted PRS kernel safety proof.
+**Interim development scope only:** exact observability and regression tests are useful first commits, but **do not satisfy final #178 acceptance**. It must also deliver default autostart + preservation, routine MCP-driven authorized execution, and verified no-interruption changes for unrelated Boxes. Retain old fail-closed safeguards until a tested replacement exists.
 
 ## 3. Workstream P1 — safe one-original root unit lifecycle
 
@@ -99,4 +110,4 @@ D. Leave autostart behavior unchanged by default. Document/run T5 in disposable 
 
 E. Integrate with #177 via a link and issue taxonomy rather than duplicating Doctor/recover implementation. Run affected Go/race, native CI, exact negative/ACK-loss, and review PR Draft until separate signoff. Do not merge/release/modify installed L0 without user approval.
 
-**Open Owner decision (not a blocker for design and initial tests):** after Peer success, should product deliberately retain `boot.autostart=false` (current conservative safety) or eventually restore exact prior state with stronger proof? Keep conservative behavior until explicitly decided.
+**Owner decision resolved (2026-11-23):** default `boot.autostart=true` for new Boxes; successful Peer operations must preserve prior user-intended autostart setting and must not interrupt unrelated Box workloads. The previous `RETAIN_FALSE_BY_CURRENT_DESIGN` labels in the RC13 source study are historical observations only, **not final acceptance criteria**. For implementation, use the new authoritative requirements and independently prove safe native transition and loss/ACK handling before changing the old fail-closed logic.
