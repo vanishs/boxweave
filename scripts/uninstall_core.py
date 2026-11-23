@@ -415,6 +415,52 @@ def audit_status():
     return {"status": record["status"], "sha256": file_fingerprint(AUDIT)["sha256"]}
 
 
+def inspect_installer_backup(project):
+    """Verify Go's previous-installation rollback receipt and exact private files."""
+    info = checked_file(BACKUP, "dir")
+    if info is None:
+        return None
+    require_root_owned(BACKUP)
+    if stat.S_IMODE(info.st_mode) != 0o700:
+        raise UninstallError("unsafe installer backup directory")
+    receipt_path = BACKUP / "receipt.json"
+    receipt = read_json(receipt_path)
+    if not isinstance(receipt, dict) or receipt.get("Schema") != 1:
+        raise UninstallError("unknown installer backup receipt")
+    previous = receipt.get("Previous")
+    if not isinstance(previous, dict) or any(previous.get(k) != v for k, v in {
+        "schema": 2, "native_project": project, "native_socket": "/var/lib/incus/unix.socket.user",
+        "service_user": "boxweave", "binary_path": str(BINARY), "state_dir": str(STATE),
+    }.items()):
+        raise UninstallError("installer backup belongs to a foreign installation")
+    expected = {
+        "binary": previous.get("binary_sha256"),
+        "unit": receipt.get("PreviousUnitSHA256"),
+    }
+    for name, field in (("ledger.sqlite", "PreviousDBSHA256"),
+                        ("ledger.sqlite-wal", "PreviousWALSHA256"),
+                        ("ledger.sqlite-shm", "PreviousSHMSHA256")):
+        if receipt.get(field):
+            expected[name] = receipt[field]
+    if any(not isinstance(v, str) or not VALID_SHA.fullmatch(v) for v in expected.values()):
+        raise UninstallError("installer backup digest not verified")
+    names = set(expected) | {"receipt.json"}
+    if {entry.name for entry in BACKUP.iterdir()} != names:
+        raise UninstallError("unrecognized installer backup file inventory")
+    files = []
+    for name in sorted(names):
+        path = BACKUP / name
+        info = checked_file(path, "file", 120 * 1024 * 1024 if name in ("binary", "unit", "receipt.json") else None)
+        if info is None or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
+            raise UninstallError("unsafe installer backup file")
+        require_root_owned(path)
+        proof = file_fingerprint(path)
+        if name in expected and proof["sha256"] != expected[name]:
+            raise UninstallError("installer backup checksum mismatch: " + name)
+        files.append({"name": name, "info": proof})
+    return {"files": files, "receipt_sha256": file_fingerprint(receipt_path)["sha256"]}
+
+
 def inspect_exec_archive(uid):
     root = STATE / EXEC_ARCHIVE_NAME
     info = checked_file(root, "dir")
@@ -482,6 +528,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
     retirement = inspect_retirement_unit(manifest, project)
     files = []
     exec_archive = inspect_exec_archive(owner.pw_uid) if guided else None
+    installer_backup = inspect_installer_backup(project) if guided and scope == "full" else None
     for entry in sorted(STATE.iterdir(), key=lambda x: x.name):
         if guided and entry.name == EXEC_ARCHIVE_NAME:
             if exec_archive is None:
@@ -535,12 +582,13 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
         if native["status"] == "ABSENT" and native_sha:
             blockers.append("NATIVE_PREPARE_DIGEST_WITHOUT_JOURNAL")
     # Upgrade backups are separate and may contain credential/database copies.
-    if scope != "service" and BACKUP.exists():
+    if scope != "service" and BACKUP.exists() and installer_backup is None:
         blockers.append("INSTALLER_BACKUP_REQUIRES_SEPARATE_RETENTION_REVIEW")
     inputs = {
         "format": 1, "scope": scope, "guided": guided, "project": project, "host_machine_id_sha256": host,
         "service_user_uid": owner.pw_uid, "service_state": service,
         "unit": unit, "binary": binary, "state_files": files, "exec_archive": exec_archive,
+        "installer_backup": installer_backup,
         "retirement_verifier": retirement,
         "effective_unit": fragment, "uninstall_audit": audit,
         "sqlite": snapshot, "native_prepare": native, "scriptlet_present": scriptlet is not None,
@@ -559,6 +607,8 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
     if guided:
         actions = ["archive original controller files under root-only retirement directory",
                    "gracefully stop exact approved running Boxes before deletion"] + actions
+        if installer_backup:
+            actions.insert(1, "archive exact verified prior installer backup before retiring original")
     if scope in ("controller", "full"):
         actions += ["unlink only recognized files from /var/lib/boxweave",
                     "rmdir empty /var/lib/boxweave"]
@@ -701,6 +751,11 @@ def archive_controller(plan):
                   for x in plan["exec_archive"]["files"]]
     items += [(BINARY, dest / "boxweave.bin"), (UNIT, dest / "boxweave.service"),
               (NATIVE, dest / "native-prepare.json")]
+    if plan.get("installer_backup"):
+        if inspect_installer_backup(plan["project"]) != plan["installer_backup"]:
+            raise UninstallError("installer backup changed before retirement archive")
+        items += [(BACKUP / x["name"], dest / ("installer-backup-" + x["name"]))
+                  for x in plan["installer_backup"]["files"]]
     if plan.get("retirement_verifier"):
         items += [(RETIREMENT_UNIT, dest / RETIREMENT_UNIT.name)]
     for src, dst in items:
@@ -826,6 +881,14 @@ def apply_with_serve_lock(plan):
         if list(STATE.iterdir()):
             raise UninstallError("new files appeared in state directory")
         STATE.rmdir()
+        backup = plan.get("installer_backup")
+        if backup:
+            # Preserve the fsynced root-private copy; unlink originals last.
+            if inspect_installer_backup(plan["project"]) != backup:
+                raise UninstallError("installer backup changed before retirement")
+            for item in backup["files"]:
+                exact_unlink(BACKUP / item["name"], item["info"])
+            BACKUP.rmdir()
     return {"outcome": "COMPLETE", "scope": plan["scope"],
             "host_machine_id_sha256": plan["host_machine_id_sha256"],
             "approved_review_sha256": plan["review_sha256"],
