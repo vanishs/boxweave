@@ -64,7 +64,24 @@ func verifyDeletePinned(ctx context.Context, tx *sql.Tx, project, uuid, inc stri
 	return true, nil
 }
 
+// Modern pinned Create may not silently downgrade to legacy dynamic NIC
+// when its own ledger is lost. This check runs both before native Delete
+// dispatch and again inside the original/UNKNOWN tombstone transaction.
+func requireDeletePinLineage(ctx context.Context, tx *sql.Tx, project, uuid, inc, resource string) error {
+	_, status, e := readLifecycleRecoveryPin(ctx, tx, RecoveryTarget{Layer: project, UUID: uuid, Incarnation: inc, Resource: resource})
+	if e != nil {
+		return e
+	}
+	if status != "PINNED" && status != "LEGACY_UNPINNED" {
+		return ErrResourceLocked
+	}
+	return nil
+}
+
 func validateDeleteAdmission(ctx context.Context, tx *sql.Tx, a Admission) (bool, error) {
+	if e := requireDeletePinLineage(ctx, tx, a.Layer, a.BoxUUID, a.Incarnation, a.ResourceKey); e != nil {
+		return false, e
+	}
 	peer, fwd, bind, fence, e := countDeleteDependencies(ctx, tx, a.Layer, a.BoxUUID)
 	if e != nil {
 		return false, e
@@ -339,6 +356,9 @@ func checkCascadeRelease(ctx context.Context, tx *sql.Tx, id string) error {
 }
 
 func finalizeDeleteDependencies(ctx context.Context, tx *sql.Tx, id string, b OwnedBox) error {
+	if e := requireDeletePinLineage(ctx, tx, b.Project, b.UUID, b.Incarnation, "box:"+b.Name); e != nil {
+		return e
+	}
 	var unfinished int
 	if e := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims c JOIN operations o ON o.id=c.operation_id WHERE c.resource_key=? AND o.state!='SUCCEEDED'", deleteParentKey(id)).Scan(&unfinished); e != nil || unfinished != 0 {
 		return ErrResourceLocked
@@ -393,6 +413,9 @@ func (s *Store) DeletePinnedNIC(ctx context.Context, id string) (*DeletePinnedNI
 	p, e := readCascadeParent(ctx, tx, id)
 	if e != nil || p.State != "DISPATCHING" {
 		return nil, ErrResourceLocked
+	}
+	if e = requireDeletePinLineage(ctx, tx, p.Project, p.UUID, p.Incarnation, "box:"+p.Name); e != nil {
+		return nil, e
 	}
 	pinned, e := verifyDeletePinned(ctx, tx, p.Project, p.UUID, p.Incarnation)
 	if e != nil {

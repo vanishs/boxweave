@@ -314,15 +314,15 @@ func (r Reader) CheckExactPrivateNIC(ctx context.Context, name, uuid string) err
 // Image selection follows Incus local aliases or its official simplestreams
 // catalog; the user never supplies a remote URL or arbitrary native config.
 func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
-	return r.create(ctx, a, nil)
+	return r.create(ctx, a, nil, nil)
 }
-func (r Reader) CreateWithPeerBinding(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding) (string, error) {
-	if reserve == nil {
+func (r Reader) CreateWithPeerBinding(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding, read ReadCreatePeerHolds) (string, error) {
+	if reserve == nil || read == nil {
 		return "", ErrNativeUnsupported
 	}
-	return r.create(ctx, a, reserve)
+	return r.create(ctx, a, reserve, read)
 }
-func (r Reader) create(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding) (string, error) {
+func (r Reader) create(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding, read ReadCreatePeerHolds) (string, error) {
 	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) || !ValidImageChoice(a.Image) {
 		return "", ErrNativeUnsupported
 	}
@@ -397,7 +397,7 @@ func (r Reader) create(ctx context.Context, a InstanceAction, reserve ReserveCre
 		return "", err
 	}
 	if reserve != nil {
-		b, e := selectCreatePeerBinding(c, r.Project, project, devices, a.OperationID, reserve)
+		b, e := selectCreatePeerBinding(ctx, c, r.Project, project, devices, a.OperationID, reserve, read)
 		if e != nil {
 			return "", e
 		}

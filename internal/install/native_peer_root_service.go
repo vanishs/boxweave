@@ -16,10 +16,26 @@ import (
 )
 
 const nativePeerRootUnitPath = "/etc/systemd/system/boxweave-native-peer-root.service"
+const nativeRetirementUnitPath = "/etc/systemd/system/boxweave-ipv4-retirement.service"
+const nativeRetirementUnitName = "boxweave-ipv4-retirement.service"
 const nativePeerRootInstalledBinary = "/usr/local/bin/boxweave"
 const nativePeerRootInstalledDB = "/var/lib/boxweave/ledger.sqlite"
 
 var nativePeerRootUnitToken = regexp.MustCompile("^[a-zA-Z0-9_-]+$")
+
+// The original exact peer grant/revoke approval remains mandatory for any
+// ordinary Peer grant/revoke request. A retirement scope independently
+// verifies exact deleted originals of its fixed Project; only explicit
+// RetirementCompact approval permits the journaled retired-DROP compaction.
+func nativePeerRootScopeApproved(cfg NativePeerRootScope) bool {
+	if !cfg.Approved || (cfg.RetirementCompact && !cfg.RetirementReview) {
+		return false
+	}
+	if cfg.OriginalID == "" && cfg.ApprovedPlanSHA == "" {
+		return cfg.RetirementReview
+	}
+	return cfg.OriginalID != "" && cfg.ApprovedPlanSHA != "" && nativePeerRootValidateRequest(NativePeerRootRequest{OperationID: cfg.OriginalID, PlanSHA256: cfg.ApprovedPlanSHA}) == nil
+}
 
 // NativePeerRootUnitText creates a one-original, one-pre-mutation-SHA
 // operator-approved unit. It is not a general root daemon, host shell or
@@ -30,17 +46,29 @@ func NativePeerRootUnitText(cfg NativePeerRootScope) (string, error) {
 		!nativePeerRootUnitToken.MatchString(cfg.Project) ||
 		!nativePeerRootUnitToken.MatchString(cfg.Bridge) ||
 		!nativePeerRootUnitToken.MatchString(cfg.ACL) ||
-		nativePeerRootValidateRequest(NativePeerRootRequest{
-			OperationID: cfg.OriginalID, PlanSHA256: cfg.ApprovedPlanSHA}) != nil ||
-		cfg.ApprovedPlanSHA == "" {
+		!nativePeerRootScopeApproved(cfg) {
 		return "", errors.New("invalid exact approved native root service scope")
 	}
 	// The systemd service runs only a pinned command, never root-exposed
 	// Config, ExecStartPre, shell, environment, and never an unaudited update.
 	command := nativePeerRootInstalledBinary + " native-peer-root-serve -db " + cfg.DBPath +
 		" -project " + cfg.Project + " -network " + cfg.Bridge + " -acl " + cfg.ACL +
-		" -operation-id " + cfg.OriginalID + " -peer-plan-sha256 " + cfg.ApprovedPlanSHA + " -approve-local"
-	return "[Unit]\nDescription=BoxWeave native peer root single-original approval\nAfter=incus.service\nRequires=incus.service\n\n" +
+		""
+	if cfg.OriginalID != "" {
+		command += " -operation-id " + cfg.OriginalID + " -peer-plan-sha256 " + cfg.ApprovedPlanSHA
+	}
+	if cfg.RetirementReview {
+		command += " -retirement-review"
+	}
+	if cfg.RetirementCompact {
+		command += " -retirement-compact"
+	}
+	command += " -approve-local"
+	header := "[Unit]\nDescription=BoxWeave native peer root single-original approval\nAfter=incus.service\nRequires=incus.service\n\n"
+	if retirementOnlyScope(cfg) {
+		header = "[Unit]\nDescription=BoxWeave exact retired IPv4 verifier\nAfter=incus.service boxweave.service\nRequires=incus.service\nPartOf=boxweave.service\nBindsTo=boxweave.service\n\n"
+	}
+	return header +
 		"[Service]\nType=simple\nUser=root\nGroup=root\nUMask=0077\nExecStart=" + command +
 		"\nRestart=on-failure\nRestartSec=1s\nNoNewPrivileges=true\nPrivateTmp=true\nProtectHome=true\nProtectSystem=full" +
 		"\nRestrictAddressFamilies=AF_UNIX AF_NETLINK\n\n[Install]\nWantedBy=multi-user.target\n", nil
@@ -90,25 +118,32 @@ func NativePeerRootUnitStage(ctx context.Context, cfg NativePeerRootScope) error
 		return err
 	}
 	defer db.Close()
-	allow, err := db.PeerOperationDirection(ctx, cfg.OriginalID, "DISPATCHING")
-	if err != nil {
-		return fmt.Errorf("native root original direction refused: %w", err)
+	if cfg.OriginalID != "" {
+		allow, err := db.PeerOperationDirection(ctx, cfg.OriginalID, "DISPATCHING")
+		if err != nil {
+			return fmt.Errorf("native root original direction refused: %w", err)
+		}
+		var plan NativePeerConntrackPlan
+		if allow {
+			plan, err = NativePeerRootGrantReviewOperation(ctx, db, cfg.Project, cfg.Bridge, cfg.ACL, cfg.OriginalID)
+		} else {
+			plan, err = NativePeerRootIntegratedReviewOperation(ctx, db, cfg.Project, cfg.Bridge, cfg.ACL, cfg.OriginalID)
+		}
+		if err != nil {
+			return fmt.Errorf("native root service preflight refused: %w", err)
+		}
+		if plan.PlanSHA256 != cfg.ApprovedPlanSHA {
+			return errors.New("root service operator-approved pre-mutation SHA drifted")
+		}
 	}
-	var plan NativePeerConntrackPlan
-	if allow {
-		plan, err = NativePeerRootGrantReviewOperation(ctx, db, cfg.Project, cfg.Bridge, cfg.ACL, cfg.OriginalID)
-	} else {
-		plan, err = NativePeerRootIntegratedReviewOperation(ctx, db, cfg.Project, cfg.Bridge, cfg.ACL, cfg.OriginalID)
-	}
-	if err != nil {
-		return fmt.Errorf("native root service preflight refused: %w", err)
-	}
-	if plan.PlanSHA256 != cfg.ApprovedPlanSHA {
-		return errors.New("root service operator-approved pre-mutation SHA drifted")
+
+	path := nativePeerRootUnitPath
+	if retirementOnlyScope(cfg) {
+		path = nativeRetirementUnitPath
 	}
 	// First stage is exclusive and durable; neither an existing unit nor
 	// the root intent journal is reset by staging/restarting/upgrading.
-	fd, err := os.OpenFile(nativePeerRootUnitPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("root unit exists or unsafe: %w", err)
 	}
@@ -123,7 +158,7 @@ func NativePeerRootUnitStage(ctx context.Context, cfg NativePeerRootScope) error
 	if closeErr != nil {
 		return closeErr
 	}
-	d, err := os.Open(filepath.Dir(nativePeerRootUnitPath))
+	d, err := os.Open(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
@@ -131,7 +166,7 @@ func NativePeerRootUnitStage(ctx context.Context, cfg NativePeerRootScope) error
 	if err := d.Sync(); err != nil {
 		return err
 	}
-	written, err := os.ReadFile(nativePeerRootUnitPath)
+	written, err := os.ReadFile(path)
 	if err != nil || strings.TrimSpace(string(written)) != strings.TrimSpace(body) {
 		return errors.New("root service persisted systemd unit readback failed")
 	}

@@ -19,6 +19,25 @@ import (
 )
 
 const nativePeerRootSocketPath = "/run/boxweave-native-peer-root.sock"
+const nativeRetirementSocketPath = "/run/boxweave-ipv4-retirement.sock"
+
+func retirementOnlyScope(cfg NativePeerRootScope) bool {
+	return cfg.RetirementReview && cfg.OriginalID == "" && cfg.ApprovedPlanSHA == ""
+}
+func peerRootSocketForScope(cfg NativePeerRootScope) string {
+	if retirementOnlyScope(cfg) {
+		return nativeRetirementSocketPath
+	}
+	return nativePeerRootSocketPath
+}
+func retirementClientSocket() string {
+	// Compatibility with explicitly approved mixed Peer+retirement helpers.
+	// Never fallback from a present but untrusted/inaccessible dedicated socket.
+	if _, e := os.Lstat(nativeRetirementSocketPath); !errors.Is(e, os.ErrNotExist) {
+		return nativeRetirementSocketPath
+	}
+	return nativePeerRootSocketPath
+}
 
 // The IPC protocol deliberately has NO project, IP, ACL, shell or native
 // parameters. An empty digest requests only a read-only original review.
@@ -31,11 +50,14 @@ type NativePeerRootRequest struct {
 	// ReconcileApproved is a read-only request for the server-pinned original
 	// and digest; the caller cannot select a plan or invoke dispatch.
 	ReconcileApproved bool `json:"reconcile_approved,omitempty"`
+	RetirementReview  bool `json:"retirement_review,omitempty"`
+	RetirementPreview bool `json:"retirement_preview,omitempty"`
 }
 type NativePeerRootResponse struct {
 	Status     string                             `json:"status"`
 	PlanSHA256 string                             `json:"plan_sha256,omitempty"`
 	Receipt    *NativePeerConntrackJournalReceipt `json:"receipt,omitempty"`
+	Retirement *NativeIPv4RetirementProof         `json:"retirement,omitempty"`
 	Error      string                             `json:"error,omitempty"`
 }
 
@@ -43,18 +65,23 @@ type NativePeerRootScope struct {
 	DBPath, Project, Bridge, ACL string
 	OriginalID, ApprovedPlanSHA  string
 	Approved                     bool
+	RetirementReview             bool
+	RetirementCompact            bool
 }
 
 // A root operator approves ONE claimed original and ONE exact native plan;
 // a future controller cannot use that authorization for another operation.
 func nativePeerRootApprovedRequest(cfg NativePeerRootScope, req NativePeerRootRequest) bool {
-	return cfg.Approved && nativePeerRootValidateRequest(req) == nil &&
+	return cfg.Approved && !req.RetirementReview && !req.RetirementPreview && nativePeerRootValidateRequest(req) == nil &&
 		cfg.OriginalID != "" && cfg.ApprovedPlanSHA != "" &&
 		req.OperationID == cfg.OriginalID &&
 		(req.PlanSHA256 == "" || req.PlanSHA256 == cfg.ApprovedPlanSHA)
 }
 
 func nativePeerRootPeerUID(conn *net.UnixConn, expected uint32) error {
+	return nativePeerRootPeerIdentity(conn, expected, 0)
+}
+func nativePeerRootPeerIdentity(conn *net.UnixConn, expected uint32, pid int) error {
 	if conn == nil {
 		return errors.New("missing original local Unix peer")
 	}
@@ -69,7 +96,7 @@ func nativePeerRootPeerUID(conn *net.UnixConn, expected uint32) error {
 	}); err != nil {
 		return err
 	}
-	if sockErr != nil || cred == nil || cred.Pid <= 0 || cred.Uid != expected {
+	if sockErr != nil || cred == nil || cred.Pid <= 0 || cred.Uid != expected || (pid > 0 && int(cred.Pid) != pid) {
 		return errors.New("root socket request from unapproved service UID")
 	}
 	return nil
@@ -78,6 +105,9 @@ func nativePeerRootPeerUID(conn *net.UnixConn, expected uint32) error {
 func nativePeerRootValidateRequest(req NativePeerRootRequest) error {
 	if _, err := nativePeerConntrackOperationJournalPath(req.OperationID); err != nil {
 		return err
+	}
+	if (req.RetirementReview || req.RetirementPreview) && (req.ReconcileApproved || req.Reconcile || req.PlanSHA256 != "" || (req.RetirementReview && req.RetirementPreview)) {
+		return errors.New("retirement accepts only an exact Delete original")
 	}
 	if req.ReconcileApproved && (req.Reconcile || req.PlanSHA256 != "") {
 		return errors.New("ambiguous approved reconciliation request")
@@ -211,46 +241,79 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 	if err != nil || gid < 1 {
 		return errors.New("unsafe installed service group")
 	}
-	if cfg.Project != "user-"+u.Uid || cfg.Bridge == "" || cfg.ACL == "" ||
-		nativePeerRootValidateRequest(NativePeerRootRequest{
-			OperationID: cfg.OriginalID, PlanSHA256: cfg.ApprovedPlanSHA}) != nil ||
-		cfg.ApprovedPlanSHA == "" {
-		return errors.New("root helper must bind one exact original and operator-approved plan digest")
+	if cfg.Project != "user-"+u.Uid || !nativePeerRootUnitToken.MatchString(cfg.Bridge) || !nativePeerRootUnitToken.MatchString(cfg.ACL) || !nativePeerRootScopeApproved(cfg) {
+		return errors.New("root helper requires fixed service scope and exact approval mode")
 	}
 	db, err := state.OpenNetworkAuditReadOnly(cfg.DBPath)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	socketPath := peerRootSocketForScope(cfg)
 	// Recover only a confirmed dead exact root-owned endpoint after crash;
 	// no root intent or previously dispatched effect may be replayed.
-	if err := nativePeerRootReclaimStaleSocket(nativePeerRootSocketPath, 0, uint32(gid)); err != nil {
+	if err := nativePeerRootReclaimStaleSocket(socketPath, 0, uint32(gid)); err != nil {
 		return err
 	}
-	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: nativePeerRootSocketPath, Net: "unix"})
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
 	if err != nil {
 		return err
 	}
 	ln.SetUnlinkOnClose(false)
-	original, err := os.Lstat(nativePeerRootSocketPath)
+	original, err := os.Lstat(socketPath)
 	if err != nil {
 		_ = ln.Close()
 		return err
 	}
 	defer func() {
 		_ = ln.Close()
-		if current, err := os.Lstat(nativePeerRootSocketPath); err == nil && os.SameFile(original, current) {
-			_ = os.Remove(nativePeerRootSocketPath)
+		if current, err := os.Lstat(socketPath); err == nil && os.SameFile(original, current) {
+			_ = os.Remove(socketPath)
 		}
 	}()
-	if err := os.Chown(nativePeerRootSocketPath, 0, gid); err != nil {
+	if err := os.Chown(socketPath, 0, gid); err != nil {
 		return err
 	}
-	if err := os.Chmod(nativePeerRootSocketPath, 0660); err != nil {
+	if err := os.Chmod(socketPath, 0660); err != nil {
 		return err
 	}
 	return nativePeerRootServeListener(ctx, ln, uint32(uid),
 		func(callCtx context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {
+			if req.RetirementReview || req.RetirementPreview {
+				if !cfg.RetirementReview {
+					return NativePeerRootResponse{}, retirementFailure("RETIREMENT_HELPER_NOT_CONFIGURED", nil)
+				}
+				candidate, e := db.ReadIPv4RetirementCandidate(callCtx, cfg.Project, req.OperationID)
+				if e != nil || candidate.Bridge != cfg.Bridge || candidate.ACL != cfg.ACL {
+					return NativePeerRootResponse{}, retirementFailure("RETIREMENT_LEDGER_NOT_QUIESCENT_OR_INELIGIBLE", nil)
+				}
+				if req.RetirementPreview {
+					if !cfg.RetirementCompact || !candidate.RequiresPeerCompaction {
+						return NativePeerRootResponse{}, retirementFailure("RETIREMENT_HELPER_NOT_CONFIGURED", nil)
+					}
+					digest, e := nativeIPv4CompactionPreview(callCtx, db, cfg.Project, req.OperationID)
+					if e != nil {
+						return NativePeerRootResponse{}, retirementFailure(NativeRetirementFailureClass(e), nil)
+					}
+					return NativePeerRootResponse{Status: "RETIREMENT_COMPACTION_PREVIEW", PlanSHA256: digest}, nil
+				}
+				var proof NativeIPv4RetirementProof
+				if candidate.RequiresPeerCompaction {
+					if !cfg.RetirementCompact {
+						return NativePeerRootResponse{}, retirementFailure("RETIREMENT_HELPER_NOT_CONFIGURED", nil)
+					}
+					proof, e = nativeIPv4CompactionApply(callCtx, db, cfg.Project, req.OperationID)
+				} else {
+					proof, e = NativeIPv4RetirementReview(callCtx, db, cfg.Project, req.OperationID)
+				}
+				if e != nil {
+					return NativePeerRootResponse{}, retirementFailure(NativeRetirementFailureClass(e), nil)
+				}
+				if proof.Candidate != candidate {
+					return NativePeerRootResponse{}, retirementFailure("RETIREMENT_POLICY_UNVERIFIED", nil)
+				}
+				return NativePeerRootResponse{Status: "RETIREMENT_VERIFIED", Retirement: &proof}, nil
+			}
 			if !nativePeerRootApprovedRequest(cfg, req) {
 				return NativePeerRootResponse{}, errors.New("root helper operator approval does not match original and plan")
 			}
@@ -330,7 +393,7 @@ func nativePeerRootCall(ctx context.Context, path string, req NativePeerRootRequ
 	if !ok {
 		return out, errors.New("root handoff did not connect by Unix credentials")
 	}
-	if req.ReconcileApproved {
+	if req.ReconcileApproved || req.RetirementReview || req.RetirementPreview {
 		// Actual kernel Unix peer, not a fake same-group listener or caller-
 		// supplied assertion. Bound the entire read-only RPC by our deadline.
 		if err := nativePeerRootPeerUID(uc, 0); err != nil {
@@ -352,13 +415,16 @@ func nativePeerRootCall(ctx context.Context, path string, req NativePeerRootRequ
 	if err := uc.CloseWrite(); err != nil {
 		return out, err
 	}
-	if !req.ReconcileApproved {
+	if !req.ReconcileApproved && !req.RetirementReview && !req.RetirementPreview {
 		_ = uc.SetReadDeadline(time.Now().Add(210 * time.Second))
 	}
 	if err := json.NewDecoder(io.LimitReader(uc, 4096)).Decode(&out); err != nil {
 		return out, err
 	}
 	if out.Error != "" {
+		if req.RetirementReview || req.RetirementPreview {
+			return out, retirementFailure(retirementWireClass(out.Error), nil)
+		}
 		return out, fmt.Errorf("native root rejected original: %s", out.Error)
 	}
 	if out.Status == "" || out.Status == "DENIED" {
@@ -387,4 +453,32 @@ func NativePeerRootCallReconcile(ctx context.Context, original, reviewedSHA stri
 // the exact original already approved by the running local root helper.
 func NativePeerRootCallReconcileApproved(ctx context.Context, original string) (NativePeerRootResponse, error) {
 	return nativePeerRootCall(ctx, nativePeerRootSocketPath, NativePeerRootRequest{OperationID: original, ReconcileApproved: true})
+}
+
+// NativePeerRootCallRetirement is a read-only, root-credential authenticated
+// request. No address, project, selector or root command comes from the caller.
+func NativePeerRootCallRetirement(ctx context.Context, original string) (NativeIPv4RetirementProof, error) {
+	var zero NativeIPv4RetirementProof
+	r, e := nativePeerRootCall(ctx, retirementClientSocket(), NativePeerRootRequest{OperationID: original, RetirementReview: true})
+	if e != nil {
+		return zero, e
+	}
+	if r.Status != "RETIREMENT_VERIFIED" || r.Retirement == nil || r.Receipt != nil || r.PlanSHA256 != "" || r.Retirement.Candidate.DeleteOperationID != original {
+		return zero, errors.New("retirement root reply mismatch")
+	}
+	return *r.Retirement, nil
+}
+
+// NativePeerRootCallRetirementPreview requests strictly read-only preparation
+// of an immutable retired-peer compaction plan. No digest supplied by MCP
+// may authorize a native update.
+func NativePeerRootCallRetirementPreview(ctx context.Context, original string) (string, error) {
+	r, e := nativePeerRootCall(ctx, retirementClientSocket(), NativePeerRootRequest{OperationID: original, RetirementPreview: true})
+	if e != nil {
+		return "", e
+	}
+	if r.Status != "RETIREMENT_COMPACTION_PREVIEW" || r.Receipt != nil || r.Retirement != nil || len(r.PlanSHA256) != 64 {
+		return "", errors.New("retirement preview reply mismatch")
+	}
+	return r.PlanSHA256, nil
 }

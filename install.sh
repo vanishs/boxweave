@@ -310,6 +310,9 @@ def apply_guided_upgrade(args, candidate, sha, version, source, reviewed, host_d
         raise InstallError("candidate build identity differs from reviewed release")
     # Health checks that open SQLite run only after terminal approval.
     service_health(args, INSTALLED_BINARY, original)
+    # Never close a previous recovery window for an incompatible candidate.
+    # In particular, pre-stable schema 6 refuses the older schema explicitly.
+    service_health(args, candidate, {"version": build["version"], "build_commit": build["commit"]})
     require_unchanged_upgrade(args, reviewed, host_digest)
     if reviewed["previous"]:
         # Delegate all backup verification/deletion to the installed Go
@@ -329,7 +332,7 @@ def apply_guided_upgrade(args, candidate, sha, version, source, reviewed, host_d
     if (current.get("binary_sha256") != sha or current.get("version") != build["version"] or
             current.get("build_commit") != build["commit"] or current.get("unit_sha256") != original["unit_sha256"] or
             current.get("service_active") is not True or current.get("restart_required") is not False or
-            any(current.get(k) != original.get(k) for k in ("schema", "native_project", "native_socket", "service_user", "state_dir", "binary_path"))):
+            any(current.get(k) != original.get(k) for k in ("schema", "native_project", "native_socket", "service_user", "state_dir", "binary_path", "retirement_unit_sha256", "retirement_bridge", "retirement_acl", "retirement_native_review_sha256"))):
         raise InstallError("upgrade postflight mismatch; retain rollback backup and inspect")
     backup, _ = private_json(BACKUP_DIR / "receipt.json", 0)
     if (backup.get("Schema") != 1 or
@@ -504,7 +507,7 @@ def main():
             if review.get("target") != expected or not SHA_RE.fullmatch(review.get("review_sha256", "")):
                 raise InstallError("native plan identity missing or mismatched")
             print("Reviewed native preparation:", plan, flush=True)
-            print("Will install, prepare Native, verify and check doctor; no shared Incus rebuild.", flush=True)
+            print("Will install, prepare Native, stage the fixed-Project IPv4 retirement verifier, verify and check doctor; no shared Incus rebuild.", flush=True)
             with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
                 out.write("Type INSTALL " + args.project + " to approve this exact plan: ")
                 out.flush()
@@ -524,6 +527,10 @@ def main():
             "-expect-sha256", sha,
             "-approve-local" if args.upgrade else "-approve-stage",
         ]
+        if fresh_guided:
+            command += ["-retirement-review", "-retirement-compact", "-pool", args.pool,
+                        "-network", args.network, "-acl", args.acl,
+                        "-native-prepare-sha256", review["review_sha256"]]
         # Only the dedicated Go executable is permitted to own installer
         # writes, backup, service health, and rollback.
         subprocess.run(command, check=True)

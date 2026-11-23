@@ -97,6 +97,7 @@ type ActivityCoverageDetails struct {
 }
 
 type ActivityResult struct {
+	NativeNetwork     *NativeNetworkAuditInfo  `json:"native_network,omitempty"`
 	CoverageDetails   *ActivityCoverageDetails `json:"coverage_details,omitempty"`
 	Source            string                   `json:"source"`
 	Scope             string                   `json:"scope"`
@@ -400,7 +401,7 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	args = append(args, peerArgs...)
 	args = append(args, labelArgs...)
 
-	fences := "SELECT 'ADDRESS_FENCE_DEPENDENCY',COALESCE(o.id,''),f.box_uuid," +
+	fences := "SELECT CASE WHEN f.state='RESERVED' AND NOT EXISTS(SELECT 1 FROM owned_boxes b WHERE b.project=f.project AND b.uuid=f.box_uuid AND b.incarnation=f.incarnation AND b.state='OWNED') THEN 'NETWORK_ORPHAN_ADDRESS_FENCE' ELSE 'ADDRESS_FENCE_DEPENDENCY' END,COALESCE(o.id,''),f.box_uuid," +
 		"'address:'||f.bridge||'/'||f.family||'/'||f.address,f.state,f.observed_at" +
 		" FROM network_address_fences f LEFT JOIN operations o ON o.id=f.operation_id" +
 		" AND o.layer=f.project AND o.rowid<=? WHERE f.project=? AND f.state!='RELEASED'"
@@ -424,6 +425,13 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	branches = append(branches, forward+labelWhere)
 	args = append(args, forwardArgs...)
 	args = append(args, labelArgs...)
+
+	networkSQL, networkArgs := activityNetworkBindingIssues(q, cursor.MaxRowID, labelWhere, labelArgs)
+	branches = append(branches, networkSQL)
+	args = append(args, networkArgs...)
+	orphanSQL, orphanArgs := activityOrphanNetworkBindings(q, cursor.MaxRowID, labelWhere, labelArgs)
+	branches = append(branches, orphanSQL)
+	args = append(args, orphanArgs...)
 
 	stmt := "WITH candidates(reason,original,box_uuid,resource,state,at_ns) AS (" +
 		strings.Join(branches, " UNION ALL ") +
@@ -457,6 +465,9 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 		issue.Disposition = activityIssueDisposition(issue.Reason, issue.State)
 		if issue.OperationID != "" {
 			next := NextAction{Kind: "READ_OPERATION", Tool: "operation_get", OperationID: issue.OperationID}
+			if strings.HasPrefix(issue.Reason, "NETWORK_") {
+				next = NextAction{Kind: "READ_EVIDENCE", Tool: "box_activity_get", OperationID: issue.OperationID, View: "evidence"}
+			}
 			if issue.State == "UNKNOWN" && issue.Reason != "EXEC_OUTPUT_GC_BLOCKER" {
 				next = NextAction{Kind: "INSPECT_RECOVERY", Tool: "operation_recover", OperationID: issue.OperationID, Mode: "inspect"}
 			}
@@ -472,6 +483,24 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	}
 	if err != nil {
 		return err
+	}
+	// Only modern originals with complete staged reservations can offer
+	// an actionable recovery inspection. This is NOT proof of native repair.
+	for i := range out.Issues {
+		issue := &out.Issues[i]
+		if issue.OperationID == "" || issue.State != "SUCCEEDED" ||
+			(issue.Reason != "NETWORK_BINDING_MISSING" && issue.Reason != "NETWORK_ADDRESS_FENCE_MISSING") {
+			continue
+		}
+		var claims int
+		err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims WHERE operation_id=? AND layer=? AND resource_key LIKE 'create-pin:%'", issue.OperationID, q.Layer).Scan(&claims)
+		if err != nil {
+			return err
+		}
+		if claims == 4 {
+			issue.Disposition = "NATIVE_VERIFICATION_REQUIRED"
+			issue.NextAction = &NextAction{Kind: "INSPECT_RECOVERY", Tool: "operation_recover", OperationID: issue.OperationID, Mode: "inspect"}
+		}
 	}
 	if out.Truncated {
 		last := out.Issues[len(out.Issues)-1]

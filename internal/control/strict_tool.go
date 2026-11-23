@@ -21,7 +21,7 @@ const serverContinuityInstructions = "BoxWeave manages only registered Boxes in 
 	"Separate authenticated Actors may inspect authorized same-Layer originals but cannot borrow another Actor's idempotency identity. " +
 	"Use operation_output_get for guest Exec output and exit_code; Operation SUCCEEDED does not guarantee a zero guest exit. " +
 	"Use box_get for observed native Box state; Running does not prove guest readiness. " +
-	"box_activity_get offers bounded SQLite-only overview/issues/evidence after reconnect; cursor pages are live views, not immutable snapshots. " +
+	"box_activity_get offers bounded SQLite overview/issues/evidence plus explicit read-only native_network full-Project diagnosis; native cross-source observations are NOT atomic or root/global trust proofs. All cursor pages recheck scope and may require restart on drift. " +
 	"BoxWeave does not store Agent plans, conversation history, external Git checkpoints or unrecorded activity."
 
 // Each mutating tool still includes a short reminder for clients that omit
@@ -56,7 +56,7 @@ func addStrictTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 		if view == nil {
 			panic("Activity requires typed view field")
 		}
-		view.Enum = []any{"overview", "issues", "evidence"}
+		view.Enum = []any{"overview", "issues", "evidence", "native_network"}
 	}
 	if tool.Name == "box_file_apply" {
 		mode := schema.Properties["mode"]

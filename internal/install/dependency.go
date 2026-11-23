@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/exec"
 	"regexp"
@@ -14,12 +15,15 @@ import (
 // NativeBootstrap only supports a fresh, approved Ubuntu 24.04 guest. It never
 // upgrades an existing daemon or changes shared Incus data.
 type NativeBootstrapReport struct {
-	Mode           string   `json:"mode"`
-	PackageVersion string   `json:"incus_package_version"`
-	PlanSHA256     string   `json:"plan_sha256,omitempty"`
-	Packages       []string `json:"packages,omitempty"`
-	AptChanges     []string `json:"apt_changes,omitempty"`
-	RebootRequired bool     `json:"reboot_required"`
+	Mode             string   `json:"mode"`
+	PackageVersion   string   `json:"incus_package_version"`
+	PlanSHA256       string   `json:"plan_sha256,omitempty"`
+	Packages         []string `json:"packages,omitempty"`
+	AptChanges       []string `json:"apt_changes,omitempty"`
+	RebootRequired   bool     `json:"reboot_required"`
+	IPv4BridgePrefix string   `json:"ipv4_bridge_prefix,omitempty"`
+	IPv4AddressPool  int      `json:"ipv4_address_pool,omitempty"`
+	NetworkPolicy    string   `json:"network_policy,omitempty"`
 }
 
 var ubuntuIncusVersion = regexp.MustCompile("^[0-9A-Za-z.+:~-]{3,80}$")
@@ -90,7 +94,7 @@ func nativePlan(packageVersion string) (NativeBootstrapReport, error) {
 	}
 	p.Packages = names
 	args := append([]string{"-s", "--no-install-recommends", "install"}, nativePackageArgs(names, packageVersion)...)
-	args = append(args, "dnsmasq-base")
+	args = append(args, "dnsmasq-base", "conntrack", "nftables", "iproute2")
 	out, err := exec.Command("apt-get", args...).CombinedOutput()
 	if err != nil {
 		return p, fmt.Errorf("signed native apt simulation failed: %w", err)
@@ -115,7 +119,8 @@ func nativePlan(packageVersion string) (NativeBootstrapReport, error) {
 	if len(seen) != len(names) {
 		return p, errors.New("apt cannot provide exact signed native package set")
 	}
-	h := sha256.Sum256([]byte("boxweave-s1-native-ubuntu2404\n" + packageVersion + "\n" + simulation))
+	p.NetworkPolicy = freshIPv4Policy
+	h := sha256.Sum256([]byte("boxweave-s1-native-ubuntu2404\n" + packageVersion + "\n" + simulation + "\n" + p.NetworkPolicy))
 	p.PlanSHA256 = hex.EncodeToString(h[:])
 	p.Mode = "fresh-install-proposed"
 	return p, nil
@@ -159,7 +164,7 @@ func NativeDependencyBootstrap(version, approvedDigest string, approved bool) (N
 		return p, errors.New("approved apt plan SHA differs from current simulation")
 	}
 	args := append([]string{"install", "-y", "--no-install-recommends"}, nativePackageArgs(p.Packages, version)...)
-	args = append(args, "dnsmasq-base")
+	args = append(args, "dnsmasq-base", "conntrack", "nftables", "iproute2")
 	if err := runLocal("apt-get", args...); err != nil {
 		return p, fmt.Errorf("partial apt install: stop, inspect, never blindly retry: %w", err)
 	}
@@ -169,6 +174,17 @@ func NativeDependencyBootstrap(version, approvedDigest string, approved bool) (N
 	if err := nativePrepareServiceAccount(); err != nil {
 		return p, fmt.Errorf("per-user restricted Project not ready: %w", err)
 	}
+	// Only the fresh package/bootstrap branch can resize the just-created empty bridge.
+	prefix, err := provisionFreshIPv4()
+	if err != nil {
+		return p, fmt.Errorf("fresh native network preparation incomplete; inspect before retry: %w", err)
+	}
+	p.IPv4BridgePrefix = prefix
+	parsed, err := netip.ParsePrefix(prefix)
+	if err != nil {
+		return p, err
+	}
+	p.IPv4AddressPool = freshIPv4Usable(parsed)
 	if err := verifyNativePackageVersions(p.Packages, version); err != nil {
 		return p, err
 	}

@@ -170,19 +170,16 @@ sudo cp -p "$work/receipt.original" "$backup/receipt.json"
 test "$(sudo sha256sum "$backup/receipt.json" | cut -d' ' -f1)" = "$backup_before"
 healthy 1.0.0-rc.11
 echo GUIDED_UPGRADE_BACKUP_NEGATIVES=PASS
-tty_run "UPGRADE $project" sudo sh install.sh --upgrade --local-binary "$work/candidate" --sha256 "$candidate_sha" > "$work/candidate.log"
-grep -Fq PREVIOUS_BACKUP_COMMITTED "$work/candidate.log"
-grep -Fq GUIDED_UPGRADE_COMPLETE "$work/candidate.log"
-test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$candidate_sha"
-healthy 1.0.0-dev.guided-upgrade
-sudo python3 - "$backup/receipt.json" <<'PY'
-import json,sys
-assert json.load(open(sys.argv[1]))["Previous"]["version"]=="1.0.0-rc.11"
-PY
-sudo "$installed" rollback -project "$project" -approve-local > "$work/rollback.json"
+# The schema-6 candidate must fail its restricted preflight BEFORE closing
+# the older backup or stopping the active RC11 service.
+pid_before="$(sudo systemctl show -p MainPID --value boxweave)"
+if tty_run "UPGRADE $project" sudo sh install.sh --upgrade --local-binary "$work/candidate" --sha256 "$candidate_sha" > "$work/candidate.log" 2>&1; then exit 88; fi
+! grep -Fq PREVIOUS_BACKUP_COMMITTED "$work/candidate.log"
+test "$(sudo sha256sum "$backup/receipt.json" | cut -d' ' -f1)" = "$backup_before"
 test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$rc11_sha"
+test "$(sudo systemctl show -p MainPID --value boxweave)" = "$pid_before"
 healthy 1.0.0-rc.11
-echo GUIDED_UPGRADE_PREVIOUS_COMMIT_NEW_BACKUP_AND_REAL_ROLLBACK=PASS
+echo GUIDED_UPGRADE_INCOMPATIBLE_SCHEMA_RETAINS_BACKUP=PASS
 # Prove existing fresh install policy is still respected by the separate
 # normal workflow and no native resources were created by upgrade.
 sudo systemctl stop boxweave

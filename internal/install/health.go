@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -65,7 +66,7 @@ func observeInstalled(p Plan, m Manifest) error {
 	if resp.StatusCode != http.StatusUnauthorized {
 		return fmt.Errorf("actual bound MCP unauthorized probe expected 401, got %d", resp.StatusCode)
 	}
-	return nil
+	return observeInstalledRetirement(p, m)
 }
 func waitInstalledHealthy(p Plan, m Manifest) error {
 	var last error
@@ -86,4 +87,80 @@ func waitInstalledHealthy(p Plan, m Manifest) error {
 		last = errors.New("no stable runtime confirmation")
 	}
 	return fmt.Errorf("installed runtime not continuously healthy: %w", last)
+}
+
+func observeInstalledRetirement(p Plan, m Manifest) error {
+	if m.RetirementUnitSHA256 == "" {
+		return nil
+	}
+	if e := verifyInstalledRetirementUnit(m); e != nil {
+		return e
+	}
+	if e := runLocal("systemctl", "is-active", "--quiet", nativeRetirementUnitName); e != nil {
+		return errors.New("installed retirement verifier not active")
+	}
+	props, e := retirementUnitProperties()
+	if e != nil {
+		return e
+	}
+	pid, e := strconv.Atoi(props["MainPID"])
+	if e != nil || pid < 2 {
+		return errors.New("retirement verifier PID unavailable")
+	}
+	st, e := os.Stat(filepath.Join("/proc", strconv.Itoa(pid)))
+	if e != nil {
+		return e
+	}
+	owner, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != 0 {
+		return errors.New("retirement verifier not root-owned process")
+	}
+	h, e := sha(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	if e != nil || h != m.BinarySHA256 {
+		return errors.New("retirement verifier executable differs")
+	}
+	_, gid, e := ServiceIdentity(p)
+	if e != nil {
+		return e
+	}
+	sock, e := os.Lstat(nativeRetirementSocketPath)
+	if e != nil {
+		return e
+	}
+	so, ok := sock.Sys().(*syscall.Stat_t)
+	if !ok || so.Uid != 0 || so.Gid != uint32(gid) || sock.Mode()&os.ModeSocket == 0 || sock.Mode().Perm() != 0660 {
+		return errors.New("retirement verifier socket ownership differs")
+	}
+	conn, e := net.DialTimeout("unix", nativeRetirementSocketPath, time.Second)
+	if e != nil {
+		return e
+	}
+	defer conn.Close()
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		return errors.New("unexpected retirement socket transport")
+	}
+	return nativePeerRootPeerIdentity(uc, 0, pid)
+}
+
+func retirementUnitProperties() (map[string]string, error) {
+	raw, e := exec.Command("systemctl", "show", "-p", "FragmentPath", "-p", "DropInPaths", "-p", "MainPID", nativeRetirementUnitName).Output()
+	if e != nil {
+		return nil, e
+	}
+	props := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		k, v, ok := strings.Cut(line, "=")
+		if ok {
+			if _, dup := props[k]; dup {
+				return nil, errors.New("ambiguous retirement service properties")
+			}
+			props[k] = v
+		}
+	}
+	dp, ok := props["DropInPaths"]
+	if !ok || dp != "" || props["FragmentPath"] != nativeRetirementUnitPath {
+		return nil, errors.New("retirement verifier effective unit differs")
+	}
+	return props, nil
 }

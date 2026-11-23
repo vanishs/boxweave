@@ -439,7 +439,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 						reserved = b
 					}
 					return ok, err
-				})
+				}, s.Store.ReadCreateAddressHolds)
 				nativeID = id
 				return id, preflightNative(e)
 			}
@@ -765,6 +765,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
 					return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
 				}
+				// The original Delete has already committed. The independent bounded
+				// retirement loop discovers this tombstone; never hold the Delete
+				// worker open for an optional root witness.
 				return state.ErrVerifiedDeleteCommitted
 			}
 			r, err = s.submitNative(r, effect, verify)

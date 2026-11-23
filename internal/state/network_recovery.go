@@ -168,6 +168,9 @@ func recoveryDependentDeleteReady(ctx context.Context, tx *sql.Tx, t RecoveryTar
 	if e != nil || peer+fwd != 0 {
 		return ErrResourceLocked
 	}
+	if e = requireDeletePinLineage(ctx, tx, t.Layer, t.UUID, t.Incarnation, t.Resource); e != nil {
+		return e
+	}
 	if _, e = verifyDeletePinned(ctx, tx, t.Layer, t.UUID, t.Incarnation); e != nil {
 		return e
 	}

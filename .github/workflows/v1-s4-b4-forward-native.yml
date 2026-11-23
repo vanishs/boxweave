@@ -1,7 +1,7 @@
 name: S4-B4 disposable native instance proxy TCP/UDP
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120, feat/v1-forward-all-20261121]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120, feat/v1-forward-all-20261121, feat/v1-network-reliability-20261122]
     paths:
       - internal/state/network_recovery*.go
       - internal/recovery/**
@@ -37,7 +37,7 @@ permissions:
   contents: read
 jobs:
   owned-proxy-native:
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') || github.ref == 'refs/heads/feat/v1-forward-all-20261121')
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') || github.ref == 'refs/heads/feat/v1-forward-all-20261121' || github.ref == 'refs/heads/feat/v1-network-reliability-20261122')
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -177,9 +177,27 @@ jobs:
             grep -Fq 'S4_B5_NATIVE_MCP_FORWARD_DEPENDENT_DELETE=PASS' "$RUNNER_TEMP/s4b5-native.log"
           fi
           for cut in before-ack after-ack receipt-unavailable protected-partial; do
+            # N4-only: never immediately recycle the SAME static address across
+            # four destructive fault cuts. The production retirement policy
+            # itself requires independent evidence before any address reuse.
+            addr=22
+            if test "$GITHUB_REF" = "refs/heads/feat/v1-network-reliability-20261122"; then
+              case "$cut" in
+                before-ack) addr=22 ;;
+                after-ack) addr=23 ;;
+                receipt-unavailable) addr=24 ;;
+                protected-partial) addr=25 ;;
+              esac
+              echo "N4_B4_NATIVE_ACK_FIXTURE_FRESH_IP=cut:$cut ipv4:10.248.83.$addr ipv6:fd83:248::$addr"
+            fi
             sudo incus --project "$S4_B4_PROJECT" init images:ubuntu/24.04 s4b5ack -c limits.cpu=1 -c limits.memory=512MiB
-            sudo incus --project "$S4_B4_PROJECT" config device override s4b5ack eth0 ipv4.address=10.248.83.22 ipv6.address=fd83:248::22
-            sudo incus --project "$S4_B4_PROJECT" start s4b5ack
+            sudo incus --project "$S4_B4_PROJECT" config device override s4b5ack eth0 "ipv4.address=10.248.83.$addr" "ipv6.address=fd83:248::$addr"
+            if ! sudo incus --project "$S4_B4_PROJECT" start s4b5ack; then
+              echo "N4_NATIVE_FIXTURE_START_FAILED cut=$cut, inspect real Incus evidence (no test pass inferred)"
+              sudo incus --project "$S4_B4_PROJECT" info s4b5ack --show-log || true
+              sudo incus network list-leases bwbr0 || true
+              exit 91
+            fi
             sudo incus --project "$S4_B4_PROJECT" file push "$RUNNER_TEMP/s4b4-echo" s4b5ack/root/s4b4-echo
             sudo incus --project "$S4_B4_PROJECT" exec s4b5ack -- chmod 0755 /root/s4b4-echo
             sudo incus --project "$S4_B4_PROJECT" exec s4b5ack -- sh -c 'nohup /root/s4b4-echo server >/tmp/s4b4-echo.log 2>&1 </dev/null &'
@@ -203,6 +221,7 @@ jobs:
                 sudo incus --project "$S4_B4_PROJECT" config set s4b5ack security.protection.delete=false
                 sudo incus --project "$S4_B4_PROJECT" delete s4b5ack ;;
             esac
+            if test "$GITHUB_REF" = "refs/heads/feat/v1-network-reliability-20261122"; then sleep 2; fi
           done
           sudo incus project delete "$S4_B4_PROJECT"
           sudo incus network acl delete bw-s4b4-native

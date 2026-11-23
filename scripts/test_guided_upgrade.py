@@ -75,6 +75,17 @@ class GuidedUpgradeTests(unittest.TestCase):
                                               SOURCE_SHA, review(), "host")
                 run.assert_not_called()
 
+    def test_incompatible_candidate_preserves_previous_backup_and_service(self):
+        health = Mock(side_effect=[{"ready": True}, ERR("candidate schema incompatible")])
+        with patch.dict(NS, {"require_unchanged_upgrade": Mock(), "service_health": health,
+                             "command_json": Mock(return_value={"version": "1.0.0-rc.11", "commit": SOURCE_SHA})}):
+            with patch("builtins.open", side_effect=[io.StringIO("UPGRADE user-1001\n"), io.StringIO()]), patch("subprocess.run") as run:
+                with self.assertRaisesRegex(ERR, "schema incompatible"):
+                    NS["apply_guided_upgrade"](args(), Path("/fixture/candidate"), SHA, "1.0.0-rc.11", SOURCE_SHA, review(), "host")
+                run.assert_not_called()
+                self.assertEqual(health.call_count, 2)
+                self.assertEqual(health.call_args.args[1], Path("/fixture/candidate"))
+
     def test_commit_failure_stops_before_upgrade(self):
         with patch.dict(NS, {"require_unchanged_upgrade": Mock(), "service_health": Mock(),
                              "command_json": Mock(return_value={"version":"1.0.0-rc.11", "commit": SOURCE_SHA})}):

@@ -26,10 +26,13 @@ func (s *Store) ReadPeerGrantSnapshot(ctx context.Context, project, bridge, acl,
 
 // UNKNOWN is inspectable only by the separately approved root read-only recovery.
 func (s *Store) readPeerGrantSnapshot(ctx context.Context, project, bridge, acl, stagedOriginal string, allowUnknownRecovery bool) ([]PeerGrantBinding, error) {
+	return s.readPeerGrantSnapshotMode(ctx, project, bridge, acl, stagedOriginal, allowUnknownRecovery, false)
+}
+func (s *Store) readPeerGrantSnapshotMode(ctx context.Context, project, bridge, acl, stagedOriginal string, allowUnknownRecovery, allowEmpty bool) ([]PeerGrantBinding, error) {
 	if s == nil || s.db == nil || (stagedOriginal != "" && !validHexID(stagedOriginal)) {
 		return nil, ErrInvalid
 	}
-	ledger, err := s.ReadCompleteNetworkAuditLedger(ctx, project, bridge, acl)
+	ledger, err := s.readCompleteNetworkAuditLedger(ctx, project, bridge, acl, allowEmpty)
 	if err != nil {
 		return nil, ErrResourceLocked
 	}
@@ -180,10 +183,13 @@ func (s *Store) readPeerGrantSnapshot(ctx context.Context, project, bridge, acl,
 // UUIDs/IP reuse refuse any subsequent ACL rebuild rather than stripping
 // safety rules silently.
 func (s *Store) ReadPeerRevokedSnapshot(ctx context.Context, project, bridge, acl string) ([]PeerGrantBinding, error) {
+	return s.readPeerRevokedSnapshot(ctx, project, bridge, acl, false)
+}
+func (s *Store) readPeerRevokedSnapshot(ctx context.Context, project, bridge, acl string, allowEmpty bool) ([]PeerGrantBinding, error) {
 	if s == nil || s.db == nil || !auditName(project) || !auditName(bridge) || !auditName(acl) {
 		return nil, ErrInvalid
 	}
-	ledger, err := s.ReadCompleteNetworkAuditLedger(ctx, project, bridge, acl)
+	ledger, err := s.readCompleteNetworkAuditLedger(ctx, project, bridge, acl, allowEmpty)
 	if err != nil {
 		return nil, ErrResourceLocked
 	}
@@ -208,7 +214,7 @@ func (s *Store) ReadPeerRevokedSnapshot(ctx context.Context, project, bridge, ac
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT source_uuid,source_incarnation,target_uuid,target_incarnation,
  source_ipv4,target_ipv4,source_ipv6,target_ipv6
- FROM peer_grants WHERE project=? AND status='REVOKED' AND desired=0 ORDER BY source_uuid,target_uuid`, project)
+ FROM peer_grants p WHERE project=? AND status='REVOKED' AND desired=0 AND `+retirementPeerUncompacted+` ORDER BY source_uuid,target_uuid`, project)
 	if err != nil {
 		return nil, err
 	}

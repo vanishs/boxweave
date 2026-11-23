@@ -139,15 +139,16 @@ else
   sudo "$installed" install-activate -project "$project" -approve-local > "$work/active.json"
   healthy
   policy "$want"
-  sudo "$installed" upgrade -project "$project" -source-binary "$work/candidate" -expect-sha256 "$candidate_sha" -approve-local > "$work/upgraded.json"
-  test "$(unit_hash)" = "$old_unit"
-  test "$(manifest_unit "$work/upgraded.json")" = "$old_unit"
-  test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$candidate_sha"
-  healthy
-  policy "$want"
-  sudo "$installed" rollback -project "$project" -approve-local > "$work/rolled-back.json"
+  # Schema 6 intentionally has no pre-stable migration from published RC10.
+  pid_before="$(sudo systemctl show -p MainPID --value boxweave)"
+  if sudo "$installed" upgrade -project "$project" -source-binary "$work/candidate" -expect-sha256 "$candidate_sha" -approve-local > "$work/upgrade-denied.log" 2>&1; then
+    exit 86
+  fi
+  grep -Fq 'restricted service preflight unavailable' "$work/upgrade-denied.log"
+  test "$(sudo systemctl show -p MainPID --value boxweave)" = "$pid_before"
   test "$(unit_hash)" = "$old_unit"
   test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$old_sha"
+  test ! -e /var/lib/boxweave-installer-backup
   if [ "$FORWARD_INSTALL_MODE" = legacy-exact ]; then
     test "$(sudo sha256sum "$dropin" | cut -d' ' -f1)" = "$old_override"
   else
@@ -155,7 +156,7 @@ else
   fi
   healthy
   policy "$want"
-  echo "FORWARD_INSTALL_UPGRADE_ROLLBACK_PRESERVED=$FORWARD_INSTALL_MODE PASS"
+  echo "FORWARD_INSTALL_INCOMPATIBLE_SCHEMA_PRESERVED=$FORWARD_INSTALL_MODE PASS"
 fi
 sudo systemctl stop boxweave.service
 test -z "$(sudo incus list --all-projects --format csv -c n)"

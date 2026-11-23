@@ -59,17 +59,26 @@ func (s *Store) StageCreateBinding(ctx context.Context, id, project, name string
 	if n != 0 {
 		return false, ErrState
 	}
+	if err = verifyIPv4RetirementHistory(ctx, tx, project, b.Bridge, b.ACL); err != nil {
+		return false, err
+	}
 	if err = tx.QueryRowContext(ctx, `SELECT
   (SELECT COUNT(*) FROM network_address_fences WHERE bridge=? AND ((family='ipv4' AND address=?) OR (family='ipv6' AND address=?) OR (project!=? AND state!='RELEASED')))+
-  (SELECT COUNT(*) FROM network_bindings WHERE bridge=? AND (mac=? OR ipv4=? OR ipv6=? OR (project!=? AND state!='RELEASED')))`, b.Bridge, b.IPv4, b.IPv6, project, b.Bridge, b.MAC, b.IPv4, b.IPv6, project).Scan(&n); err != nil {
+  (SELECT COUNT(*) FROM network_bindings n WHERE bridge=? AND (mac=? OR (ipv4=? AND NOT EXISTS (SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation)) OR ipv6=? OR (project!=? AND state!='RELEASED')))`, b.Bridge, b.IPv4, b.IPv6, project, b.Bridge, b.MAC, b.IPv4, project, b.IPv6, project).Scan(&n); err != nil {
 		return false, err
 	}
 	if n != 0 {
 		return false, nil
 	}
 	keys := b.reservationKeys()
-	for _, key := range keys[:3] {
-		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims WHERE resource_key=?", key).Scan(&n); err != nil {
+	for i, key := range keys[:3] {
+		query := "SELECT COUNT(*) FROM operation_resource_claims WHERE resource_key=?"
+		args := []any{key}
+		if i == 0 {
+			query = "SELECT COUNT(*) FROM operation_resource_claims c WHERE resource_key=? AND NOT EXISTS (SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.bridge=? AND r.ipv4=? AND r.create_operation_id=c.operation_id AND c.layer=r.project)"
+			args = append(args, project, b.Bridge, b.IPv4)
+		}
+		if err = tx.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
 			return false, err
 		}
 		if n != 0 {
@@ -106,8 +115,8 @@ func requireCreateBindingReservation(ctx context.Context, tx *sql.Tx, id, projec
 }
 
 // insertVerifiedCreateBinding is part of the atomic original Create
-// finalization. All inserts are exclusive, never upserts; even RELEASED
-// address fences are not reassigned. Any failure rolls back ownership and
+// finalization. All inserts are exclusive, never upserts. Only independently archived
+// historical IPv4 claims may be reused; RELEASED fences alone never are. Any failure rolls back ownership and
 // terminal success together. The worker preserves UNKNOWN on uncertainty.
 func insertVerifiedCreateBinding(ctx context.Context, tx *sql.Tx, opID, project, uuid string, b VerifiedCreateBinding, now int64) error {
 	if !b.valid() || !auditName(project) || project == "default" || uuid == "" {

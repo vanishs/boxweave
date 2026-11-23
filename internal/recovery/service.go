@@ -62,7 +62,7 @@ type Result struct {
 // legacy RELEASED audit row. Preserve the row as history but report the
 // retained protection and require explicit review; never infer settlement.
 func protectedNetworkRecovery(t state.RecoveryTarget) bool {
-	return t.DependentDelete || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete"
+	return t.DependentDelete || (t.Action == "box_create" && (t.CreatePinStaged || t.CreatePinRequired)) || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete"
 }
 func base(t state.RecoveryTarget, stream string) View {
 	v := View{OriginalID: t.ID, OriginalAction: t.Action, OriginalState: t.State, BoxID: t.UUID, Incarnation: t.Incarnation, OriginalNativeID: t.NativeID, ClaimProtection: "NOT_UNKNOWN", NativeObservation: "NOT_CHECKED", EvidenceSource: "SQLITE_DURABLE", GCStream: stream}
@@ -204,6 +204,9 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	if t.Action == "operation_recover" {
 		return finish(state.RecoveryBlocked, "RECOVERY_OF_RECOVERY_UNSUPPORTED")
 	}
+	if t.Action == "box_create" && t.State == "SUCCEEDED" && t.CreatePinRequired && t.CreatePinStaged && t.OwnedState == "OWNED" {
+		return s.observeCreatePinRepair(ctx, t, v)
+	}
 	if t.State != "UNKNOWN" {
 		switch t.State {
 		case "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT":
@@ -286,6 +289,12 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 		return finish(state.RecoveryBlocked, "EXACT_ORIGINAL_OWNERSHIP_UNPROVED")
 	}
 	if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
+		if t.CreatePinStaged {
+			return s.observeStagedCreate(ctx, t, v)
+		}
+		if t.CreatePinRequired {
+			return finish(state.RecoveryBlocked, "CREATE_STATIC_RESERVATION_MISSING")
+		}
 		box, obs, e := ObserveCreate(ctx, s.Native, t.Name, t.ID)
 		if e != nil || box.Project != s.Layer {
 			return finish(state.RecoveryBlocked, "CREATE_MARKER_IDENTITY_UNPROVED")
@@ -393,6 +402,30 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	if e != nil || box.UUID != t.UUID || box.Project != s.Layer {
 		return finish(state.RecoveryBlocked, "EXACT_NATIVE_UUID_UNVERIFIED")
 	}
+	switch t.LifecyclePinStatus {
+	case "MISSING":
+		return finish(state.RecoveryBlocked, "LIFECYCLE_STATIC_LEDGER_MISSING")
+	case "CONFLICT":
+		return finish(state.RecoveryBlocked, "LIFECYCLE_STATIC_LEDGER_MISMATCH")
+	case "PINNED":
+		n, ok := s.Native.(interface {
+			VerifyPinnedDeleteNIC(context.Context, string, string, string, string, string, string, string) error
+		})
+		if !ok {
+			return finish(state.RecoveryBlocked, "LIFECYCLE_STATIC_OBSERVER_UNAVAILABLE")
+		}
+		pin := t.LifecycleBinding
+		if e = n.VerifyPinnedDeleteNIC(ctx, t.Name, t.UUID, pin.Bridge, pin.ACL, pin.MAC, pin.IPv4, pin.IPv6); e != nil {
+			if errors.Is(e, native.ErrUnsafeNetwork) {
+				return finish(state.RecoveryBlocked, "NATIVE_PINNED_NIC_DRIFT")
+			}
+			return finish(state.RecoveryBlocked, "NATIVE_PINNED_NIC_UNVERIFIED")
+		}
+		again, tag, err := s.Native.GetExactBox(ctx, t.Name, t.UUID)
+		if err != nil || tag == "" || etag != tag || again.UUID != box.UUID || again.Project != box.Project || again.NativeState != box.NativeState {
+			return finish(state.RecoveryBlocked, "LIFECYCLE_NATIVE_POSTSTATE_CHANGED")
+		}
+	}
 	if e = s.Native.CheckExactPrivateNIC(ctx, t.Name, t.UUID); e != nil {
 		return finish(state.RecoveryBlocked, "PRIVATE_NIC_UNVERIFIED")
 	}
@@ -416,6 +449,11 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	}
 	view, p := finish(state.RecoverySettle, "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED")
 	p.NativeID, p.UUID, p.Fingerprint = t.NativeID, t.UUID, fingerprint(t.ID, t.NativeID, t.UUID, etag, box.NativeState)
+	if t.LifecyclePinStatus == "PINNED" {
+		p.LifecycleBinding = t.LifecycleBinding
+		pin := p.LifecycleBinding
+		p.Fingerprint = fingerprint(p.Fingerprint, pin.Bridge, pin.ACL, pin.MAC, pin.IPv4, pin.IPv6)
+	}
 	return view, p
 }
 

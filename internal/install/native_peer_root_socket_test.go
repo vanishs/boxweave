@@ -262,3 +262,37 @@ func TestS5A4RootReadOnlyApprovalScope(t *testing.T) {
 		t.Fatal("nonroot socket was trusted as root witness")
 	}
 }
+
+func TestRetirementRootReviewIsExplicitAndReadOnly(t *testing.T) {
+	original := strings.Repeat("a", 32)
+	read := NativePeerRootRequest{OperationID: original, RetirementReview: true}
+	cfg := NativePeerRootScope{Approved: true, RetirementReview: true, DBPath: nativePeerRootInstalledDB, Project: "user-1001", Bridge: "bwbr0", ACL: "bw-peer"}
+	if !nativePeerRootScopeApproved(cfg) || nativePeerRootValidateRequest(read) != nil || nativePeerRootApprovedRequest(cfg, read) {
+		t.Fatal("read-only mode invalid")
+	}
+	if nativePeerRootApprovedRequest(cfg, NativePeerRootRequest{OperationID: original, PlanSHA256: strings.Repeat("b", 64)}) {
+		t.Fatal("read-only configuration authorizes a write")
+	}
+	unit, e := NativePeerRootUnitText(cfg)
+	if e != nil || !strings.Contains(unit, " -retirement-review -approve-local") || strings.Contains(unit, " -peer-plan-sha256 ") {
+		t.Fatal(unit, e)
+	}
+	for _, ambiguous := range []NativePeerRootRequest{
+		{OperationID: original, RetirementReview: true, PlanSHA256: strings.Repeat("b", 64)},
+		{OperationID: original, RetirementReview: true, Reconcile: true},
+		{OperationID: original, RetirementReview: true, ReconcileApproved: true},
+	} {
+		if nativePeerRootValidateRequest(ambiguous) == nil {
+			t.Fatal("ambiguous read accepted", ambiguous)
+		}
+	}
+	cfg.RetirementReview = false
+	if nativePeerRootScopeApproved(cfg) {
+		t.Fatal("missing approval")
+	}
+	cfg.RetirementReview = true
+	cfg.OriginalID = original
+	if nativePeerRootScopeApproved(cfg) {
+		t.Fatal("partial mutating approval")
+	}
+}

@@ -1,0 +1,44 @@
+name: v1 N2 clean installed retirement lifecycle
+on:
+  pull_request:
+    branches: [v1]
+    paths:
+      - internal/install/**
+      - internal/state/network_ipv4*.go
+      - internal/control/ipv4_retirement*.go
+      - install.sh
+      - scripts/uninstall_core.py
+      - scripts/n2_installed_lifecycle.*
+      - .github/workflows/v1-n2-installed-lifecycle.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installed-lifecycle:
+    if: github.repository == 'vanishs/boxweave' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.ref == 'refs/heads/feat/v1-network-reliability-20261122')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      N2_EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Exact-head native bootstrap, install, outage, compatible upgrade, rollback and uninstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$N2_EXACT_HEAD"
+          sh -n scripts/n2_installed_lifecycle.sh
+          sh scripts/n2_installed_lifecycle.sh | tee "$RUNNER_TEMP/n2-installed.log"
+          grep -Fq 'N2_CLEAN_BOOTSTRAP_ADDRESS_POOL=PASS ' "$RUNNER_TEMP/n2-installed.log"
+          for marker in N2_INSTALLED_HELPER_ACTIVATION N2_INSTALLED_HELPER_OUTAGE_RECOVERY_NO_DELETE_REPLAY N2_SCHEMA6_UPGRADE_ROLLBACK N2_FULL_UNINSTALL_PRESERVES_ARCHIVE; do
+            grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+          done
+          grep -Fxq N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"

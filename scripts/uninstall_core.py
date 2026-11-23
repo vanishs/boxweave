@@ -22,6 +22,8 @@ BINARY = Path("/usr/local/bin/boxweave")
 NATIVE = Path("/var/lib/boxweave-native-prereq-v1.json")
 SCRIPTLET = Path("/var/lib/boxweave-native-scriptlet-v1.json")
 ROOT_UNIT = Path("/etc/systemd/system/boxweave-native-peer-root.service")
+RETIREMENT_UNIT = Path("/etc/systemd/system/boxweave-ipv4-retirement.service")
+RETIREMENT_SOCKET = Path("/run/boxweave-ipv4-retirement.sock")
 AUDIT = Path("/var/lib/boxweave-uninstall-v1-audit.json")
 BACKUP = Path("/var/lib/boxweave-installer-backup")
 RETIRED = Path("/var/lib/boxweave-retired")
@@ -166,7 +168,7 @@ def inspect_sqlite(dbpath, guided=False):
         conn.execute("PRAGMA query_only=ON")
         conn.execute("BEGIN")
         version = [x[0] for x in conn.execute("SELECT version FROM schema_version")]
-        if len(version) != 1 or version[0] not in (4, 5):
+        if len(version) != 1 or version[0] not in (4, 5, 6):
             raise UninstallError("unrecognized controller database schema")
         operation_hash = hashlib.sha256()
         operation_count = 0
@@ -180,7 +182,7 @@ def inspect_sqlite(dbpath, guided=False):
             if state not in TERMINAL:
                 # Keep UNKNOWN unchanged. Only retire a reviewed historical
                 # Exec with exact successful Delete lineage.
-                if guided and version[0] == 5 and state == "UNKNOWN":
+                if guided and version[0] in (5, 6) and state == "UNKNOWN":
                     witness = conn.execute("""
                         SELECT o.id, b.uuid, d.id, r.seq, r.evidence_digest
                         FROM operations o
@@ -214,6 +216,12 @@ def inspect_sqlite(dbpath, guided=False):
             count = conn.execute("SELECT count(*) FROM " + table + " WHERE " + condition).fetchone()[0]
             if count:
                 blockers.append(table + "_NOT_RELEASED:" + str(count))
+        if version[0] == 6:
+            # An uncertain root ACL update is not an ordinary terminal Delete.
+            # Its project fence must survive; do not uninstall away recovery evidence.
+            count = conn.execute("SELECT count(*) FROM network_ipv4_compactions").fetchone()[0]
+            if count:
+                blockers.append("IPV4_COMPACTION_PROTECTED:" + str(count))
         # Exact operation IDs/state/native refs bind the human review to the
         # current durable originals, including terminal operations.
         return {"version": version[0], "operations": operation_count,
@@ -307,6 +315,83 @@ def effective_unit():
     return pairs["FragmentPath"]
 
 
+def retirement_unit_body(project, bridge, acl):
+    for value in (project, bridge, acl):
+        if not isinstance(value, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", value):
+            raise UninstallError("unsafe retirement unit scope")
+    return ("[Unit]\nDescription=BoxWeave exact retired IPv4 verifier\n"
+            "After=incus.service boxweave.service\nRequires=incus.service\n"
+            "PartOf=boxweave.service\nBindsTo=boxweave.service\n\n"
+            "[Service]\nType=simple\nUser=root\nGroup=root\nUMask=0077\n"
+            "ExecStart=/usr/local/bin/boxweave native-peer-root-serve -db /var/lib/boxweave/ledger.sqlite "
+            "-project " + project + " -network " + bridge + " -acl " + acl +
+            " -retirement-review -retirement-compact -approve-local\n"
+            "Restart=on-failure\nRestartSec=1s\nNoNewPrivileges=true\nPrivateTmp=true\n"
+            "ProtectHome=true\nProtectSystem=full\nRestrictAddressFamilies=AF_UNIX AF_NETLINK\n"
+            "\n[Install]\nWantedBy=multi-user.target\n").encode()
+
+
+def retirement_service_state():
+    raw, _ = command(["systemctl", "show", RETIREMENT_UNIT.name,
+                      "-p", "FragmentPath", "-p", "DropInPaths",
+                      "-p", "ActiveState", "-p", "MainPID", "--no-pager"])
+    pairs = dict(x.split("=", 1) for x in raw.splitlines() if "=" in x)
+    if (pairs.get("FragmentPath") != str(RETIREMENT_UNIT) or
+            pairs.get("DropInPaths") != "" or
+            pairs.get("ActiveState") not in ("active", "inactive", "failed") or
+            not re.fullmatch(r"[0-9]+", pairs.get("MainPID", ""))):
+        raise UninstallError("effective retirement verifier unit cannot be verified")
+    if (int(pairs["MainPID"]) > 1) != (pairs["ActiveState"] == "active"):
+        raise UninstallError("retirement verifier process state ambiguous")
+    return pairs["ActiveState"]
+
+
+def inspect_retirement_unit(manifest, project):
+    proof = file_fingerprint(RETIREMENT_UNIT)
+    digest = manifest.get("retirement_unit_sha256", "")
+    if not digest:
+        if (proof is not None or os.path.lexists(RETIREMENT_SOCKET) or
+                any(manifest.get(x) for x in ("retirement_bridge", "retirement_acl", "retirement_native_review_sha256"))):
+            raise UninstallError("unmanaged retirement verifier; inspect original unit")
+        return None
+    if proof is None or proof["sha256"] != digest or proof["mode"] != 0o644:
+        raise UninstallError("installer retirement verifier identity changed")
+    require_root_owned(RETIREMENT_UNIT)
+    if RETIREMENT_UNIT.lstat().st_nlink != 1:
+        raise UninstallError("retirement verifier unit hardlink refused")
+    expected = retirement_unit_body(project, manifest.get("retirement_bridge"), manifest.get("retirement_acl"))
+    if sha(expected) != digest:
+        raise UninstallError("retirement verifier differs from exact installer unit")
+    require_root_journal(NATIVE)
+    record = read_json(NATIVE) or {}
+    plan = record.get("plan") or {}
+    target = plan.get("target") or {}
+    if (record.get("status") not in ("APPLIED", "ROLLED_BACK") or
+            plan.get("review_sha256") != manifest.get("retirement_native_review_sha256") or
+            target.get("project") != project or
+            target.get("network") != manifest.get("retirement_bridge") or
+            target.get("acl") != manifest.get("retirement_acl")):
+        raise UninstallError("retirement verifier lacks original prepared scope")
+    current = retirement_service_state()
+    if os.path.lexists(RETIREMENT_SOCKET):
+        info = RETIREMENT_SOCKET.lstat()
+        if (current != "active" or not stat.S_ISSOCK(info.st_mode) or info.st_uid != 0 or
+                stat.S_IMODE(info.st_mode) != 0o660):
+            raise UninstallError("untrusted or stale retirement verifier socket")
+    elif current == "active":
+        raise UninstallError("active retirement verifier socket missing")
+    return {"unit": proof, "state": current}
+
+
+def require_retirement_stopped(plan):
+    proof = plan.get("retirement_verifier")
+    if not proof:
+        return
+    if (file_fingerprint(RETIREMENT_UNIT) != proof["unit"] or
+            retirement_service_state() not in ("inactive", "failed") or os.path.lexists(RETIREMENT_SOCKET)):
+        raise UninstallError("retirement verifier not stopped or changed; preserve evidence")
+
+
 def audit_status():
     record = read_json(AUDIT)
     if record is None:
@@ -384,6 +469,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
         raise UninstallError("Root peer socket present: reconcile exact original before retirement")
     if checked_file(ROOT_UNIT, "file") is not None:
         raise UninstallError("separate root peer service exists: manual original audit required")
+    retirement = inspect_retirement_unit(manifest, project)
     files = []
     exec_archive = inspect_exec_archive(owner.pw_uid) if guided else None
     for entry in sorted(STATE.iterdir(), key=lambda x: x.name):
@@ -445,6 +531,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
         "format": 1, "scope": scope, "guided": guided, "project": project, "host_machine_id_sha256": host,
         "service_user_uid": owner.pw_uid, "service_state": service,
         "unit": unit, "binary": binary, "state_files": files, "exec_archive": exec_archive,
+        "retirement_verifier": retirement,
         "effective_unit": fragment, "uninstall_audit": audit,
         "sqlite": snapshot, "native_prepare": native, "scriptlet_present": scriptlet is not None,
         "incus_instances": incus, "allowlist": expected if scope == "full" else [],
@@ -454,6 +541,8 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
     actions = ["stop exact boxweave.service", "disable exact boxweave.service",
                "unlink validated /etc/systemd/system/boxweave.service",
                "unlink validated /usr/local/bin/boxweave", "systemctl daemon-reload"]
+    if retirement:
+        actions.insert(1, "verify stopped and remove exact installer-owned IPv4 retirement verifier")
     if scope == "full":
         actions = ["delete exact stopped, DB-owned, explicitly allowlisted Incus UUIDs",
                    "rollback/archive exact approved native preparation journal"] + actions
@@ -583,6 +672,7 @@ def apply(plan):
         command(["systemctl", "stop", "boxweave.service"])
     if systemd_status() == "active":
         raise UninstallError("controller did not stop")
+    require_retirement_stopped(plan)
     with hold_stopped_serve_lock(plan):
         return apply_with_serve_lock(plan)
 
@@ -601,6 +691,8 @@ def archive_controller(plan):
                   for x in plan["exec_archive"]["files"]]
     items += [(BINARY, dest / "boxweave.bin"), (UNIT, dest / "boxweave.service"),
               (NATIVE, dest / "native-prepare.json")]
+    if plan.get("retirement_verifier"):
+        items += [(RETIREMENT_UNIT, dest / RETIREMENT_UNIT.name)]
     for src, dst in items:
         proof = file_fingerprint(src)
         if proof is None:
@@ -682,6 +774,10 @@ def apply_with_serve_lock(plan):
     command(["systemctl", "disable", "boxweave.service"])
     if systemd_status() == "active":
         raise UninstallError("service restarted during removal")
+    if plan.get("retirement_verifier"):
+        require_retirement_stopped(plan)
+        command(["systemctl", "disable", RETIREMENT_UNIT.name])
+        exact_unlink(RETIREMENT_UNIT, plan["retirement_verifier"]["unit"])
     exact_unlink(UNIT, plan["unit"])
     exact_unlink(BINARY, plan["binary"])
     command(["systemctl", "daemon-reload"])
