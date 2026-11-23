@@ -2,6 +2,21 @@
 
 **Status:** Owner-approved design direction, **not yet implemented**. Recorded 2026-11-23. Implement on Draft PR [#177](https://github.com/vanishs/boxweave/pull/177), base `v1`, while preserving its existing guided-uninstall recovery. **Do not merge, promote, change the installed L0 or edit global Incus without explicit owner instruction.**
 
+## 0. Owner update: runtime-first dependency (2026-11-23) — HOLD feature development
+
+**Superseding execution priority:** **#178 BEFORE #177.** The Owner explicitly requested that the new unified Doctor/Recover implementation **wait until #178 has finished and verified the new network/autostart/Root mediation behavior**. All earlier directions in this document to start implementing #177 immediately are **obsolete scheduling advice**, not an authorization to race implementation against changing native semantics. Retain the already implemented and signed-off **guided-uninstall recovery** in this Draft branch unchanged; no repeat Host teardown.
+
+The final target of [#178](https://github.com/vanishs/boxweave/pull/178) is default `boot.autostart=true` for newly created Boxes, preservation of user-intended autostart across Peer mutations, **routine authorized MCP-based Peer grant/revoke (and safe scoped recovery) without per-original Host shell work after trusted initial setup**, and **no normal-operation interruption of unrelated Box/network/service workloads** when changing A→B. The RC13 shared-ACL full-bridge stop barrier and manually staged one-original unit are **historical source facts**, **not** a normative final design or recommended diagnostic behavior. Read the [authoritative new owner contract](https://github.com/vanishs/boxweave/blob/fix/rc13-peer-blast-radius-lifecycle-20261123/docs/development/V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md).
+
+### How to avoid wrong diagnoses
+
+- **Do not implement RC13-derived hardcoded findings before #178 lands:** e.g. always claiming `PEER_ROOT_APPROVAL_PENDING` requires manual Host steps, always finding full-Project STOP/retained autostart=false, assuming one-use helper unit is required to exist, or treating the old native Peer journal/lock semantics as final. They can be accurate historical cases on RC13 but **false positives or false repairs** under the redesigned runtime.
+- **Post-#178 correctness gate:** independently review the **actual final accepted source** of Box creation defaults, peer authorization, MCP/Host helper privileges, native ACL/nft/conntrack propagation and failure barriers, Operation/SQLite events, versioning, service-effective env and recovery. Update source map, issue IDs, repairability categories and negative tests against these real semantics; explicitly version or retire RC13-only findings.
+- **Coverage remains strict:** report running-Guest app listener separately from native proxy device, actual packet proof separately from written ACL/ledger, privilege/recovery constraints independently; no secret/root journal export, no writable SQLite in “read-only” Doctor.
+- **Compatibility across versions:** the same real RC13 trace remains usable as a historical diagnostic fixture **only when explicitly scoped to RC13 code/version**. New code must not infer modern permission/manual approval semantics solely from that trace. If a legacy installation remains, label version-dependent lifecycle and coverage rather than claim that a modern helper is missing.
+
+**State today:** #177 proposed new `doctor --full --json` and `recover --plan --issue` are **not implemented**. This scheduling hold neither proves #178 is complete nor invalidates #177's historical uninstall/resume behavior. A future Agent must verify #178 completion and integration before resuming new feature work.
+
 ## 1. Decision and product goal
 
 The operator approved **one binary, two public CLI entry points**:
