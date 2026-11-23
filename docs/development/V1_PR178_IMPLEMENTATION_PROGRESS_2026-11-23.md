@@ -52,7 +52,40 @@ No fallback may report success when the requested availability and fail-closed s
 - Go 1.26.9, `CGO_ENABLED=1`. Targeted new tests `8b14ac1b5e4676d6bb44f4c57fc3039c`: native/control both PASS, observed Guest exit **0**.
 - Full affected Go packages `881704fa30a9f639b5909553b78d9d30`: both PASS, Guest exit **0**.
 - Targeted `-race` `2517ff8468eeb6c98ccddfcbec2f9e7f`: both PASS, Guest exit **0**.
-- Full **`make verify`** `a48605f3d69a494dec80fb14b73208dd`: exit **0**; format 831 tracked files, YAML 47 files, Go vet/mod, all-repo race including state, Python MCP/uninstall/stable gate/raw operation witness PASS. This validates source-level regression only; there was **no candidate install, real peer packet test or Host reboot** on the new code.
+- Full **`make verify`** `a48605f3d69a494dec80fb14b73208dd`: exit **0**; format 831 tracked files, YAML 47 files, Go vet/mod, all-repo race including state, Python MCP/uninstall/stable gate/raw operation witness PASS. This validates source-level regression only; the new BoxWeave candidate was **not installed**, and no Host reboot was tested. A **separate manual raw Incus 7.6 per-NIC packet experiment** is documented below; it does not exercise the candidate `box_peer_set` implementation.
 - Earlier absent CGO/make/git failures were **dev-Box prerequisite issues**, rectified locally, not product regressions; read Guest exit independently from Operation SUCCEEDED.
 
 **Handoff to #177:** Keep unified Doctor/Recover in Draft until #178 has implemented and independently verified the final network/helper/Operation state model; then replace historical RC13 hard-coded expectations with exact final code and versioned schema. Preserve existing #177 guided-uninstall work.
+
+## Independent Native N1 feasibility experiment — real Incus 7.6, isolated only
+
+**This is experimental feasibility evidence, NOT a production BoxWeave native acceptance.** All commands ran inside the separate L0-owned Box `pr178-lab-1123`; the physical Host, running L0 service and three earlier application Boxes were not changed. Exact installed Incus package: signed Zabbly `1:7.6-ubuntu24.04-202611072126`, signing fingerprint `4EFC590696CB15B87C73A3AD82CC8797C838DCFD`. L1 daemon initialized its own `incusbr0`. Parent AppArmor observed `unconfined`: this does not prove enforcing recursive isolation.
+
+### Live topology and trace
+
+| Inner name | IPv4 in test | ACL attached only to this instance | `boot.autostart` |
+| --- | --- | --- | --- |
+| `pr178-a` | `10.152.98.160` | `pr178-a-acl` | `true` |
+| `pr178-b` | `10.152.98.190` | `pr178-b-acl` | `true` |
+| `pr178-c` | `10.152.98.67` | `pr178-c-acl` | `true` |
+| `pr178-d` | `10.152.98.185` | `pr178-d-acl` | `true` |
+
+The experiment overrides the four NICs individually; every ACL `used_by` contains only its owning instance. D has a Python HTTP listener on port 8080 and persistent TCP echo listener on 9090. D's ingress rules admit C on these two ports. A separately running **C-side service** maintained repeated HTTP requests plus **one persistent TCP socket** to D; all observed counters and reconnects came from within C, not guessed from API state.
+
+- Initial C→D HTTP returned `200` and the long-lived TCP echo monitor reported `http_ok=26, tcp_ok=26, http_fail=0, tcp_fail=0, reconnects=1` (initial connection only). This is inner Native original `c347a561f0fe6e35e832bda8aa18a8b2`, Guest exit 0.
+- Before granting A→B: `curl` from A to B and from C to B both timed out, `http_ok=168, tcp_ok=168, failures=0`, original `3c80dfe406745ba3416f0a146f76e6cc`, Guest exit 0.
+- Added **one rule only to B's exclusive ACL** (`ingress action=allow source=10.152.98.160 protocol=tcp destination_port=8080`); A→B HTTP became `200`, C→B remained denied, C/D counters reached `281/281` with zero failures, one initial TCP connection, all 4 instances Running and all 4 `boot.autostart=true`. Original `f1e60c8079c8df8fdaa0e6255f5cc596`, Guest exit 0.
+- Negative rule test: `allow-stateless` on B's bridged ingress was **refused by Incus before mutation** (`Action "allow-stateless" is only supported on OVN networks`); B's correct original ACL remained, A→B still HTTP 200, C→B still denied; C/D counters `483/483`, zero failures, same persistent TCP socket. Original `606c7518e347b22d44179573d0d9fe1c`, Guest exit 0. **This is only input rejection; it does NOT inject a mid-PUT/ETag ACK loss or prove atomic fail-closed behavior under all kernel errors.**
+- Removed the exact A→B ingress rule from B's ACL, A→B and C→B again timed out, while C/D counters reached **`876/876` with `http_fail=0, tcp_fail=0, reconnects=1`**, all 4 still Running. Original `7889b7c8f5dd93522e0359d92150eaca`, Guest exit 0. A first attempted `rule remove ingress 0` gave CLI syntax error (original `ed42ac6a91eda9214919f78be1ba71c3`, Guest exit 1) **before** any rule removal; corrected exact-key removal was verified by empty ACL ingress.
+
+### Critical constraints before choosing N1
+
+1. The lab intentionally set **default egress=allow** and used DHCP addresses, so **changing B alone is insufficient for BoxWeave production**. Existing production compilers explicitly deny reserved/private egress; final A→B grants would need **two narrowly targeted, independently attested** effects (A egress and B ingress), with whole-policy private egress deny, exact static IPv4/IPv6, source-MAC anti-spoof and direction/reverse/conntrack controls preserved. The prototype does not demonstrate these.
+2. Live happy-path continuity is not fail-open proof. The failed `allow-stateless` attempt was rejected at policy validation, so **ACK-loss, partial nft render, dual-stack, concurrent edits, Host helper interruption, and journal UNKNOWN** remain deliberately marked **UNTESTED**.
+3. Proof of C/D unaffected is scoped to the observed IPv4 HTTP and persistent TCP echo + stable native Running/autostart; no IPv6, UDP, Forward, power-cycle, process-PID or external Host watcher was measured.
+4. The candidate branch still uses **one shared ACL in the actual installer and old root barrier**, and the new code has NOT been installed in this nested daemon. No claim that `box_peer_set` is automatic or nondisruptive in RC13 or #178 candidate.
+5. Follow-up engineering decision: N1 is **promising for blast-radius reduction**, but needs a new bootstrap / migration design and per-original rollback proof. Do **not** short-circuit existing shared ACL safety to copy the lab's commands into the product.
+
+### CI for the first source commit
+
+At commit `7151831092a776a0dfd99042cd5fe8482836b56c`: `v1 S1 source checks` run `45241210248` **success**, `v1 required quality gate` run `45241210103` **success**, `v1 Linux amd64 and arm64 candidate artifacts` run `45241210101` **success**. These are *that exact commit's* CI results, not evidence that any later docs/source HEAD also passed or that Native full contract passed.
