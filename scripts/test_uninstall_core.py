@@ -586,6 +586,41 @@ class FakeHost(unittest.TestCase):
                     (1, "p"*32, "RELEASED", 10, "a"*64))
         self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
 
+    def test_guided_archives_verified_prior_installer_backup(self):
+        u.BACKUP.mkdir(mode=0o700)
+        previous = {"schema": 2, "native_project": "user-1001",
+                    "native_socket": "/var/lib/incus/unix.socket.user",
+                    "service_user": "boxweave", "binary_path": str(u.BINARY),
+                    "state_dir": str(u.STATE),
+                    "binary_sha256": u.sha(b"prior-binary")}
+        files = {"binary": b"prior-binary", "unit": b"prior-unit"}
+        for name, body in files.items():
+            (u.BACKUP / name).write_bytes(body)
+            (u.BACKUP / name).chmod(0o600)
+        receipt = {"Schema": 1, "Previous": previous,
+                   "PreviousUnitSHA256": u.sha(files["unit"]),
+                   "PreviousDBSHA256": "", "PreviousWALSHA256": "",
+                   "PreviousSHMSHA256": ""}
+        (u.BACKUP / "receipt.json").write_text(json.dumps(receipt))
+        (u.BACKUP / "receipt.json").chmod(0o600)
+        self.assertFalse(self.plan("full")["ready"])
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"], plan["blockers"])
+        self.assertEqual(len(plan["installer_backup"]["files"]), 3)
+        result = u.apply(plan)
+        saved = Path(result["retirement_archive"])
+        for name, body in files.items():
+            self.assertEqual((saved / ("installer-backup-" + name)).read_bytes(), body)
+        self.assertTrue((saved / "installer-backup-receipt.json").is_file())
+        self.assertFalse(u.BACKUP.exists())
+
+    def test_guided_untrusted_backup_cannot_be_retired(self):
+        u.BACKUP.mkdir(mode=0o700)
+        (u.BACKUP / "unexpected").write_text("foreign")
+        with self.assertRaises(u.UninstallError):
+            u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue((u.BACKUP / "unexpected").exists())
+
     def test_guided_native_dependency_and_live_operation_refusals(self):
         entry = {"name": "bw-example", "type": "container", "status": "Running",
                  "config": {"volatile.uuid": self.box},
