@@ -90,6 +90,17 @@ def main(project, receipt):
         assert not os.path.lexists(path), path
     assert (archive / "scoped-original").is_dir()
     print("PR182_SCOPED_COMPLETE=PASS", flush=True)
+    # Explicit data erasure is separate from verified full retirement.
+    preview = json.loads(run("sh", "uninstall.sh", "--purge-plan", "--project", project))
+    assert preview["ready"] and preview["irreversible"] and str(archive / "state-ledger.sqlite") in preview["files"]
+    assert archive.exists() and u.AUDIT.exists()
+    tty_run(["sh", "uninstall.sh", "--purge", "--project", project],
+            [(("Type PURGE " + project).encode(), "PURGE " + project)])
+    assert not any(os.path.lexists(p) for p in (u.RETIRED, u.AUDIT, u.PURGE_FENCE))
+    assert pid("incus.service") == incus_pid
+    assert foreign == [run("incus", "query", "/1.0/projects/pr182-foreign"),
+                       run("incus", "query", "/1.0/network-acls/pr182-foreign?project=default")]
+    print("RC14_SCOPED_PURGE=PASS", flush=True)
 
 
 if __name__ == "__main__":
