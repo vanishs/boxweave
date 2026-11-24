@@ -59,6 +59,12 @@ bridge="incusbr-$uid"
 test "$(sudo incus project get "$project" restricted)" = true
 test -z "$(sudo incus list --all-projects -c n -f csv)"
 if test "${PR178_SCOPED_N2:-0}" = 1; then
+  sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$work/candidate-a" --sha256 "$first" > "$work/scoped-plan.txt"
+  grep -Eq '^scoped_fresh_review_sha256=[a-f0-9]{64}$' "$work/scoped-plan.txt"
+  grep -Fxq "project=$project" "$work/scoped-plan.txt"
+  test ! -e /var/lib/boxweave-scoped-peer-v2
+  test ! -e /usr/local/bin/boxweave
+  echo INSTALL_SCOPED_READONLY_PLAN=PASS
   python3 scripts/n2_installed_lifecycle.py tty-install-scoped "$project" "$work/candidate-a" "$first"
   installed=/usr/local/bin/boxweave
   sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service
@@ -74,6 +80,19 @@ CHECK
     exit 1
   fi
   test ! -e /var/lib/boxweave-installer-backup
+  if sudo sh uninstall.sh --plan --scope full --project "$project" > "$work/scoped-uninstall.log" 2>&1; then
+    echo "scoped uninstall unexpectedly accepted" >&2
+    exit 1
+  fi
+  grep -Fq "scoped v2 retirement requires" "$work/scoped-uninstall.log"
+  if sudo sh install.sh --plan --upgrade --local-binary "$work/candidate-b" --sha256 "$next" > "$work/scoped-upgrade.log" 2>&1; then
+    echo "scoped wrapper upgrade unexpectedly accepted" >&2
+    exit 1
+  fi
+  grep -Fq "scoped installation evidence exists" "$work/scoped-upgrade.log"
+  sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service
+  test ! -e /var/lib/boxweave-installer-backup
+  echo INSTALL_SCOPED_WRAPPERS_REFUSE_LEGACY=PASS
   echo PR178_N2_FRESH_ONLY=PASS
 else
   python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"

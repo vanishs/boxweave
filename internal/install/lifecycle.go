@@ -345,6 +345,9 @@ func inspectBackup(p Plan) (BackupReceipt, error) {
 		return b, err
 	}
 	m := b.Previous
+	if m.ScopedPeerMode != "" {
+		return b, errors.New("scoped backup is not supported by legacy maintenance")
+	}
 	if b.Schema != 1 || m.Schema != manifestSchema || m.StateDir != p.StateDir ||
 		m.BinaryPath != p.BinaryPath || m.ServiceUser != p.User || m.Project != p.Project ||
 		m.Socket != p.Socket || m.BinarySHA256 == "" {
@@ -384,6 +387,9 @@ func Rollback(p Plan, approved bool) (Manifest, error) {
 	}
 	if err := localApproval(p, approved); err != nil {
 		return Manifest{}, err
+	}
+	if current, e := ReadManifest(p); e == nil && current.ScopedPeerMode != "" {
+		return Manifest{}, errors.New("scoped manifest: legacy rollback unsupported")
 	}
 	b, err := inspectBackup(p)
 	if err != nil {

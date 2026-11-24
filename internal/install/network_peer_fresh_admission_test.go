@@ -139,3 +139,26 @@ func TestPR178FreshAdmissionDanglingSymlinkAndACL(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestScopedLegacyRefusesEveryResidualPath(t *testing.T) {
+	for _, target := range []string{nativePeerFreshJournalDir, scopedGuardUnitPath,
+		scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket} {
+		t.Run(target, func(t *testing.T) {
+			for _, err := range []error{nil, fs.ErrPermission} {
+				if e := refuseScopedLegacyPaths(func(path string) (fs.FileInfo, error) {
+					if path == target {
+						return nil, err
+					}
+					return nil, fs.ErrNotExist
+				}); e == nil {
+					t.Fatal("scoped residue or unreadable evidence accepted")
+				}
+			}
+		})
+	}
+	if err := refuseScopedLegacyPaths(func(string) (fs.FileInfo, error) {
+		return nil, fs.ErrNotExist
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

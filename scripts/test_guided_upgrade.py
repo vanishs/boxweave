@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import sys
 from unittest.mock import patch, Mock
 
 SOURCE = Path(__file__).resolve().parents[1] / "install.sh"
@@ -32,6 +33,58 @@ def review(previous=True):
                               build_commit="2"*40, receipt_sha256="3"*64) if previous else None)
 
 class GuidedUpgradeTests(unittest.TestCase):
+    def test_scoped_residue_refuses_even_dangling_links(self):
+        with tempfile.TemporaryDirectory() as folder:
+            paths = tuple(Path(folder) / str(i) for i in range(5))
+            with patch.dict(NS, {"SCOPED_PATHS": paths}):
+                NS["refuse_scoped_existing"]()
+                for path in paths:
+                    path.symlink_to(path.with_name("missing"))
+                    with self.assertRaisesRegex(ERR, "scoped installation evidence exists"):
+                        NS["refuse_scoped_existing"]()
+                    path.unlink()
+                with patch.object(Path, "lstat", side_effect=PermissionError("unreadable")):
+                    with self.assertRaisesRegex(ERR, "unreadable"):
+                        NS["refuse_scoped_existing"]()
+
+    def test_scoped_review_binds_native_host_and_mode(self):
+        machine = "0123456789abcdef" * 2
+        native_host = NS["digest"](("boxweave-native-host-v1|" + machine).encode())
+        review = dict(Mode="SCOPED_PEER_FRESH_V2", Project="user-1001",
+                      HostSHA256=native_host, ReviewSHA256=SHA,
+                      GuardSHA256=OLD, NativeSHA256=PREV)
+        with patch.object(Path, "read_text", return_value=machine), patch.dict(NS, {"command_json": Mock(return_value=review)}):
+            self.assertEqual(NS["scoped_review"](Path("/candidate"), "user-1001"), review)
+            for key, val in (("Mode", "legacy"), ("Project", "user-9999"),
+                             ("HostSHA256", SHA), ("ReviewSHA256", "bad"),
+                             ("NativeSHA256", ""), ("GuardSHA256", "")):
+                with self.subTest(key=key):
+                    NS["command_json"].return_value = dict(review, **{key: val})
+                    with self.assertRaisesRegex(ERR, "mismatch"):
+                        NS["scoped_review"](Path("/candidate"), "user-1001")
+
+    def test_scoped_plan_calls_native_readonly_before_apply(self):
+        review = dict(ReviewSHA256=SHA)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "candidate"
+            path.write_bytes(b"test fixture")
+            binary_sha = NS["digest"](path.read_bytes())
+            argv = ["install.sh", "--plan", "--scoped-peer-fresh",
+                    "--local-binary", str(path), "--sha256", binary_sha]
+            reader = Mock(return_value=review)
+            with patch.object(sys, "argv", argv), patch("os.geteuid", return_value=0), patch("pwd.getpwnam", return_value=Mock(pw_uid=1001)), patch.dict(NS, {
+                "STATE_DIR": Path(folder) / "unused-state",
+                "refuse_scoped_existing": Mock(),
+                "current_host_digest": Mock(return_value=OLD),
+                "scoped_review": reader,
+            }), patch("subprocess.run") as run, patch("sys.stdout", new_callable=io.StringIO) as out:
+                NS["main"]()
+                reader.assert_called_once()
+                self.assertEqual(reader.call_args.args[1], "user-1001")
+                self.assertIn("scoped_fresh_review_sha256=" + SHA, out.getvalue())
+                self.assertIn("PLAN_ONLY:", out.getvalue())
+                run.assert_not_called()
+
     def test_release_order(self):
         f = NS["release_order"]
         self.assertLess(f("1.0.0-rc.9"), f("1.0.0-rc.10"))

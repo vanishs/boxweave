@@ -59,9 +59,16 @@ RC13 uses legacy Peer authorization. Some Peer work requires separate Host-local
 
 ## 3. Scoped Peer v2: current source only
 
-This mode is not in RC13. Use an exact independently verified candidate on a fresh dedicated test host, or a future published release that explicitly contains it. The flag is --scoped-peer-fresh; its native scope is derived, not caller-selected. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../development/V1_PR178_N5_DELIVERY_2026-11-23.md).
+This mode is not in RC13. Use an exact independently verified candidate on a fresh dedicated test host, or a future published release that explicitly contains it. The flag is --scoped-peer-fresh; its native scope is derived, not caller-selected. For a reviewed source candidate, the current wrapper supports a complete root-local read-only plan and an interactive approval. For example, set CANDIDATE to the absolute path of the independently verified binary and SHA256 to its reviewed digest:
 
-No legacy migration/adoption, upgrade, rollback, backup commit or uninstall is supported for scoped mode. Do not delete Root journals or state to bypass a refusal. Unlike legacy Peer, routine scoped Peer grants/revokes are authenticated MCP operations after reviewed setup, and new Boxes default to boot.autostart=true while explicit false is preserved. The 1,024 owned-Box bound is not a physical capacity guarantee. Retained identities, addresses, directional grant history and Root policy records have separate limits.
+```sh
+sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$CANDIDATE" --sha256 "$SHA256"
+sudo sh install.sh --interactive --scoped-peer-fresh --local-binary "$CANDIDATE" --sha256 "$SHA256"
+```
+
+The plan prints the actual native scope and scoped_fresh_review_sha256 without persisting installation state. The interactive path rechecks the native review before staging. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../development/V1_PR178_N5_DELIVERY_2026-11-23.md).
+
+No legacy migration/adoption, upgrade, rollback, backup commit or uninstall is supported for scoped mode. Do not delete Root journals, guard/lifecycle units, the Incus guard drop-in or state to bypass a refusal. Any surviving scoped installation evidence blocks legacy maintenance, even if the journal is absent. Unlike legacy Peer, routine scoped Peer grants/revokes are authenticated MCP operations after reviewed setup, and new Boxes default to boot.autostart=true while explicit false is preserved. The 1,024 owned-Box bound is not a physical capacity guarantee. Retained identities, addresses, directional grant history and Root policy records have separate limits.
 
 ## 4. Verify installation
 
