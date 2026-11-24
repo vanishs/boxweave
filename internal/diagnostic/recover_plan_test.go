@@ -31,7 +31,7 @@ func TestPR177D3ReviewDigestAndRefusals(t *testing.T) {
 		t.Fatal(p)
 	}
 	p.SetWitness(w)
-	if p.Status != "REVIEW_READY" || !p.CanRepair || p.ApplyAvailable || p.NativeRetried || !p.ReviewMatches(now) || p.ReviewMatches(now.Add(RecoverPlanTTL)) {
+	if p.Status != "REVIEW_READY" || !p.CanRepair || !p.ApplyAvailable || p.NativeRetried || !p.ReviewMatches(now) || p.ReviewMatches(now.Add(RecoverPlanTTL)) {
 		t.Fatal(p)
 	}
 	raw, e := json.Marshal(p)
@@ -43,7 +43,7 @@ func TestPR177D3ReviewDigestAndRefusals(t *testing.T) {
 		t.Fatal("review envelope not reproducible", e)
 	}
 	for _, change := range []func(*RecoverPlan){
-		func(p *RecoverPlan) { p.Scope = "user-1002" }, func(p *RecoverPlan) { p.OriginalRevision++ }, func(p *RecoverPlan) { p.Incarnation = "other" }, func(p *RecoverPlan) { p.Leaf = "release" }, func(p *RecoverPlan) { p.ObserverUID = 1001 }, func(p *RecoverPlan) { p.ExpiresNS++ }, func(p *RecoverPlan) { p.InstallationSHA256 = strings.Repeat("e", 64) }, func(p *RecoverPlan) { p.ApplyAvailable = true },
+		func(p *RecoverPlan) { p.Scope = "user-1002" }, func(p *RecoverPlan) { p.OriginalRevision++ }, func(p *RecoverPlan) { p.Incarnation = "other" }, func(p *RecoverPlan) { p.Leaf = "release" }, func(p *RecoverPlan) { p.ObserverUID = 1001 }, func(p *RecoverPlan) { p.ExpiresNS++ }, func(p *RecoverPlan) { p.InstallationSHA256 = strings.Repeat("e", 64) }, func(p *RecoverPlan) { p.ApplyAvailable = false },
 	} {
 		q := p
 		change(&q)

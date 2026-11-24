@@ -2,9 +2,6 @@ package recovery
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 
 	"github.com/vanishs/boxweave/internal/state"
 )
@@ -52,15 +49,10 @@ func (s Service) InspectPlan(ctx context.Context, t state.RecoveryTarget) (PlanW
 			out.Reason = "RECOVERY_PRECONDITIONS_UNVERIFIED"
 			return out, nil
 		}
-		b, e := json.Marshal(struct {
-			Target state.RecoveryTarget
-			Proof  state.RecoveryProof
-		}{t, p})
-		if e != nil {
-			return PlanWitness{}, e
+		out.ProofSHA256 = state.RecoveryWitnessDigest(t, p)
+		if out.ProofSHA256 == "" {
+			return PlanWitness{}, state.ErrInvalid
 		}
-		h := sha256.Sum256(append([]byte("boxweave/recover-plan-witness/v1\n"), b...))
-		out.ProofSHA256 = hex.EncodeToString(h[:])
 	}
 	return out, nil
 }

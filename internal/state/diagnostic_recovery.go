@@ -25,6 +25,14 @@ func (s *DiagnosticSnapshot) ReadOriginal(ctx context.Context, project, id strin
 		return out, e
 	}
 	defer tx.Rollback()
+	out, e = readDiagnosticOriginalTx(ctx, tx, project, id)
+	if e != nil {
+		return out, e
+	}
+	return out, tx.Commit()
+}
+func readDiagnosticOriginalTx(ctx context.Context, tx *sql.Tx, project, id string) (DiagnosticOriginal, error) {
+	var out DiagnosticOriginal
 	t, e := readRecoveryTarget(ctx, tx, project, id)
 	if e != nil {
 		return out, e
@@ -112,9 +120,6 @@ func (s *DiagnosticSnapshot) ReadOriginal(ctx context.Context, project, id strin
 		return out, e
 	}
 	h := sha256.Sum256(append([]byte("boxweave/diagnostic-original/v1\n"), b...))
-	if e = tx.Commit(); e != nil {
-		return out, e
-	}
 	return DiagnosticOriginal{Target: t, Digest: hex.EncodeToString(h[:]), Claims: keys, CredentialActive: active}, nil
 }
 

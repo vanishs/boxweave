@@ -531,6 +531,15 @@ func (s *Store) ReadIPv4RetirementStatus(ctx context.Context, project string) (I
 		return out, e
 	}
 	defer tx.Rollback()
+	out, e = readIPv4RetirementStatusTx(ctx, tx, project)
+	if e != nil {
+		return out, e
+	}
+	return out, tx.Commit()
+}
+func readIPv4RetirementStatusTx(ctx context.Context, tx *sql.Tx, project string) (IPv4RetirementStatus, error) {
+	var out IPv4RetirementStatus
+	var e error
 	if e = tx.QueryRowContext(ctx, `SELECT count(*) FROM owned_boxes b JOIN network_bindings n ON n.project=b.project AND n.box_uuid=b.uuid AND n.incarnation=b.incarnation AND n.nic='eth0' WHERE b.project=? AND b.state='DELETED' AND n.state='RELEASED' AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=b.project AND r.box_uuid=b.uuid AND r.incarnation=b.incarnation)`, project).Scan(&out.Pending); e != nil {
 		return out, e
 	}
@@ -544,7 +553,7 @@ func (s *Store) ReadIPv4RetirementStatus(ctx context.Context, project string) (I
 	if out.LastDeferredReason != "" && !validRetirementFailureClass(out.LastDeferredReason) {
 		return IPv4RetirementStatus{}, ErrResourceLocked
 	}
-	return out, tx.Commit()
+	return out, nil
 }
 
 // ReadIPv4RetirementRollbackWitness is a stable ordered digest of all

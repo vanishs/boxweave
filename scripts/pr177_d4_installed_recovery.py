@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Installed D4 acceptance, only in dedicated disposable test installation."""
+import hashlib
+import json
+import os
+import re
+import socket
+import sqlite3
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+from mcp_testkit import LoopbackMCP
+from n2_installed_lifecycle import op, token, wait_status
+from pr178_n4_native import guest, SERVER, UDP
+from pr178_n2_scoped_lifecycle import binding
+
+DB = "file:/var/lib/boxweave/ledger.sqlite?mode=ro"
+BIN = "/usr/local/bin/boxweave"
+CTL = "boxweave.service"
+HELPER = "boxweave-scoped-lifecycle.service"
+
+def run(args, **kw):
+    result=subprocess.run(args, timeout=100, **kw)
+    if result.returncode:
+        if result.stdout:print(result.stdout[-10000:],flush=True)
+        if result.stderr:print(result.stderr[-4000:],file=sys.stderr,flush=True)
+        result.check_returncode()
+    return result
+
+def pid():
+    return subprocess.check_output(["systemctl","show",CTL,"-p","MainPID","--value"],text=True).strip()
+
+def db_state(original):
+    with sqlite3.connect(DB,uri=True) as db:
+        row=db.execute("SELECT state,native_operation_id,box_uuid FROM operations WHERE id=?",(original,)).fetchone()
+        claims=db.execute("SELECT layer,resource_key FROM operation_resource_claims WHERE operation_id=? ORDER BY layer,resource_key",(original,)).fetchall()
+        receipts=db.execute("SELECT count(*) FROM operations WHERE action='operation_recover'").fetchone()[0]
+        audits=db.execute("SELECT count(*) FROM recovery_audit WHERE operation_id=?",(original,)).fetchone()[0]
+    return row,claims,receipts,audits
+
+def journal(original, mode):
+    if mode=="LEGACY":
+        return []
+    root=Path("/var/lib/boxweave-scoped-peer-v2")/("peer-"+original)
+    return [(x.name,hashlib.sha256(x.read_bytes()).hexdigest()) for x in sorted(root.iterdir())]
+
+def main(project, receipt, testbin, mode):
+    assert os.geteuid()==0 and mode in ("LEGACY","SCOPED_V2")
+    names=["d4-a","d4-sibling"]+([] if mode=="LEGACY" else ["d4-b"])
+    with LoopbackMCP("http://127.0.0.1:18650/mcp",token=token(receipt),allow_mutations=True,timeout=60) as c:
+        ids={}
+        for name in names:
+            ids[name]=op(c,"box_create",{"name":name,"cpu":1,"memory_mib":256,"disk_gib":2,"image":"local:boxweave-ubuntu-24.04","start":True,"internet":True},name+"-create")["box_uuid"]
+        for name in [x for x in names if x!="d4-a"]:
+            guest(project,name,"python3","-c","import subprocess,sys;subprocess.Popen(['python3','-u','-c',sys.argv[1]],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)",SERVER)
+        time.sleep(1)
+        fwd=op(c,"port_forward_create",{"box_id":ids["d4-sibling"],"protocol":"tcp","host_bind":"127.0.0.1","host_port":28284,"guest_port":18182},"d4-sibling-forward")["operation_id"]
+    sock=socket.create_connection(("127.0.0.1",28284),timeout=5)
+    sock.settimeout(2)
+    stop=threading.Event();errors=[];rounds=[0]
+    def monitor():
+        while not stop.is_set():
+            try:
+                data=("d4-"+str(rounds[0])).encode()
+                sock.sendall(data)
+                out=b""
+                while len(out)<len(data):
+                    part=sock.recv(4096)
+                    if not part:raise RuntimeError("forward disconnected")
+                    out+=part
+                assert out==data
+                rounds[0]+=1
+            except Exception as e:
+                errors.append(repr(e));return
+            stop.wait(.05)
+    t=threading.Thread(target=monitor,daemon=True);t.start()
+    try:
+        # Intentional test fixture interruption BEFORE the recovery plan.
+        # No service restart is permitted during actual plan/apply.
+        run(["systemctl","stop",CTL])
+        if mode=="SCOPED_V2":
+            run(["systemctl","stop",HELPER])
+        env={"BOXWEAVE_PR177_D4_LAB":"disposable-installed-v1","D4_TEST_PROJECT":project,"D4_TEST_MODE":mode}
+        base=[testbin,"-test.run","^TestPR177D4InstalledCompletedOriginal$","-test.v","-test.timeout","100s"]
+        staged=subprocess.check_output(["runuser","-u","boxweave","--","env",*[k+"="+v for k,v in env.items()],"D4_TEST_PHASE=stage",*base],text=True,timeout=100)
+        print(staged,flush=True)
+        original=re.search(r"PR177_D4_COMPLETED_ORIGINAL=([0-9a-f]{32})",staged).group(1)
+        if mode=="SCOPED_V2":
+            run(base,env=dict(os.environ,**env,D4_TEST_PHASE="apply-native",D4_TEST_ORIGINAL=original))
+        run(["systemctl","start",CTL])
+        for _ in range(30):
+            if db_state(original)[0][0]=="UNKNOWN" and int(pid())>1:
+                break
+            time.sleep(.5)
+        before=db_state(original);oldjournal=journal(original,mode);controller=pid()
+        assert before[0][0]=="UNKNOWN" and int(controller)>1,before
+        if mode=="SCOPED_V2":
+            assert len(before[1])==5 and len(oldjournal)>1
+        report=json.loads(run([BIN,"doctor","-project",project],capture_output=True,text=True).stdout)["diagnostic"]
+        issue=next(i["id"] for i in report["issues"] if i["code"] in ("PROJECT_PEER_BARRIER","UNRESOLVED_OPERATION") and i.get("original_id")==original)
+        planned=run([BIN,"recover","--plan","--issue",issue,"-project",project],capture_output=True,text=True)
+        p=json.loads(planned.stdout)
+        assert p["status"]=="REVIEW_READY" and p["apply_available"] and p["mode"]==mode and p["original_id"]==original,p
+        assert p["leaf"]=="MCP_SETTLE_ORIGINAL_NO_REPLAY" and p["original_state"]=="UNKNOWN" and not p["native_retried"]
+        assert db_state(original)==before and journal(original,mode)==oldjournal
+        print("PR177_D3_INSTALLED_POSITIVE_PLAN=PASS",mode,flush=True)
+        base=[BIN,"recover","--apply","--issue",issue,"-project",project,"--approve-local","--reviewer","d4-installed-test","--recovery-key","pr177-d4-reviewed-exact-key","--confirm-review-sha256",p["review_sha256"]]
+        def refused(args, payload):
+            out=subprocess.run(args,input=payload,text=True,capture_output=True,timeout=100)
+            assert out.returncode!=0,(out.stdout,out.stderr)
+        wrong=list(base);wrong[-1]="0"*64
+        refused(wrong,planned.stdout)
+        refused([x for x in base if x!="--approve-local"],planned.stdout)
+        refused(["runuser","-u","boxweave","--",*base],planned.stdout)
+        forged=dict(p);forged["original_revision"]+=1
+        refused(base,json.dumps(forged))
+        assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
+        result=json.loads(run(base,input=planned.stdout,text=True,capture_output=True).stdout)
+        rec=result["recovery"]
+        assert rec["original_operation_id"]==original and rec["disposition"]=="SETTLED" and rec["operation"]["state"]=="SUCCEEDED",result
+        assert result["postcheck"]["state"]=="DURABLE_ORIGINAL_POSTSTATE_VERIFIED" and result["postcheck"]["original_state"]=="SUCCEEDED" and not result["native_retried"],result
+        after=db_state(original)
+        assert after[0][0]=="SUCCEEDED" and after[0][1:]==before[0][1:] and after[1]==before[1] and after[2]==before[2]+1 and after[3]==before[3]+1,(before,after)
+        dup=json.loads(run(base,input=planned.stdout,text=True,capture_output=True).stdout)
+        assert dup["recovery"]["operation"]["operation_id"]==rec["operation"]["operation_id"] and dup["recovery"]["operation"]["duplicate"],dup
+        changed=list(base);changed[changed.index("--recovery-key")+1]="pr177-d4-reviewed-other-key"
+        refused(changed,planned.stdout)
+        assert db_state(original)==after and journal(original,mode)==oldjournal and pid()==controller
+        if mode=="SCOPED_V2":
+            for family in ("ipv4","ipv6"):
+                guest(project,"d4-a","python3","-c",UDP,binding(ids["d4-b"])[family],"yes")
+        else:
+            status=json.loads(subprocess.check_output(["incus","list","d4-a","--project",project,"-f","json"],text=True))
+            assert len(status)==1 and status[0]["status"]=="Stopped",status
+        doc=json.loads(run([BIN,"doctor","-project",project],capture_output=True,text=True).stdout)["diagnostic"]
+        assert not any(i.get("original_id")==original and i["id"]==issue for i in doc["issues"])
+        assert not errors and rounds[0]>5,(errors,rounds)
+        print("PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY=PASS",mode,rounds[0],flush=True)
+    finally:
+        stop.set();t.join(timeout=5);sock.close()
+    # Legacy subsequent upgrade/uninstall acceptance requires no Boxes.
+    # Scoped dedicated fixtures may stay; do not alter unrelated peers.
+    if mode=="LEGACY":
+        with LoopbackMCP("http://127.0.0.1:18650/mcp",token=token(receipt),allow_mutations=True,timeout=60) as c:
+            op(c,"port_forward_delete",{"forward_id":fwd},"d4-sibling-forward-delete")
+            for name in names:
+                op(c,"box_delete",{"box_id":ids[name]},"d4-delete-"+name)
+            wait_status(c,lambda x:x["address_retirement"]["pending"]==0,120)
+
+if __name__=="__main__":
+    main(*sys.argv[1:])

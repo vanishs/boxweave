@@ -97,6 +97,7 @@ func (s *Store) ReadRecoveryTarget(ctx context.Context, layer, id string) (Recov
 // kernel-verified host-local root worker. LocalReviewer is never a wire field.
 type RecoveryRequest struct {
 	Layer, ActorID, TokenID, LocalReviewer, OriginalID, Stream, Key, WorkRef, AgentRef string
+	Review                                                                             *ReviewedRecoveryBinding
 }
 type RecoveryProof struct {
 	Kind, Reason, NativeID, UUID, Fingerprint string
@@ -138,10 +139,18 @@ func recoveryAdmission(r RecoveryRequest) (Admission, error) {
 	} else if !validHexID(actor) || !validHexID(token) {
 		return Admission{}, ErrInvalid
 	}
+	review := ""
+	if r.Review != nil {
+		if r.LocalReviewer == "" || r.Stream != "" || !r.Review.valid() {
+			return Admission{}, ErrInvalid
+		}
+		review = r.Review.ReviewSHA256
+	}
 	intent, _ := json.Marshal(struct {
 		Original string `json:"original_operation_id"`
 		Stream   string `json:"stream,omitempty"`
-	}{r.OriginalID, r.Stream})
+		Review   string `json:"review_sha256,omitempty"`
+	}{r.OriginalID, r.Stream, review})
 	return Admission{Layer: r.Layer, ActorID: actor, TokenID: token, Key: r.Key, Action: "operation_recover", SafeIntent: intent, WorkRef: r.WorkRef, AgentRef: r.AgentRef}, nil
 }
 
@@ -249,6 +258,11 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	}
 	if nowTarget != t {
 		return RecoveryRecord{}, ErrConflict
+	}
+	if r.Review != nil {
+		if e = checkReviewedRecoveryTx(ctx, tx, r, t, p); e != nil {
+			return RecoveryRecord{}, e
+		}
 	}
 	id, e := newID()
 	if e != nil {
@@ -379,10 +393,17 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	// Link audit to immutable original; digest includes exact recovery receipt,
 	// original version and the bounded observation. No native or guest bytes.
 	if success {
-		raw, _ := json.Marshal([]any{id, t.ID, t.UpdatedAt, t.NativeID, t.UUID, outcome, p.Reason, p.Fingerprint})
+		evidence := []any{id, t.ID, t.UpdatedAt, t.NativeID, t.UUID, outcome, p.Reason, p.Fingerprint}
+		if r.Review != nil {
+			evidence = append(evidence, reviewDigestOf(r))
+		}
+		raw, _ := json.Marshal(evidence)
 		if _, e = tx.ExecContext(ctx, "INSERT INTO recovery_audit(operation_id,at,reviewer,decision,evidence_digest) VALUES(?,?,?,?,?)", t.ID, now, a.ActorID, "RECOVERY_"+outcome, digest(string(raw))); e != nil {
 			return RecoveryRecord{}, e
 		}
+	}
+	if r.Review != nil && time.Now().UnixNano() >= r.Review.ExpiresNS {
+		return RecoveryRecord{}, ErrConflict
 	}
 	if e = tx.Commit(); e != nil {
 		return RecoveryRecord{}, e

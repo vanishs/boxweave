@@ -145,7 +145,7 @@ func (s Service) Inspect(ctx context.Context, id, stream string) (Result, error)
 	return Result{View: v}, nil
 }
 func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result, error) {
-	if s.ReadStore != nil || s.Store == nil {
+	if s.ReadStore != nil || s.Store == nil || r.Review != nil {
 		return Result{}, state.ErrInvalid
 	}
 	if r.Layer != s.Layer {

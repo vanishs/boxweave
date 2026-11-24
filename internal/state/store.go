@@ -166,14 +166,21 @@ func newID() (string, error) {
 func digest(s string) string          { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
 func DigestToken(token string) string { return digest(token) }
 
-func Open(path string) (*Store, error) {
+func Open(path string) (*Store, error) { return openStore(path, true) }
+
+// OpenExistingRecovery uses SQLite mode=rw, not rwc; never creates a
+// ledger or parent if the reviewed installation disappeared.
+func OpenExistingRecovery(path string) (*Store, error) { return openStore(path, false) }
+func openStore(path string, create bool) (*Store, error) {
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path ||
 		strings.ContainsAny(path, "?\x00") {
 		return nil, fmt.Errorf("absolute canonical literal database path required")
 	}
 	parent := filepath.Dir(path)
-	if err := os.MkdirAll(parent, 0700); err != nil {
-		return nil, err
+	if create {
+		if err := os.MkdirAll(parent, 0700); err != nil {
+			return nil, err
+		}
 	}
 	// A private final parent alone is not enough: a symlink anywhere in the
 	// ancestor path would permit two names for the same SQLite inode and two
@@ -193,6 +200,9 @@ func Open(path string) (*Store, error) {
 	// Never follow a preexisting link into an unmanaged host file.
 	flags := os.O_RDWR
 	if st, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		if !create {
+			return nil, ErrNotFound
+		}
 		flags |= os.O_CREATE | os.O_EXCL
 	} else if err != nil {
 		return nil, err
@@ -217,7 +227,11 @@ func Open(path string) (*Store, error) {
 	if !ok || stat.Nlink != 1 {
 		return nil, fmt.Errorf("database hardlinks or unknown inode metadata refused")
 	}
-	db, err := sql.Open("sqlite3", "file:"+path+"?_busy_timeout=5000&_foreign_keys=on")
+	dsn := "file:" + path + "?_busy_timeout=5000&_foreign_keys=on"
+	if !create {
+		dsn += "&mode=rw"
+	}
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}

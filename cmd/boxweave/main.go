@@ -36,6 +36,12 @@ func run() error {
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if command == "recover-apply-worker" {
+		if len(os.Args) != 2 {
+			return state.ErrInvalid
+		}
+		return recoverApplyWorker()
+	}
 	if command == "recover-plan-worker" {
 		if len(os.Args) != 2 {
 			return errors.New("private plan worker accepts no arguments")

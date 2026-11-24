@@ -1,5 +1,7 @@
 # PR #177 D3 - read-only evidence-bound recovery plan
 
+**D4 candidate update (2026-11-23 PT):** [Reviewed recovery execution and exact Box evidence](V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md). D2/D3 independent exact-head CI all four passed. D4 code, three focused Race rounds, full verify and fresh scoped installed positive recovery passed in Box. D4 independent CI is required before D5; legacy installed D4 and scoped partial apply refusal remain CI gates. Earlier staged-status notes below are historical, not instructions to redo accepted stages. Keep Draft; no v1 merge, release or physical L0 modification.
+
 Status: Box-verified candidate for independent CI. D2 installed CI correction included. No D4 apply, production install, v1 merge or release.
 
 ## D2 reconciliation

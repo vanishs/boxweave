@@ -133,6 +133,15 @@ func (s *DiagnosticSnapshot) ReadLedger(ctx context.Context, project, mode, brid
 		return out, e
 	}
 	defer tx.Rollback()
+	out, e = readDiagnosticLedgerTx(ctx, tx, project, mode, bridge)
+	if e != nil {
+		return out, e
+	}
+	return out, tx.Commit()
+}
+func readDiagnosticLedgerTx(ctx context.Context, tx *sql.Tx, project, mode, bridge string) (DiagnosticLedger, error) {
+	out := DiagnosticLedger{Active: []DiagnosticOperation{}, HistorySample: []DiagnosticOperation{}, GuestExecNonzeroSample: []DiagnosticOperation{}}
+	var e error
 	// Reuse the Activity SQL without cursor secrets or fake actor identity.
 	q := ActivityQuery{Layer: project, View: "issues", Limit: 50}
 	var cursor activityCursor
@@ -349,23 +358,20 @@ func (s *DiagnosticSnapshot) ReadLedger(ctx context.Context, project, mode, brid
 	if e != nil {
 		return out, e
 	}
-	if e = tx.Commit(); e != nil {
-		return out, e
-	}
-	// All these readers observe the same immutable private capture epoch.
+	// Observe every predicate in the same transaction, including live commit.
 	if mode == "LEGACY" {
-		r, e := s.store.ReadIPv4RetirementStatus(ctx, project)
+		r, e := readIPv4RetirementStatusTx(ctx, tx, project)
 		if e != nil {
 			return out, e
 		}
 		out.LegacyRetirement = &r
 	}
-	if l, e := s.store.ReadNativeNetworkLedger(ctx, project); e == nil {
+	if l, e := readNativeNetworkLedgerTx(ctx, tx, project); e == nil {
 		out.Network = l
 		out.NetworkObserved = true
 	}
 	if bridge != "" {
-		if h, e := s.store.ReadCreateAddressHolds(ctx, project, bridge); e == nil {
+		if h, e := readCreateAddressHoldsTx(ctx, tx, project, bridge); e == nil {
 			out.HoldsObserved = true
 			out.HeldMAC = len(h.MACs)
 			raw, _ := json.Marshal(h)

@@ -34,6 +34,12 @@ func planFlagPresent(args []string) bool {
 	return false
 }
 func recoverPlanCLI(args []string) error {
+	for _, a := range args {
+		if a == "--apply" || a == "-apply" || strings.HasPrefix(a, "--apply=") || strings.HasPrefix(a, "-apply=") {
+			return recoverApplyCLI(args)
+		}
+	}
+
 	f := flag.NewFlagSet("recover --plan", flag.ContinueOnError)
 	plan := f.Bool("plan", false, "read-only issue-bound recovery plan")
 	id := f.String("issue", "", "exact current Doctor issue ID")
@@ -196,9 +202,7 @@ func restrictedPlanWitness(ctx context.Context, a doctorArgs, q planWorkerReques
 	return out, nil
 }
 
-func runRecoverPlan(a doctorArgs, id string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+func collectRecoverPlan(ctx context.Context, a doctorArgs, id string) diagnostic.RecoverPlan {
 	_, report := collectDoctor(ctx, a)
 	p := diagnostic.NewRecoverPlan(report, id, os.Geteuid(), time.Now())
 	if p.OriginalID != "" && p.Status != "HISTORICAL" {
@@ -274,6 +278,12 @@ func runRecoverPlan(a doctorArgs, id string) error {
 			}
 		}
 	}
+	return p
+}
+func runRecoverPlan(a doctorArgs, id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	p := collectRecoverPlan(ctx, a, id)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if e := enc.Encode(p); e != nil {

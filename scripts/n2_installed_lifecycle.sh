@@ -179,6 +179,7 @@ D2ACTIVE
   sudo python3 scripts/pr178_n4_reincarnation.py "$project" "$work/actor.receipt"
   CGO_ENABLED=1 go test -c -o "$work/n4-partial.test" ./internal/install
   chmod 0755 "$work/n4-partial.test"
+  sudo python3 scripts/pr177_d4_installed_recovery.py "$project" "$work/actor.receipt" "$work/n4-partial.test" SCOPED_V2
   # Deliberate incomplete native original is the LAST test, on a fresh
   # disposable GitHub runner only. Preserve its journal and resource locks.
   sudo systemctl stop boxweave.service
@@ -214,6 +215,10 @@ assert p["claim_count"]==5 and not p["can_repair"] and not p["apply_available"] 
 assert p["mcp_inspect"]["arguments"]=={"operation_id":sys.argv[2],"mode":"inspect"}
 print("PR177_D3_INSTALLED_PARTIAL_ORIGINAL_PLAN_BLOCKED=PASS",flush=True)
 D3DEGRADED
+  d4_rc=0
+  sudo "$installed" recover --apply --issue "$d3_issue" -project "$project" --approve-local --reviewer d4-ci --recovery-key d4-partial-blocked-key --confirm-review-sha256 "$(printf '%064d' 0)" < "$work/d3-scoped-degraded.json" || d4_rc=$?
+  test "$d4_rc" = 1
+  echo PR177_D4_INSTALLED_PARTIAL_APPLY_REFUSED=PASS
   # Existing authenticated degraded acceptance independently rechecks original
   # and exactly five claims; planning must not create a recovery receipt.
   sudo python3 scripts/pr178_n4_degraded.py "$project" "$work/n4-degraded.receipt" "$original"
@@ -222,6 +227,10 @@ D3DEGRADED
   exit 0
 fi
 sudo python3 scripts/n2_installed_lifecycle.py mcp-retry "$project" "$work/actor.receipt"
+CGO_ENABLED=1 go test -c -o "$work/d4-legacy.test" ./internal/install
+chmod 0755 "$work/d4-legacy.test"
+sudo python3 scripts/pr177_d4_installed_recovery.py "$project" "$work/actor.receipt" "$work/d4-legacy.test" LEGACY
+
 test -z "$(sudo incus list --all-projects -c n -f csv)"
 unit_hash="$(sudo sha256sum /etc/systemd/system/boxweave-ipv4-retirement.service | cut -d' ' -f1)"
 sudo "$installed" upgrade -project "$project" -source-binary "$work/candidate-b" -expect-sha256 "$next" -approve-local > "$work/upgrade.json"

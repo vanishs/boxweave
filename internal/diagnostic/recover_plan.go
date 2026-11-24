@@ -11,11 +11,11 @@ import (
 	"github.com/vanishs/boxweave/internal/state"
 )
 
-const RecoverPlanVersion = 1
+const RecoverPlanVersion = 2
 const RecoverPlanTTL = 2 * time.Minute
 
 // RecoverPlan is a local reviewed observation, not a credential,
-// approval, idempotency key or executable request. D3 never applies it.
+// approval, idempotency key or executable request. Only root-reviewed D4 applies.
 type RecoverPlan struct {
 	Version                  int               `json:"version"`
 	IssueID                  string            `json:"issue_id"`
@@ -141,6 +141,7 @@ func (p *RecoverPlan) Block(reason string) {
 	p.originalVerified = false
 	p.Reason = reason
 	p.CanRepair = false
+	p.ApplyAvailable = false
 	p.ReviewSHA256 = ""
 	p.ExpiresNS = 0
 	p.Leaf = "NONE"
@@ -267,8 +268,9 @@ func (p *RecoverPlan) SetWitness(w recovery.PlanWitness) {
 	p.Reason = "OBSERVED_SUPPORTED_LEAF_REQUIRES_FRESH_REVALIDATION"
 	p.Route = "EXISTING_MCP_INSPECT_THEN_REVIEWED_RECONCILE"
 	p.CanRepair = true
+	p.ApplyAvailable = p.ObserverUID == 0
 	p.Effects = []string{"ONLY_ORIGINAL_LEDGER_RECONCILIATION_VIA_EXISTING_RECOVERY"}
-	p.Preconditions = []string{"FRESH_ORIGINAL_AND_NATIVE_PROOF_REQUIRED", "AUTHENTICATED_MCP_AUTHORITY_REQUIRED", "SEPARATE_RECOVERY_IDEMPOTENCY_KEY_REQUIRED", "D4_REVIEW_ADAPTER_NOT_IMPLEMENTED"}
+	p.Preconditions = []string{"FRESH_ORIGINAL_AND_NATIVE_PROOF_REQUIRED", "AUTHENTICATED_MCP_AUTHORITY_REQUIRED", "SEPARATE_RECOVERY_IDEMPOTENCY_KEY_REQUIRED", "EXPLICIT_LOCAL_ROOT_APPROVAL_REQUIRED_FOR_CLI_APPLY"}
 	p.Postconditions = []string{"ORIGINAL_REOBSERVED", "EXACT_DURABLE_RECOVERY_RECEIPT", "NO_NATIVE_REPLAY", "UNRELATED_PROTECTION_UNCHANGED"}
 	p.ExpiresNS = p.IssuedNS + RecoverPlanTTL.Nanoseconds()
 	// Digest includes version, exact issue, installation, actor scope,
@@ -289,5 +291,25 @@ func (p RecoverPlan) reviewDigest() string {
 // ReviewMatches is pure structural verification for future D4. It does
 // NOT verify current native state or authorize a caller.
 func (p RecoverPlan) ReviewMatches(now time.Time) bool {
-	return p.Version == RecoverPlanVersion && p.Status == "REVIEW_READY" && p.CanRepair && !p.ApplyAvailable && !p.NativeRetried && p.IssuedNS <= now.UnixNano() && now.UnixNano() < p.ExpiresNS && p.ExpiresNS == p.IssuedNS+RecoverPlanTTL.Nanoseconds() && validSHA(p.ReviewSHA256) && p.ReviewSHA256 == p.reviewDigest()
+	return p.Version == RecoverPlanVersion && p.Status == "REVIEW_READY" && p.CanRepair && p.ApplyAvailable == (p.ObserverUID == 0) && !p.NativeRetried && p.IssuedNS <= now.UnixNano() && now.UnixNano() < p.ExpiresNS && p.ExpiresNS == p.IssuedNS+RecoverPlanTTL.Nanoseconds() && validSHA(p.ReviewSHA256) && p.ReviewSHA256 == p.reviewDigest()
+}
+
+// MatchesFresh compares all semantic review fields; only observation time
+// and newly issued envelope hash may differ. Expiry always comes from the
+// original approved envelope, never from a refreshed plan.
+func (p RecoverPlan) MatchesFresh(fresh RecoverPlan, now time.Time) bool {
+	if !p.ReviewMatches(now) || !fresh.ReviewMatches(now) || !p.ApplyAvailable || !fresh.ApplyAvailable {
+		return false
+	}
+	fresh.IssuedNS = p.IssuedNS
+	fresh.ExpiresNS = p.ExpiresNS
+	fresh.EvidenceEpochNS = p.EvidenceEpochNS
+	return fresh.reviewDigest() == p.ReviewSHA256
+}
+func (p RecoverPlan) ReviewedBinding() state.ReviewedRecoveryBinding {
+	b := state.ReviewedRecoveryBinding{ReviewSHA256: p.ReviewSHA256, OriginalSHA256: p.OriginalSHA256, LedgerSHA256: p.LedgerSHA256, Mode: p.Mode, Leaf: p.Leaf, ExpiresNS: p.ExpiresNS}
+	if p.Witness != nil {
+		b.WitnessSHA256 = p.Witness.ProofSHA256
+	}
+	return b
 }

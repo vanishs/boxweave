@@ -33,6 +33,14 @@ func (s *Store) ReadNativeNetworkLedger(ctx context.Context, project string) (Na
 		return out, e
 	}
 	defer tx.Rollback()
+	out, e = readNativeNetworkLedgerTx(ctx, tx, project)
+	if e != nil {
+		return out, e
+	}
+	return out, tx.Commit()
+}
+func readNativeNetworkLedgerTx(ctx context.Context, tx *sql.Tx, project string) (NativeNetworkLedger, error) {
+	var out NativeNetworkLedger
 	out.Project = project
 	rows, e := tx.QueryContext(ctx, `SELECT uuid,incarnation,name FROM owned_boxes
  WHERE project=? AND state='OWNED' ORDER BY uuid LIMIT ?`, project, networklimits.MaxProjectBoxes+1)
@@ -166,9 +174,6 @@ func (s *Store) ReadNativeNetworkLedger(ctx context.Context, project string) (Na
 	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE layer=? AND
  state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING')`, project).Scan(&out.Unsettled)
 	if e != nil {
-		return NativeNetworkLedger{}, e
-	}
-	if e = tx.Commit(); e != nil {
 		return NativeNetworkLedger{}, e
 	}
 	return out, nil

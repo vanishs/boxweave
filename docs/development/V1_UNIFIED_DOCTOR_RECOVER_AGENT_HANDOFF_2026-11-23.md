@@ -1,5 +1,7 @@
 # Next Agent handoff — implement unified `boxweave doctor` + `boxweave recover` in PR #177
 
+**D4 candidate update (2026-11-23 PT):** [Reviewed recovery execution and exact Box evidence](V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md). D2/D3 independent exact-head CI all four passed. D4 code, three focused Race rounds, full verify and fresh scoped installed positive recovery passed in Box. D4 independent CI is required before D5; legacy installed D4 and scoped partial apply refusal remain CI gates. Earlier staged-status notes below are historical, not instructions to redo accepted stages. Keep Draft; no v1 merge, release or physical L0 modification.
+
 **D3 candidate update (2026-11-23):** [Read-only recovery plan and Box evidence](V1_PR177_D3_RECOVERY_PLAN_2026-11-23.md). D2 installed JSON assertion corrected; D2/D3 independent CI still required. D4 apply is not implemented.
 
 > **D1 accepted, D2 diagnosis candidate:** [D2 implementation, Box evidence and CI gates](V1_PR177_D2_DIAGNOSIS_2026-11-23.md). D1 exact-head CI all four passed. D2 shared diagnosis, mode-qualified retirement/capacity, bounded activity/history, Native/Root/Forward/OAuth coverage and stable issue routes delivered; review D2 exact-head CI before D3. Routes are not repair authority.
