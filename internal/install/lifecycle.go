@@ -110,6 +110,11 @@ func Activate(p Plan, approved bool) (Manifest, error) {
 		if err = runLocal("systemctl", "daemon-reload"); err != nil {
 			return m, err
 		}
+		if m.ScopedPeerMode == nativePeerFreshMode {
+			if err = activateScopedGuard(); err != nil {
+				return m, err
+			}
+		}
 		if m.RetirementUnitSHA256 != "" {
 			if _, err = retirementUnitProperties(); err != nil {
 				return m, err
@@ -246,6 +251,12 @@ func checkSource(p Plan) (string, error) {
 // Upgrade is single-generation and fail-closed. Existing Incus and unrelated
 // workloads are never upgraded; only the verified BoxWeave unit is stopped.
 func Upgrade(p Plan, approved bool) (Manifest, error) {
+	if p.ScopedFreshReviewSHA != "" {
+		return Manifest{}, errors.New("scoped fresh only")
+	}
+	if err := refuseScopedLegacy(); err != nil {
+		return Manifest{}, err
+	}
 	if err := localApproval(p, approved); err != nil {
 		return Manifest{}, err
 	}
@@ -365,6 +376,12 @@ func restore(src, dst string, mode os.FileMode) error {
 // Rollback is local and explicit; it preserves the original audit snapshot.
 // It never asserts that a previously dispatched native effect was reversed.
 func Rollback(p Plan, approved bool) (Manifest, error) {
+	if p.ScopedFreshReviewSHA != "" {
+		return Manifest{}, errors.New("scoped fresh only")
+	}
+	if err := refuseScopedLegacy(); err != nil {
+		return Manifest{}, err
+	}
 	if err := localApproval(p, approved); err != nil {
 		return Manifest{}, err
 	}

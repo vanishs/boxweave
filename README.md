@@ -1,5 +1,7 @@
 # BoxWeave
 
+**PR #178 scoped Peer v2 candidate (not released):** explicit fresh-only installation; no legacy migration, upgrade, rollback or scoped uninstall. [N5 delivery, capacity limits, acceptance and #177 handoff](docs/development/V1_PR178_N5_DELIVERY_2026-11-23.md). Exact N5 CI and Owner review required. Never remove Root journals to bypass refusals.
+
 **Secure Agent-Programmable Container Environment**
 
 **Let AI agents build and operate a group of Boxes. Keep host administration out of reach.**

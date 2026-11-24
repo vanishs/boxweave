@@ -847,6 +847,8 @@ def main(argv=None):
         parser.error("--scope and --project required for plan/apply")
     if os.geteuid() != 0 or sys.platform != "linux":
         raise UninstallError("root on the reviewed Linux host required for safe ledger/Incus inspection")
+    if os.path.lexists("/var/lib/boxweave-scoped-peer-v2"):
+        raise UninstallError("scoped v2 retirement requires separate reviewed implementation; preserve native guard and journal")
     plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256, guided=args.full)
     if args.plan:
         print(json.dumps(plan, indent=2, sort_keys=True))

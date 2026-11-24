@@ -66,6 +66,9 @@ func observeInstalled(p Plan, m Manifest) error {
 	if resp.StatusCode != http.StatusUnauthorized {
 		return fmt.Errorf("actual bound MCP unauthorized probe expected 401, got %d", resp.StatusCode)
 	}
+	if err := observeScopedInstalled(m); err != nil {
+		return err
+	}
 	return observeInstalledRetirement(p, m)
 }
 func waitInstalledHealthy(p Plan, m Manifest) error {

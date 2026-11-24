@@ -3,6 +3,7 @@ package native
 import (
 	"encoding/json"
 	"github.com/lxc/incus/v7/shared/api"
+	"strconv"
 	"testing"
 )
 
@@ -103,5 +104,28 @@ func TestBH019AllowlistedLowlevelOnly(t *testing.T) {
 	}
 	if !appArmorLabelEnforced("test-profile (enforce)\n") || appArmorLabelEnforced("unconfined\n") {
 		t.Fatal("AppArmor enforce requirement is not strict")
+	}
+}
+
+func TestPR178CreateAutostartDefaultPreservesExplicitChoice(t *testing.T) {
+	var omitted InstanceOptions
+	effective := omitted.ForCreate()
+	if omitted.BootAutostart != nil || effective.BootAutostart == nil || !*effective.BootAutostart {
+		t.Fatal("create default must be true without changing original omitted intent")
+	}
+	config := api.ConfigMap{}
+	if err := effective.Apply(config, nil); err != nil || config["boot.autostart"] != "true" || !effective.Matches(observedNativeOptions(config)) {
+		t.Fatalf("default not persisted and verified: %v, %v", config, err)
+	}
+	delete(config, "boot.autostart")
+	if effective.Matches(observedNativeOptions(config)) {
+		t.Fatal("missing native default accepted as true")
+	}
+	for _, requested := range []bool{false, true} {
+		options := InstanceOptions{BootAutostart: boolPtr(requested)}.ForCreate()
+		config := api.ConfigMap{}
+		if err := options.Apply(config, nil); err != nil || config["boot.autostart"] != strconv.FormatBool(requested) || !options.Matches(observedNativeOptions(config)) {
+			t.Fatalf("explicit choice %v lost: %v, %v", requested, config, err)
+		}
 	}
 }

@@ -27,6 +27,14 @@ next="$(sha256sum "$work/candidate-b" | cut -d' ' -f1)"
 test "$first" != "$next"
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base conntrack nftables iproute2 >/dev/null
+# N3 guard prerequisite, not final installed Peer acceptance.
+if test "${PR178_SCOPED_N2:-0}" = 1; then
+  CGO_ENABLED=1 go test -c -o "$work/n3-direction.test" ./internal/install
+  for attempt in 1 2 3; do
+    sudo unshare --net -- env BOXWEAVE_PR178_DIRECTION_NETNS=isolated-v1 "$work/n3-direction.test" -test.run '^TestPR178N3NativeDirectionGuard$' -test.v
+  done
+  echo PR178_N3_GUARD_PREREQUISITE=PASS
+fi
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/key.asc"
 test "$(gpg --show-keys --with-colons "$work/key.asc" | awk -F: '$1=="fpr"{print $10;exit}')" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
 sudo install -m 0644 "$work/key.asc" /etc/apt/keyrings/bw-n2-install.asc
@@ -50,8 +58,28 @@ project="user-$uid"
 bridge="incusbr-$uid"
 test "$(sudo incus project get "$project" restricted)" = true
 test -z "$(sudo incus list --all-projects -c n -f csv)"
-python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"
+if test "${PR178_SCOPED_N2:-0}" = 1; then
+  python3 scripts/n2_installed_lifecycle.py tty-install-scoped "$project" "$work/candidate-a" "$first"
+  installed=/usr/local/bin/boxweave
+  sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service
+  sudo "$installed" install-status -project "$project" > "$work/scoped-active.json"
+  python3 - "$work/scoped-active.json" <<'CHECK'
+import json,sys
+x=json.load(open(sys.argv[1]))
+assert x["scoped_peer_mode"]=="SCOPED_PEER_FRESH_V2" and x["service_active"] and not x["restart_required"],x
+CHECK
+  echo PR178_N2_INSTALL=PASS
+  if sudo "$installed" upgrade -project "$project" -source-binary "$work/candidate-b" -expect-sha256 "$next" -approve-local; then
+    echo "scoped upgrade unexpectedly accepted" >&2
+    exit 1
+  fi
+  test ! -e /var/lib/boxweave-installer-backup
+  echo PR178_N2_FRESH_ONLY=PASS
+else
+  python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"
+fi
 installed=/usr/local/bin/boxweave
+if test "${PR178_SCOPED_N2:-0}" != 1; then
 sudo systemctl is-active --quiet boxweave.service
 sudo systemctl is-active --quiet boxweave-ipv4-retirement.service
 test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$first"
@@ -62,8 +90,29 @@ x=json.load(open(sys.argv[1]))
 assert x["service_active"] and not x["restart_required"] and len(x["retirement_unit_sha256"])==64
 print("N2_INSTALLED_HELPER_ACTIVATION=PASS",flush=True)
 PY
+fi
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
+if test "${PR178_SCOPED_N2:-0}" = 1; then
+  sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
+  echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
+  sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr178_n4_native.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr178_n4_concurrent.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr178_n4_reincarnation.py "$project" "$work/actor.receipt"
+  CGO_ENABLED=1 go test -c -o "$work/n4-partial.test" ./internal/install
+  chmod 0755 "$work/n4-partial.test"
+  # Deliberate incomplete native original is the LAST test, on a fresh
+  # disposable GitHub runner only. Preserve its journal and resource locks.
+  sudo systemctl stop boxweave.service
+  sudo python3 scripts/pr178_n4_partial.py "$project" "$work/n4-partial.test" > "$work/n4-partial.log" || { cat "$work/n4-partial.log"; exit 1; }
+  cat "$work/n4-partial.log"
+  original="$(sed -n 's/.*PR178_N4_PARTIAL_ORIGINAL=\([0-9a-f]\{32\}\)$/\1/p' "$work/n4-partial.log")"
+  test "${#original}" = 32
+  (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 15m > "$work/n4-degraded.receipt")
+  sudo python3 scripts/pr178_n4_degraded.py "$project" "$work/n4-degraded.receipt" "$original"
+  exit 0
+fi
 sudo python3 scripts/n2_installed_lifecycle.py mcp-retry "$project" "$work/actor.receipt"
 test -z "$(sudo incus list --all-projects -c n -f csv)"
 unit_hash="$(sudo sha256sum /etc/systemd/system/boxweave-ipv4-retirement.service | cut -d' ' -f1)"

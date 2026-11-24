@@ -15,6 +15,7 @@ import (
 
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/vanishs/boxweave/internal/install"
 	"github.com/vanishs/boxweave/internal/native"
 	"github.com/vanishs/boxweave/internal/state"
 )
@@ -412,6 +413,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if in.Internet != nil {
 				internet = *in.Internet
 			}
+			if s.ScopedPeerFresh {
+				return s.admitScopedCreate(ctx, req, in, start, internet)
+			}
 			r, err := s.admitNative(ctx, req, "box_create", in.IdempotencyKey, "", "",
 				"box:"+in.Name, in.WorkRef, in.AgentRef, struct {
 					Name      string                 `json:"name"`
@@ -427,6 +431,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if err != nil {
 				return nil, state.Receipt{}, err
 			}
+			// Preserve the admitted caller intent for legacy replay; materialize
+			// the default only for an actually new native Create.
+			in.InstanceOptions = in.InstanceOptions.ForCreate()
 			var nativeID string
 			var reserved native.VerifiedStaticPeerBinding
 			effect := func(ctx context.Context) (string, error) {
@@ -761,6 +768,16 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				}
 				if err := s.Native.ConfirmDeleteAbsence(ctx, box.Name); err != nil {
 					return err
+				}
+				if s.ScopedPeerFresh {
+					receipt, e := install.NativeScopedLifecycleCall(ctx, r.ID, "DELETE")
+					if e != nil || receipt.Project != box.Project || receipt.Name != box.Name || receipt.UUID != box.UUID || receipt.NativeID != nativeID {
+						return state.VerificationUncertain{Class: "SCOPED_DELETE_ROOT_ACL_UNVERIFIED"}
+					}
+					if e = s.Store.FinalizeVerifiedScopedDelete(ctx, r.ID, box); e != nil {
+						return state.VerificationUncertain{Class: "SCOPED_DELETE_TOMBSTONE_UNVERIFIED"}
+					}
+					return state.ErrVerifiedDeleteCommitted
 				}
 				if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
 					return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}

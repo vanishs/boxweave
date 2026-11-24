@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"github.com/vanishs/boxweave/internal/peerscope"
 	"time"
 )
 
@@ -58,6 +59,13 @@ func (s *Store) StageCreateBinding(ctx context.Context, id, project, name string
 	}
 	if n != 0 {
 		return false, ErrState
+	}
+	schema, e := scopedCreateIntentSchema(ctx, tx, id)
+	if e != nil {
+		return false, e
+	}
+	if schema != 0 && schema != 2 || schema == 2 && b.ACL != peerscope.QuarantineACL || schema == 0 && b.ACL == peerscope.QuarantineACL {
+		return false, ErrResourceLocked
 	}
 	if err = verifyIPv4RetirementHistory(ctx, tx, project, b.Bridge, b.ACL); err != nil {
 		return false, err

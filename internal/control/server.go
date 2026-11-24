@@ -65,11 +65,12 @@ func (w *privateMCPWriter) Unwrap() http.ResponseWriter {
 }
 
 type Service struct {
-	Store        *state.Store
-	Native       native.Reader
-	BuildVersion string
-	BuildCommit  string
-	Listener     string
+	ScopedPeerFresh bool
+	Store           *state.Store
+	Native          native.Reader
+	BuildVersion    string
+	BuildCommit     string
+	Listener        string
 }
 
 type HostStatus struct {
@@ -268,6 +269,8 @@ func (s *Service) ListenAndServe() error {
 	gcCtx, gcCancel := context.WithCancel(context.Background())
 	defer gcCancel()
 	go s.execGCLoop(gcCtx)
-	go s.ipv4RetirementLoop(gcCtx)
+	if !s.ScopedPeerFresh {
+		go s.ipv4RetirementLoop(gcCtx)
+	}
 	return server.ListenAndServe()
 }

@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"github.com/vanishs/boxweave/internal/install"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,6 +31,9 @@ func (s *Service) registerRecoveryTool(server *mcp.Server) {
 			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
 			svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: principal.Layer, PeerWitness: recovery.ObserveCompletedPeer}
+			if s.ScopedPeerFresh {
+				svc.ScopedPeerWitness = install.NativeScopedPeerCall
+			}
 			var out recovery.Result
 			switch in.Mode {
 			case "inspect":
