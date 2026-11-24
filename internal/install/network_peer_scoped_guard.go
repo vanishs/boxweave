@@ -35,13 +35,24 @@ type NativePeerGuardPlan struct {
 
 func NativePeerGuardFromSnapshot(t NativePrepareTarget, network *api.Network,
 	members []NativePeerGuardMember, active, revoked []state.PeerGrantBinding) (NativePeerGuardPlan, error) {
+	return nativePeerGuardCompile(t, network, members, active, revoked, false)
+}
+
+// Only fresh provisioning may propose the empty initial guard.
+func nativePeerFreshInitialGuard(t NativePrepareTarget, network *api.Network) (NativePeerGuardPlan, error) {
+	return nativePeerGuardCompile(t, network, nil, nil, nil, true)
+}
+
+func nativePeerGuardCompile(t NativePrepareTarget, network *api.Network,
+	members []NativePeerGuardMember, active, revoked []state.PeerGrantBinding, fresh bool) (NativePeerGuardPlan, error) {
 	var zero NativePeerGuardPlan
 	if !safePrereqName.MatchString(t.Project) ||
 		!safePrereqName.MatchString(t.Network) ||
 		!safePrereqName.MatchString(t.ACL) ||
 		!strings.HasPrefix(t.ACL, "bw-") ||
 		network == nil || (network.Name != "" && network.Name != t.Network) ||
-		len(members) == 0 || len(members) > networklimits.MaxProjectBoxes {
+		(!fresh && len(members) == 0) || len(members) > networklimits.MaxProjectBoxes ||
+		(fresh && (len(members) != 0 || len(active) != 0 || len(revoked) != 0)) {
 		return zero, errors.New("untrusted scoped nft guard Project, bridge, ACL or complete inventory")
 	}
 	if _, err := NativePeerACLFromPolicySnapshot(t, network, active, revoked); err != nil {

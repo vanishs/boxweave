@@ -6,7 +6,7 @@
 
 Remote starting head `6a4fb80cc23866ee81a93af6f08ffa851113b7aa` (26 commits, 4/4 workflows successful: 45290441818, 45290441780, 45290441772, 45290441906). Existing L0 RC13 remained intact. Isolated Box `pr178-lab-1123` UUID `ac585d2c-37ae-4879-a2e6-3cecc338d4d7`.
 
-- `/root/pr178/repo` is a symlink to `boxweave-fix-rc13-peer-blast-radius-lifecycle-20261123`. That older source has no valid Git HEAD and 832 staged files; no meaningful uncommitted source delta versus the remote except files absent from that older tree. 
+- `/root/pr178/repo` is a symlink to `boxweave-fix-rc13-peer-blast-radius-lifecycle-20261123`. That older source has no valid Git HEAD and 832 staged files; no meaningful uncommitted source delta versus the remote except files absent from that older tree.
 - Actual recovery source `/root/pr178/new-4cbdb5f` also has an unborn Git HEAD. Four new Go files and the changed transition type were recovered. Its progress doc was older than remote and it lacked the remote preflight report: do not overwrite either remote document with old copies. Python caches are excluded.
 - Full non-destructive archive `/root/pr178/recovery-20261123/original-worktrees.tar.gz`, SHA256 `077ca1f4cce19abae2856ec5220deec5b9505859bbf5bfb653d6cedcc9b6e9b7`, operation `c14709d185dd8924ccdd53c435176b0f`, Guest exit 0.
 - Reconstructed independent candidate `/root/pr178/recovery-20261123/candidate` from exact remote tarball plus five reviewed source changes. Local Git initialized only for make verify's tracked YAML requirement; its index is not a valid upstream commit ancestry. No reset, clean, original directory replacement, L0 network change or #177 edit.
