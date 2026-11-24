@@ -216,7 +216,9 @@ func unit(p Plan) string {
 	}
 	scopedFlag := ""
 	if p.ScopedFreshReviewSHA != "" {
-		header += "Requires=" + scopedLifecycleUnitName + "\nAfter=" + scopedLifecycleUnitName + "\n"
+		// Root effects remain independently fail-closed. Keep the unprivileged
+		// read/recovery API available if the helper refuses a partial journal.
+		header += "Wants=" + scopedLifecycleUnitName + "\nAfter=" + scopedLifecycleUnitName + "\n"
 		scopedFlag = " -scoped-peer-fresh"
 	}
 	return header + "\n[Service]\n" +

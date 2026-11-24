@@ -97,6 +97,20 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr178_n4_native.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr178_n4_concurrent.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr178_n4_reincarnation.py "$project" "$work/actor.receipt"
+  CGO_ENABLED=1 go test -c -o "$work/n4-partial.test" ./internal/install
+  chmod 0755 "$work/n4-partial.test"
+  # Deliberate incomplete native original is the LAST test, on a fresh
+  # disposable GitHub runner only. Preserve its journal and resource locks.
+  sudo systemctl stop boxweave.service
+  sudo python3 scripts/pr178_n4_partial.py "$project" "$work/n4-partial.test" > "$work/n4-partial.log" || { cat "$work/n4-partial.log"; exit 1; }
+  cat "$work/n4-partial.log"
+  original="$(sed -n 's/.*PR178_N4_PARTIAL_ORIGINAL=\([0-9a-f]\{32\}\)$/\1/p' "$work/n4-partial.log")"
+  test "${#original}" = 32
+  (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 15m > "$work/n4-degraded.receipt")
+  sudo python3 scripts/pr178_n4_degraded.py "$project" "$work/n4-degraded.receipt" "$original"
   exit 0
 fi
 sudo python3 scripts/n2_installed_lifecycle.py mcp-retry "$project" "$work/actor.receipt"

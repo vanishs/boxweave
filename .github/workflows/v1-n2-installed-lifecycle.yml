@@ -16,6 +16,7 @@ on:
       - scripts/n2_installed_lifecycle.*
       - scripts/pr178_n2_scoped_lifecycle.py
       - scripts/pr178_n3_scoped_peer.py
+      - scripts/pr178_n4_*.py
       - .github/workflows/v1-n2-installed-lifecycle.yml
   workflow_dispatch:
 permissions:
@@ -60,6 +61,10 @@ jobs:
             grep -Fxq PR178_N3_ACTIVE_POLICY_LIFECYCLE=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N3_BOOT_POLICY=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N3_INSTALLED_PEER=PASS "$RUNNER_TEMP/n2-installed.log"
+            for marker in UDP_FORWARD_CONTINUITY FORWARD_DEVICE_POSTSTATE CONCURRENT_ORIGINAL_UDP REINCARNATION NATIVE_PARTIAL_ACL_ACK_LOSS PARTIAL_PACKET_SAFETY PARTIAL_NO_RECOVERY_REPLAY PARTIAL_BOOT_REFUSAL PARTIAL_FORWARD_CONTINUITY PARTIAL_MCP_FENCED DEGRADED_MCP_STABLE; do
+              grep -Fq "PR178_N4_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            grep -Fxq 'N4_PARTIAL_RESTART_PHASE UNKNOWN' "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
           for marker in N2_INSTALLED_HELPER_ACTIVATION N2_INSTALLED_HELPER_OUTAGE_RECOVERY_NO_DELETE_REPLAY N2_SCHEMA6_UPGRADE_ROLLBACK N2_FULL_UNINSTALL_PRESERVES_ARCHIVE; do
