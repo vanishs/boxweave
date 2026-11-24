@@ -1,5 +1,7 @@
 # v1 versioning and publication
 
+**Current publication status (2026-11-24):** RC13 is the latest published prerelease; stable pointer is UNPUBLISHED. Current v1 uses schema 6 and includes fresh-only scoped Peer and reviewed Doctor/Recover, not in RC13. Legacy upgrades require compatible verified state; scoped migration, upgrade, rollback, backup commit and uninstall are unsupported. No implicit reset or adoption. See [installation](../getting-started/MANUAL_INSTALL.md) and [current status](../INDEX.md). Historical RC examples below are not the current release.
+
 **2026-11-13 distribution update:** See [v1 dedicated-host pilot + installer + Release contract](../development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). A checked, owner-authorized, reversible pre-release **physical development-host pilot** may occur before final HOST_GO/physical postflight, with no stable release or pointer promotion. The protected v1 branch's separate `V1_PUBLISHED_RELEASE` pointer is `UNPUBLISHED` until a reviewed stable release exists; do not infer it from `VERSION` or the mixed main/v1 GitHub latest Release endpoint.
 
 **Version:** `1.0.0`, recorded in the root [VERSION](../../VERSION) file.

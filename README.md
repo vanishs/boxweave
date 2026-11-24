@@ -1,93 +1,58 @@
 # BoxWeave
 
-**PR #178 scoped Peer v2 candidate (not released):** explicit fresh-only installation; no legacy migration, upgrade, rollback or scoped uninstall. [N5 delivery, capacity limits, acceptance and #177 handoff](docs/development/V1_PR178_N5_DELIVERY_2026-11-23.md). Exact N5 CI and Owner review required. Never remove Root journals to bypass refusals.
+**A self-hosted MCP control plane for AI agents working across isolated Linux containers.**
 
-**Secure Agent-Programmable Container Environment**
+BoxWeave lets an authorized AI agent create and operate a group of Incus containers ("Boxes"), run code and tests, connect workloads, and recover operation results after a disconnect. The agent works inside owned Boxes, not through a general-purpose host shell or an Incus administrator account.
 
-**Let AI agents build and operate a group of Boxes. Keep host administration out of reach.**
+## What you can do
 
-BoxWeave is a small, self-hosted **MCP control plane for multiple owned Incus Linux containers**. An authorized AI Agent can create, inspect, run, update and remove Boxes inside a restricted environment, without receiving a general host shell or the host's Incus administrator socket. The Agent can compose different Boxes into an application or test setup; **BoxWeave enforces the resource and operation boundaries, not the Agent's business workflow**.
+- Create, inspect, start, stop, resize and remove owned Linux Boxes.
+- Clone repositories, edit files, install dependencies, build and test software inside a Box.
+- Compose multiple workloads: a web application, API, database and test environment.
+- Grant directional Box-to-Box access or expose an owned service through native TCP/UDP forwarding.
+- Reconnect to work, retrieve original command output and exit status, or investigate an uncertain operation.
 
-Unlike a one-sandbox-per-request service, the unit of value is the **controlled multi-Box environment**: several isolated workloads, a clear ownership boundary, durable operation results, and explicit directional Box-to-Box permissions and limited host-port exposure.
-
-## The environment
+BoxWeave provides infrastructure primitives. Your agent decides what to build and how to organize its work.
 
 ```mermaid
-flowchart TB
-    human["Human / operator: approves host setup and credentials"]
-    agent["AI Agent / authenticated MCP client"]
-    bw["BoxWeave: permission checks, exact ownership, durable SQLite operations"]
-    human -->|authorizes| agent
-    agent -->|typed MCP tools| bw
-    subgraph project["One restricted Incus Project: BoxWeave-owned environment"]
-        direction LR
-        web["Web Box"]
-        api["API Box"]
-        db["Database Box"]
-        tests["Test Box"]
-        web -.->|directional allow| api
-        api -.->|directional allow| db
-    end
-    bw -->|owned-only native Incus actions| web
-    bw --> api
-    bw --> db
-    bw --> tests
-    host["Host admin and foreign Incus resources: not exposed by MCP"]
+flowchart LR
+    User["Operator"] -->|authorizes| Agent["AI agent / MCP client"]
+    Agent -->|authenticated MCP| BW["BoxWeave"]
+    BW -->|owned operations| Web["Web Box"]
+    BW -->|owned operations| API["API Box"]
+    BW -->|owned operations| DB["Database Box"]
+    BW -->|owned operations| Test["Test Box"]
+    Web -.->|explicit peer grant| API
+    API -.->|explicit peer grant| DB
 ```
 
-The roles above (Web/API/Database/Test) are **examples chosen by an Agent**, not built-in BoxWeave service types. **Dashed Box-to-Box links depict explicitly granted traffic** in the S4 candidate, not a claim that RC.7 includes them. The host-administration node is intentionally **not connected** to the Agent/MCP path. Incus and the kernel enforce the real container/network effects; BoxWeave checks ownership and validates their observed results.
+Boxes deny private peer access by default. These workloads are examples, not built-in roles. Each independent nested BoxWeave installation has its own ownership and credential boundary; nesting depends on host Incus and kernel capabilities.
 
-An appropriately configured Box may itself host a separate BoxWeave + Incus installation. Each nesting layer keeps its **own** credentials, Project, SQLite and ownership boundary; kernel/AppArmor/BPF limitations mean arbitrary-depth hostile isolation is **not** promised.
+## Get started
 
-## What an Agent can do
+1. Prepare a Linux amd64 or arm64 host with a compatible, already configured Incus daemon, storage pool and restricted per-user Project.
+2. Follow the [installation guide](docs/getting-started/MANUAL_INSTALL.md). Download and verify the installer from an exact published release.
+3. Connect an MCP client using a local Bearer credential or embedded OAuth through your own HTTPS endpoint. See [Connect and use BoxWeave](docs/getting-started/USE_BOXWEAVE.md).
+4. Ask your agent to call host_status and box_list, then create one test Box and verify readiness before running commands.
 
-| Capability | Public interface and scope |
-| --- | --- |
-| Manage owned Linux Boxes | `box_create`, `box_list`, `box_get`, `box_update`, `box_start`, `box_stop`, `box_delete` |
-| Develop and test inside Boxes | `box_exec` with bounded guest argv, environment, output and timeout; `box_file_list`, `box_file_read`, safe `box_file_apply` |
-| Recover and inspect operations | `operation_get`, `operation_list`, `operation_output_get`, `operation_cancel`; original Tracking IDs and idempotency keys |
-| Inspect readiness and activity | `box_get(detail=true)`, `box_wait_ready`, `box_activity_get` |
-| Inspect this controller | `host_status` (read-only; not a general host inventory) |
-| Relate and expose Boxes | **S4 candidate:** `box_peer_set` (directional peer allow/revoke), `port_forward_list/create/delete` (native TCP/UDP for owned Boxes) |
+[Download a release](https://github.com/vanishs/boxweave/releases) | [Installation](docs/getting-started/MANUAL_INSTALL.md) | [Usage](docs/getting-started/USE_BOXWEAVE.md)
 
-**RC8 development candidate:** PR #153 implements 22 public MCP Tools, including directional peer access, native TCP/UDP forwards, dependent Delete, Activity and readiness. See [S4-C evidence](docs/development/S4_C_IMPLEMENTATION_2026-11-20.md) and [RC8 preflight](docs/development/V1_RC8_MERGE_RELEASE_PREFLIGHT_2026-11-20.md). RC.7 is the last confirmed published RC at this checkpoint. Scoped Box/native CI evidence is not full S4/S5 or production acceptance.
+**Release status:** v1 is in prerelease development. As of 2026-11-24, [RC13](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.13) is the latest published v1 prerelease. The v1 source branch also contains newer scoped Peer and Doctor/Recover implementations; those changes are not in RC13. Check the release page and installed build identity before using source-only features.
 
-**Important file limit:** native exclusive file create is supported. Atomic conditional replace/delete is not proven through the Incus SFTP path; `box_file_apply` returns `UNSUPPORTED` for unsafe modes. Use Git/shell **inside the owned Box** through authorized `box_exec` for larger code changes. A guest command is never a host command.
+## Example agent request
 
-## Typical multi-Box workflow
+> Create a development Box and a test Box. Install the tools my project needs inside them, clone the repository, run the tests, fix any failures and report the original command outputs. If the Boxes need to communicate, grant only the required direction. Keep the Boxes for my review.
 
-1. **Operator setup:** on a dedicated, compatible Linux/Incus host, review the local install/preflight and native Project/Profile preparation; authorize an independently revocable management Actor credential (RC8 candidate). `/mcp` listens on loopback by default. Any public HTTPS/Tunnel access is operator-managed.
-2. **Create separate workloads:** the Agent creates, for example, an API Box and a test Box; each returned operation has an original ID. Read `operation_get` and the Box's native readiness before depending on it.
-3. **Work independently:** use guest `box_exec` for `git clone`, dependency setup, tests and fixes. Query original operation status/output on reconnect. A failing guest test is a completed failed command, not a missing transport response.
-4. **Connect only what is required (RC8 candidate, not RC.7):** authorize API-to-database peer traffic with `box_peer_set`, and publish an owned test service via a loopback-default native TCP/UDP forward when the network features have passed their gates. Other Box pairs remain denied.
-5. **Verify and clean up:** inspect exact owned Box/forward/peer state and retained operation evidence, then delete only the managed resources. After an ambiguous `UNKNOWN`, **do not blindly retry** a possibly dispatched mutation.
+Use operation_get to follow the original asynchronous operation and operation_output_get to retrieve guest command output and exit status. If an operation becomes UNKNOWN, inspect the original rather than blindly issuing a new mutation. A successful operation receipt is not proof that a guest test passed.
 
-BoxWeave does **not** choose the application's components, run an Agent scheduler, manage Git repositories on the host, or orchestrate a cross-host cluster. It provides safe primitives for an **external Agent to compose**.
+## Important limits
 
-## Install, connect and learn
-
-- **[v1.0.0-rc.7 prerelease](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.7)** — latest published v1 RC at this documentation snapshot; **not** a stable production release. The older `main` v0.x line is separate.
-- **[Manual installation guide](docs/getting-started/MANUAL_INSTALL.md)** — reviewed local install, Incus prerequisites, native preparation, OAuth and MCP. **This guide is explicitly anchored to RC.3**; pin and verify your selected release and its CLI options rather than blindly treating the RC.3 example as an RC.7 install recipe.
-- **[Documentation index](docs/INDEX.md)** and **[glossary](docs/GLOSSARY.md)** — operator and development references.
-- **[Tool contracts](docs/design/MCP_TOOLS.md)** · **[Agent development loop](docs/product/DEVELOPMENT_LOOP.md)** · **[original operations/UNKNOWN](docs/design/OPERATIONS.md)** · **[nesting](docs/design/NESTING.md)**.
-- **[Long-term multi-Box positioning and competitor notes — discussion PR #155](https://github.com/vanishs/boxweave/pull/155)**. The notes are **non-normative** and do not expand v1 scope.
-
-**Breaking RC8 change:** SQLite schema v5; incompatible old ledgers are rejected. Preserve original receipts and native resources; fresh isolated installation, credentials and reauthorization are required. Never reset a live host without separate operator approval. [Reconstruction policy](docs/process/VERSIONING.md).
-
-**PR #177 Doctor/Recover candidate (not released):** [operator guide](docs/process/DOCTOR_RECOVER.md) for read-only diagnosis, original-specific reviewed recovery and MCP recheck. No automatic repair or new remote Host authority.
-
-## Security and scope
-
-- **Host boundary:** the MCP principal can operate only exact BoxWeave-owned Incus resources. No host shell/files, foreign Box adoption, generic Incus admin API, general ACL DSL, Caddy, managed certificates, guest resident Agent or cross-layer orchestrator.
-- **Credentials:** independently revocable full-management Actors and embedded OAuth on the same `/mcp` endpoint. RC8 removes admin/viewer roles and OAuth application-permission scopes; protect all credentials and private data.
-- **Durable effects:** every admitted mutation uses a reusable client idempotency key and an original durable Operation record. Track an uncertain native result as `UNKNOWN` until independently reconciled; never assume a timeout means no effect.
-- **Nested security:** host and kernel capabilities determine supported depth and isolation. The ability to run a child Incus daemon is not proof of hostile multi-tenant safety.
-- **Host-global Scriptlet warning (S4 design):** the proposed restricted TLS/ACL writer may require Incus `authorization.client.tls-restricted=scriptlet`, a **daemon-global** setting that can change authorization behavior for *other* restricted TLS clients. Never enable it without explicit host-specific owner approval, compatibility review and rollback proof. It is not an ordinary Box MCP operation.
-
-See the [permanent v1 product boundary](docs/decisions/PRODUCT_BOUNDARY.md), [network design and native limits](docs/design/NETWORK.md), [security model](docs/design/SECURITY.md) and [acceptance status](docs/development/phases/README.md). Planned features are not production security claims.
+- A management credential grants access to owned Boxes, including guest-root execution. Keep credentials private.
+- File tools support exclusive create, list and read; unsafe conditional replace/delete is refused. Use Git or guest commands for edits.
+- A native forward is not proof that an application is listening or externally reachable. Omitted host binds stay loopback.
+- The newer scoped Peer architecture requires an explicit fresh installation and does not support migration, upgrade, rollback or uninstall. Older installations use the legacy architecture.
+- Host configuration and evidence-bound local recovery remain operator responsibilities. BoxWeave is not a general host administration, cluster orchestration, backup or website publishing platform.
 
 ## Development
 
-[Scoped uninstall planner](docs/development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md) (destructive real-host apply not accepted) · [Python loopback MCP testkit](docs/development/V1_PYTHON_LOOPBACK_MCP_TESTKIT_2026-11-19.md).
-
-[Contributing](CONTRIBUTING.md) · [quality and protected-branch rules](docs/process/QUALITY_GATES.md) · [staged implementation](docs/process/IMPLEMENTATION_PLAN.md) · [execution checkpoint](docs/development/EXECUTION_LOG.md).
+[Developer documentation](docs/INDEX.md) — architecture, MCP contracts, contribution workflow, current source status, acceptance evidence and historical records.

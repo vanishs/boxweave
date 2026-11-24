@@ -16,7 +16,9 @@ Use this glossary in onboarding, design and acceptance documents. Older dated ex
 | **Bridge, NIC, ACL** | Native managed private network, attached Box virtual NIC and access-control rules; actual packet isolation needs separate testing. |
 | **MCP / tool** | Model Context Protocol, the bounded Agent-to-BoxWeave interface. Not a host-shell or generic REST admin API. |
 | **`/mcp`** | Single authenticated Streamable HTTP endpoint; local default `127.0.0.1:18650/mcp`, optionally tunneled with external HTTPS. |
-| **Bearer / admin / viewer** | Revocable token and existing two roles. Viewer is read-only, may read sensitive guest data; admin may mutate owned guests. |
+| **Bearer / management Actor** | Independently revocable credential granting full management of this controller's owned Boxes; no admin/viewer roles or application permission scopes. |
+| **Scoped Peer v2** | Current unreleased v1 fresh-only architecture with independent Box ACLs, bounded Root guard/lifecycle helpers and routine directional MCP grant/revoke. Not the legacy RC13 mode. |
+| **Doctor / Recover** | Local read-only diagnostic and evidence-bound reviewed settlement CLI entries in current v1; not a remote Host repair Tool. |
 | **Embedded OAuth** | Optional browser approval/credential-issuance path in same Go service, not an identity platform or separate MCP endpoint. |
 | **Public origin** | Exact external `https://hostname` configured locally for OAuth, **without** `/mcp`, query, or trailing path; full client MCP URL ends in `/mcp`. |
 | **Tunnel** | Optional operator-run HTTPS exposure such as Cloudflare Quick Tunnel; not part of BoxWeave installer or daemon management. |

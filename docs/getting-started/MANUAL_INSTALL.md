@@ -1,264 +1,105 @@
-# Manual installation — BoxWeave v1 RC.3 (general host guide)
+# Install BoxWeave
 
-**Doctor D2 source candidate, not a released feature:** diagnostic coverage now distinguishes durable active/history, scoped/legacy, local HTTP 401, restricted native inventory, Root policy, device configuration and external verification. A route to inspection is not repair authorization; never reset a retained scoped identity or restart a helper solely to make Doctor green. [D2 design and boundaries](../development/V1_PR177_D2_DIAGNOSIS_2026-11-23.md).
+This is the user-facing guide for the published v1 prerelease and the current source branch. Select an exact version before making changes. As of 2026-11-24, RC13 is the latest published v1 prerelease; stable v1 is unpublished. The newer scoped Peer and Doctor/Recover implementations are merged into v1 but not released.
 
-**Doctor source candidate (PR #177 D1, not a released feature):** Doctor no longer initializes a missing ledger. Its versioned diagnostic block reports per-source evidence and PARTIAL coverage; legacy ready/mcp_ready are preflight/schema compatibility, not proof of real MCP, native or packet health. Root and restricted service observations differ. Busy or incomplete capture reports UNVERIFIED; never initialize, reset or restart a production service to force a green diagnosis. See [D1 design and limits](../development/V1_PR177_D1_FOUNDATION_2026-11-23.md).
+## 1. Prepare the Host
 
-**PR #178 scoped Peer v2 candidate (not released):** explicit fresh-only installation; no legacy migration, upgrade, rollback or scoped uninstall. [N5 delivery, capacity limits, acceptance and #177 handoff](../development/V1_PR178_N5_DELIVERY_2026-11-23.md). Exact N5 CI and Owner review required. Never remove Root journals to bypass refusals.
+Use a dedicated or explicitly approved Linux amd64/arm64 host (Ubuntu LTS is the initial tested baseline), systemd, Python 3 and a compatible Incus server with required native extensions (7.5+, tested 7.6). Incus must already be installed and initialized with an existing storage pool and managed bridge. See the [Incus installation guide](https://linuxcontainers.org/incus/docs/main/installing/). Do not reinitialize a live daemon, pool or bridge.
 
-**Fresh Forward policy (source PR #166, not retroactive to published older versions):** newly generated systemd service defaults to all. Explicit external Forward requests still require caller acknowledgment and native Project proxy permission. Fresh, reviewed empty-Project native preparation grants the latter as an explicit plan action; service installation alone and ordinary upgrades never change it. Existing installations retain their operator-approved Project settings. Omitted host_bind and MCP management stay loopback. An operator may set an empty or exact allowlist in a root-local drop-in; upgrade preserves existing unit/overrides. Wildcards can include public and future interfaces. The authenticated MCP host_status reports native.project_permissions (audited keys and normalized values) and native.external_forward_policy (disabled, exact, all, or invalid). These are configuration observations, not a packet test. A denied proxy Project and denied external service policy have separate diagnostics. A Project-wide proxy grant allows the confined native account to create proxy devices; review that exposure separately. An operator may explicitly authorize this capability for an existing exact owned Project from the trusted host without rerunning empty-Project preparation or modifying the default/global Project. A normal upgrade preserves both Project permissions and systemd overrides. Interception, low-level LXC and privilege/UID-GID options retain their separate safety constraints; no automatic expansion. [Policy](../development/V1_FORWARD_ALL_POLICY_2026-11-21.md).
-
-**Guided RC install / retirement (post-RC8 source):** On a compatible already-provisioned dedicated Incus host, use `sudo sh uninstall.sh --full` (exact owned inventory; terminal `REMOVE user-UID` approval, root-only retirement backup) then `sudo sh install.sh --interactive --version <published-tag>` (terminal `INSTALL user-UID` approval, verified native prepare/verify, doctor and optional OAuth). A root interactive invocation without --plan/--apply also selects the guided installer. Existing explicit plan/apply modes remain available, and noninteractive default stays plan-only. The published RC8 artifact is immutable and does not include this later change. Obtain both scripts from a subsequent checked Release; the repository uninstaller requires scripts/uninstall_core.py. Guided fresh defaults derive the exact restricted service Project, default pool, incusbr-UID and exclusive ACL; explicit --pool/--network/--acl can select existing compatible resources. No shared Incus bootstrap, automatic proxy/tunnel installation, generic PRS approval, or silent upgrade. Unknown active claims, unresolved originals, foreign resources, Root/Scriptlet maintenance, interrupted journals or unsupported older schemas block; guided retirement only archives an already released historical Exec with exact successful Delete lineage. On partial completion inspect original journals rather than rerun. Native config readiness is not packet or quota acceptance. OAuth is optional, external HTTPS origin remains operator-managed; no passwords in arguments or logs.
-
-
-This is a **human-reviewed, fresh-install** guide, not a one-shot provisioning script. The separately observed **2026-11-19 physical RC.7→exact-source RC8 candidate rebuild** is recorded in [the Host/ChatGPT acceptance ledger](../verification/V1_RC8_PHYSICAL_HOST_CHATGPT_L0_L2_ACCEPTANCE_2026-11-19.md) and [safe uninstall/reinstall design](../development/V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md); it was **not** a published RC8 release or a general-purpose `uninstall.sh`. No machine-specific host hashes, UID, bridge, Release digests or public Tunnel hostnames are reusable defaults. See the [glossary](../GLOSSARY.md).
-
-**Legend:** **Required** = necessary for this stage; **Optional** = only if you want this feature; **Review/write** = changes the host/Incus and must be explicitly approved; **Extra acceptance** = testing beyond installation.
-
-## A. Check the dedicated host — Required, read-only
-
-- Initially tested on Ubuntu LTS Linux; published Release assets target Linux **amd64/arm64**. Incus **7.5+ with the required native extensions** is needed; Incus **7.6** was tested on a real host. Prefer an existing compatible daemon; don't silently upgrade one with other users.
-- Inspect Incus state and the storage driver **before** changing anything. BoxWeave accepts any native supported **Incus storage driver** with a ready pool (`btrfs`, `zfs`, `lvm`, `dir`, etc.). It does **not** enforce or certify filesystem quotas or remaining disk/Exec spool capacity.
-- Do not co-install with legacy BoxWeave `main`, reuse an unknown `/var/lib/boxweave`, or adopt unrelated Incus instances.
+Inspect the host locally:
 
 ```sh
 uname -m
-cat /etc/os-release
 incus version
 sudo incus storage list
 sudo incus network list
 sudo incus list --all-projects
-sudo test -S /var/lib/incus/unix.socket.user && echo "Incus multi-user socket available"
+sudo test -S /var/lib/incus/unix.socket.user
 ```
 
-If Incus is missing, use the [Incus official installation guide](https://linuxcontainers.org/incus/docs/main/installing/) or [Zabbly's signed package instructions](https://github.com/zabbly/incus); verify that the **server**, not just the client, is compatible. Ubuntu's default `apt install incus` may select an older major release. On an **uninitialized, empty** daemon only, the administrator may run `sudo incus admin init` and choose a native storage pool and managed bridge. A directory used as a storage-pool source does **not** imply the Incus `dir` driver. Never recreate or reinitialize a live pool to follow an example.
-
-## B. Confined nonroot Incus identity — Required, Review/write
-
-Create one dedicated service user with only the non-admin `incus` group; **never** add it to `incus-admin`, `sudo`, `docker` or `lxd`. If this account already exists, inspect it instead of recreating.
+The BoxWeave service identity must be nonroot and confined to its own Incus per-user Project. If absent, create the dedicated account on an approved host:
 
 ```sh
 getent group incus
-getent passwd boxweave || sudo useradd --create-home --gid incus \
-  --shell /usr/sbin/nologin boxweave
+getent passwd boxweave || sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
 id boxweave
 PROJECT="user-$(id -u boxweave)"
-echo "$PROJECT"
-```
-
-Incus **multi-user per-user Projects** normally create an isolated `user-<UID>` Project and private bridge on the user's first use of the `incus` socket. Check it through the actual service identity:
-
-```sh
-sudo runuser -u boxweave -- env \
-  -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
-  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  incus project list
-
+sudo runuser -u boxweave -- incus project list
 sudo incus project show "$PROJECT"
 sudo incus profile show default --project "$PROJECT"
-sudo incus network list
 ```
 
-If these are absent, fix the native [Incus multi-user confinement setup](https://linuxcontainers.org/incus/docs/main/explanation/projects/) **before** proceeding. Do **not** switch BoxWeave to the privileged `/var/lib/incus/unix.socket` or manually invent a permissive replacement Project. Record the **actual** private network name and **existing** pool. Changing the global `default` Profile is not necessary.
+Do not add this user to incus-admin or sudo, or use the privileged Incus socket. If the confined Project or private bridge is missing, resolve native multi-user setup before installation. Never adopt unrelated resources or reuse an unknown BoxWeave ledger.
 
-## C. Verify a pinned Release and install the service — Required, Review/write
+## 2. Fresh installation: published RC13 (legacy architecture)
 
-The following `v1.0.0-rc.3` is an **example exact published prerelease**, not a floating upgrade instruction. The source's `VERSION=1.0.0` and `V1_PUBLISHED_RELEASE=UNPUBLISHED` are **not** stable publication. Review the [Release page](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.3) and use the exact selected tag:
+Choose a pinned published release from [Releases](https://github.com/vanishs/boxweave/releases). The commands below use RC13, not floating branch code.
 
 ```sh
-RELEASE=v1.0.0-rc.3
+RELEASE=v1.0.0-rc.13
 mkdir -p "$HOME/boxweave-install"
 cd "$HOME/boxweave-install"
 curl -fL "https://github.com/vanishs/boxweave/releases/download/$RELEASE/install.sh" -o install.sh
 curl -fL "https://github.com/vanishs/boxweave/releases/download/$RELEASE/SHA256SUMS" -o SHA256SUMS
 grep '  install.sh$' SHA256SUMS | sha256sum -c -
-sh ./install.sh --plan --version "$RELEASE" --project "$PROJECT"
+sh install.sh --plan --version "$RELEASE" --project "$PROJECT"
 ```
 
-Check the pinned tag, arch, **source commit**, binary digest, project, nonadmin socket and `host_machine_id_sha256` from **this host's plan**; inspect the downloaded installer. A checksum in the same release binds assets but is not an independent signature. The installer itself verifies tag, GitHub asset digest, manifest, binary SHA256 and size. Do not pipe downloads into `sudo sh`.
+Review the script and the exact host/project/source/binary plan. The release checksums are not an independent signature. Do not pipe a remote script directly into a root shell.
 
-Only when the exact plan is approved:
+On a fresh compatible host, run the guided installation from a trusted local terminal:
 
 ```sh
-HOST_SHA256="PASTE_host_machine_id_sha256_FROM_PLAN"
-sudo sh ./install.sh --apply --version "$RELEASE" \
-  --project "$PROJECT" --confirm-host-sha256 "$HOST_SHA256"
+sudo sh install.sh --interactive --version "$RELEASE"
 ```
 
-**Install ≠ first Box preparation.** RC.3 activates the single Go service using restricted actor, compatible Incus API and SQLite checks **without** preloading a Guest image, setting the Profile/ACL or modifying Incus. It will not auto-start a Tunnel or authorize OAuth. Do not blindly rerun `--apply` if it partly failed; inspect the original manifest/recovery state.
+The guided installer derives the dedicated Project, default pool, private incusbr-UID bridge and exclusive bw-user-UID-acl. If your existing pool/network differs, specify the actual approved --pool, --network and --acl (new exclusive ACL) as supported by that installer. Review the native preparation plan and type the requested INSTALL confirmation only for that exact target. It prepares the confined native resources, installs/activates the service, verifies configuration and offers optional OAuth setup. It does not install Incus itself, create a tunnel, or certify packet isolation or disk quota enforcement.
 
-### In-place upgrade (guided, prospective Release containing this installer)
+RC13 uses legacy Peer authorization. Some Peer work requires separate Host-local review and Root helper readiness; ordinary successful install does not prove Peer grant/revoke readiness. Inspect the original operation if approval or evidence is missing. Never treat a legacy repair as a scoped-v2 procedure.
 
-Obtain and checksum-verify the selected Release's installer as above. For an already verified canonical v1 installation, stop other operator maintenance and mutating MCP work, then run:
+## 3. Scoped Peer v2: current source only
 
-    sudo sh install.sh --upgrade --version v1.0.0-rc.12
+This mode is not in RC13. Use an exact independently verified candidate on a fresh dedicated test host, or a future published release that explicitly contains it. The flag is --scoped-peer-fresh; its native scope is derived, not caller-selected. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../development/V1_PR178_N5_DELIVERY_2026-11-23.md).
 
-The tag above is an example, not a claim that RC12 is published. Use an exact published tag. Use the *new* installer; RC11's immutable installer still requires the old manual sequence. Explicit --upgrade prevents any fresh install or implicit adoption. Guided upgrade derives the existing service user, socket, exact Project and Host fingerprint from the verified manifest; it reviews the installed binary/unit, active state, candidate source/bytes, and any previous backup receipt. Type UPGRADE user-UID on the controlling terminal to approve the displayed plan. A prior backup is closed only under this approval through the installed install-commit; it will be permanently unavailable even if the later upgrade fails before making a new backup. The new backup (the version being replaced) is retained. No silent backup removal, native re-preparation, OAuth setup, new tunnel, or fresh Forward default is applied. The Go installer continues to own actual writes, health verification and rollback; this wrapper rechecks Host/install/backup before each mutation. The two existing Go mutations are separately locked, not a cross-command atomic transaction: do not run concurrent maintenance. A failure leaves its real manifest/backup for inspection; do not repeat blindly. Service readiness is not a full native/packet/quota acceptance. Applying the same exact bytes is a no-op that retains any existing backup.
+No legacy migration/adoption, upgrade, rollback, backup commit or uninstall is supported for scoped mode. Do not delete Root journals or state to bypass a refusal. Unlike legacy Peer, routine scoped Peer grants/revokes are authenticated MCP operations after reviewed setup, and new Boxes default to boot.autostart=true while explicit false is preserved. The 1,024 owned-Box bound is not a physical capacity guarantee. Retained identities, addresses, directional grant history and Root policy records have separate limits.
 
-Read-only upgrade review (root needed to read the private manifest and receipt):
-
-    sudo sh install.sh --plan --upgrade --version v1.0.0-rc.12
-
-Without a TTY, upgrade requires --plan or the existing explicit --apply --upgrade --project PROJECT --confirm-host-sha256 DIGEST form. Explicit noninteractive apply still refuses a prior backup rather than closing it automatically. Noncanonical/unmanaged and development-installed builds require explicit reviewed maintenance; no automatic downgrade, same-version changed bytes, or legacy adoption.
-
-## D. Confirm the loopback service — Required, read-only
+## 4. Verify installation
 
 ```sh
 sudo systemctl is-active boxweave
 sudo /usr/local/bin/boxweave install-status -project "$PROJECT"
-curl -sS -o /dev/null -w 'HTTP %{http_code}\n' \
-  -X POST http://127.0.0.1:18650/mcp
+sudo runuser -u boxweave -- /usr/local/bin/boxweave doctor -project "$PROJECT"
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' -X POST http://127.0.0.1:18650/mcp
 ```
 
-Expect `active` and **HTTP 401** for anonymous `/mcp`: reachable loopback listener plus correct denial, **not** an authenticated OAuth test or guest readiness.
+An active service and anonymous HTTP 401 establish listener/denial, not authenticated client or workload readiness. Verify installed version and commit; a doctor configuration result does not prove packet reachability, physical storage quota or every native Root path. In current v1 source, the expanded read-only Doctor and reviewed Recover are documented in the [operator guide](../process/DOCTOR_RECOVER.md).
 
-## E. Prepare native Project/Profile/ACL for the first Box — Required before creation, Review/write
+## Connect a remote OAuth client
 
-Use the **existing** pool and private **managed bridge** selected above. Choose a **new, exclusive, `bw-`-prefixed** ACL name. The native prepare code only changes an **empty, unmodified, confined** per-user Project/Profile; it refuses an existing ACL, used Profile, foreign network, or unreviewed devices.
-
-```sh
-POOL=default                 # example; replace with selected pool
-BRIDGE=incusbr-EXAMPLE       # replace with actual private bridge name
-ACL=bw-boxweave-acl          # example; must be unused and unique
-sudo /usr/local/bin/boxweave native-prepare-plan \
-  -project "$PROJECT" -pool "$POOL" -network "$BRIDGE" -acl "$ACL"
-```
-
-Review the reported `target`, `actions`, `warnings`, host/native digests and `review_sha256`. Then approve **that exact snapshot**:
+Skip for local-only Bearer clients. BoxWeave's MCP listener stays on loopback. Operate your own HTTPS reverse proxy or tunnel forwarding to http://127.0.0.1:18650; BoxWeave does not manage DNS, certificates or tunnels. Use a trusted operator terminal to configure the separate OAuth approval password (at least 16 characters) and actual external HTTPS origin, without /mcp:
 
 ```sh
-PREPARE_SHA256="PASTE_review_sha256_FROM_native-prepare-plan"
-sudo /usr/local/bin/boxweave native-prepare-apply \
-  -project "$PROJECT" -pool "$POOL" -network "$BRIDGE" -acl "$ACL" \
-  -native-prepare-sha256 "$PREPARE_SHA256" -approve-local
-```
-
-Expect `status: "APPLIED"` and readback. **On any error/timeout/uncertain state, never repeat apply blindly.** Read `sudo /usr/local/bin/boxweave native-prepare-status` and reconcile the durable native journal; root-local rollback has separate identity/host/safety gates. Actual **IPv4/IPv6 packet isolation must still be tested**, not inferred from ACL JSON.
-
-## F. Independently verify admission readiness — Required before creation
-
-```sh
-sudo /usr/local/bin/boxweave native-prereq-plan -project "$PROJECT"
-```
-
-Check the **eight** `checks[].ok` booleans, `config_ready=true` and `review_sha256`. Eight checks cover restricted service identity, Incus extensions, Project nesting, exact safe disk/NIC, ready pool, managed bridge, exclusive secure ACL and **image source policy** (not image download). Confirm the digest of this **new plan**, not the prior prepare digest:
-
-```sh
-PREREQ_SHA256="PASTE_review_sha256_FROM_native-prereq-plan"
-sudo /usr/local/bin/boxweave native-prereq-verify \
-  -project "$PROJECT" -native-prereq-sha256 "$PREREQ_SHA256" -approve-local
-
-sudo runuser -u boxweave -- env \
-  -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
-  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  /usr/local/bin/boxweave doctor -project "$PROJECT"
-```
-
-Expected `mcp_ready=true`, `native.service_ready=true`, `native.ready=true`, `ready=true`. **`default_image_local_ready=false` is valid.** RC.3 resolves Guest image **inside the first original durable `box_create`**: local `boxweave-default`, legacy alias, or Incus official `images:ubuntu/24.04`. A caller can choose an owned local alias or `images:<catalog alias>`, but not arbitrary remote URLs. Actual image download, Guest boot, disk and packet enforcement are separate acceptance work.
-
-## G. Optional: ChatGPT / remote OAuth through operator HTTPS — Optional, Review/write
-
-Skip entirely for local-only MCP clients. BoxWeave serves **one** loopback-only `http://127.0.0.1:18650/mcp` endpoint. Optional in-process OAuth **shares `/mcp`** with direct Bearer auth; a public endpoint requires an **operator-managed** HTTPS tunnel/proxy.
-
-First configure the **separate OAuth consent password** (at least 16 characters). The original non-echoing TTY flow remains supported (no password in arguments, chat, or logs):
-
-```sh
-sudo runuser -u boxweave -- env \
-  -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
-  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  /usr/local/bin/boxweave oauth-setup -project "$PROJECT"
-```
-
-**RC.4 noninteractive per-layer provisioning:** For automated hosts, use exactly one of `oauth-setup --generate --output-file ABSOLUTE_NEW_PATH` or `oauth-setup --password-file ABSOLUTE_EXISTING_PATH`, as the **nonroot service user**. The parent directory must already exist, be owned by `boxweave`, and be mode **0700**; the secret must be a regular, single-link **0600** file owned by that user. Relative paths, world/group-accessible files, symlinks and overwriting existing output files are refused. Generation uses 32 bytes of OS cryptographic randomness, writes one 43-character URL-safe password (plus a newline), synchronizes it to disk and stores only an Argon2id hash in SQLite. The CLI prints **only the secret-file path**, never its contents. There is no new network administration endpoint or cross-layer orchestration.
-
-```sh
-# One-time preparation of the private local secret directory per controller:
-sudo install -d -m 0700 -o boxweave -g "$(id -gn boxweave)" /home/boxweave/.config/boxweave
-
-# The following can run in a noninteractive local provisioning workflow:
-SECRET_FILE=/home/boxweave/.config/boxweave/oauth-approval.secret
-sudo runuser -u boxweave -- env \
-  -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
-  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  /usr/local/bin/boxweave oauth-setup -project "$PROJECT" \
-  --generate --output-file "$SECRET_FILE"
-
-# Optional: load an existing protected secret on a fresh controller instead:
-# sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-setup \
-#   -project "$PROJECT" --password-file "$SECRET_FILE"
-
-# Display the password ONLY in your own trusted terminal, not in CI/Agent logs:
-sudo runuser -u boxweave -- cat "$SECRET_FILE"
-```
-
-The **host operator** can see/copy that one-time password from their own terminal for the ChatGPT OAuth approval page; an Agent should report the `$SECRET_FILE` path and the HTTPS URL, **not echo the plaintext password in its tool stdout**. `--generate` refuses to overwrite an existing file; deliberate credential rotation requires a new file path and review of existing OAuth grants. Every nested controller needs its **own independently generated secret**; no parent token or approval password propagates to a child. Setting the password alone does not publish the service or approve a ChatGPT OAuth grant.
-
-Install `cloudflared` from [Cloudflare's verified installation instructions](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/). For **temporary testing only**, in a second terminal:
-
-```sh
-cloudflared tunnel --url http://127.0.0.1:18650
-```
-
-Copy the actual generated external **`https://random.trycloudflare.com` origin, without `/mcp`**. From the host terminal:
-
-```sh
-PUBLIC_ORIGIN="https://REPLACE-WITH-ACTUAL.trycloudflare.com"
-sudo runuser -u boxweave -- env \
-  -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
-  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  /usr/local/bin/boxweave oauth-set-origin -project "$PROJECT" \
-  -public-origin "$PUBLIC_ORIGIN"
-
+sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-setup -project "$PROJECT"
+PUBLIC_ORIGIN="https://your-approved-host.example"
+sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-set-origin -project "$PROJECT" -public-origin "$PUBLIC_ORIGIN"
 sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-status
 ```
 
-Expect the configured public Origin exactly and `Enabled=true`. Connect an OAuth-capable ChatGPT/custom MCP client to `$PUBLIC_ORIGIN/mcp` (not the bare Origin or `/mcp/oauth`). **This RC.3 installation guide describes published historical OAuth;** Draft PR #153 instead requires fresh Schema v4 credentials and new explicit approval for scope-free full BoxWeave management, without old client/Grant reuse. Do not roll over the old DB or erase native UNKNOWN evidence. Inspect client and redirect URI, protect tokens, and test genuine `host_status` and `box_list` reads before any write. See [reconstruction policy](../process/VERSIONING.md).
+Connect the OAuth-capable MCP client to the actual origin followed by /mcp. Confirm consent only for the intended client; credentials grant full management of owned resources. Verify authenticated host_status and box_list. For a changed tunnel origin update oauth-set-origin; stop the public proxy/tunnel and use oauth-disable when ending access. Do not expose passwords or tokens to chat, logs or source control. Use the [usage guide](USE_BOXWEAVE.md) to create the first Box.
 
-Quick Tunnel URLs change between sessions. Update `oauth-set-origin` when that happens. To finish public testing, stop the tunnel and run `sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-disable`. Long-lived public access needs separate review of HTTPS, identity, exposure, revocation and negative tests.
+## Existing installations: legacy maintenance only
 
-## H. First Box and host acceptance — Extra acceptance (not installation)
-
-Through an **authorized** MCP client, create **one** test Box with an original `idempotency_key`. Retain the returned Operation ID; inspect `operation_get` and native UUID readback before Start/Exec/Stop/Delete. A default image may be fetched from the official catalog; ensure sufficient capacity and public HTTPS outbound access. If an operation is `UNKNOWN` or network-disconnected, **do not generate a new key and retry** before reconciling the original.
-
-For broader HOST_GO evidence, separately test real IPv4/IPv6 isolation and anti-spoof packets, egress toggling, driver-specific disk quota/Exec spool limits, faults and recovery, exact-owned cleanup and independent Verifier/rollback. A green `doctor`, 8/8 prerequisite check or remote MCP read **does not** establish these. See [host pilot evidence](../verification/RC3_PHYSICAL_HOST_PILOT_2026-11-13.md) and [formal gates](../development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md).
-
-
-## Physical Host RC.7 → exact-source RC8 candidate reset (observed development-only example, 2026-11-19 PT)
-
-**Not a copy/paste general upgrade:** The Owner explicitly approved deleting only its old controller/SQLite/Grants and **14 identified development Boxes**, plus restoring an older Root/Native Project/Profile/ACL journal. First inspect current Incus Projects, all Boxes/UNKNOWN, units, state, network, root journal and other tenants. Never assume the same host hash or ACL name works on a different system. The actual reset retained Incus 7.6, global `default` Btrfs pool, `incusbr-1001`, unrelated objects and closed journal evidence. Two unused legacy image references were **not confirmed deleted**. [Exact operation and cleanup facts](../development/V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md).
-
-The successful exact-source installation deliberately used **a pinned candidate binary, not a nonexistent published RC8 asset**. After verifying the staging binary and matching `install.sh` from **source commit `bc1e844703cdfb7ea3813cc614176d35e8883018`**:
+Do not use the fresh installer on an existing controller. Obtain the exact target release's verified installer as above. The guided legacy upgrade requires a compatible verified installed ledger and a private backup review.
 
 ```sh
-# Historical physical Host values for this one binary only; recompute host plan digest locally.
-sudo sh /var/tmp/bw-rc8-staging/install.sh --plan \
-  --local-binary /var/tmp/bw-rc8-staging/boxweave-rc8 \
-  --sha256 06759b41fbd36727d37684276f82b7b9cfb9447df2f934b61bc79cb2b81c5386 \
-  --project user-1001
-
-# Only after reviewing current host-specific plan, apply:
-sudo sh /var/tmp/bw-rc8-staging/install.sh --apply \
-  --local-binary /var/tmp/bw-rc8-staging/boxweave-rc8 \
-  --sha256 06759b41fbd36727d37684276f82b7b9cfb9447df2f934b61bc79cb2b81c5386 \
-  --project user-1001 --confirm-host-sha256 "<FROM_THIS_HOST_INSTALL_PLAN>"
+sudo sh install.sh --plan --upgrade --version "$RELEASE"
+sudo sh install.sh --upgrade --version "$RELEASE"
 ```
 
-**The candidate must be deliberately obtained and checked at the exact source/binary SHA; do not assume this staging path exists on another machine or that these commands constitute an available RC8 Release.** Installation only starts the Controller. A fresh separate `native-prepare-plan`/approved `native-prepare-apply` and `native-prereq-plan`/approved verify are still required; the physical run achieved 8/8 and `doctor.ready=true` on a fresh v4 SQLite. Rollback an old **APPLIED** native journal only using `native-prepare-rollback` with its *own exact digest*, confirming true before-state, then use `native-prepare-archive`. Do not delete journal JSON or brute-force ACL/profile changes to make the next plan succeed.
+Review the displayed source, host, existing backup and target. Prior backup closure requires the displayed approval and is irreversible; the replacement backup is retained. Do not run concurrent maintenance or force incompatible schema upgrades. Use the exact installed rollback/install-commit help and [guided upgrade contract](../development/V1_GUIDED_UPGRADE_2026-11-21.md) for separately reviewed backup operations.
 
-A new service OAuth secret and `oauth-set-origin` were required. `cloudflared tunnel --url http://127.0.0.1:18650` publishes a **temporary** HTTPS hostname. Local root `GET /` may return **404** (not the MCP endpoint); public `invalid Host` can indicate that BoxWeave's configured public Origin does not match the Tunnel hostname. Verify current DNS/Tunnel registration separately; then set **only** the exact `https://...trycloudflare.com` Origin (no trailing slash, no `/mcp`) and connect ChatGPT at **`<origin>/mcp`**. Never log OAuth secrets in Shell/MCP transcripts. Successful real ChatGPT Tool calls prove live authenticated Tool dispatch, **not** that browser Scope parameters or ChatGPT OAuth refresh/reauthorization/revocation were independently captured.
+For deliberate legacy retirement only, obtain the matching release's uninstall.sh, verify its checksum and read the exact release's help. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema or incomplete journals can block it. No scoped uninstall is supported. See [retirement contract](../development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
 
-Observed physical Host lifecycle and actual independently installed L1→L2 functional acceptance are in [this scoped evidence ledger](../verification/V1_RC8_PHYSICAL_HOST_CHATGPT_L0_L2_ACCEPTANCE_2026-11-19.md). **Neither the existing installer nor the future design automatically cleans up prior native resources.** The future `uninstall.sh` must have an independently approved, fail-closed plan+apply and separately opted-in purge/native rollback modes; it is **not implemented yet**.
+If installation or maintenance fails, retain the original manifest, journal and evidence. Do not blindly reinstall, erase the ledger, weaken confinement or reset unrelated native resources.
 
-## Common failure boundaries
-
-| Observation | Safe interpretation |
-| --- | --- |
-| No `user-UID` Project or `unix.socket.user` | Fix Incus multi-user confinement; never upgrade runtime privilege as workaround. |
-| Existing state detected by installer | Inspect previous manifest, unit, state and recovery; do not implicitly upgrade/adopt legacy `main`. |
-| `native-prepare-plan` refuses existing device/ACL | Review actual use; first-Box auto preparation is intentionally limited to untouched empty owned objects. |
-| `native-prepare-apply` ambiguous | Read original native journal with `native-prepare-status`; do not blindly rerun. |
-| `service_ready` true but `native.ready` false | Service is healthy, first-Box Project/Profile/ACL is not yet prepared. |
-| `STORAGE_QUOTA_UNVERIFIED` | Warning: test Incus driver quota and host spool/disk independently; not a readiness gate. |
-| Local `/mcp` returns HTTP 401 | Correct unauthenticated rejection, not proof of completed OAuth login. |
-| No Guest image locally | Acceptable in RC.3; default image selection occurs during original Create. |
-| Public client requests `/` instead of `/mcp` | Fix the complete MCP URL; root-path 404/405 is not evidence of a broken `/mcp`. |
+The [historical detailed RC3–RC13 guide](https://github.com/vanishs/boxweave/blob/3165f8eedfad514ee4e5c733e7807d19ddbec2ee/docs/getting-started/MANUAL_INSTALL.md) is retained as historical reference, not a current recipe. [Developer documentation](../INDEX.md).

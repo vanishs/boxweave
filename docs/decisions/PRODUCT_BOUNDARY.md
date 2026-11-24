@@ -1,5 +1,7 @@
 # Permanent v1 product boundary — keep BoxWeave small
 
+**Current implementation (2026-11-24):** 23 public MCP Tools including Activity and Recovery; full-management Actor credentials without old role/scope classes. #178 scoped Peer and #177 local Doctor/Recover are accepted and merged into v1, not in published RC13. They add no generic Host authority or public Tool. The latest scoped architecture and recovery restrictions supersede earlier shared-ACL and pending implementation statements for that mode. See [current status](../INDEX.md). Dated decisions below preserve their original context.
+
 **2026-11-21 owner default-policy refinement:** newly installed services default to all within the approved Forward capability; existing units, overrides and manual serve with no policy retain their restrictions. Default Forward address is loopback; explicit acknowledgment, native Proxy permission and all ownership/UNKNOWN protections remain required. [Policy](../development/V1_FORWARD_ALL_POLICY_2026-11-21.md).
 
 **2026-11-21 owner-approved Forward policy adjustment:** One-time explicit Host opt-in to all external addresses/ports, including explicit IPv4/IPv6 wildcard listeners, preserving default loopback, caller exposure acknowledgment, owned target identity, collision reservation and no remote Host administration. Existing exact rules remain valid. [Implementation and evidence](../development/V1_FORWARD_ALL_POLICY_2026-11-21.md).

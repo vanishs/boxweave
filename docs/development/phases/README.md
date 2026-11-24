@@ -1,5 +1,7 @@
 # Phase cards — load only the phase you are executing
 
+**Current status (2026-11-24):** RC13 is published; #178 N1–N5 and #177 D0–D5 are accepted and merged to v1, not released. 23 Tools are registered. These phase cards retain their historical execution plans, not current next-agent instructions. Use [the developer index](../../INDEX.md) for latest merged source and exact acceptance evidence; stable release gates remain separate.
+
 **2026-11-20 current execution:** S4 merged / RC8 published, S4-B6/C PARTIAL. S5 is the final feature phase: [S5A1–A6 development + immediate acceptance, then S5B1–B6 exact integrated acceptance](05_RELEASE_ACCEPTANCE.md#canonical-execution-order--s5a-development-then-s5b-integrated-acceptance-2026-11-20). Strong hostile recursive isolation is not a stable-v1 requirement. 22 source tools, one proposed recovery addition. Earlier phase status and counts below are historical.
 
 **2026-11-16 active state:** S3 is [formally signed and merged](../S3_MINIMAL_PASS_2026-11-16.md). [S4 Draft PR #153](https://github.com/vanishs/boxweave/pull/153) is opened for **preparation only**; next Agent begins `S4-A` in that same PR, followed by `S4-B` and `S4-C` as independently reported checkpoints. [Current S4/S5 reallocation](../S4_S5_EXECUTION_REBALANCE_2026-11-16.md), [kickoff](../S4_EXECUTION_KICKOFF_2026-11-16.md). Older no-S3-PASS/status rows below are historical. Tool total remains exactly 20 after S4, and S5 final assurance/Release remains mandatory.
