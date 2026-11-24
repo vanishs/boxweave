@@ -14,17 +14,7 @@ BoxWeave lets an authorized AI agent create and operate a group of Incus contain
 
 BoxWeave provides infrastructure primitives. Your agent decides what to build and how to organize its work.
 
-```mermaid
-flowchart LR
-    User["Operator"] -->|authorizes| Agent["AI agent / MCP client"]
-    Agent -->|authenticated MCP| BW["BoxWeave"]
-    BW -->|owned operations| Web["Web Box"]
-    BW -->|owned operations| API["API Box"]
-    BW -->|owned operations| DB["Database Box"]
-    BW -->|owned operations| Test["Test Box"]
-    Web -.->|explicit peer grant| API
-    API -.->|explicit peer grant| DB
-```
+![BoxWeave architecture: authorized AI agent, MCP control plane, restricted Incus Project and isolated Boxes with explicit directional Peer grants](docs/assets/boxweave-architecture.svg)
 
 Boxes deny private peer access by default. These workloads are examples, not built-in roles. Each independent nested BoxWeave installation has its own ownership and credential boundary; nesting depends on host Incus and kernel capabilities.
 
