@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 
 	"github.com/vanishs/boxweave/internal/native"
@@ -37,7 +38,7 @@ func nativeScopedPeerExecute(ctx context.Context, dir string, uid uint32, host s
 	}
 	glob, e := global(ctx, proof, base)
 	if e != nil || !nativePeerGuardSHA256Valid(glob) {
-		return zero, errors.New("missing host-wide scope witness")
+		return zero, fmt.Errorf("missing host-wide scope witness: %w", e)
 	}
 	scope := scopedPeerEffectJournalScope{HostSHA256: host, LedgerSHA256: state.ScopedPeerProofSHA256(proof), NativeSHA256: nativePrepareStateDigest("scoped-peer-native-preimage-v2", base, glob)}
 	var latest nativePeerScopedSDKSnapshot

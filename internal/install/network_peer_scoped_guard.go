@@ -55,7 +55,15 @@ func nativePeerGuardCompile(t NativePrepareTarget, network *api.Network,
 		(fresh && (len(members) != 0 || len(active) != 0 || len(revoked) != 0)) {
 		return zero, errors.New("untrusted scoped nft guard Project, bridge, ACL or complete inventory")
 	}
-	if _, err := NativePeerACLFromPolicySnapshot(t, network, active, revoked); err != nil {
+	live, err := nativePeerBindingsFromSnapshot(active)
+	if err != nil {
+		return zero, err
+	}
+	denied, err := nativePeerBindingsFromSnapshot(revoked)
+	if err != nil {
+		return zero, err
+	}
+	if _, err := nativeScopedACLWithDeniedPeers(t, network, live, denied); err != nil {
 		return zero, fmt.Errorf("unsafe full peer grant/tombstone snapshot: %w", err)
 	}
 	base4, err4 := netip.ParsePrefix(network.Config["ipv4.address"])

@@ -5,7 +5,7 @@ import sqlite3
 import subprocess
 import sys
 
-from mcp_testkit import LoopbackMCP, MCPToolError
+from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import op, token
 
 DB = "file:/var/lib/boxweave/ledger.sqlite?mode=ro"
@@ -59,13 +59,6 @@ def main(project, receipt):
         aa = verify(project, "scoped-alpha", a, "true")
         ba = verify(project, "scoped-beta", b, "false")
         assert aa != ba and {aa, ba, "bw-peer-quarantine"} == acls()
-        try:
-            c.call("box_peer_set", {"source_box_id": a, "target_box_id": b,
-                                  "allow": True, "idempotency_key": "scoped-n2-refuse-peer"})
-        except MCPToolError:
-            pass
-        else:
-            raise AssertionError("N2 must not enable legacy Peer")
         print("PR178_N2_MCP_SCOPED_CREATE=PASS", flush=True)
         op(c, "box_stop", {"box_id": a}, "scoped-a-stop")
         op(c, "box_delete", {"box_id": a}, "scoped-a-delete")

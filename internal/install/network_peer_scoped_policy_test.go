@@ -126,7 +126,6 @@ func TestPR178ScopedACLRejectsAllUntrustedSnapshotsAndOwnerDrift(t *testing.T) {
 		{"global-duplicate-address", owner, []state.PeerGrantBinding{ab, pr178Grant(pr178C, pr178D, "10.55.8.12", "10.55.8.14", "fd55:8::13", "fd55:8::14")}, nil},
 		{"global-invalid-foreign", owner, []state.PeerGrantBinding{ab, pr178Grant(pr178C, pr178D, "192.168.1.13", "10.55.8.14", "fd55:8::13", "fd55:8::14")}, nil},
 		{"global-invalid-incarnation", owner, []state.PeerGrantBinding{ab, func() state.PeerGrantBinding { x := cd; x.TargetIncarnation = ""; return x }()}, nil},
-		{"global-reverse-live-and-revoked", owner, []state.PeerGrantBinding{pr178Grant(pr178B, pr178A, "10.55.8.12", "10.55.8.11", "fd55:8::12", "fd55:8::11")}, []state.PeerGrantBinding{ab}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -166,5 +165,46 @@ func TestPR178ScopedACLNamePinnedToProjectBridgeAndNativeUUID(t *testing.T) {
 		if _, e := NativePeerScopedACLName(tc.p, tc.n, tc.id); e == nil {
 			t.Fatal("invalid scope accepted")
 		}
+	}
+}
+
+func TestPR178N3ReversePolicyPreservesIndependentGrant(t *testing.T) {
+	ab := pr178Grant(pr178A, pr178B, "10.55.8.11", "10.55.8.12", "fd55:8::11", "fd55:8::12")
+	ba := pr178Grant(pr178B, pr178A, "10.55.8.12", "10.55.8.11", "fd55:8::12", "fd55:8::11")
+	for _, subject := range []NativePeerACLSubject{pr178Subject(pr178A, ab.SourceIPv4, ab.SourceIPv6), pr178Subject(pr178B, ab.TargetIPv4, ab.TargetIPv6)} {
+		before := pr178Compile(t, subject, []state.PeerGrantBinding{ab, ba}, nil)
+		after := pr178Compile(t, subject, []state.PeerGrantBinding{ba}, []state.PeerGrantBinding{ab})
+		if len(before.Ingress) != 4 || len(after.Ingress) != 2 {
+			t.Fatal("independent reverse direction lost")
+		}
+		for _, r := range after.Ingress {
+			if r.Action != "allow" || r.Source != ba.SourceIPv4+"/32" && r.Source != ba.SourceIPv6+"/128" {
+				t.Fatal("unexpected reverse ACL", r)
+			}
+		}
+		both := pr178Compile(t, subject, nil, []state.PeerGrantBinding{ab, ba})
+		if len(both.Ingress) != 4 {
+			t.Fatal("duplicate or missing inactive pair DROP")
+		}
+		for _, r := range both.Ingress {
+			if r.Action != "drop" {
+				t.Fatal(r)
+			}
+		}
+		if !reflect.DeepEqual(before, pr178Compile(t, subject, []state.PeerGrantBinding{ba, ab}, nil)) {
+			t.Fatal("unordered direction policy")
+		}
+	}
+	proof, nw, obs := pr178FourRootScopedFixture(t)
+	proof.Intent.Allow = false
+	proof.Before = append(proof.After, ba)
+	proof.After = []state.PeerGrantBinding{proof.Before[0], ba}
+	proof.RevokedAfter = []state.PeerGrantBinding{ab}
+	plan, e := NativePeerScopedRootTransitionFromEvidence(proof, nw, obs)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = nativePeerScopedRootEffectSequence(plan); e != nil {
+		t.Fatal(e)
 	}
 }

@@ -2,8 +2,11 @@ package install
 
 import (
 	"errors"
+	"fmt"
 	"net/netip"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/vanishs/boxweave/internal/peerscope"
@@ -66,7 +69,7 @@ func NativePeerScopedACLFromPolicySnapshot(
 	}
 	// Validate the ENTIRE state before selection. Invalid C/D snapshots must
 	// not be silently ignored when compiling A's ACL.
-	if _, err := nativeACLWithDeniedPeers(target, bridge, allActive, allRevoked); err != nil {
+	if _, err := nativeScopedACLWithDeniedPeers(target, bridge, allActive, allRevoked); err != nil {
 		return zero, err
 	}
 	var scopedActive, scopedRevoked []nativePeerBinding
@@ -91,5 +94,59 @@ func NativePeerScopedACLFromPolicySnapshot(
 	if err := collect(allRevoked, &scopedRevoked); err != nil {
 		return zero, err
 	}
-	return nativeACLWithDeniedPeers(target, bridge, scopedActive, scopedRevoked)
+	return nativeScopedACLWithDeniedPeers(target, bridge, scopedActive, scopedRevoked)
+}
+
+// Scoped ACLs are an additional native barrier; the separately verified
+// stateful Guard is authoritative for original vs reply direction. When
+// a reverse grant remains live, symmetric DROP would kill its replies.
+// Keep its exact allow and never introduce a broad accept. The Guard denies
+// the revoked original and its replies, independently of ACL convergence.
+func nativeScopedACLWithDeniedPeers(t NativePrepareTarget, nw *api.Network, active, revoked []nativePeerBinding) (api.NetworkACLsPost, error) {
+	all := append(slices.Clone(active), revoked...)
+	base, e := nativeACLForVerifiedPeers(t, nw, all)
+	if e != nil || len(revoked) == 0 {
+		return base, e
+	}
+	live := map[string]bool{}
+	for _, p := range active {
+		live[p.SourceUUID+"/"+p.TargetUUID] = true
+	}
+	removed := map[string]bool{}
+	drops := map[string]api.NetworkACLRule{}
+	for _, p := range revoked {
+		for _, f := range []struct {
+			x, y netip.Addr
+			bits int
+		}{{p.SourceIPv4, p.TargetIPv4, 32}, {p.SourceIPv6, p.TargetIPv6, 128}} {
+			removed[exactPeerRuleKey(f.x, f.y, f.bits)] = true
+			if live[p.TargetUUID+"/"+p.SourceUUID] {
+				continue
+			}
+			for _, q := range [][2]netip.Addr{{f.x, f.y}, {f.y, f.x}} {
+				k := exactPeerRuleKey(q[0], q[1], f.bits)
+				drops[k] = api.NetworkACLRule{Action: "drop", State: "enabled", Source: fmt.Sprintf("%s/%d", q[0], f.bits), Destination: fmt.Sprintf("%s/%d", q[1], f.bits), Description: "BoxWeave scoped pair inactive; exact guard independently enforced"}
+			}
+		}
+	}
+	filter := func(rules []api.NetworkACLRule) []api.NetworkACLRule {
+		out := make([]api.NetworkACLRule, 0, len(rules))
+		for _, r := range rules {
+			if r.Action != "allow" || !removed[r.Source+"|"+r.Destination] {
+				out = append(out, r)
+			}
+		}
+		keys := make([]string, 0, len(drops))
+		for k := range drops {
+			keys = append(keys, k)
+		}
+		slices.SortFunc(keys, strings.Compare)
+		for _, k := range keys {
+			out = append(out, drops[k])
+		}
+		return out
+	}
+	base.Ingress = filter(base.Ingress)
+	base.Egress = filter(base.Egress)
+	return base, nil
 }

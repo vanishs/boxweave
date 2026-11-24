@@ -75,3 +75,30 @@ func nativeScopedPeerRecoverWithDriver(ctx context.Context, dir string, uid uint
 	}
 	return state.ScopedPeerRootReceipt{OriginalID: proof.OriginalID, Project: r.Project, Bridge: r.Bridge, Status: "COMPLETE_VERIFIED", ProofSHA256: last.ProofSHA256, PlanSHA256: last.PlanSHA256, FinalSHA256: last.FinalSHA256, VerifiedSteps: 4, RecoveryOnly: true}, ctx.Err()
 }
+
+func nativeScopedPeerRecover(ctx context.Context, db *state.Store, id string) (state.ScopedPeerRootReceipt, error) {
+	var zero state.ScopedPeerRootReceipt
+	if db == nil || !db.IsNetworkAuditReadOnly() || !scopedLifecycleID.MatchString(id) {
+		return zero, errors.New("unverified recovery original")
+	}
+	r, initial, e := nativePeerFreshVerifiedPlan()
+	if e != nil {
+		return zero, e
+	}
+	if e = nativePeerFreshQuarantineReceipt(r); e != nil {
+		return zero, e
+	}
+	c, e := prepareClient(ctx)
+	if e != nil {
+		return zero, e
+	}
+	c = c.UseProject("default")
+	return nativeScopedPeerRecoverWithDriver(ctx, nativePeerFreshJournalDir, 0, r, initial,
+		func(ctx context.Context) (state.ScopedPeerOriginalProof, error) {
+			return db.ReadRootScopedPeerUnknownOriginal(ctx, id, r.Project, r.Bridge)
+		},
+		nativePeerScopedIncusReader{root: c}, "/sys/class/net", NativePeerGuardKernelReadback,
+		func(ctx context.Context, p state.ScopedPeerOriginalProof, s nativePeerScopedSDKSnapshot) (string, error) {
+			return nativeScopedPeerGlobal(ctx, c, db, r, p, s)
+		})
+}

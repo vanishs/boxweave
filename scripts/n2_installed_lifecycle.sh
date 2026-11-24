@@ -96,6 +96,7 @@ sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --a
 if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
+  sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
   exit 0
 fi
 sudo python3 scripts/n2_installed_lifecycle.py mcp-retry "$project" "$work/actor.receipt"

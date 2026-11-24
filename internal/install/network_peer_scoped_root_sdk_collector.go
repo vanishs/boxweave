@@ -83,6 +83,10 @@ func nativePeerScopedRootReadSnapshot(ctx context.Context, r nativePeerScopedRoo
 	if e = ctx.Err(); e != nil {
 		return zero, e
 	}
+	bridgeCopy := *bridge
+	bridgeCopy.UsedBy = slices.Clone(bridge.UsedBy)
+	slices.Sort(bridgeCopy.UsedBy)
+	bridge = &bridgeCopy
 	names, e := r.names(i.Project)
 	if e != nil || len(names) != len(proof.Inventory.Boxes) {
 		return zero, errors.New("native tenant instances do not match complete protected ledger")

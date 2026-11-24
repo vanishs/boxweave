@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 )
@@ -32,6 +33,15 @@ func (s *Store) FinalizeScopedPeerOriginal(ctx context.Context, r ScopedPeerRoot
 		return e
 	}
 	defer tx.Rollback()
+	if e = finalizeScopedPeerOriginalTx(ctx, tx, r); e != nil {
+		return e
+	}
+	return tx.Commit()
+}
+func finalizeScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, r ScopedPeerRootReceipt) error {
+	if !validHexID(r.OriginalID) || r.Status != "COMPLETE_VERIFIED" || r.VerifiedSteps != 4 || !scopedPeerSHA(r.ProofSHA256) || !scopedPeerSHA(r.PlanSHA256) || !scopedPeerSHA(r.FinalSHA256) {
+		return ErrInvalid
+	}
 	phase := "DISPATCHING"
 	if r.RecoveryOnly {
 		phase = "UNKNOWN"
@@ -70,7 +80,7 @@ func (s *Store) FinalizeScopedPeerOriginal(ctx context.Context, r ScopedPeerRoot
 			return e
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 type ScopedPeerRootCall func(context.Context, string) (ScopedPeerRootReceipt, error)
@@ -88,6 +98,7 @@ func (w Worker) ExecuteScopedPeerOriginal(id string, call ScopedPeerRootCall) er
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 	if e := w.Store.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+		_ = w.Store.transition(context.Background(), id, "ADMITTED", "FAILED", "", "SCOPED_PEER_V2_PRE_DISPATCH_REFUSED")
 		return e
 	}
 	r, e := call(ctx, id)

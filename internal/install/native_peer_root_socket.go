@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/user"
@@ -54,6 +55,7 @@ type NativePeerRootRequest struct {
 	RetirementPreview bool `json:"retirement_preview,omitempty"`
 }
 type NativePeerRootResponse struct {
+	ScopedPeer      *state.ScopedPeerRootReceipt       `json:"scoped_peer,omitempty"`
 	ScopedLifecycle *ScopedLifecycleReceipt            `json:"scoped_lifecycle,omitempty"`
 	Status          string                             `json:"status"`
 	PlanSHA256      string                             `json:"plan_sha256,omitempty"`
@@ -174,6 +176,7 @@ func nativePeerRootServeListener(ctx context.Context, ln *net.UnixListener,
 			defer cancel()
 			result, err := handle(callCtx, req)
 			if err != nil {
+				log.Printf("Root original %s refused or uncertain: %v", req.OperationID, err)
 				result.Status = "DENIED_OR_UNKNOWN"
 				result.Error = err.Error()
 			}

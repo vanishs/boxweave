@@ -6,10 +6,16 @@ on:
       - internal/install/**
       - internal/state/network_ipv4*.go
       - internal/control/ipv4_retirement*.go
+      - internal/control/peer_tools.go
+      - internal/control/operation_recover.go
+      - internal/state/network_peer*.go
+      - internal/state/operation_recover.go
+      - internal/recovery/service.go
       - install.sh
       - scripts/uninstall_core.py
       - scripts/n2_installed_lifecycle.*
       - scripts/pr178_n2_scoped_lifecycle.py
+      - scripts/pr178_n3_scoped_peer.py
       - .github/workflows/v1-n2-installed-lifecycle.yml
   workflow_dispatch:
 permissions:
@@ -50,6 +56,10 @@ jobs:
               grep -Fxq "PR178_N2_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             grep -Fxq PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N3_INSTALLED_LIVE_FLOWS=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N3_ACTIVE_POLICY_LIFECYCLE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N3_BOOT_POLICY=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N3_INSTALLED_PEER=PASS "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
           for marker in N2_INSTALLED_HELPER_ACTIVATION N2_INSTALLED_HELPER_OUTAGE_RECOVERY_NO_DELETE_REPLAY N2_SCHEMA6_UPGRADE_ROLLBACK N2_FULL_UNINSTALL_PRESERVES_ARCHIVE; do

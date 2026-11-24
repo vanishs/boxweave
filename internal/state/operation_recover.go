@@ -20,6 +20,7 @@ type RecoveryTarget struct {
 	ForwardReady                                                           bool
 	Peer                                                                   RecoveryPeerClaim
 	PeerReady                                                              bool
+	ScopedPeer                                                             bool
 	LifecycleBinding                                                       VerifiedCreateBinding
 	LifecyclePinStatus                                                     string
 }
@@ -60,7 +61,12 @@ func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id str
 		}
 	}
 	if t.State == "UNKNOWN" && t.Action == "box_peer_set" {
-		t.Peer, t.PeerReady, e = readRecoveryPeer(ctx, q, t)
+		var in ScopedPeerOriginalIntent
+		if json.Unmarshal([]byte(t.SafeIntent), &in) == nil && in.Schema == 2 && in.Project == t.Layer && t.Resource == "peer-guard:"+in.Bridge {
+			t.ScopedPeer = true
+		} else {
+			t.Peer, t.PeerReady, e = readRecoveryPeer(ctx, q, t)
+		}
 		if e != nil {
 			return t, e
 		}
@@ -98,6 +104,7 @@ type RecoveryProof struct {
 	StdoutPath, StderrPath                    string
 	Forward                                   ForwardClaim
 	Peer                                      RootPeerResult
+	ScopedPeer                                ScopedPeerRootReceipt
 	CreateBinding                             VerifiedCreateBinding
 	LifecycleBinding                          VerifiedCreateBinding
 }
@@ -266,7 +273,15 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 		if r.Stream != "" {
 			return RecoveryRecord{}, ErrResourceLocked
 		}
-		if e = finishRecoveryPeerTx(ctx, tx, t, p); e != nil {
+		if t.ScopedPeer {
+			if p.Reason != "SCOPED_PEER_COMPLETED_NO_REPLAY" || t.State != "UNKNOWN" || t.Released || p.ScopedPeer.OriginalID != t.ID || p.ScopedPeer.Project != t.Layer || !p.ScopedPeer.RecoveryOnly || p.Fingerprint == "" {
+				return RecoveryRecord{}, ErrResourceLocked
+			}
+			e = finalizeScopedPeerOriginalTx(ctx, tx, p.ScopedPeer)
+		} else {
+			e = finishRecoveryPeerTx(ctx, tx, t, p)
+		}
+		if e != nil {
 			return RecoveryRecord{}, e
 		}
 		outcome, success = "SETTLED", true

@@ -48,7 +48,22 @@ func nativeScopedPeerGlobal(ctx context.Context, c incus.InstanceServer, db *sta
 		return "", errors.New("wrong scoped Root scope")
 	}
 	pf, pr, nw, e := nativePeerFreshQuarantineRead(ctx, c, r, "")
-	if e != nil || !reflect.DeepEqual(nw, s.Network) {
+	if e != nil || nw == nil || pf == nil || pr == nil {
+		return "", errors.New("scoped root quarantine scope unverified")
+	}
+	nwCopy := *nw
+	nwCopy.UsedBy = slices.Clone(nw.UsedBy)
+	slices.Sort(nwCopy.UsedBy)
+	nw = &nwCopy
+	pfCopy := *pf
+	pfCopy.UsedBy = slices.Clone(pf.UsedBy)
+	slices.Sort(pfCopy.UsedBy)
+	pf = &pfCopy
+	prCopy := *pr
+	prCopy.UsedBy = slices.Clone(pr.UsedBy)
+	slices.Sort(prCopy.UsedBy)
+	pr = &prCopy
+	if !reflect.DeepEqual(nw, s.Network) {
 		return "", errors.New("scoped root quarantine/bridge drift")
 	}
 	ledger, e := db.ReadNativeNetworkLedger(ctx, r.Project)
@@ -68,7 +83,7 @@ func nativeScopedPeerGlobal(ctx context.Context, c incus.InstanceServer, db *sta
 		if e != nil || !nativeScopedReceiptMatches(r, rec, l.OriginalID, "CREATE", b) || o.Instance == nil || o.Instance.Config["user.boxweave.create_operation"] != l.OriginalID {
 			return "", errors.New("scoped current owner missing Root Create receipt")
 		}
-		if e = nativeScopedCreateLeaseCheck(c, r.Bridge, b.Name, rec.Binding, true); e != nil {
+		if e = nativeScopedCreateLeaseCheck(c.UseProject(r.Project), r.Bridge, b.Name, rec.Binding, true); e != nil {
 			return "", e
 		}
 		receipts = append(receipts, rec)
