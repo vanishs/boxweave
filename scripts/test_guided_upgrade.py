@@ -36,7 +36,7 @@ class GuidedUpgradeTests(unittest.TestCase):
     def test_scoped_residue_refuses_even_dangling_links(self):
         with tempfile.TemporaryDirectory() as folder:
             paths = tuple(Path(folder) / str(i) for i in range(5))
-            with patch.dict(NS, {"SCOPED_PATHS": paths}):
+            with patch.dict(NS, {"SCOPED_PATHS": paths, "STATE_DIR": Path(folder) / "state"}):
                 NS["refuse_scoped_existing"]()
                 for path in paths:
                     path.symlink_to(path.with_name("missing"))
@@ -46,6 +46,16 @@ class GuidedUpgradeTests(unittest.TestCase):
                 with patch.object(Path, "lstat", side_effect=PermissionError("unreadable")):
                     with self.assertRaisesRegex(ERR, "unreadable"):
                         NS["refuse_scoped_existing"]()
+
+    def test_scoped_manifest_only_refuses_before_candidate_execution(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = Path(folder)
+            manifest = state / "install-manifest.json"
+            manifest.write_text("{}")
+            with patch.dict(NS, {"SCOPED_PATHS": (), "STATE_DIR": state,
+                                 "private_json": Mock(return_value=({"scoped_peer_mode": "SCOPED_PEER_FRESH_V2"}, SHA))}), patch("os.geteuid", return_value=0), patch("pwd.getpwnam", return_value=Mock(pw_uid=1001)):
+                with self.assertRaisesRegex(ERR, "scoped manifest"):
+                    NS["refuse_scoped_existing"]()
 
     def test_scoped_review_binds_native_host_and_mode(self):
         machine = "0123456789abcdef" * 2

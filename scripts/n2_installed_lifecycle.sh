@@ -65,6 +65,17 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   test ! -e /var/lib/boxweave-scoped-peer-v2
   test ! -e /usr/local/bin/boxweave
   echo INSTALL_SCOPED_READONLY_PLAN=PASS
+  host_review="$(sed -n 's/^host_machine_id_sha256=//p' "$work/scoped-plan.txt")"
+  test -n "$host_review"
+  stale_review="$(printf '%064d' 0)"
+  if sudo sh install.sh --apply --scoped-peer-fresh --project "$project" --local-binary "$work/candidate-a" --sha256 "$first" --confirm-host-sha256 "$host_review" --scoped-fresh-review-sha256 "$stale_review" > "$work/scoped-stale.log" 2>&1; then
+    echo "stale scoped plan unexpectedly accepted" >&2
+    exit 1
+  fi
+  grep -Fq "scoped fresh review digest changed" "$work/scoped-stale.log"
+  test ! -e /var/lib/boxweave-scoped-peer-v2
+  test ! -e /usr/local/bin/boxweave
+  echo INSTALL_SCOPED_STALE_PLAN_REFUSED=PASS
   python3 scripts/n2_installed_lifecycle.py tty-install-scoped "$project" "$work/candidate-a" "$first"
   installed=/usr/local/bin/boxweave
   sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service

@@ -45,7 +45,7 @@ grep '  install.sh$' SHA256SUMS | sha256sum -c -
 sh install.sh --plan --version "$RELEASE" --project "$PROJECT"
 ```
 
-Review the script and the exact host/project/source/binary plan. The release checksums are not an independent signature. Do not pipe a remote script directly into a root shell.
+Review the script and the exact host/project/source/binary distribution plan. Legacy --plan is service-only; the guided fresh installer separately reviews native Project/Profile/ACL preparation before writes. The release checksums are not an independent signature. Do not pipe a remote script directly into a root shell.
 
 On a fresh compatible host, run the guided installation from a trusted local terminal:
 
@@ -105,7 +105,7 @@ sudo sh install.sh --upgrade --version "$RELEASE"
 
 Review the displayed source, host, existing backup and target. Prior backup closure requires the displayed approval and is irreversible; the replacement backup is retained. Do not run concurrent maintenance or force incompatible schema upgrades. Use the exact installed rollback/install-commit help and [guided upgrade contract](../development/V1_GUIDED_UPGRADE_2026-11-21.md) for separately reviewed backup operations.
 
-For deliberate legacy retirement only, obtain the matching release's uninstall.sh, verify its checksum and read the exact release's help. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema or incomplete journals can block it. No scoped uninstall is supported. See [retirement contract](../development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
+For deliberate legacy retirement only, obtain the matching release's self-contained uninstall.sh, verify its checksum and read the exact release's help. The source checkout wrapper requires scripts/uninstall_core.py. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema, separately installed legacy Peer Root services or incomplete journals can block it. Use the original local review/recovery path for these rather than removing units or journals manually. No scoped uninstall is supported. See [retirement contract](../development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
 
 If installation or maintenance fails, retain the original manifest, journal and evidence. Do not blindly reinstall, erase the ledger, weaken confinement or reset unrelated native resources.
 

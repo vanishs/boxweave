@@ -211,6 +211,19 @@ def refuse_scoped_existing():
             raise InstallError("scoped installation evidence unreadable; preserve original state") from exc
         raise InstallError("scoped installation evidence exists: " + str(path) +
                            "; preserve original state, no legacy adoption or upgrade")
+    # Root maintenance must also refuse a surviving manifest even if all
+    # scoped native paths are missing. Nonroot distribution previews never
+    # open the service's private metadata.
+    if os.geteuid() == 0:
+        manifest_path = STATE_DIR / "install-manifest.json"
+        try:
+            manifest_path.lstat()
+        except FileNotFoundError:
+            return
+        uid = pwd.getpwnam("boxweave").pw_uid
+        manifest, _ = private_json(manifest_path, uid)
+        if manifest.get("scoped_peer_mode") not in (None, ""):
+            raise InstallError("scoped manifest: preserve original, no legacy adoption or upgrade")
 
 
 def scoped_review(candidate, project):
