@@ -1,5 +1,7 @@
 # PR #177 — mandatory post-#178 Doctor/Recover correctness contract
 
+> **Current staged execution contract:** [D0-D5 plan](V1_PR177_D0_D5_DEVELOPMENT_PLAN_2026-11-23.md) and [D0 source/Box experiments](V1_PR177_D0_EXPERIMENTS_2026-11-23.md). The v1 merge is complete at e60de8f; all four baseline CI workflows passed. D0 characterizes readers only; new feature implementation starts with D1 after D0 CI. Every stage iterates and verifies inside a Box before submitting code and docs to CI. The cold SQLite WAL/SHM observation and immutable stale-read negative are mandatory D1 constraints.
+
 **Status: #178 merged to v1; dependency hold lifted for #177 implementation after source integration.** Accepted v1 baseline `ba29c74292747242b211771c30b4d9d8f6f83ed9`, PR #178 exact tested head `f7ba456039fe2898c70652f0b3b25441cc591de0`. This document supersedes RC13-derived assumptions and historical scheduling holds, not the original signed-off #177 guided-uninstall work. No implementation, new release, physical L0 change or #177 merge is implied.
 
 ## 1. First action: integrate actual source before writing diagnostic rules

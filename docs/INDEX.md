@@ -1,5 +1,7 @@
 # Documentation index
 
+**PR #177 staged delivery:** [D0-D5 development plan](development/V1_PR177_D0_D5_DEVELOPMENT_PLAN_2026-11-23.md) and [D0 experiments and source/authority matrix](development/V1_PR177_D0_EXPERIMENTS_2026-11-23.md). Box iteration precedes every CI submission; D0 candidate is experimental, not new Doctor/Recover implementation.
+
 **PR #178 scoped Peer v2 (merged into v1; not released):** explicit fresh-only installation; no legacy migration, upgrade, rollback or scoped uninstall. [N5 delivery, capacity limits and acceptance](development/V1_PR178_N5_DELIVERY_2026-11-23.md). Exact N5 CI passed and Owner authorized merge at `ba29c74292747242b211771c30b4d9d8f6f83ed9`. Never remove Root journals to bypass refusals. [Owner network requirements](development/V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md).
 
 **PR #177 Doctor/Recover (Draft, feature NOT implemented):** [Mandatory post-#178 diagnostic contract](development/V1_DOCTOR_RECOVER_POST_PR178_CONTRACT_2026-11-23.md) · [Unified design and historical evidence](development/V1_UNIFIED_DOCTOR_RECOVER_DESIGN_2026-11-23.md) · [Agent handoff](development/V1_UNIFIED_DOCTOR_RECOVER_AGENT_HANDOFF_2026-11-23.md). One binary, two CLI entries; true read-only Doctor and evidence-bound Recover. #178 dependency hold lifted; verify integrated source and preserve already accepted legacy guided uninstall. Keep Draft and physical L0 unchanged.

@@ -1,5 +1,7 @@
 # Next Agent handoff — implement unified `boxweave doctor` + `boxweave recover` in PR #177
 
+> **Current staged execution contract:** [D0-D5 plan](V1_PR177_D0_D5_DEVELOPMENT_PLAN_2026-11-23.md) and [D0 source/Box experiments](V1_PR177_D0_EXPERIMENTS_2026-11-23.md). The v1 merge is complete at e60de8f; all four baseline CI workflows passed. D0 characterizes readers only; new feature implementation starts with D1 after D0 CI. Every stage iterates and verifies inside a Box before submitting code and docs to CI. The cold SQLite WAL/SHM observation and immutable stale-read negative are mandatory D1 constraints.
+
 **As of 2026-11-23. Owner-approved direction, design committed; feature code is NOT implemented.** Do not claim existing RC13 `doctor --full` or `recover --plan --issue` work. You must read [the full design and incident ledger](V1_UNIFIED_DOCTOR_RECOVER_DESIGN_2026-11-23.md) before coding.
 
 ## CURRENT FIRST ACTION — #178 merged, proceed after integrating v1
