@@ -25,7 +25,7 @@ Baseline verified on 2026-11-24: v1 commit [3165f8e](https://github.com/vanishs/
 
 ## Installation maintenance
 
-[Install/uninstall incident closure](development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md) records #177 follow-up work and verification. [Scoped retirement design](development/V1_SCOPED_RETIREMENT_DESIGN_2026-11-24.md) is a future review contract, not an enabled teardown feature.
+[Install/uninstall incident closure](development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md) records #177 follow-up work and verification. [Scoped retirement design](development/V1_SCOPED_RETIREMENT_DESIGN_2026-11-24.md) is the original review contract. [PR #182](https://github.com/vanishs/boxweave/pull/182) tracks its full-only implementation and acceptance (not a release).
 
 ## Contribute and verify
 
