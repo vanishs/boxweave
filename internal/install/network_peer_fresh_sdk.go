@@ -3,9 +3,11 @@ package install
 import (
 	"context"
 	"errors"
+	"github.com/vanishs/boxweave/internal/native"
 	"os"
 	"os/user"
 	"reflect"
+	"slices"
 	"strings"
 
 	incus "github.com/lxc/incus/v7/client"
@@ -30,6 +32,7 @@ func nativePeerFreshSDKSnapshot(ctx context.Context, root incus.InstanceServer, 
 	if err != nil {
 		return zero, err
 	}
+	slices.Sort(names)
 	if err = nativePeerFreshACLInventory(names); err != nil {
 		return zero, err
 	}
@@ -50,13 +53,17 @@ func nativePeerFreshSDKSnapshot(ctx context.Context, root incus.InstanceServer, 
 		pf.Devices["eth0"]["network"] != bridge || nativePrepareProfileEligible(pf.Devices, NativePrepareTarget{Network: bridge}) != nil {
 		return zero, errors.New("fresh default profile evidence unavailable or modified")
 	}
+	v6Digest, err := nativePeerFreshIPv6Snapshot(ctx, root, bridge, nw.Config["ipv6.address"])
+	if err != nil {
+		return zero, err
+	}
 	// Label only, no shared ACL is created or adopted.
 	guard, err := nativePeerFreshInitialGuard(NativePrepareTarget{Project: project, Network: bridge, ACL: "bw-fresh-initial-guard"}, nw)
 	if err != nil {
 		return zero, err
 	}
 	return nativePeerFreshEvidence{Project: project, Bridge: bridge, Guard: guard, IPv4CIDR: nw.Config["ipv4.address"], IPv6CIDR: nw.Config["ipv6.address"],
-		NativeSHA256: nativePrepareStateDigest(nativePeerFreshMode, scope.Before, scope.ETag, scope.Blocked, pr, ptag, pf, ftag, names)}, nil
+		NativeSHA256: nativePrepareStateDigest(nativePeerFreshMode, scope.Before, scope.ETag, scope.Blocked, pr, ptag, pf, ftag, names, v6Digest)}, nil
 }
 
 // No installed caller: full IPv6/global nft provenance, guarded setup
@@ -69,15 +76,26 @@ func nativePeerFreshCollectReadOnly(ctx context.Context, upgrade bool) (nativePe
 	if os.Geteuid() != 0 || ctx == nil {
 		return zero, errors.New("fresh scoped admission requires local root")
 	}
-	return nativePeerFreshAdmission(ctx, false, os.Lstat, func(ctx context.Context) (nativePeerFreshEvidence, error) {
-		u, err := user.Lookup("boxweave")
-		if err != nil || u.Uid == "0" {
-			return zero, errors.New("dedicated service identity missing")
-		}
-		root, err := prepareClient(ctx)
-		if err != nil {
-			return zero, err
-		}
-		return nativePeerFreshSDKSnapshot(ctx, root, "user-"+u.Uid, "incusbr-"+u.Uid)
-	})
+	return nativePeerFreshAdmission(ctx, false, os.Lstat, nativePeerFreshRootSnapshot)
+}
+
+func nativePeerFreshRootSnapshot(ctx context.Context) (nativePeerFreshEvidence, error) {
+	var zero nativePeerFreshEvidence
+	if err := nativeServiceActorReady(); err != nil {
+		return zero, err
+	}
+	u, err := user.Lookup("boxweave")
+	if err != nil || u.Uid == "0" {
+		return zero, errors.New("dedicated service identity missing")
+	}
+	root, err := prepareClient(ctx)
+	if err != nil {
+		return zero, err
+	}
+	pf, _, err := root.UseProject("user-" + u.Uid).GetProfile("default")
+	group, gerr := user.LookupGroup("incus")
+	if err != nil || pf == nil || gerr != nil || !native.SafePerUserProfileConfig(pf.Config, u.Uid, group.Gid) {
+		return zero, errors.New("unsafe fresh restricted profile identity")
+	}
+	return nativePeerFreshSDKSnapshot(ctx, root, "user-"+u.Uid, "incusbr-"+u.Uid)
 }

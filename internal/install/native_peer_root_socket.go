@@ -54,11 +54,12 @@ type NativePeerRootRequest struct {
 	RetirementPreview bool `json:"retirement_preview,omitempty"`
 }
 type NativePeerRootResponse struct {
-	Status     string                             `json:"status"`
-	PlanSHA256 string                             `json:"plan_sha256,omitempty"`
-	Receipt    *NativePeerConntrackJournalReceipt `json:"receipt,omitempty"`
-	Retirement *NativeIPv4RetirementProof         `json:"retirement,omitempty"`
-	Error      string                             `json:"error,omitempty"`
+	ScopedLifecycle *ScopedLifecycleReceipt            `json:"scoped_lifecycle,omitempty"`
+	Status          string                             `json:"status"`
+	PlanSHA256      string                             `json:"plan_sha256,omitempty"`
+	Receipt         *NativePeerConntrackJournalReceipt `json:"receipt,omitempty"`
+	Retirement      *NativeIPv4RetirementProof         `json:"retirement,omitempty"`
+	Error           string                             `json:"error,omitempty"`
 }
 
 type NativePeerRootScope struct {

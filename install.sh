@@ -353,6 +353,8 @@ def main():
     mode.add_argument("--interactive", action="store_true", help="review and install/upgrade in one terminal")
     mode.add_argument("--plan", action="store_true", help="read-only plan (default)")
     mode.add_argument("--apply", action="store_true", help="apply on exact approved host")
+    parser.add_argument("--scoped-peer-fresh", action="store_true", help="fresh-only scoped N2 candidate; no legacy migration")
+    parser.add_argument("--scoped-fresh-review-sha256", help="exact root-local native-scoped-fresh-plan review digest for --apply")
     parser.add_argument("--upgrade", action="store_true", help="explicitly upgrade an existing verified install")
     parser.add_argument("--project", help="pre-provisioned restricted native Incus Project")
     parser.add_argument("--pool", help="existing Incus storage pool (guided install)")
@@ -363,6 +365,16 @@ def main():
     parser.add_argument("--incus-socket", default="/var/lib/incus/unix.socket.user")
     parser.add_argument("--confirm-host-sha256", help="exact SHA256 of /etc/machine-id printed by --plan")
     args = parser.parse_args()
+    if os.path.lexists("/var/lib/boxweave-scoped-peer-v2"):
+        raise InstallError("scoped fresh journal exists; preserve original, no adoption or upgrade")
+    if args.scoped_peer_fresh and args.upgrade:
+        raise InstallError("scoped Peer requires a new installation; upgrade refused before backup or health changes")
+    if args.scoped_fresh_review_sha256 and (not args.scoped_peer_fresh or not args.apply):
+        raise InstallError("scoped review digest requires explicit scoped --apply")
+    if args.scoped_peer_fresh and args.apply and not SHA_RE.fullmatch(args.scoped_fresh_review_sha256 or ""):
+        raise InstallError("scoped --apply requires exact --scoped-fresh-review-sha256")
+    if args.scoped_peer_fresh and any((args.pool,args.network,args.acl)):
+        raise InstallError("scoped fresh native scope is derived, never caller-selected")
     # Source is a heredoc: use the controlling terminal for human consent.
     guided = args.interactive or (not args.plan and not args.apply and
                                  os.geteuid() == 0 and sys.stdout.isatty())
@@ -449,7 +461,10 @@ def main():
     print("socket=" + str(sock))
     print("service_user=" + args.service_user)
     print("operation=" + ("upgrade" if args.upgrade else "fresh install"))
-    print("changes=only existing v1 Go installer-owned binary/unit/SQLite; never Incus setup or tunnel")
+    if args.scoped_peer_fresh:
+        print("changes=fresh-only exact scoped guard, quarantine ACL/profile, fixed systemd units, binary and SQLite; no legacy upgrade or tunnel")
+    else:
+        print("changes=only existing v1 Go installer-owned binary/unit/SQLite; never Incus setup or tunnel")
     print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
     if args.upgrade:
         print("forward_policy=preserve existing systemd unit and operator overrides; native Project permissions remain unchanged")
@@ -499,7 +514,7 @@ def main():
             return
         native_args = ["-project", args.project, "-pool", args.pool,
                        "-network", args.network, "-acl", args.acl] if fresh_guided else []
-        if fresh_guided:
+        if fresh_guided and not args.scoped_peer_fresh:
             plan = subprocess.check_output([str(candidate), "native-prepare-plan", *native_args],
                                            text=True)
             review = json.loads(plan)
@@ -518,6 +533,23 @@ def main():
             if subprocess.check_output([str(candidate), "native-prepare-plan", *native_args],
                                        text=True) != plan:
                 raise InstallError("native plan changed after approval; review again")
+        if args.scoped_peer_fresh:
+            scoped = command_json([str(candidate), "native-scoped-fresh-plan"])
+            scoped_sha = scoped.get("ReviewSHA256", scoped.get("review_sha256", ""))
+            scoped_project = scoped.get("Project", scoped.get("project", ""))
+            if scoped_project != args.project or not SHA_RE.fullmatch(scoped_sha):
+                raise InstallError("scoped fresh review identity mismatch")
+            print("Reviewed scoped native preparation:", json.dumps(scoped), flush=True)
+            if guided:
+                with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+                    out.write("Type INSTALL SCOPED " + args.project + " to approve this exact plan: ")
+                    out.flush()
+                    if inp.readline().strip() != "INSTALL SCOPED " + args.project:
+                        raise InstallError("scoped installation not approved")
+            elif scoped_sha != args.scoped_fresh_review_sha256:
+                raise InstallError("scoped fresh review digest changed")
+            if current_host_digest() != host_digest:
+                raise InstallError("host changed after approval")
         command = [
             str(candidate), "upgrade" if args.upgrade else "install-stage",
             "-project", args.project,
@@ -527,14 +559,16 @@ def main():
             "-expect-sha256", sha,
             "-approve-local" if args.upgrade else "-approve-stage",
         ]
-        if fresh_guided:
+        if args.scoped_peer_fresh:
+            command += ["-scoped-peer-fresh", "-scoped-fresh-review-sha256", scoped_sha]
+        elif fresh_guided:
             command += ["-retirement-review", "-retirement-compact", "-pool", args.pool,
                         "-network", args.network, "-acl", args.acl,
                         "-native-prepare-sha256", review["review_sha256"]]
         # Only the dedicated Go executable is permitted to own installer
         # writes, backup, service health, and rollback.
         subprocess.run(command, check=True)
-        if fresh_guided:
+        if fresh_guided and not args.scoped_peer_fresh:
             prepared = json.loads(subprocess.check_output(
                 [str(candidate), "native-prepare-apply", *native_args,
                  "-native-prepare-sha256", review["review_sha256"], "-approve-local"], text=True))

@@ -37,7 +37,7 @@ func nativePeerFreshBootstrapOnce(ctx context.Context, dir string, uid uint32, h
 	}
 	defer d.Close()
 	intent := nativePeerFreshJournalRecord{Schema: 1, Mode: nativePeerFreshMode, HostSHA256: hostSHA,
-		Project: before.Project, Bridge: before.Bridge, NativeSHA256: before.NativeSHA256, GuardSHA256: before.Guard.DigestSHA256, Status: "DISPATCH_UNKNOWN"}
+		Project: before.Project, Bridge: before.Bridge, NativeSHA256: before.NativeSHA256, GuardSHA256: before.Guard.DigestSHA256, IPv4CIDR: before.IPv4CIDR, IPv6CIDR: before.IPv6CIDR, Status: "DISPATCH_UNKNOWN"}
 	if err = nativePeerFreshJournalWrite(d, intent); err != nil {
 		return zero, err
 	}

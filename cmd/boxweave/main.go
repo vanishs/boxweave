@@ -56,6 +56,8 @@ func run() error {
 	serviceUser := f.String("service-user", "boxweave", "dedicated nonroot incus-only service account")
 	sourceBinary := f.String("source-binary", "", "source executable at approved exact digest")
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
+	scopedFresh := f.Bool("scoped-peer-fresh", false, "fresh-only scoped lifecycle candidate")
+	scopedReview := f.String("scoped-fresh-review-sha256", "", "exact local scoped fresh review digest")
 	approve := f.Bool("approve-stage", false, "explicitly authorize staging service files; no automatic start")
 	approveLocal := f.Bool("approve-local", false, "host-local root authorization to activate, upgrade or rollback")
 	nativePackageVersion := f.String("incus-package-version", "", "exact signed Ubuntu Incus package version (for fresh bootstrap)")
@@ -97,10 +99,39 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
+	}
+	if command == "native-scoped-fresh-plan" || command == "native-scoped-guard-boot" || command == "native-scoped-lifecycle-serve" {
+		if os.Geteuid() != 0 || len(os.Args) != 2 {
+			return errors.New("fixed scoped local root command")
+		}
+		if command == "native-scoped-lifecycle-serve" {
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer cancel()
+			return install.NativeScopedLifecycleServe(ctx)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if command == "native-scoped-guard-boot" {
+			return install.NativeScopedGuardBoot(ctx)
+		}
+		r, err := install.NativeScopedFreshReview(ctx)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(r)
+	}
+	if *scopedReview != "" && (!*scopedFresh || command != "install-stage") {
+		return errors.New("scoped review is fresh stage only")
+	}
+	if *scopedFresh && command != "serve" && command != "status" && command != "doctor" && command != "install-stage" {
+		return errors.New("scoped mode requires fresh installation")
+	}
+	if *scopedFresh && command == "install-stage" && *scopedReview == "" {
+		return errors.New("scoped fresh review required")
 	}
 	// One fail-closed root-local mutex for every installer or native dependency
 	// mutation, including a reviewed UNKNOWN claim release. Read-only status
@@ -405,7 +436,7 @@ func run() error {
 		p := install.Plan{User: *serviceUser, StateDir: "/var/lib/boxweave",
 			BinaryPath: "/usr/local/bin/boxweave", UnitPath: "/etc/systemd/system/boxweave.service",
 			SourceBinary: *sourceBinary, Project: *project, Socket: *socket, Version: version,
-			ExpectedDigest: *digest}
+			ExpectedDigest: *digest, ScopedFreshReviewSHA: *scopedReview}
 		if command == "install-stage" && (*retirementReview || *retirementCompact) {
 			if !*retirementReview || !*retirementCompact {
 				return errors.New("fresh retirement install requires both explicit retirement scope flags")
@@ -435,6 +466,11 @@ func run() error {
 			return err
 		}
 		return json.NewEncoder(os.Stdout).Encode(m)
+	}
+	if command == "serve" {
+		if err := install.CheckScopedServeMode(*scopedFresh); err != nil {
+			return err
+		}
 	}
 	s, err := state.Open(*db)
 	if err != nil {
@@ -556,7 +592,7 @@ func run() error {
 			return s.RevokeOAuthGrant(ctx, *tokenID)
 		}
 	}
-	svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}, BuildVersion: version, BuildCommit: commit, Listener: *listener}
+	svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}, BuildVersion: version, BuildCommit: commit, Listener: *listener, ScopedPeerFresh: *scopedFresh}
 	switch command {
 	case "serve":
 		external := os.Getenv("BOXWEAVE_FORWARD_EXTERNAL_ALLOW")

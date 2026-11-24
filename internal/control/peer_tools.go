@@ -36,6 +36,9 @@ func (s *Service) registerPeerTools(server *mcp.Server) {
 		Description: "Admit a directional private-network grant/revoke for two exact UUID-owned Boxes in one operator-pinned Project/ACL. UUIDs must come from box_list. Missing/foreign IDs, unpinned native bindings, incomplete network audit or unresolved claims deliberately give the same PEER_SCOPE_UNVERIFIED_OR_LOCKED refusal; inspect operation_list and activity issues, never bypass or blindly retry. An admitted original Operation still needs host-root staging, exact digest approval and PRS; this tool never directly changes ACL/connectivity.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in peerSetInput) (*mcp.CallToolResult, state.Receipt, error) {
+		if s.ScopedPeerFresh {
+			return nil, state.Receipt{}, errors.New("SCOPED_PEER_N3_NOT_ENABLED")
+		}
 		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, state.Receipt{}, err

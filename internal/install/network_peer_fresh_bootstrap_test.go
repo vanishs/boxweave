@@ -115,7 +115,7 @@ func TestPR178FreshJournalRefusesTamperedReceipt(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "fresh")
 			uid := uint32(os.Geteuid())
 			e := pr178FreshEvidence(t)
-			want := nativePeerFreshJournalRecord{Schema: 1, Mode: nativePeerFreshMode, HostSHA256: strings.Repeat("c", 64), Project: e.Project, Bridge: e.Bridge, NativeSHA256: e.NativeSHA256, GuardSHA256: e.Guard.DigestSHA256, Status: "INITIAL_GUARD_VERIFIED"}
+			want := nativePeerFreshJournalRecord{Schema: 1, Mode: nativePeerFreshMode, HostSHA256: strings.Repeat("c", 64), Project: e.Project, Bridge: e.Bridge, NativeSHA256: e.NativeSHA256, GuardSHA256: e.Guard.DigestSHA256, IPv4CIDR: e.IPv4CIDR, IPv6CIDR: e.IPv6CIDR, Status: "INITIAL_GUARD_VERIFIED"}
 			d, err := nativePeerFreshJournalCreateAt(dir, uid)
 			if err != nil {
 				t.Fatal(err)

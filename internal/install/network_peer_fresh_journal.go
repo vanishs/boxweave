@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -19,15 +20,18 @@ const nativePeerFreshJournalDir = "/var/lib/boxweave-scoped-peer-v2"
 type nativePeerFreshJournalRecord struct {
 	Schema                                                       int
 	Mode, HostSHA256, Project, Bridge, NativeSHA256, GuardSHA256 string
+	IPv4CIDR, IPv6CIDR                                           string
 	Status                                                       string
 }
 
 func nativePeerFreshJournalRecordValid(r nativePeerFreshJournalRecord) bool {
-	return r.Schema == 1 && r.Mode == nativePeerFreshMode &&
+	v4, e4 := netip.ParsePrefix(r.IPv4CIDR)
+	v6, e6 := netip.ParsePrefix(r.IPv6CIDR)
+	return e4 == nil && e6 == nil && v4.Addr().Is4() && v6.Addr().Is6() && !v6.Addr().Is4In6() && v4.String() == r.IPv4CIDR && v6.String() == r.IPv6CIDR && r.Schema == 1 && r.Mode == nativePeerFreshMode &&
 		safePrereqName.MatchString(r.Project) && safePrereqName.MatchString(r.Bridge) &&
 		nativePeerGuardSHA256Valid(r.HostSHA256) && nativePeerGuardSHA256Valid(r.NativeSHA256) &&
 		nativePeerGuardSHA256Valid(r.GuardSHA256) &&
-		(r.Status == "DISPATCH_UNKNOWN" || r.Status == "INITIAL_GUARD_VERIFIED")
+		(r.Status == "DISPATCH_UNKNOWN" || r.Status == "INITIAL_GUARD_VERIFIED" || r.Status == "QUARANTINE_DISPATCH_UNKNOWN" || r.Status == "QUARANTINE_VERIFIED")
 }
 
 // The production directory and owner are fixed; these parameters are only
@@ -86,6 +90,12 @@ func nativePeerFreshJournalName(status string) string {
 	}
 	if status == "INITIAL_GUARD_VERIFIED" {
 		return "guard-verified.json"
+	}
+	if status == "QUARANTINE_DISPATCH_UNKNOWN" {
+		return "quarantine-intent.json"
+	}
+	if status == "QUARANTINE_VERIFIED" {
+		return "quarantine-verified.json"
 	}
 	return ""
 }

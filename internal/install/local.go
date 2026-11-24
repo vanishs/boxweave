@@ -21,19 +21,21 @@ import (
 )
 
 type Plan struct {
-	User                string
-	StateDir            string
-	BinaryPath          string
-	UnitPath            string
-	SourceBinary        string
-	Project             string
-	Socket              string
-	Version             string
-	ExpectedDigest      string
-	RetirementTarget    *NativePrepareTarget
-	RetirementReviewSHA string
+	User                 string
+	StateDir             string
+	BinaryPath           string
+	UnitPath             string
+	SourceBinary         string
+	Project              string
+	Socket               string
+	Version              string
+	ExpectedDigest       string
+	RetirementTarget     *NativePrepareTarget
+	RetirementReviewSHA  string
+	ScopedFreshReviewSHA string
 }
 type Manifest struct {
+	ScopedPeerMode            string `json:"scoped_peer_mode,omitempty"`
 	Schema                    int    `json:"schema"`
 	Version                   string `json:"version"`
 	BuildCommit               string `json:"build_commit,omitempty"`
@@ -197,6 +199,9 @@ func Status(p Plan) (Manifest, error) {
 	if err = verifyInstalledRetirementUnit(m); err != nil {
 		return m, err
 	}
+	if err = verifyScopedInstalled(m); err != nil {
+		return m, err
+	}
 	m.ServiceActive = serviceActive() == nil
 	return m, nil
 }
@@ -209,10 +214,15 @@ func unit(p Plan) string {
 	if p.RetirementTarget != nil {
 		header += "Wants=boxweave-ipv4-retirement.service\n"
 	}
+	scopedFlag := ""
+	if p.ScopedFreshReviewSHA != "" {
+		header += "Requires=" + scopedLifecycleUnitName + "\nAfter=" + scopedLifecycleUnitName + "\n"
+		scopedFlag = " -scoped-peer-fresh"
+	}
 	return header + "\n[Service]\n" +
 		"Type=simple\nUser=" + p.User + "\nUMask=0077\n" +
 		"Environment=BOXWEAVE_FORWARD_EXTERNAL_ALLOW=all\n" +
-		"ExecStart=" + p.BinaryPath + " serve -db " + p.StateDir + "/ledger.sqlite -incus-socket " + p.Socket + " -project " + p.Project + " -listen 127.0.0.1:18650\n" +
+		"ExecStart=" + p.BinaryPath + " serve -db " + p.StateDir + "/ledger.sqlite -incus-socket " + p.Socket + " -project " + p.Project + " -listen 127.0.0.1:18650" + scopedFlag + "\n" +
 		"Restart=on-failure\nRestartSec=5s\nNoNewPrivileges=true\nPrivateTmp=true\nProtectHome=true\nProtectSystem=strict\nReadWritePaths=" + p.StateDir + "\n" +
 		"CapabilityBoundingSet=\nAmbientCapabilities=\n\n[Install]\nWantedBy=multi-user.target\n"
 }
@@ -250,6 +260,13 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 		return Manifest{}, errors.New("local root approval required")
 	}
 	if err := safe(p); err != nil {
+		return Manifest{}, err
+	}
+	if p.ScopedFreshReviewSHA != "" {
+		if err := scopedFreshEffectiveAbsent(); err != nil {
+			return Manifest{}, err
+		}
+	} else if err := refuseScopedLegacy(); err != nil {
 		return Manifest{}, err
 	}
 	uid, gid, err := ServiceIdentity(p)
@@ -332,6 +349,11 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 			return Manifest{}, errors.New("existing retirement socket requires review")
 		}
 	}
+	if p.ScopedFreshReviewSHA != "" {
+		if err = scopedFreshPrepare(p); err != nil {
+			return Manifest{}, err
+		}
+	}
 	fmt.Fprintln(os.Stderr, "Fresh install: external Forward policy defaults to all; explicit external binds may expose public interfaces. Default bind is loopback; native Project authorization is unchanged.")
 	if err = os.MkdirAll(p.StateDir, 0700); err != nil {
 		return Manifest{}, err
@@ -351,6 +373,12 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	}
 	digestUnit := sha256.Sum256([]byte(unit(p)))
 	m := Manifest{Schema: manifestSchema, Version: build.Version, BuildCommit: build.Commit, BinarySHA256: h, UnitSHA256: hex.EncodeToString(digestUnit[:]), BinaryPath: p.BinaryPath, StateDir: p.StateDir, ServiceUser: p.User, Project: p.Project, Socket: p.Socket, RestartRequired: true}
+	if p.ScopedFreshReviewSHA != "" {
+		m.ScopedPeerMode = nativePeerFreshMode
+		if err = scopedStageUnits(); err != nil {
+			return m, err
+		}
+	}
 	if retirementBody != "" {
 		dig := sha256.Sum256([]byte(retirementBody))
 		m.RetirementUnitSHA256 = hex.EncodeToString(dig[:])

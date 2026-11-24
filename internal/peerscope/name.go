@@ -9,6 +9,9 @@ import (
 	"regexp"
 )
 
+// QuarantineACL is a deny-by-default staging profile only, never an owned Box ACL.
+const QuarantineACL = "bw-peer-quarantine"
+
 var safeResource = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$`)
 var safeUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 

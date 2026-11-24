@@ -50,8 +50,28 @@ project="user-$uid"
 bridge="incusbr-$uid"
 test "$(sudo incus project get "$project" restricted)" = true
 test -z "$(sudo incus list --all-projects -c n -f csv)"
-python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"
+if test "${PR178_SCOPED_N2:-0}" = 1; then
+  python3 scripts/n2_installed_lifecycle.py tty-install-scoped "$project" "$work/candidate-a" "$first"
+  installed=/usr/local/bin/boxweave
+  sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service
+  sudo "$installed" install-status -project "$project" > "$work/scoped-active.json"
+  python3 - "$work/scoped-active.json" <<'CHECK'
+import json,sys
+x=json.load(open(sys.argv[1]))
+assert x["scoped_peer_mode"]=="SCOPED_PEER_FRESH_V2" and x["service_active"] and not x["restart_required"],x
+CHECK
+  echo PR178_N2_INSTALL=PASS
+  if sudo "$installed" upgrade -project "$project" -source-binary "$work/candidate-b" -expect-sha256 "$next" -approve-local; then
+    echo "scoped upgrade unexpectedly accepted" >&2
+    exit 1
+  fi
+  test ! -e /var/lib/boxweave-installer-backup
+  echo PR178_N2_FRESH_ONLY=PASS
+else
+  python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"
+fi
 installed=/usr/local/bin/boxweave
+if test "${PR178_SCOPED_N2:-0}" != 1; then
 sudo systemctl is-active --quiet boxweave.service
 sudo systemctl is-active --quiet boxweave-ipv4-retirement.service
 test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$first"
@@ -62,8 +82,14 @@ x=json.load(open(sys.argv[1]))
 assert x["service_active"] and not x["restart_required"] and len(x["retirement_unit_sha256"])==64
 print("N2_INSTALLED_HELPER_ACTIVATION=PASS",flush=True)
 PY
+fi
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
+if test "${PR178_SCOPED_N2:-0}" = 1; then
+  sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
+  echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
+  exit 0
+fi
 sudo python3 scripts/n2_installed_lifecycle.py mcp-retry "$project" "$work/actor.receipt"
 test -z "$(sudo incus list --all-projects -c n -f csv)"
 unit_hash="$(sudo sha256sum /etc/systemd/system/boxweave-ipv4-retirement.service | cut -d' ' -f1)"
