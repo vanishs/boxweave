@@ -1,78 +1,10 @@
-# UNKNOWN manual recovery — approved minimal local-operator procedure
+# UNKNOWN recovery — preserve the original
 
-**PR #177 merged into v1 (unreleased):** use the [Doctor/Recover operator guide](DOCTOR_RECOVER.md) for the new read-only issue plan and explicitly approved, evidence-bound apply. The older local recovery entries below remain historical or separately supported leaves, not blanket permission.
+1. Locate exact original via operation_list or box_activity_get; inspect operation_get, independent native evidence and actual guest exit/streams through operation_output_get.
+2. Use authenticated operation_recover mode=inspect. Supported reconcile requires a distinct reusable key, exact evidence and protected original scope; identity binding is not settlement. Native 404 or missing receipt does not prove absence.
+3. If MCP cannot prove the leaf, use [Doctor/Recover](DOCTOR_RECOVER.md). Local reviewed plan/apply is evidence-bound and never redispatches the original. Older leaf commands are version-specific; consult exact installed help.
+4. Partial proof, unavailable authority or foreign/native barriers leave original UNKNOWN/BLOCKED, protections intact. Report reason and safe next observation.
 
-**Historical S5A2 update (2026-11-20):** the candidate added MCP `operation_recover` and root-reviewed CLI `recover -action=diagnose|reconcile` (reconcile requires `-recovery-key`), sharing the bounded read-only native evidence path and durable recovery transaction. Existing protected CLI challenge/release remains unchanged; no remote approval or blanket lock release. The older text below describes its historical implementation checkpoint. [S5A2 evidence](../development/S5A2_RECOVERY_2026-11-20.md).
+Never use new mutation keys, SQL edits, blanket unlock, native delete, reinstall or guard removal to force progress. Scoped incomplete policy remains fenced; no shared-ACL remedy. Interrupted uninstall/purge uses separate original receipts in [maintenance](../getting-started/MANUAL_INSTALL.md).
 
-**Historical implementation checkpoint:** existing host-local challenge/release is implemented for registered owned UUIDs. The new unbound-Create **identity-binding** extension is implemented only in the separate pre-release UNKNOWN-repair test branch and is **not yet installed/native accepted**; do not use it to claim real HOST_GO approval. This is a host-local CLI/SQLite operation, **not** a new MCP tool, remote admin endpoint, replay daemon, or generalized lease management platform.
-
-## New: Create UNKNOWN before UUID registration (candidate, requires native acceptance)
-
-Native Incus may expire a completed Operation record very quickly.
-An automatic terminal Create verification is allowed only for a durable
-**original native Operation ID** after the typed native 404, two
-Project-confined active-Operation listings showing the original is not
-active, exact immutable Create marker/UUID/ACL/resource-shape readback,
-bounded Guest-state stabilization, and a second final active-operation
-check. Native 404 alone never triggers cleanup, a fabricated result or
-a second Create; unknown observations stay `UNKNOWN`.
-
-A Create whose Incus Operation ACK was lost may leave a real Box while the original SQLite record has an empty UUID. New v1 Creates carry their unique durable BoxWeave Operation ID in the native instance config key `user.boxweave.create_operation`, without exposing any raw Incus config to the MCP caller. This marker is an additional evidence witness, not proof of native final success by itself.
-
-Under the **existing protected local root/credential-drop recover flow**, `recover -action=create-inspect` validates the original `box_create` safe intent, Project and resource name, then reads the exact native marker/UUID/ACL. `create-challenge` issues a short-lived, one-use challenge bound to the original immutable receipt and exact native observation. `create-bind` additionally requires the literal native UUID, reviewer, explanatory reason, explicit native-uncertainty acknowledgement, and a fresh unchanged readback. The native UUID/owned record, original UNKNOWN event and audit are written in **one SQLite transaction**. If audit fails, none of the binding survives.
-
-Binding alone does **not** change the original `UNKNOWN`, invent a missing Incus Operation ID, release the name/UUID claim, retry any effect, create another Box, or delete the residual. After binding, the pre-existing `recover inspect/challenge/release` procedure can review the exact owned UUID and, only with its own new explicit challenge/confirmation, release its **coordination claim** for a new separately authorized operation.
-
-If the original native marker is missing/mismatched, the project or UUID differs, network safety fails, or the Box is absent, binding is refused. Earlier legacy or pre-marker UNKNOWNs have no automatic adoption fallback. A native Create that **has a durable final Incus Operation ID** and is fully verified at execution time may instead terminate as `FAILED` with a registered STOPPED owned Box, or `FAILED` with verified native absence. Neither outcome asserts Guest Running; errors/partial ownership without adequate proof remain UNKNOWN.
-
-The local CLI remains restricted to the exact installed state path `/var/lib/boxweave/ledger.sqlite`, a separately reviewed root invocation and the existing service UID downgrade, Project confinement and maintenance lock. The candidate adds **no public MCP tools, remote recovery endpoint, background reconciliation or automatic retry**.
-
-## Dependent Delete: confirmed original native terminal outcome
-
-The root-reviewed local `recover` flow now has `delete-inspect`,
-`delete-challenge` and `delete-confirm`, with literal original UUID, reviewer,
-reason, acknowledgement and a fresh challenge. It issues no native mutation.
-
-- If the original durable native ID is absent, report NATIVE_ACK_MISSING.
-  If its receipt can no longer be queried and original inactivity is
-  independently confirmed, report NATIVE_RECEIPT_UNAVAILABLE; do not infer
-  successful deletion merely from absence or claim physical receipt expiry.
-- If the exact original native Operation reports terminal SUCCESS and two
-  confined absence reads succeed, issue the distinct success-bound challenge.
-  Reobserve the same proof on confirmation; stale or lost proof refuses.
-- In one SQLite transaction, verify all linked child Operations succeeded and
-  no peer/forward dependency remains, settle the exact ownership tombstone
-  and historical address fences, update the same original to SUCCEEDED, and
-  append the reviewed audit. Failed audit rolls the entire settlement back.
-- For a dependent Delete whose target is absent, generic claim release is
-  refused. Partial failure with an exact present identity remains eligible
-  for the separate existing reviewed release only when no unresolved children
-  or pending dependency remain. No automatic compensation or replay.
-
-The challenge can outlive a native receipt but never substitutes for it.
-A missing receipt remains UNKNOWN until adequate independent evidence exists.
-
-## Plain-language contract
-
-An Agent asked BoxWeave to delete a Box. BoxWeave may have sent the request to Incus, but lost the reply. It is **not known** whether the Box was actually deleted. To prevent an overlapping create or delete from making the situation worse, BoxWeave retains a resource claim and the original `UNKNOWN` receipt.
-
-The operator may **inspect and, only after a separate explicit confirmation, release that specific BoxWeave coordination claim**. Releasing it means “allow a separately authorized future request to be considered”; it **does not** mean “the original delete succeeded,” “Incus stopped,” “the original task was canceled,” or “please send the original delete again.” The original client idempotency key always returns its original receipt.
-
-## Minimal protected procedure
-
-1. **Identify** the original Tracking ID and Operation ID. From the already existing `operation_get`, `box_get` and `port_forward_list`, inspect sanitized phase evidence and the native Box/forward consequences. Never resolve an uncertain create/delete from a same-name or same-IP instance alone.
-2. **Read only**: authorized host-local `boxweave recover inspect <operation_id>` (final CLI syntax may be adjusted before schema freeze) reads the original durable Operation, exact immutable native target UUID/incarnation, resource lock set, identity/receipt fingerprint, native observations and previous recovery audit. A mismatch, active native effect, foreign ownership or missing evidence remains explicitly reported.
-3. The local tool issues a **short-lived, single-use challenge** bound to the exact original Operation + resource/identity fingerprint + reviewing operator. It reports a prominent warning: original native outcome may still be unknown. A stale/changed resource snapshot or reused challenge must be rejected.
-4. **Independent operator decision**: after inspecting the exact native Box and related forward/peer state, the operator supplies a reason, challenge, literal exact-ID confirmation, and explicit acknowledgement that a previously dispatched action may still be running. Only this privileged local CLI path may release the exact local claim.
-5. **Atomically append a protected audit record and release only that claim.** If the audit write fails, retain the lock. The audit includes time, reviewer, original Operation ID/state/receipt, exact claimed resource identities, reason and the release decision. Application-level writes never silently modify/delete prior audit events. Do not claim resistance to a fully privileged host root deleting the whole DB.
-6. Recheck native state. The original Operation/Tracking IDs and original `UNKNOWN` state remain **unchanged** unless independently resolved through a separate evidence-based reconciliation. A **new** mutation uses a **new** client idempotency key and must still pass current ownership/identity/conflict checks. A release is never an automatic native retry, automatic cancellation, foreign resource adoption or rollback.
-
-**Safe default:** If there is not enough independent evidence to justify the risk, **do not release**. A blocked recovery is preferable to possibly duplicating or interrupting a destructive native action. A confirmed native terminal outcome should be normally reconciled without forcing release.
-
-## Evidence and test scope
-
-Required negative tests: mismatched Box UUID/incarnation or same-name replacement; missing/expired/replayed challenge; claim changed after review; wrong reviewer/confirmation/reason; unverified native status; audit insertion failure; simultaneous release attempts; ordinary MCP token unable to invoke recovery; original idempotency key never re-dispatches after force release. Positive test: exact authorized local review releases only the chosen claim, persists one audit event, preserves original UNKNOWN, and a separate new authorized request must still pass new admission.
-
-This generalizes the **principle**, not the legacy Python architecture, from [main `operation_coordination.py`](https://github.com/vanishs/boxweave/blob/main/bwmini/operation_coordination.py), [main real and simulated v0.45.0 R-04 recovery report](https://github.com/vanishs/boxweave/blob/main/docs/verification/R04_UNKNOWN_RECOVERY_0450_2026-11-05.md), and [main ADR-002 intent/reconciliation](https://github.com/vanishs/boxweave/blob/main/docs/design/ADR/0002-intent-and-reconciliation.md). Actual v1 installed acceptance is pending.
-
-See [durable operations](../design/OPERATIONS.md), [security](../design/SECURITY.md) and [acceptance matrix](../verification/ACCEPTANCE.md).
+Original protected challenge/release and Create identity-binding procedures are preserved in the [pre-refresh record](https://github.com/vanishs/boxweave/blob/06d27434b11997e9254822c122483c9dacba12a3/docs/process/UNKNOWN_MANUAL_RECOVERY.md); do not apply historical commands to another build. See [operations](../design/OPERATIONS.md) and [status](../STATUS.md).

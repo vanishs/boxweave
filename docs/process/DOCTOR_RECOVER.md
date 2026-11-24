@@ -1,7 +1,6 @@
 # Doctor and Recover: operator guide
 
-This guide describes the merged v1 implementation from PR #177, not the
-published RC13 executable. D0–D5 passed exact-head CI and were merged on
+This guide describes the implementation introduced by PR #177; RC13 does not contain it. D0–D5 passed exact-head CI and were merged on
 2026-11-24. Use the exact installed build's help and manifest. One binary,
 two local CLI entries, unchanged 23-tool MCP catalog. See [current status](../INDEX.md).
 
@@ -71,8 +70,8 @@ scope, or the required local authority is unavailable, preserve the
 original claims and evidence. Do not use SQL edits, native replay,
 blanket unlock, policy resets, reinstall or unrelated Box restarts to
 force progress. A reviewed settlement is not a generic repair tool.
-Scoped fresh v2 does not support legacy upgrade, rollback or uninstall. The PR #182 candidate adds a distinct full-only scoped retirement/resume workflow after MCP cleanup, requiring the original fresh native preimage; see the manual installation guide. Older installations without the preimage must retain their original evidence.
-Legacy guided retirement/resume has its own exact review and audit flow. The current installer now emits phase labels and separates optional OAuth configuration from installed service health. Current full retirement consults a fixed read-only native preparation observation before approval and effects, without treating it as permission to delete. Use the matching installed binary/uninstaller and original archive; a STARTED audit is navigation to --resume-plan, not a new uninstall. See [install/uninstall incident closure](../development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md).
+Scoped fresh v2 does not support upgrade or rollback. PR #182 implements a distinct full-only scoped retirement/resume workflow after MCP cleanup, requiring the original fresh native preimage; see the manual installation guide. Older installations without the preimage must retain their original evidence.
+Legacy guided retirement/resume has its own exact review and audit flow. The current installer now emits phase labels and separates optional OAuth configuration from installed service health. Current full retirement consults a fixed read-only native preparation observation before approval and effects, without treating it as permission to delete. Use the matching installed binary/uninstaller and original archive; a STARTED audit is navigation to --resume-plan, not a new uninstall. See [install/uninstall incident closure](../history/development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md).
 
-See [the D4 execution contract](../development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md)
-and [the D5 acceptance record](../development/V1_PR177_D5_DELIVERY_2026-11-24.md).
+See [the D4 execution contract](../history/development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md)
+and [the D5 acceptance record](../history/development/V1_PR177_D5_DELIVERY_2026-11-24.md).

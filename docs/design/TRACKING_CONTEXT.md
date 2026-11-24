@@ -1,5 +1,7 @@
 # End-to-end Tracking ID, Go context, and asynchronous execution — P0
 
+**Reading rule:** current scope and runtime are in [status](../STATUS.md) and [product boundary](../decisions/PRODUCT_BOUNDARY.md). Dated source experiments, original design requirements and evidence below retain their original scope; they are not current installed signoff.
+
 **Owner decision:** Async-first operations and durable Tracking IDs, with safe execution context propagated as far as practical throughout each BoxWeave layer. This is a central product contract, not a logging-only feature. **S1 has implemented the initial journal/admission/tracking foundation; S2 must still complete lifecycle tools and real operation retrieval/output.**
 
 ## Identity vocabulary: do not conflate identifiers
@@ -13,7 +15,7 @@
 | `trace_id` / `span_id` | Internal bounded diagnostic instrumentation | Correlate checked component transitions; trace/span data is **optional internal logging only**, not a separate product feature, store or required public identifier. Do not expose a generic tracing backend or secret-bearing logs to MCP. |
 | `idempotency_key` | **Required caller input for every mutating tool** | Client generates once per logical mutation and reuses on retry. Persist unique (layer/actor/key), then compare canonical action+intent (including exact native target identity when one exists). Conflicting reuse is denied. A new `box_create` has no UUID before admission. Not a tracking/operation ID or credential. |
 
-**Future extension vocabulary only:** `taskId` (MCP Tasks protocol handle, when officially supported) is a **different optional identifier** from both `operation_id` and `native_operation_id`, and its lifetime/authorization may differ. Do not add it to the S1/S2 schema solely as preparation. [Future adapter seam and Task semantics](../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md).
+**Future extension vocabulary only:** `taskId` (MCP Tasks protocol handle, when officially supported) is a **different optional identifier** from both `operation_id` and `native_operation_id`, and its lifetime/authorization may differ. Do not add it to the S1/S2 schema solely as preparation. [Future adapter seam and Task semantics](../history/research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md).
 
 The tracking ID can appear in structured MCP tool results, safe diagnostic errors, local CLI output and internal logs. Protocol-level MCP errors that cannot use a tool result include a safe correlation identifier where the protocol permits. An unauthenticated request may receive an opaque request ID but never a private operation trace. `operation_get`, `operation_list` and `operation_output_get` remain authorization- and ownership-scoped.
 
@@ -48,7 +50,7 @@ MCP transport
 
 ## Native SDK cancellation reality
 
-Passing `context.Context` throughout BoxWeave's own handlers, workers and adapters is still required, but many Incus `InstanceServer` methods do **not** take context arguments. Never claim that all native API calls are automatically cancelable or inherit request deadlines. Crucially, the Incus `Operation.WaitContext` event-listener path calls native `Cancel` on context cancellation. For `operation_get(wait_ms)`, use safe native status observation (`GetOperationWait`/`GetOperation`), not cancelable `WaitContext`. See [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+Passing `context.Context` throughout BoxWeave's own handlers, workers and adapters is still required, but many Incus `InstanceServer` methods do **not** take context arguments. Never claim that all native API calls are automatically cancelable or inherit request deadlines. Crucially, the Incus `Operation.WaitContext` event-listener path calls native `Cancel` on context cancellation. For `operation_get(wait_ms)`, use safe native status observation (`GetOperationWait`/`GetOperation`), not cancelable `WaitContext`. See [SDK fit review](../history/research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
 ## Data and output boundaries
 
@@ -70,6 +72,6 @@ Passing `context.Context` throughout BoxWeave's own handlers, workers and adapte
 7. Test native command exit 0 and nonzero (both have observed `COMPLETED` state), guest process timeout, missing exit status and transport failure as separate cases.
 
 Related: [operation journal](OPERATIONS.md), [MCP tools](MCP_TOOLS.md), [development loop](../product/DEVELOPMENT_LOOP.md), [security](SECURITY.md).
-## RC8 candidate — private post-Delete Exec output archive
+## Private post-Delete Exec output archive
 
-The pre-release Draft PR #153 adds controller-private archive files adjacent to the SQLite DB. It preserves the original immutable operation/exec_outputs witness, stores at most 1 MiB per stdout/stderr stream and 256 MiB total (4096-file limit, 64 MiB statfs headroom), and refuses symlink/hardlink access. A verified Exec terminal remains valid if archiving fails; output retrieval reports structured unavailable/expired, never fabricated bytes. The first seven-day retention window is measured from the durable Exec witness and a bounded 15-minute file GC removes expired archives independently of native Incus output GC. Physical host quota enforcement is not proved by this filesystem bound. Current blockers and bounded historical unknown/failed samples are separately visible in Activity issues, with incomplete native coverage explicit. See [isolated acceptance](../verification/V1_RC8_EXEC_ARCHIVE_ACTIVITY_ISSUES_ACCEPTANCE_2026-11-19.md).
+The implemented retention contract introduced by PR #153 adds controller-private archive files adjacent to the SQLite DB. It preserves the original immutable operation/exec_outputs witness, stores at most 1 MiB per stdout/stderr stream and 256 MiB total (4096-file limit, 64 MiB statfs headroom), and refuses symlink/hardlink access. A verified Exec terminal remains valid if archiving fails; output retrieval reports structured unavailable/expired, never fabricated bytes. The first seven-day retention window is measured from the durable Exec witness and a bounded 15-minute file GC removes expired archives independently of native Incus output GC. Physical host quota enforcement is not proved by this filesystem bound. Current blockers and bounded historical unknown/failed samples are separately visible in Activity issues, with incomplete native coverage explicit. See [isolated acceptance](../history/verification/V1_RC8_EXEC_ARCHIVE_ACTIVITY_ISSUES_ACCEPTANCE_2026-11-19.md).

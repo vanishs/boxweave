@@ -1,12 +1,14 @@
 # Upstream research and borrowed design patterns
 
-**Future protocol review (only when S2 receipts or a new Go SDK Tasks release becomes relevant):** [Official MCP Tasks extension vs BoxWeave's durable Operation seam](MCP_TASKS_EXTENSION_SEAM_2026-11-10.md), including incompatible 2025 experimental protocol, absent pinned Go SDK runtime implementation, and zero-new-Tool constraints.
+**Reading rule:** current scope and runtime are in [status](../STATUS.md) and [product boundary](../decisions/PRODUCT_BOUNDARY.md). Dated source experiments, original design requirements and evidence below retain their original scope; they are not current installed signoff.
 
-**Recent legacy operational input (read only for matching S2/S5 work):** [Incus I/O pressure, MCP wrong-path and Agent stall incident](LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md). The report separates observations from causation hypotheses and does not authorize Incus DB repair, old OAuth or a new heartbeat subsystem.
+**Future protocol review (only when S2 receipts or a new Go SDK Tasks release becomes relevant):** [Official MCP Tasks extension vs BoxWeave's durable Operation seam](../history/research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md), including incompatible 2025 experimental protocol, absent pinned Go SDK runtime implementation, and zero-new-Tool constraints.
+
+**Recent legacy operational input (read only for matching S2/S5 work):** [Incus I/O pressure, MCP wrong-path and Agent stall incident](../history/research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md). The report separates observations from causation hypotheses and does not authorize Incus DB repair, old OAuth or a new heartbeat subsystem.
 
 References are **technical evidence and inspiration**, not dependencies or instructions to copy upstream code unreviewed. No licensing conclusion about copying source is implied.
 
-**Scoped 2026-11-10 studies:** [Current MCP Go SDK v1.8.0 small adoption opportunities](MCP_GO_SDK_CONTINUITY_REVIEW_2026-11-10.md) and [Temporal/LangGraph/CrewAI attributed operation/crash/visibility lessons](AGENT_CONTINUITY_FRAMEWORKS_2026-11-10.md). Only load these during their matching [S2 continuity work](../design/AGENT_OPERATION_CONTINUITY.md), not as new dependencies or a workflow-platform feature request.
+**Scoped 2026-11-10 studies:** [Current MCP Go SDK v1.8.0 small adoption opportunities](../history/research/MCP_GO_SDK_CONTINUITY_REVIEW_2026-11-10.md) and [Temporal/LangGraph/CrewAI attributed operation/crash/visibility lessons](../history/research/AGENT_CONTINUITY_FRAMEWORKS_2026-11-10.md). Only load these during their matching [S2 continuity work](../design/AGENT_OPERATION_CONTINUITY.md), not as new dependencies or a workflow-platform feature request.
 
 ## Existing BoxWeave main
 
@@ -16,19 +18,19 @@ References are **technical evidence and inspiration**, not dependencies or instr
 
 Retain English artifacts, requester-language replies, explicit privileges, source-vs-installed evidence, UNKNOWN preservation, black-box bug hunting, separate Finder/Fixer/Verifier and concise handoff. Do **not** import Containarium-specific procedures, old code, SSH client matrices, Web UI rules, stale host/Box names, or legacy release assumptions.
 
-**Owner's retrospective (2026-11-07):** Reliability problems appeared to intensify after MCP→REST migration. Treat this as a high-priority **anti-pattern investigation**, not as proof of REST-protocol causation or an endorsement of old MCP relaying. [Pinned two-dimensional `main` source/814-commit-history review](MAIN_HISTORY_LESSONS_2026-11-07.md#owner-retrospective-and-pinned-v0504-re-review-2026-11-07) identifies multiple receipt models, an actual resize success/UNKNOWN semantic split, REST-500/404 repair chains, permanent-payload idempotency mistakes and test-harness false evidence. Prefer **eliminating duplicated boundaries** through one native Incus Go SDK Operation path to importing the old downstream fixes.
+**Owner's retrospective (2026-11-07):** Reliability problems appeared to intensify after MCP→REST migration. Treat this as a high-priority **anti-pattern investigation**, not as proof of REST-protocol causation or an endorsement of old MCP relaying. [Pinned two-dimensional `main` source/814-commit-history review](../history/research/MAIN_HISTORY_LESSONS_2026-11-07.md#owner-retrospective-and-pinned-v0504-re-review-2026-11-07) identifies multiple receipt models, an actual resize success/UNKNOWN semantic split, REST-500/404 repair chains, permanent-payload idempotency mistakes and test-harness false evidence. Prefer **eliminating duplicated boundaries** through one native Incus Go SDK Operation path to importing the old downstream fixes.
 
 ## nikitatsym/incus-mcp
 
 https://github.com/nikitatsym/incus-mcp
 
-Borrow omitted-vs-null parameter semantics, schema conformance test patterns, post-terminal native readback, and real Incus integration tests. **Its write verifier checks returned key presence, not full value equality; do not call that sufficient postcondition proof.** Its in-process waiter/pending-verify maps are not durable across restarts. Keep only v1's already-approved tools and responsibilities. [Pinned source assessment](INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
+Borrow omitted-vs-null parameter semantics, schema conformance test patterns, post-terminal native readback, and real Incus integration tests. **Its write verifier checks returned key presence, not full value equality; do not call that sufficient postcondition proof.** Its in-process waiter/pending-verify maps are not durable across restarts. Keep only v1's already-approved tools and responsibilities. [Pinned source assessment](../history/research/INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
 
 ## fredmj/incus-mcp-server
 
 https://github.com/fredmj/incus-mcp-server
 
-Borrow typed official MCP Go SDK tool registration, small Go handler layout, injectable fake Incus client/MCP-session tests and create-before-start separation. Its Incus **v6** dependency, synchronous waits, name-only deletion checks, raw native config, default Incus CLI remote credentials and unbounded Exec buffers are **not** v1 patterns. v1 uses reviewed **Incus v7**. [Pinned source assessment](INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
+Borrow typed official MCP Go SDK tool registration, small Go handler layout, injectable fake Incus client/MCP-session tests and create-before-start separation. Its Incus **v6** dependency, synchronous waits, name-only deletion checks, raw native config, default Incus CLI remote credentials and unbounded Exec buffers are **not** v1 patterns. v1 uses reviewed **Incus v7**. [Pinned source assessment](../history/research/INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
 
 ## sw2m/pyincusd
 
@@ -48,13 +50,13 @@ Borrow bounded and typed operation timeout handling, ETag and owned ACL edits, r
 
 **Reject as v1 architecture:** Containarium as a runtime dependency, CLI-first platform APIs, protobuf/gRPC/REST gateway as a public management contract, separate in-Box SSH MCP, multi-host/tenant infrastructure, and PostgreSQL dependency for single-host state. Its Platform MCP handles protocol itself; its Agent Box MCP uses third-party `mark3labs/mcp-go`. V1 favors an official MCP SDK if Go is selected.
 
-For a **fixed source, commit-by-commit, non-template assessment** (2,577 upstream commit subjects, representative diffs, 21 bounded incident lessons and test links), see [Containarium `main` and history study](CONTAINARIUM_MAIN_HISTORY_2026-11-07.md). Upstream references are **examples**, not proof of v1 behavior.
+For a **fixed source, commit-by-commit, non-template assessment** (2,577 upstream commit subjects, representative diffs, 21 bounded incident lessons and test links), see [Containarium `main` and history study](../history/research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md). Upstream references are **examples**, not proof of v1 behavior.
 
 ## Waishnav/devspace — external development/verification evidence
 
 https://github.com/Waishnav/devspace
 
-Its **current source** illustrates local MCP workspace execution, workspace-scoped identity, SQLite dispatch records, explicit cancellation/stop distinction, interrupted-workflow recovery, native Git review checkpoints, and isolated real-MCP/CLI plus record/replay tests. Its **1,260-subject commit history** supplies real counterexamples: delegated read-only authority escapes, unsafe provider extensions, cleanup followed by failed persistence and failed compensation, daemon/reply races, incompatible migrations and tests that could not fail. These are engineering evidence, **not** v1 native PASS or requirements to add an Agent service. Keep all verification orchestration in repository/CI/disposable Boxes, not the standard BoxWeave runtime. [Pinned two-dimensional source and commit assessment](DEVSPACE_MAIN_HISTORY_2026-11-07.md).
+Its **current source** illustrates local MCP workspace execution, workspace-scoped identity, SQLite dispatch records, explicit cancellation/stop distinction, interrupted-workflow recovery, native Git review checkpoints, and isolated real-MCP/CLI plus record/replay tests. Its **1,260-subject commit history** supplies real counterexamples: delegated read-only authority escapes, unsafe provider extensions, cleanup followed by failed persistence and failed compensation, daemon/reply races, incompatible migrations and tests that could not fail. These are engineering evidence, **not** v1 native PASS or requirements to add an Agent service. Keep all verification orchestration in repository/CI/disposable Boxes, not the standard BoxWeave runtime. [Pinned two-dimensional source and commit assessment](../history/research/DEVSPACE_MAIN_HISTORY_2026-11-07.md).
 
 **Do not import:** DevSpace's JavaScript/Node runtime, multi-provider adapters, OAuth web authorization, local host Shell, Git worktree API, UI, workflow scripting, resident Agent daemon or best-effort activity journal as a replacement for BoxWeave's mandatory Operation/audit. Existing 20 MCP tools and product boundary remain unchanged.
 
@@ -79,9 +81,9 @@ Prior Containarium Caddy reconciliation, generalized ACL, Web/UI, OAuth, snapsho
 
 ## Official Go SDK research (2026-11-07)
 
-- [Incus and MCP Go SDK capabilities, source history and architectural fit](OFFICIAL_SDK_FIT_2026-11-07.md) — S01–S20 with the corrected local Incus privilege model.
-- [Every v1 public MCP tool mapped to official Incus/MCP SDK methods](SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) — 20/20 tools, native implementations versus BoxWeave-specific policy, missing guarantees and practical test gates.
+- [Incus and MCP Go SDK capabilities, source history and architectural fit](../history/research/OFFICIAL_SDK_FIT_2026-11-07.md) — S01–S20 with the corrected local Incus privilege model.
+- [Every v1 public MCP tool mapped to official Incus/MCP SDK methods](../history/research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) — 20/20 tools, native implementations versus BoxWeave-specific policy, missing guarantees and practical test gates.
 
-- [Second-pass exact SDK contract gaps](SDK_GAP_CLOSURE_2026-11-07.md) — MCP Tool per-request identity (distinct from HTTP context), Bridge ACL selector/anti-spoof limits, native file creation truncation and CAS, blocking Exec output modes, operation-wait transport behavior, Project features/root Profile ordering; source links and historical changes included.
+- [Second-pass exact SDK contract gaps](../history/research/SDK_GAP_CLOSURE_2026-11-07.md) — MCP Tool per-request identity (distinct from HTTP context), Bridge ACL selector/anti-spoof limits, native file creation truncation and CAS, blocking Exec output modes, operation-wait transport behavior, Project features/root Profile ordering; source links and historical changes included.
 
-- [Executed Incus 7.6 TLS/Scriptlet ACL authorization probe](../verification/INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md) — source-confirmed Project ACL expansion, official Go SDK restricted TLS access tests, native Scriptlet exact ACL edit permissions, stale ETag 412, Project-wide ACL create-granularity limit, client-class routing risks and independently verified cleanup.
+- [Executed Incus 7.6 TLS/Scriptlet ACL authorization probe](../history/verification/INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md) — source-confirmed Project ACL expansion, official Go SDK restricted TLS access tests, native Scriptlet exact ACL edit permissions, stale ETag 412, Project-wide ACL create-granularity limit, client-class routing risks and independently verified cleanup.

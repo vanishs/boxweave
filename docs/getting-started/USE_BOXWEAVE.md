@@ -1,6 +1,6 @@
 # Connect and use BoxWeave
 
-Start with the [installation guide](MANUAL_INSTALL.md). This guide covers the published RC13 workflow and current v1 source where explicitly marked. Discover the installed tools and build identity first.
+Start with the [installation guide](MANUAL_INSTALL.md). This guide is version-aware; see [current status](../STATUS.md). Discover the installed tools and build identity first.
 
 ## Connect an MCP client
 
@@ -45,6 +45,6 @@ A TCP/UDP forward maps a host listener to an owned Box port. Default host bind i
 
 Recover original IDs via operation_list or box_activity_get (overview/issues/evidence). Read operation_get and, for Exec, operation_output_get. Do not submit the original action under a new key merely because a request timed out.
 
-Use operation_recover inspect for an UNKNOWN original; use reconcile only for a supported authorized settlement with its own key. Retain evidence when blocked. On unreleased v1 source the local [Doctor and Recover guide](../process/DOCTOR_RECOVER.md) describes additional evidence-bound diagnosis and reviewed recovery, not a general remote Host repair API.
+Use operation_recover inspect for an UNKNOWN original; use reconcile only for a supported authorized settlement with its own key. Retain evidence when blocked. On builds containing #177, the local [Doctor and Recover guide](../process/DOCTOR_RECOVER.md) describes additional evidence-bound diagnosis and reviewed recovery, not a general remote Host repair API.
 
 See [README](../../README.md) and [developer documentation](../INDEX.md).

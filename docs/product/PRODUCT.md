@@ -15,4 +15,5 @@ Ubuntu LTS is the initial verified host/guest baseline. Other guest Linux distri
 See [permanent scope](SCOPE.md), [boundary decisions](../decisions/PRODUCT_BOUNDARY.md), and [Agent development loop](DEVELOPMENT_LOOP.md).
 
 
-**RC.3 evidence:** The [manual installation guide](../getting-started/MANUAL_INSTALL.md) separates service installation from first-Box preparation. A [scoped physical-host pilot](../verification/RC3_PHYSICAL_HOST_PILOT_2026-11-13.md) proved real ChatGPT/OAuth MCP reads, not first Box Create or network/quota acceptance; neither HOST_GO nor S5 is signed.
+
+See [current status](../STATUS.md), [installation](../getting-started/MANUAL_INSTALL.md) and [acceptance](../verification/ACCEPTANCE.md).
