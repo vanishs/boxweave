@@ -2,13 +2,18 @@ package state
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestScopedRetirementLedgerEmptyAndLiveRefused(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "ledger.sqlite")
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "ledger.sqlite")
 	st, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
