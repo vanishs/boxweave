@@ -691,6 +691,8 @@ def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False):
 
 
 def _replace_audit(record):
+    if len(canonical(record)) + 1 > 1024 * 1024:
+        raise UninstallError("uninstall audit retention bound exceeded")
     old = checked_file(AUDIT, "file", 1024 * 1024)
     if old is None or stat.S_IMODE(old.st_mode) != 0o600:
         raise UninstallError("untrusted existing root uninstall audit")
@@ -727,6 +729,8 @@ def audited_write(event):
         return
     record = {**event, "status": "STARTED", "history": []}
     payload = canonical(record) + b"\n"
+    if len(payload) > 1024 * 1024:
+        raise UninstallError("uninstall audit retention bound exceeded")
     fd = os.open(str(AUDIT), os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                  getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(fd, "wb") as dst:
@@ -1228,8 +1232,8 @@ def scoped_plan(project):
             plan["retirement_verifier"] or plan["scriptlet_present"] or plan["installer_backup"] or os.path.lexists(BACKUP)):
         raise UninstallError("mixed legacy/scoped installation evidence; no retirement")
     for path in (BINARY, UNIT):
-        if path.lstat().st_nlink != 1:
-            raise UninstallError("untrusted installed file hardlink")
+        if path.lstat().st_nlink != 1 or stat.S_IMODE(path.lstat().st_mode) != (0o755 if path == BINARY else 0o644):
+            raise UninstallError("untrusted installed file mode or hardlink")
     # Go Status validates exact unit contents, manifest and original Root receipts.
     command([str(BINARY), "install-status", "-project", project], timeout=90)
     plan["scoped_units"] = scoped_units()
@@ -1237,6 +1241,8 @@ def scoped_plan(project):
     plan["mode"] = SCOPED_MODE
     if plan["sqlite"]["boxes"] or plan["incus_instances"]:
         plan["blockers"].append("SCOPED_LIVE_BOXES: retire all Boxes, Peer and Forward through MCP first")
+    if not os.path.lexists(SCOPED_JOURNAL / "retirement-preimage.json"):
+        plan["blockers"].append("SCOPED_RETIREMENT_PREIMAGE_MISSING: older installation has no verified original configuration")
     if not plan["blockers"]:
         try:
             plan["scoped_native"] = scoped_native(plan, "plan")
@@ -1315,6 +1321,7 @@ def scoped_advance(record, phase, **updates):
 
 
 def scoped_copy(src, dst):
+    src, dst = Path(src), Path(dst)
     original = file_fingerprint(src)
     if original is None or src.lstat().st_nlink != 1:
         raise UninstallError("scoped archive source missing or linked")
@@ -1611,6 +1618,16 @@ def scoped_continue(record):
             raise UninstallError("serve lock disappeared before scoped state cleanup")
         lockplan["state_files"] = []
     with hold_stopped_serve_lock(lockplan):
+        if record["phase"] != "CLEANUP_STARTED":
+            if scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"] or inspect_sqlite(STATE / "ledger.sqlite", guided=True) != plan["sqlite"]:
+                raise UninstallError("original scoped journal or ledger changed after archive")
+            if file_fingerprint(BINARY) != plan["binary"] or file_fingerprint(UNIT) != plan["unit"]:
+                raise UninstallError("original scoped installed identity changed after archive")
+            for raw, proof in plan["scoped_units"].items():
+                if raw == str(SCOPED_INCUS_DROPIN) and record["phase"] != "ARCHIVED" and not os.path.lexists(raw):
+                    continue
+                if file_fingerprint(Path(raw)) != proof:
+                    raise UninstallError("original scoped unit changed after archive")
         for unit in (UNIT.name, SCOPED_LIFECYCLE_UNIT.name):
             scoped_inactive(unit)
         if record["phase"] == "ARCHIVED":

@@ -113,6 +113,28 @@ func scopedRetirementFenceMatches(project, digest string) error {
 			return errors.New("untrusted scoped retirement archive")
 		}
 	}
+	var reviewed struct {
+		Mode    string                 `json:"mode"`
+		Project string                 `json:"project"`
+		Review  string                 `json:"review_sha256"`
+		Ready   bool                   `json:"ready"`
+		Native  ScopedRetirementReview `json:"scoped_native"`
+	}
+	path := filepath.Join(receipt.Archive, "review.json")
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != 0 || owner.Nlink != 1 || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() > 1024*1024 {
+		return errors.New("untrusted archived scoped retirement review")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || json.Unmarshal(data, &reviewed) != nil || !reviewed.Ready ||
+		reviewed.Mode != "SCOPED_PEER_FRESH_V2" || reviewed.Project != project ||
+		reviewed.Review != receipt.Review || reviewed.Native.ReviewSHA256 != digest || reviewed.Native.Project != project {
+		return errors.New("archived scoped retirement review mismatch")
+	}
 	return nil
 }
 
