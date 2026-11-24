@@ -92,6 +92,36 @@ print("N2_INSTALLED_HELPER_ACTIVATION=PASS",flush=True)
 PY
 fi
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
+# D1 exact-head installed read-only observations before workload admission.
+d1_pid="$(sudo systemctl show boxweave.service -p MainPID --value)"
+for actor in root boxweave; do
+  if test "$actor" = root; then
+    sudo "$installed" doctor -project "$project" > "$work/d1-$actor.json"
+  else
+    sudo runuser -u boxweave -- "$installed" doctor -project "$project" > "$work/d1-$actor.json"
+  fi
+done
+python3 - "$work/d1-root.json" "$work/d1-boxweave.json" "${PR178_SCOPED_N2:-0}" <<'D1CHECK'
+import json,sys
+root,svc=(json.load(open(p)) for p in sys.argv[1:3])
+for x in (root,svc):
+    d=x["diagnostic"]
+    assert x["ready"] and x["native"]["ready"] and x["schema_version"]==6
+    assert d["version"]==1 and d["database"]["state"]=="OBSERVED" and d["database"]["epoch_ns"]>0
+    assert d["coverage"]=="PARTIAL_D1_FOUNDATION" and not d["cross_source_atomic"] and d["mcp"]["state"]=="NOT_CHECKED"
+    assert d["installation"]["installed_identity"]=="VERIFIED" and d["installation"]["runtime"]=="VERIFIED"
+r,s=(x["diagnostic"]["installation"] for x in (root,svc))
+if sys.argv[3]=="1":
+    assert r["mode"]=="SCOPED_V2" and r["root_proof"]=="VERIFIED",r
+    assert root["diagnostic"]["scoped_ledger"]=={"owned":0,"retired":0}
+    assert s["candidate"]=="SCOPED_V2" and s["mode"]=="UNVERIFIED" and s["root_proof"]=="ROOT_AUTHORITY_REQUIRED",s
+else:
+    assert r["mode"]=="LEGACY" and s["mode"]=="LEGACY",(r,s)
+print("PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS",flush=True)
+D1CHECK
+test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
+echo PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS
+
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"

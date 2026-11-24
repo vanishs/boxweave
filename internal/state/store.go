@@ -238,17 +238,21 @@ func (s *Store) ExecArchiveDir() string {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) validateExistingSchema() error {
+	return s.validateExistingSchemaContext(context.Background())
+}
+
+func (s *Store) validateExistingSchemaContext(ctx context.Context) error {
 	// Inspect existing files with read-only SQL BEFORE any journal mode,
 	// DDL or migration: never modify a foreign/unversioned database.
 	var n int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'").Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'").Scan(&n); err != nil {
 		return err
 	}
 	if n != 1 {
 		return fmt.Errorf("existing database missing version: refuse foreign adoption")
 	}
 	var version int
-	if err := s.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version); err != nil {
+	if err := s.db.QueryRowContext(ctx, "SELECT version FROM schema_version LIMIT 1").Scan(&version); err != nil {
 		return err
 	}
 	if version != SchemaVersion {
@@ -257,13 +261,13 @@ func (s *Store) validateExistingSchema() error {
 	// A LIMIT 1 version read alone can hide a second conflicting migration
 	// record. Never choose one history or adopt unknown application tables.
 	var versionRows int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&versionRows); err != nil {
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_version").Scan(&versionRows); err != nil {
 		return err
 	}
 	if versionRows != 1 {
 		return fmt.Errorf("ambiguous SQLite migration history: %d version rows", versionRows)
 	}
-	rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'")
+	rows, err := s.db.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'")
 	if err != nil {
 		return err
 	}
@@ -294,7 +298,7 @@ func (s *Store) validateExistingSchema() error {
 	for _, expected := range schemaDDL {
 		name := strings.Fields(expected)[2]
 		var actual string
-		if err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&actual); err != nil {
+		if err := s.db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&actual); err != nil {
 			return fmt.Errorf("missing exact schema table %s: %w", name, err)
 		}
 		if actual != expected {
@@ -303,7 +307,7 @@ func (s *Store) validateExistingSchema() error {
 	}
 	// Validate every index in the new initial schema as well as tables. No
 	// silently changed/foreign index may influence a security-scoped query.
-	indexRows, err := s.db.Query("SELECT name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
+	indexRows, err := s.db.QueryContext(ctx, "SELECT name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
 	if err != nil {
 		return err
 	}
@@ -339,14 +343,14 @@ func (s *Store) validateExistingSchema() error {
 	}
 	// A foreign trigger/view can silently change mutation semantics even when
 	// the six declared table names and schema_version are unchanged.
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
 		return err
 	}
 	if n != 0 {
 		return errors.New("unexpected SQLite trigger/view: refuse foreign database")
 	}
 	var integrity string
-	if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
+	if err := s.db.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&integrity); err != nil {
 		return err
 	}
 	if integrity != "ok" {

@@ -4,6 +4,9 @@ on:
     branches: [v1]
     paths:
       - internal/install/**
+      - internal/diagnostic/**
+      - internal/state/diagnostic_snapshot*.go
+      - cmd/boxweave/doctor*.go
       - internal/state/network_ipv4*.go
       - internal/control/ipv4_retirement*.go
       - internal/control/peer_tools.go
@@ -51,6 +54,8 @@ jobs:
           sh -n scripts/n2_installed_lifecycle.sh
           sh scripts/n2_installed_lifecycle.sh | tee "$RUNNER_TEMP/n2-installed.log"
           grep -Fq 'N2_CLEAN_BOOTSTRAP_ADDRESS_POOL=PASS ' "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS "$RUNNER_TEMP/n2-installed.log"
           if test "$PR178_SCOPED_N2" = 1; then
             grep -Fxq PR178_N3_GUARD_PREREQUISITE=PASS "$RUNNER_TEMP/n2-installed.log"
             for marker in INSTALL FRESH_ONLY BOOT_ORDER MCP_SCOPED_CREATE MCP_SCOPED_DELETE MCP_LIFECYCLE; do

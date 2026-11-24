@@ -1,5 +1,7 @@
 # Documentation index
 
+**PR #177 D1 foundation:** [implementation and Box verification](development/V1_PR177_D1_FOUNDATION_2026-11-23.md). D0 accepted; D1 candidate requires exact-head CI before D2.
+
 **PR #177 extended D0:** [D1-D4 investigation and reproducible boundary tests](development/V1_PR177_D0_EXTENDED_D1_D4_INVESTIGATION_2026-11-23.md). Test-only, no production feature implementation.
 
 **PR #177 staged delivery:** [D0-D5 development plan](development/V1_PR177_D0_D5_DEVELOPMENT_PLAN_2026-11-23.md) and [D0 experiments and source/authority matrix](development/V1_PR177_D0_EXPERIMENTS_2026-11-23.md). Box iteration precedes every CI submission; D0 candidate is experimental, not new Doctor/Recover implementation.

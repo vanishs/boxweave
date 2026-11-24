@@ -1,5 +1,7 @@
 # PR #177: staged Doctor / Recover delivery (D0-D5)
 
+> **D0 accepted, D1 foundation delivered for CI:** [D1 implementation and Box evidence](V1_PR177_D1_FOUNDATION_2026-11-23.md). Check exact D1 HEAD CI including new installed mode/authority markers before D2. Doctor now captures a bounded private locked SQLite epoch and never calls state.Open on source; this handle is not a Root witness. Do not repeat D0.
+
 > **Mandatory D0 extended findings:** [D1-D4 investigation and additional Box evidence](V1_PR177_D0_EXTENDED_D1_D4_INVESTIGATION_2026-11-23.md). Reuse the source/authority and leaf matrix; fix proven retirement/operation-cause/navigation classification gaps in D2, separate Root proof from restricted recovery worker, bind fresh review evidence separately from idempotency, and do not certify a moving DB/WAL copy. D0 extension is characterization only; review exact-head CI before D1.
 
 Owner-approved engineering workflow (2026-11-23). Scope: one BoxWeave binary, two public CLI entries, existing MCP tools, shared internal diagnostic and recovery services. Preserve accepted legacy guided uninstall and #178 scoped fresh security boundaries. No new public Root tool, no automatic global repair, no production deployment or v1 merge without separate authorization.
