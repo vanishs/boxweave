@@ -3,6 +3,8 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -121,7 +123,7 @@ func CheckScopedServeMode(enabled bool) error {
 		if enabled {
 			return errors.New("scoped installation journal missing")
 		}
-		return nil
+		return refuseScopedLegacy()
 	}
 	if err != nil {
 		return err
@@ -134,8 +136,15 @@ func CheckScopedServeMode(enabled bool) error {
 }
 
 func refuseScopedLegacy() error {
-	if _, err := os.Lstat(nativePeerFreshJournalDir); !errors.Is(err, os.ErrNotExist) {
-		return errors.New("scoped fresh state exists or cannot be inspected; legacy upgrade/adoption unsupported")
+	return refuseScopedLegacyPaths(os.Lstat)
+}
+
+func refuseScopedLegacyPaths(lstat func(string) (fs.FileInfo, error)) error {
+	for _, path := range []string{nativePeerFreshJournalDir, scopedGuardUnitPath,
+		scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket} {
+		if info, err := lstat(path); info != nil || !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("scoped fresh evidence exists or cannot be inspected: %s; legacy maintenance unsupported", path)
+		}
 	}
 	return nil
 }

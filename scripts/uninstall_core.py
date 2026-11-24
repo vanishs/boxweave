@@ -28,6 +28,10 @@ AUDIT = Path("/var/lib/boxweave-uninstall-v1-audit.json")
 BACKUP = Path("/var/lib/boxweave-installer-backup")
 RETIRED = Path("/var/lib/boxweave-retired")
 SCOPED_JOURNAL = Path("/var/lib/boxweave-scoped-peer-v2")
+SCOPED_GUARD_UNIT = Path("/etc/systemd/system/boxweave-scoped-guard.service")
+SCOPED_LIFECYCLE_UNIT = Path("/etc/systemd/system/boxweave-scoped-lifecycle.service")
+SCOPED_INCUS_DROPIN = Path("/etc/systemd/system/incus.service.d/50-boxweave-scoped-guard.conf")
+SCOPED_SOCKET = Path("/run/boxweave-scoped-lifecycle.sock")
 VALID_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 VALID_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 VALID_SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -46,14 +50,15 @@ class UninstallError(Exception):
 
 def refuse_scoped_retirement():
     """Legacy retirement, including resume, cannot consume a scoped installation."""
-    try:
-        SCOPED_JOURNAL.lstat()
-    except FileNotFoundError:
-        pass
-    except OSError as exc:
-        raise UninstallError("scoped v2 journal cannot be inspected; preserve native guard and journal") from exc
-    else:
-        raise UninstallError("scoped v2 retirement requires separate reviewed implementation; preserve native guard and journal")
+    for path in (SCOPED_JOURNAL, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT,
+                 SCOPED_INCUS_DROPIN, SCOPED_SOCKET):
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise UninstallError("scoped v2 evidence cannot be inspected; preserve native guard and journal") from exc
+        raise UninstallError("scoped v2 retirement requires separate reviewed implementation; preserve native guard and journal: " + str(path))
     manifest = read_json(STATE / "install-manifest.json")
     if isinstance(manifest, dict) and manifest.get("scoped_peer_mode") not in (None, ""):
         raise UninstallError("scoped v2 retirement requires separate reviewed implementation; preserve native guard and journal")
@@ -1026,7 +1031,7 @@ def resume_interrupted_retirement(plan, archive):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned host uninstall (no implicit deletion)")
+    parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned Legacy uninstall (Scoped Peer v2 unsupported; no implicit deletion)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")

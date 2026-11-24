@@ -44,9 +44,17 @@ class ReleaseTests(unittest.TestCase):
                                 text=True, capture_output=True)
         self.assertEqual(output.returncode, 0, output.stderr)
         self.assertIn("--full", output.stdout)
+        self.assertIn("Scoped Peer v2 unsupported", output.stdout)
         self.assertEqual(len(m["assets"]), 2)
         self.assertEqual(m["dependencies"]["go_toolchain"], "1.26.9")
         self.assertTrue(m["dependencies"]["incus_go_sdk"].startswith("v7."))
+
+    def test_checkout_uninstall_wrapper_missing_core_is_clear(self):
+        wrapper = self.dir / "uninstall-source.sh"
+        wrapper.write_bytes((ROOT / "uninstall.sh").read_bytes())
+        out = subprocess.run(["sh", str(wrapper), "--help"], text=True, capture_output=True)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("self-contained matching Release uninstall.sh", out.stderr)
 
     def test_wrong_machine_fails(self):
         arm = self.dir / "boxweave-v1.0.0-rc.1-linux-arm64"

@@ -35,6 +35,10 @@ class FakeHost(unittest.TestCase):
             "BACKUP": root / "installer-backup",
             "RETIRED": root / "retired",
             "SCOPED_JOURNAL": root / "scoped-journal",
+            "SCOPED_GUARD_UNIT": root / "scoped-guard",
+            "SCOPED_LIFECYCLE_UNIT": root / "scoped-lifecycle",
+            "SCOPED_INCUS_DROPIN": root / "scoped-dropin",
+            "SCOPED_SOCKET": root / "scoped-socket",
         }
         for name, p in self.paths.items():
             patcher = mock.patch.object(u, name, p)
@@ -150,6 +154,18 @@ class FakeHost(unittest.TestCase):
         u.SCOPED_JOURNAL.symlink_to(u.SCOPED_JOURNAL.parent / "missing")
         with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
             self.plan()
+        self.assertEqual(self.cmds, [])
+        self.assertFalse(u.AUDIT.exists())
+
+    def test_scoped_residue_without_journal_refuses_legacy(self):
+        for key in ("SCOPED_GUARD_UNIT", "SCOPED_LIFECYCLE_UNIT",
+                    "SCOPED_INCUS_DROPIN", "SCOPED_SOCKET"):
+            with self.subTest(key=key):
+                path = self.paths[key]
+                path.symlink_to(path.with_name("missing"))
+                with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+                    self.plan()
+                path.unlink()
         self.assertEqual(self.cmds, [])
         self.assertFalse(u.AUDIT.exists())
 
