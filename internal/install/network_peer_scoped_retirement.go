@@ -34,19 +34,19 @@ func refuseScopedRetirementInProgress() error {
 }
 
 type ScopedRetirementReview struct {
-	Project string `json:"project"`
+	Project      string `json:"project"`
 	ReviewSHA256 string `json:"review_sha256"`
-	Phase string `json:"phase"`
-	GuardPresent bool `json:"guard_present"`
-	Retired int `json:"retired"`
-	Table string `json:"table"`
+	Phase        string `json:"phase"`
+	GuardPresent bool   `json:"guard_present"`
+	Retired      int    `json:"retired"`
+	Table        string `json:"table"`
 }
 
 type scopedRetirementNative struct {
-	Review ScopedRetirementReview
-	Preimage scopedRetirementPreimage
-	Guard NativePeerGuardPlan
-	ProjectTag, ProfileTag string
+	Review                                  ScopedRetirementReview
+	Preimage                                scopedRetirementPreimage
+	Guard                                   NativePeerGuardPlan
+	ProjectTag, ProfileTag                  string
 	ProjectBefore, ProfileBefore, ACLAbsent bool
 }
 
@@ -83,10 +83,10 @@ func scopedRetirementDetached(ctx context.Context) error {
 
 func scopedRetirementFenceMatches(project, digest string) error {
 	var receipt struct {
-		Schema int `json:"schema"`
+		Schema  int    `json:"schema"`
 		Project string `json:"project"`
-		Native string `json:"native_review_sha256"`
-		Review string `json:"review_sha256"`
+		Native  string `json:"native_review_sha256"`
+		Review  string `json:"review_sha256"`
 		Archive string `json:"archive"`
 	}
 	st, err := os.Lstat(scopedRetirementFence)
@@ -293,7 +293,7 @@ func scopedRetirementNativeRead(ctx context.Context, project string, resume bool
 		phase = "GUARD_ABSENT"
 	}
 	return scopedRetirementNative{
-		Review: ScopedRetirementReview{Project: project, ReviewSHA256: digest, Phase: phase, GuardPresent: present, Retired: len(ledger.Retired), Table: guard.Table},
+		Review:   ScopedRetirementReview{Project: project, ReviewSHA256: digest, Phase: phase, GuardPresent: present, Retired: len(ledger.Retired), Table: guard.Table},
 		Preimage: p, Guard: guard, ProjectTag: pt, ProfileTag: ft,
 		ProjectBefore: projectBefore, ProfileBefore: profileBefore, ACLAbsent: absent,
 	}, nil
