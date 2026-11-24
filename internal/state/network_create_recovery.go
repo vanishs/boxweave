@@ -25,6 +25,15 @@ func (s *Store) CheckRecoveryCreateBinding(ctx context.Context, t RecoveryTarget
 }
 
 func checkRecoveryCreateTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof) error {
+	schema, err := scopedCreateIntentSchema(ctx, tx, t.ID)
+	if err != nil {
+		return err
+	}
+	// Scoped recovery must prove Root ACL and boot journal, never settle
+	// a quarantined v2 Create via the legacy pinned-NIC verifier.
+	if schema != 0 {
+		return ErrResourceLocked
+	}
 	b := p.CreateBinding
 	if t.Action != "box_create" || t.State != "UNKNOWN" || t.Released || !t.CreatePinStaged ||
 		t.UUID != "" || t.Incarnation != "" || p.NativeID != t.NativeID || !validCreateRecoveryReason(t, p) ||

@@ -577,6 +577,9 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	if e := requireNoIPv4Compaction(ctx, tx, a.Layer); e != nil {
 		return Receipt{}, e
 	}
+	if err = scopedCreateAdmissionBarrier(ctx, tx, a); err != nil {
+		return Receipt{}, err
+	}
 	if a.Action == ReadinessAction {
 		return s.admitReadinessTx(ctx, tx, a, keyHash, intentHash)
 	}

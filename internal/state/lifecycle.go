@@ -316,6 +316,13 @@ func (s *Store) registerCreatedBox(ctx context.Context, operationID, project, na
 		resource != "box:"+name || existingUUID != "" || nativeID == "" {
 		return ErrState
 	}
+	schema, err := scopedCreateIntentSchema(ctx, tx, operationID)
+	if err != nil {
+		return err
+	}
+	if schema != 0 {
+		return ErrResourceLocked
+	}
 	now := time.Now().UnixNano()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO owned_boxes
 		(uuid,project,name,incarnation,state,created_at)
@@ -359,7 +366,7 @@ func (s *Store) registerCreatedBox(ctx context.Context, operationID, project, na
 // and current instance identity. A failed-start residue uses RegisterCreatedBox
 // instead, deliberately retaining a FAILED owned claim for explicit deletion.
 func (s *Store) FinalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string) error {
-	return s.finalizeVerifiedCreate(ctx, opID, project, name, uuid, nil)
+	return s.finalizeVerifiedCreate(ctx, opID, project, name, uuid, nil, false)
 }
 
 // FinalizeVerifiedCreateWithBinding couples the original Create receipt,
@@ -369,10 +376,19 @@ func (s *Store) FinalizeVerifiedCreateWithBinding(ctx context.Context, opID, pro
 	if !binding.valid() {
 		return ErrInvalid
 	}
-	return s.finalizeVerifiedCreate(ctx, opID, project, name, uuid, &binding)
+	return s.finalizeVerifiedCreate(ctx, opID, project, name, uuid, &binding, false)
 }
 
-func (s *Store) finalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string, binding *VerifiedCreateBinding) error {
+// FinalizeVerifiedScopedCreate requires verified native UUID/ACL/boot
+// postconditions from the trusted controller. A legacy finalizer cannot
+// accept a v2 intent or retain the provisional ACL as the final binding.
+func (s *Store) FinalizeVerifiedScopedCreate(ctx context.Context, opID, project, name, uuid string, binding VerifiedCreateBinding) error {
+	if !binding.valid() {
+		return ErrInvalid
+	}
+	return s.finalizeVerifiedCreate(ctx, opID, project, name, uuid, &binding, true)
+}
+func (s *Store) finalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string, binding *VerifiedCreateBinding, scoped bool) error {
 	if opID == "" || project == "" || name == "" || uuid == "" ||
 		len(name) > 63 || len(uuid) > 128 {
 		return ErrInvalid
@@ -391,6 +407,20 @@ func (s *Store) finalizeVerifiedCreate(ctx context.Context, opID, project, name,
 	if action != "box_create" || phase != "VERIFYING" ||
 		layer != project || resource != "box:"+name || oldUUID != "" || nativeID == "" {
 		return ErrState
+	}
+	schema, err := scopedCreateIntentSchema(ctx, tx, opID)
+	if err != nil {
+		return err
+	}
+	if scoped {
+		if schema != 2 || binding == nil {
+			return ErrResourceLocked
+		}
+		if err = exchangeScopedCreateACL(ctx, tx, opID, project, name, uuid, *binding); err != nil {
+			return err
+		}
+	} else if schema != 0 {
+		return ErrResourceLocked
 	}
 	now := time.Now().UnixNano()
 	if _, err = tx.ExecContext(ctx, `INSERT INTO owned_boxes
@@ -448,7 +478,24 @@ func (s *Store) FinalizeVerifiedDelete(ctx context.Context, opID string, box Own
 	return tx.Commit()
 }
 
+// FinalizeVerifiedScopedDelete requires a trusted Root receipt proving
+// the exact detached ACL no longer exists. Legacy recovery cannot settle
+// this mode's original using instance absence alone.
+func (s *Store) FinalizeVerifiedScopedDelete(ctx context.Context, opID string, box OwnedBox) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = finishVerifiedDeleteTxMode(ctx, tx, opID, box, "VERIFYING", "SCOPED_DELETE_ACL_ABSENT_ATOMIC", true); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 func finishVerifiedDeleteTx(ctx context.Context, tx *sql.Tx, opID string, box OwnedBox, expectedPhase, detail string) error {
+	return finishVerifiedDeleteTxMode(ctx, tx, opID, box, expectedPhase, detail, false)
+}
+func finishVerifiedDeleteTxMode(ctx context.Context, tx *sql.Tx, opID string, box OwnedBox, expectedPhase, detail string, scoped bool) error {
 	var err error
 	var action, phase, layer, uuid, incarnation, resource, nativeID string
 	if err = tx.QueryRowContext(ctx, `SELECT action,state,layer,box_uuid,
@@ -460,6 +507,33 @@ func finishVerifiedDeleteTx(ctx context.Context, tx *sql.Tx, opID string, box Ow
 		layer != box.Project || uuid != box.UUID ||
 		incarnation != box.Incarnation || resource != "box:"+box.Name {
 		return ErrState
+	}
+	var createID string
+	e := tx.QueryRowContext(ctx, "SELECT id FROM operations WHERE action='box_create' AND layer=? AND box_uuid=? AND incarnation=?", box.Project, box.UUID, box.Incarnation).Scan(&createID)
+	if e != nil && !errors.Is(e, sql.ErrNoRows) {
+		return e
+	}
+	schema := 0
+	if createID != "" {
+		schema, e = scopedCreateIntentSchema(ctx, tx, createID)
+		if e != nil {
+			return e
+		}
+	}
+	if scoped {
+		if schema != 2 {
+			return ErrResourceLocked
+		}
+		var bridge string
+		if e = tx.QueryRowContext(ctx, "SELECT bridge FROM network_bindings WHERE project=? AND box_uuid=? AND incarnation=? AND state='PINNED'", box.Project, box.UUID, box.Incarnation).Scan(&bridge); e != nil {
+			return e
+		}
+		p, e := readScopedDeleteOriginalTx(ctx, tx, opID, box.Project, bridge)
+		if e != nil || p.Box != box {
+			return ErrResourceLocked
+		}
+	} else if schema != 0 {
+		return ErrResourceLocked
 	}
 	if err := finalizeDeleteDependencies(ctx, tx, opID, box); err != nil {
 		return err

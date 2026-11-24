@@ -27,6 +27,7 @@ RETIREMENT_SOCKET = Path("/run/boxweave-ipv4-retirement.sock")
 AUDIT = Path("/var/lib/boxweave-uninstall-v1-audit.json")
 BACKUP = Path("/var/lib/boxweave-installer-backup")
 RETIRED = Path("/var/lib/boxweave-retired")
+SCOPED_JOURNAL = Path("/var/lib/boxweave-scoped-peer-v2")
 VALID_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 VALID_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 VALID_SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -41,6 +42,21 @@ SCOPES = ("service", "controller", "full")
 
 class UninstallError(Exception):
     pass
+
+
+def refuse_scoped_retirement():
+    """Legacy retirement, including resume, cannot consume a scoped installation."""
+    try:
+        SCOPED_JOURNAL.lstat()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise UninstallError("scoped v2 journal cannot be inspected; preserve native guard and journal") from exc
+    else:
+        raise UninstallError("scoped v2 retirement requires separate reviewed implementation; preserve native guard and journal")
+    manifest = read_json(STATE / "install-manifest.json")
+    if isinstance(manifest, dict) and manifest.get("scoped_peer_mode") not in (None, ""):
+        raise UninstallError("scoped v2 retirement requires separate reviewed implementation; preserve native guard and journal")
 
 
 def sha(data):
@@ -484,6 +500,7 @@ def inspect_exec_archive(uid):
 
 
 def inspect(scope, project, box_uuids, native_sha, guided=False):
+    refuse_scoped_retirement()
     if not VALID_NAME.fullmatch(project):
         raise UninstallError("exact valid --project required")
     if len(box_uuids) != len(set(box_uuids)) or any(not VALID_UUID.fullmatch(x) for x in box_uuids):
@@ -726,6 +743,7 @@ def hold_stopped_serve_lock(plan):
 
 
 def apply(plan):
+    refuse_scoped_retirement()
     # At this point the operator has already approved both exact digests;
     # no automatic retries or implicit "yes" on modified host state.
     if plan["service_state"] == "active":
@@ -788,6 +806,7 @@ def archive_controller(plan):
 
 
 def apply_with_serve_lock(plan, preserved_archive=None):
+    refuse_scoped_retirement()
     # Stopping may legitimately checkpoint WAL; recheck native and SQLite
     # semantic blockers, not a fabricated claim that WAL bytes are immutable.
     after = inspect_sqlite(STATE / "ledger.sqlite", guided=plan.get("guided", False))
@@ -902,6 +921,7 @@ def inspect_interrupted_retirement(project, archive_path):
     pre-rollback APPLIED native journal are accepted. No partially dispatched
     native rollback, deleted controller artifact or unknown Box is replayed.
     """
+    refuse_scoped_retirement()
     if not VALID_NAME.fullmatch(project):
         raise UninstallError("exact project required for retirement recovery")
     archive = Path(archive_path)
@@ -994,6 +1014,7 @@ def inspect_interrupted_retirement(project, archive_path):
 
 
 def resume_interrupted_retirement(plan, archive):
+    refuse_scoped_retirement()
     # Caller must have independently approved the matching, fresh read-only phase.
     if systemd_status() != "inactive":
         raise UninstallError("stopped original service required for retirement resume")
@@ -1088,6 +1109,7 @@ def main(argv=None):
     if plan["host_machine_id_sha256"] != args.confirm_host_sha256 or \
             plan["review_sha256"] != args.confirm_review_sha256 or not plan["ready"]:
         raise UninstallError("host/scope/inventory drift or blockers: apply refused")
+    refuse_scoped_retirement()
     audited_write({"status": "STARTED", "scope": plan["scope"],
                    "host_sha256": plan["host_machine_id_sha256"],
                    "review_sha256": plan["review_sha256"],

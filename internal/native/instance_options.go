@@ -27,6 +27,17 @@ type InstanceOptions struct {
 	InterceptBPFDevices  *bool   `json:"security.syscalls.intercept.bpf.devices,omitempty" jsonschema:"Device-cgroup BPF interception requires security.syscalls.intercept.bpf=true plus host/Project permission."`
 }
 
+// ForCreate materializes BoxWeave-owned defaults only for a NEW instance.
+// Keep the original omitted-field create intent for historical idempotency replay.
+// Never use this for box_update; explicitly disabled autostart stays disabled.
+func (o InstanceOptions) ForCreate() InstanceOptions {
+	if o.BootAutostart == nil {
+		enabled := true
+		o.BootAutostart = &enabled
+	}
+	return o
+}
+
 // IsZero determines whether box_update contains a requested new field.
 func (o InstanceOptions) IsZero() bool {
 	return o.AppArmorProfile == nil && o.Privileged == nil &&

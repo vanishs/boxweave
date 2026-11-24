@@ -134,6 +134,12 @@ def main():
                  "--local-binary", path, "--sha256", digest],
                 [(b"to approve this exact plan:", "INSTALL "+project),
                  (b"Configure a new OAuth approval password?", "N")])
+    elif action == "tty-install-scoped":
+        path, digest = args
+        tty_run(["sudo", "sh", "install.sh", "--interactive", "--scoped-peer-fresh",
+                 "--project", project, "--local-binary", path, "--sha256", digest],
+                [(b"to approve this exact plan:", "INSTALL SCOPED "+project),
+                 (b"Configure a new OAuth approval password?", "N")])
     elif action == "tty-uninstall":
         tty_run(["sudo", "sh", "uninstall.sh", "--full", "--project", project],
                 [(b"to approve deleting all listed Boxes and retiring this controller:", "REMOVE "+project)])

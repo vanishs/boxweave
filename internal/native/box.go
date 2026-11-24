@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vanishs/boxweave/internal/peerscope"
 	"io"
 	"net/http"
 	"net/url"
@@ -314,15 +315,29 @@ func (r Reader) CheckExactPrivateNIC(ctx context.Context, name, uuid string) err
 // Image selection follows Incus local aliases or its official simplestreams
 // catalog; the user never supplies a remote URL or arbitrary native config.
 func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
-	return r.create(ctx, a, nil, nil)
+	return r.create(ctx, a, nil, nil, false)
 }
 func (r Reader) CreateWithPeerBinding(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding, read ReadCreatePeerHolds) (string, error) {
 	if reserve == nil || read == nil {
 		return "", ErrNativeUnsupported
 	}
-	return r.create(ctx, a, reserve, read)
+	return r.create(ctx, a, reserve, read, false)
 }
-func (r Reader) create(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding, read ReadCreatePeerHolds) (string, error) {
+
+// CreateScopedQuarantined dispatches only an inert first phase. No start,
+// internet or autostart until the Root ACL attachment has been verified.
+// The original caller intent remains in SQLite, not modified by this copy.
+func (r Reader) CreateScopedQuarantined(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding, read ReadCreatePeerHolds) (string, error) {
+	if reserve == nil || read == nil || a.OperationID == "" {
+		return "", ErrNativeUnsupported
+	}
+	a.Start = false
+	a.Internet = false
+	disabled := false
+	a.Options.BootAutostart = &disabled
+	return r.create(ctx, a, reserve, read, true)
+}
+func (r Reader) create(ctx context.Context, a InstanceAction, reserve ReserveCreatePeerBinding, read ReadCreatePeerHolds, scoped bool) (string, error) {
 	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) || !ValidImageChoice(a.Image) {
 		return "", ErrNativeUnsupported
 	}
@@ -395,6 +410,12 @@ func (r Reader) create(ctx context.Context, a InstanceAction, reserve ReserveCre
 	devices, err := ownedPrivateNICEgress(api.DevicesMap{rootKey: root}, p.Devices, a.Internet)
 	if err != nil {
 		return "", err
+	}
+	if (devices["eth0"]["security.acls"] == peerscope.QuarantineACL) != scoped {
+		return "", ErrUnsafeNetwork
+	}
+	if scoped && (a.Start || a.Internet || config["boot.autostart"] != "false" || devices["eth0"]["security.acls.default.egress.action"] != "reject") {
+		return "", ErrUnsafeNetwork
 	}
 	if reserve != nil {
 		b, e := selectCreatePeerBinding(ctx, c, r.Project, project, devices, a.OperationID, reserve, read)

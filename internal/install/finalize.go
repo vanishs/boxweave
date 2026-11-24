@@ -12,6 +12,9 @@ import (
 // after an operator has verified the currently active instance. It does not
 // delete SQLite state, alter Incus, or silently discard an upgrade snapshot.
 func CommitUpgrade(p Plan, approved bool) (Manifest, error) {
+	if err := refuseScopedLegacy(); err != nil {
+		return Manifest{}, err
+	}
 	if err := localApproval(p, approved); err != nil {
 		return Manifest{}, err
 	}

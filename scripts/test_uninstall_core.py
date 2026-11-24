@@ -34,6 +34,7 @@ class FakeHost(unittest.TestCase):
             "AUDIT": root / "uninstall-audit.json",
             "BACKUP": root / "installer-backup",
             "RETIRED": root / "retired",
+            "SCOPED_JOURNAL": root / "scoped-journal",
         }
         for name, p in self.paths.items():
             patcher = mock.patch.object(u, name, p)
@@ -111,6 +112,46 @@ class FakeHost(unittest.TestCase):
         }))
         self.paths["STATE"].joinpath("install-manifest.json").chmod(0o600)
         self.box = "11111111-2222-3333-4444-555555555555"
+
+    def test_scoped_journal_blocks_every_legacy_retirement_entry(self):
+        plan = self.plan()
+        u.SCOPED_JOURNAL.mkdir()
+        with mock.patch.object(u.os, "geteuid", return_value=0):
+            for argv in (
+                ["--plan", "--scope", "service", "--project", "user-1001"],
+                ["--plan", "--guided-full-plan", "--scope", "full", "--project", "user-1001"],
+                ["--apply", "--scope", "service", "--project", "user-1001"],
+                ["--full"],
+                ["--resume-plan", "--project", "user-1001", "--retirement-archive", "/unused"],
+                ["--resume", "--project", "user-1001", "--retirement-archive", "/unused"],
+            ):
+                with self.subTest(argv=argv), self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+                    u.main(argv)
+        for invoke in (
+            lambda: u.apply(plan),
+            lambda: u.apply_with_serve_lock(plan),
+            lambda: u.resume_interrupted_retirement(plan, "/unused"),
+        ):
+            with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+                invoke()
+        self.assertEqual(self.cmds, [])
+        self.assertFalse(u.AUDIT.exists())
+        self.assertTrue(u.SCOPED_JOURNAL.is_dir())
+
+    def test_scoped_manifest_or_dangling_journal_never_falls_back_to_legacy(self):
+        manifest_path = u.STATE / "install-manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["scoped_peer_mode"] = "scoped-v2"
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+            self.plan()
+        del manifest["scoped_peer_mode"]
+        manifest_path.write_text(json.dumps(manifest))
+        u.SCOPED_JOURNAL.symlink_to(u.SCOPED_JOURNAL.parent / "missing")
+        with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+            self.plan()
+        self.assertEqual(self.cmds, [])
+        self.assertFalse(u.AUDIT.exists())
 
     def fake_command(self, args, **kwargs):
         if args[:2] == ["systemctl", "show"]:
