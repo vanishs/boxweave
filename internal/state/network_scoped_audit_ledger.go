@@ -93,6 +93,7 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 		"SELECT count(*) FROM operation_resource_claims WHERE layer!=? OR 1=1",
 		"SELECT count(*) FROM network_ipv4_compactions WHERE project!=? OR 1=1",
 		"SELECT count(*) FROM network_ipv4_retirements WHERE project!=? OR 1=1",
+		"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=? OR 1=1",
 	} {
 		var n int
 		if err = tx.QueryRowContext(ctx, q, project).Scan(&n); err != nil {
