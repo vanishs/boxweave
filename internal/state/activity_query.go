@@ -347,6 +347,13 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	if err != nil {
 		return err
 	}
+	return readActivityIssuesAt(ctx, tx, q, out, cursor, secret)
+}
+
+// Shared bounded first-page query. Local diagnostics use a private SQLite
+// epoch and do not read cursor secrets or manufacture an MCP requester.
+func readActivityIssuesAt(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *ActivityResult, cursor activityCursor, secret []byte) error {
+	var err error
 	opQuery := q
 	opQuery.BoxUUID = ""
 	opWhere, opArgs := opQuery.where()
@@ -484,6 +491,22 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	if err != nil {
 		return err
 	}
+	// A scoped UNKNOWN can be inspected through the existing MCP recovery
+	// boundary. The durable intent is not a complete Root proof, so never
+	// promise settlement or bypass the original protection.
+	for i := range out.Issues {
+		issue := &out.Issues[i]
+		if issue.OperationID == "" || issue.State != "UNKNOWN" || (issue.Reason != "PROJECT_PEER_BARRIER" && issue.Reason != "PEER_LEDGER_UNRESOLVED") {
+			continue
+		}
+		target, e := readRecoveryTarget(ctx, tx, q.Layer, issue.OperationID)
+		if e != nil {
+			return e
+		}
+		if target.ScopedPeer && target.State == "UNKNOWN" {
+			issue.Disposition = "MCP_RECOVERY_INSPECTION_REQUIRED"
+		}
+	}
 	// Only modern originals with complete staged reservations can offer
 	// an actionable recovery inspection. This is NOT proof of native repair.
 	for i := range out.Issues {
@@ -502,7 +525,7 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 			issue.NextAction = &NextAction{Kind: "INSPECT_RECOVERY", Tool: "operation_recover", OperationID: issue.OperationID, Mode: "inspect"}
 		}
 	}
-	if out.Truncated {
+	if out.Truncated && len(secret) == 32 {
 		last := out.Issues[len(out.Issues)-1]
 		cursor.AtNS, cursor.Reason, cursor.OriginalID, cursor.Resource =
 			last.AtNS, last.Reason, last.OperationID, last.ResourceRef

@@ -1,5 +1,7 @@
 # Manual installation — BoxWeave v1 RC.3 (general host guide)
 
+**Doctor D2 source candidate, not a released feature:** diagnostic coverage now distinguishes durable active/history, scoped/legacy, local HTTP 401, restricted native inventory, Root policy, device configuration and external verification. A route to inspection is not repair authorization; never reset a retained scoped identity or restart a helper solely to make Doctor green. [D2 design and boundaries](../development/V1_PR177_D2_DIAGNOSIS_2026-11-23.md).
+
 **Doctor source candidate (PR #177 D1, not a released feature):** Doctor no longer initializes a missing ledger. Its versioned diagnostic block reports per-source evidence and PARTIAL coverage; legacy ready/mcp_ready are preflight/schema compatibility, not proof of real MCP, native or packet health. Root and restricted service observations differ. Busy or incomplete capture reports UNVERIFIED; never initialize, reset or restart a production service to force a green diagnosis. See [D1 design and limits](../development/V1_PR177_D1_FOUNDATION_2026-11-23.md).
 
 **PR #178 scoped Peer v2 candidate (not released):** explicit fresh-only installation; no legacy migration, upgrade, rollback or scoped uninstall. [N5 delivery, capacity limits, acceptance and #177 handoff](../development/V1_PR178_N5_DELIVERY_2026-11-23.md). Exact N5 CI and Owner review required. Never remove Root journals to bypass refusals.

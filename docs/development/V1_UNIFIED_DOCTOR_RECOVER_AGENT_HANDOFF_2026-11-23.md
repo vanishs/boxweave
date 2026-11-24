@@ -1,5 +1,7 @@
 # Next Agent handoff — implement unified `boxweave doctor` + `boxweave recover` in PR #177
 
+> **D1 accepted, D2 diagnosis candidate:** [D2 implementation, Box evidence and CI gates](V1_PR177_D2_DIAGNOSIS_2026-11-23.md). D1 exact-head CI all four passed. D2 shared diagnosis, mode-qualified retirement/capacity, bounded activity/history, Native/Root/Forward/OAuth coverage and stable issue routes delivered; review D2 exact-head CI before D3. Routes are not repair authority.
+
 > **D0 accepted, D1 foundation delivered for CI:** [D1 implementation and Box evidence](V1_PR177_D1_FOUNDATION_2026-11-23.md). Check exact D1 HEAD CI including new installed mode/authority markers before D2. Doctor now captures a bounded private locked SQLite epoch and never calls state.Open on source; this handle is not a Root witness. Do not repeat D0.
 
 > **Mandatory D0 extended findings:** [D1-D4 investigation and additional Box evidence](V1_PR177_D0_EXTENDED_D1_D4_INVESTIGATION_2026-11-23.md). Reuse the source/authority and leaf matrix; fix proven retirement/operation-cause/navigation classification gaps in D2, separate Root proof from restricted recovery worker, bind fresh review evidence separately from idempotency, and do not certify a moving DB/WAL copy. D0 extension is characterization only; review exact-head CI before D1.

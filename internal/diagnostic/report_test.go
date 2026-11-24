@@ -10,7 +10,7 @@ func TestPR177D1IssueIdentityAndCoverage(t *testing.T) {
 	r := NewReport("user-1001")
 	r.AddIssue("database", "MISSING", "ledger", "UNVERIFIED")
 	r.AddIssue("database", "MISSING", "ledger", "UNVERIFIED")
-	if len(r.Issues) != 1 || r.CrossSourceAtomic || r.Coverage != "PARTIAL_D1_FOUNDATION" || r.Issues[0].Repairability != "NOT_EVALUATED" {
+	if len(r.Issues) != 1 || r.CrossSourceAtomic || r.Coverage != "PARTIAL_D2_DIAGNOSIS" || r.Issues[0].Repairability != "NOT_EVALUATED" {
 		t.Fatal(r)
 	}
 	same := NewReport("user-1001")

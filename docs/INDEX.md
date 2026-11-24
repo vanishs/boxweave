@@ -1,5 +1,7 @@
 # Documentation index
 
+**PR #177 D2 diagnosis:** [implementation and Box evidence](development/V1_PR177_D2_DIAGNOSIS_2026-11-23.md). D1 accepted, D2 candidate requires exact-head CI before D3.
+
 **PR #177 D1 foundation:** [implementation and Box verification](development/V1_PR177_D1_FOUNDATION_2026-11-23.md). D0 accepted; D1 candidate requires exact-head CI before D2.
 
 **PR #177 extended D0:** [D1-D4 investigation and reproducible boundary tests](development/V1_PR177_D0_EXTENDED_D1_D4_INVESTIGATION_2026-11-23.md). Test-only, no production feature implementation.

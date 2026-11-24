@@ -28,24 +28,40 @@ type Issue struct {
 	Resource       string `json:"resource"`
 	Classification string `json:"classification"`
 	Repairability  string `json:"repairability"`
+	OriginalID     string `json:"original_id,omitempty"`
+	BoxID          string `json:"box_id,omitempty"`
 }
 type Report struct {
-	Version           int                            `json:"version"`
-	AsOfNS            int64                          `json:"as_of_ns"`
-	Scope             string                         `json:"scope"`
-	GoVersion         string                         `json:"-"`
-	Coverage          string                         `json:"coverage"`
-	CrossSourceAtomic bool                           `json:"cross_source_atomic"`
-	Database          Source                         `json:"database"`
-	Native            Source                         `json:"native"`
-	MCP               Source                         `json:"mcp"`
-	Installation      install.DiagnosticInstallation `json:"installation"`
-	ScopedLedger      *state.DiagnosticScopedSummary `json:"scoped_ledger,omitempty"`
-	Issues            []Issue                        `json:"issues"`
+	Version             int                            `json:"version"`
+	AsOfNS              int64                          `json:"as_of_ns"`
+	Scope               string                         `json:"scope"`
+	GoVersion           string                         `json:"-"`
+	Coverage            string                         `json:"coverage"`
+	CrossSourceAtomic   bool                           `json:"cross_source_atomic"`
+	Database            Source                         `json:"database"`
+	Native              Source                         `json:"native"`
+	MCP                 Source                         `json:"mcp"`
+	Installation        install.DiagnosticInstallation `json:"installation"`
+	ScopedLedger        *state.DiagnosticScopedSummary `json:"scoped_ledger,omitempty"`
+	Ledger              *state.DiagnosticLedger        `json:"ledger,omitempty"`
+	ActivityCoverage    Source                         `json:"activity_coverage"`
+	NativeInventory     Source                         `json:"native_inventory"`
+	NativeInventoryInfo *state.NativeNetworkAuditInfo  `json:"native_inventory_info,omitempty"`
+	ForwardDevices      Source                         `json:"forward_devices"`
+	ForwardVerified     int                            `json:"forward_verified"`
+	ForwardPolicy       Source                         `json:"forward_policy"`
+	AddressCapacity     Source                         `json:"address_capacity"`
+	RootPolicy          install.DiagnosticRootPolicy   `json:"root_policy"`
+	OAuth               Source                         `json:"oauth"`
+	StorageQuota        Source                         `json:"storage_quota"`
+	Tunnel              Source                         `json:"tunnel"`
+	PacketReachability  Source                         `json:"packet_reachability"`
+
+	Issues []Issue `json:"issues"`
 }
 
 func NewReport(scope string) Report {
-	return Report{Version: ReportVersion, AsOfNS: time.Now().UnixNano(), Scope: scope, GoVersion: runtime.Version(), Coverage: "PARTIAL_D1_FOUNDATION", MCP: Source{State: "NOT_CHECKED", Reason: "LEGACY_MCP_READY_IS_SCHEMA_ONLY"}, Issues: []Issue{}}
+	return Report{Version: ReportVersion, AsOfNS: time.Now().UnixNano(), Scope: scope, GoVersion: runtime.Version(), Coverage: "PARTIAL_D2_DIAGNOSIS", ActivityCoverage: Source{State: "NOT_CHECKED"}, NativeInventory: Source{State: "NOT_CHECKED"}, ForwardDevices: Source{State: "NOT_CHECKED"}, ForwardPolicy: Source{State: "NOT_CHECKED"}, AddressCapacity: Source{State: "NOT_CHECKED"}, RootPolicy: install.DiagnosticRootPolicy{State: "NOT_CHECKED", Kernel: "NOT_CHECKED", Conntrack: "NOT_CHECKED"}, OAuth: Source{State: "NOT_CHECKED"}, StorageQuota: Source{State: "NOT_CHECKED"}, Tunnel: Source{State: "NOT_CHECKED", Reason: "EXTERNAL_REACHABILITY_NOT_PROBED"}, PacketReachability: Source{State: "NOT_CHECKED", Reason: "CONFIGURATION_IS_NOT_PACKET_PROOF"}, MCP: Source{State: "NOT_CHECKED", Reason: "LEGACY_MCP_READY_IS_SCHEMA_ONLY"}, Issues: []Issue{}}
 }
 
 // IDs bind immutable scope and reason, not changing observations or

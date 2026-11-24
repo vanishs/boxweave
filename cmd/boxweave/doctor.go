@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
@@ -39,56 +41,92 @@ func doctorNativeActive(ctx context.Context, r native.Reader) native.Status {
 	return r.Read(ctx)
 }
 
+// Worker accepts no caller-supplied native scope, file path, shell or
+// credential. It independently captures the installed restricted ledger.
 func doctorNativeWorker() error {
 	p := doctorInstallPlan(doctorArgs{Project: "user-" + strconv.Itoa(os.Geteuid()), ServiceUser: "boxweave", Socket: "/var/lib/incus/unix.socket.user"})
 	uid, _, e := install.ServiceIdentity(p)
 	if e != nil || uid != os.Geteuid() || uid == 0 {
 		return errors.New("restricted installed diagnostic actor required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
-	return json.NewEncoder(os.Stdout).Encode(doctorNativeActive(ctx, native.Reader{Project: p.Project, Socket: p.Socket}))
+	r := native.Reader{Project: p.Project, Socket: p.Socket}
+	st := doctorNativeActive(ctx, r)
+	snap, e := state.OpenDiagnosticSnapshot(ctx, "/var/lib/boxweave/ledger.sqlite")
+	var l *state.DiagnosticLedger
+	if e == nil {
+		defer snap.Close()
+		if v, e := snap.ReadLedger(ctx, p.Project, "", "incusbr-"+strconv.Itoa(uid)); e == nil {
+			l = &v
+		}
+	}
+	return json.NewEncoder(os.Stdout).Encode(diagnostic.ReadNativeObservation(ctx, r, st, snap, l))
 }
-
-func doctorNative(ctx context.Context, a doctorArgs, identity install.DiagnosticInstallation) native.Status {
+func doctorNative(ctx context.Context, a doctorArgs, identity install.DiagnosticInstallation, snap *state.DiagnosticSnapshot, l *state.DiagnosticLedger) diagnostic.NativeObservation {
 	r := native.Reader{Socket: a.Socket, Project: a.Project}
 	if os.Geteuid() != 0 {
-		return doctorNativeActive(ctx, r)
+		return diagnostic.ReadNativeObservation(ctx, r, doctorNativeActive(ctx, r), snap, l)
+	}
+	unavailable := func(code string) diagnostic.NativeObservation {
+		return diagnostic.ReadNativeObservation(ctx, r, native.Status{Project: a.Project, ErrorClass: code}, nil, nil)
 	}
 	if identity.InstalledIdentity != "VERIFIED" || a.DB != "/var/lib/boxweave/ledger.sqlite" || a.ServiceUser != "boxweave" || a.Socket != "/var/lib/incus/unix.socket.user" {
-		return native.Status{Project: a.Project, ErrorClass: "RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED"}
+		return unavailable("RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED")
 	}
 	p := doctorInstallPlan(a)
 	uid, gid, e := install.ServiceIdentity(p)
 	if e != nil || a.Project != "user-"+strconv.Itoa(uid) {
-		return native.Status{Project: a.Project, ErrorClass: "RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED"}
+		return unavailable("RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED")
 	}
 	g, e := user.LookupGroup("incus")
 	if e != nil {
-		return native.Status{Project: a.Project, ErrorClass: "RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED"}
+		return unavailable("RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED")
 	}
 	ig, e := strconv.ParseUint(g.Gid, 10, 32)
 	if e != nil || ig == 0 {
-		return native.Status{Project: a.Project, ErrorClass: "RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED"}
+		return unavailable("RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED")
 	}
 	cmd := exec.CommandContext(ctx, "/proc/self/exe", "doctor-native-worker")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid), Groups: recoveryGroups(uint32(gid), uint32(ig))}}
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=/home/boxweave", "XDG_CONFIG_HOME=/home/boxweave/.config", "LANG=C"}
 	b, e := cmd.Output()
-	var out native.Status
-	if e != nil || len(b) > 65536 || json.Unmarshal(b, &out) != nil || out.Project != a.Project {
-		return native.Status{Project: a.Project, ErrorClass: "RESTRICTED_DIAGNOSTIC_READ_UNAVAILABLE"}
+	var out diagnostic.NativeObservation
+	if e != nil || len(b) > 262144 || json.Unmarshal(b, &out) != nil || out.Status.Project != a.Project {
+		return unavailable("RESTRICTED_DIAGNOSTIC_READ_UNAVAILABLE")
 	}
 	return out
 }
 
+func doctorMCP(ctx context.Context, identity install.DiagnosticInstallation) diagnostic.Source {
+	if identity.Runtime != "VERIFIED" || identity.ServiceUnit != "ACTIVE" {
+		return diagnostic.Source{State: "UNVERIFIED", Reason: "CONTROLLER_RUNTIME_UNVERIFIED"}
+	}
+	client := &http.Client{Timeout: time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	req, e := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:18650/mcp", strings.NewReader("{}"))
+	if e != nil {
+		return diagnostic.Source{State: "UNVERIFIED", Reason: "LOCAL_MCP_UNAVAILABLE"}
+	}
+	resp, e := client.Do(req)
+	if e != nil {
+		return diagnostic.Source{State: "UNVERIFIED", Reason: "LOCAL_MCP_UNAVAILABLE"}
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+	if resp.StatusCode != http.StatusUnauthorized {
+		return diagnostic.Source{State: "UNVERIFIED", Reason: "LOCAL_MCP_UNEXPECTED_RESPONSE"}
+	}
+	return diagnostic.Source{State: "OBSERVED", Reason: "LOCAL_HTTP_401_ONLY_AUTHENTICATED_MCP_NOT_CHECKED", EpochNS: time.Now().UnixNano()}
+}
+
 func runDoctor(a doctorArgs) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	report := diagnostic.NewReport(a.Project)
 	legacy := control.HostStatus{Version: version, Commit: commit, GoVersion: report.GoVersion}
 	instctx, instcancel := context.WithTimeout(ctx, 5*time.Second)
 	report.Installation = install.ObserveDiagnosticInstallation(instctx, doctorInstallPlan(a), a.DB)
+	report.ClassifyInstallation()
 	instcancel()
 	if report.Installation.Mode != "LEGACY" && report.Installation.Mode != "SCOPED_V2" {
 		reason := report.Installation.Reason
@@ -101,6 +139,8 @@ func runDoctor(a doctorArgs) error {
 	// available native or installation observations.
 	dbctx, dbcancel := context.WithTimeout(ctx, 5*time.Second)
 	snap, e := state.OpenDiagnosticSnapshot(dbctx, a.DB)
+	var ledger *state.DiagnosticLedger
+	bridge := "incusbr-" + strings.TrimPrefix(a.Project, "user-")
 	if e != nil {
 		report.Database = diagnostic.Source{State: "UNVERIFIED", Reason: diagnostic.DatabaseReason(e)}
 		report.AddIssue("database", report.Database.Reason, "ledger", "UNVERIFIED")
@@ -114,10 +154,28 @@ func runDoctor(a doctorArgs) error {
 			} else {
 				report.AddIssue("database", "PROJECT_CAPACITY_UNVERIFIED", "ledger", "UNVERIFIED")
 			}
+			if l, err := snap.ReadLedger(dbctx, a.Project, report.Installation.Mode, bridge); err == nil {
+				ledger = &l
+				report.ClassifyLedger(l)
+				report.ActivityCoverage.EpochNS = snap.EpochNS
+				legacy.AddressRetirement = l.LegacyRetirement
+				if l.LegacyRetirement != nil {
+					legacy.AddressRetirementPolicy = "LEGACY_IPV4_RETIREMENT"
+				}
+				if l.PeerCapacity != nil {
+					legacy.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
+					legacy.ScopedPeerCapacity = l.PeerCapacity
+				}
+			} else {
+				report.AddRoutedIssue("database", "LEDGER_OBSERVATION_UNVERIFIED", "ledger", "UNVERIFIED", "INSPECT_EVIDENCE")
+			}
 			if report.Installation.Mode == "SCOPED_V2" {
 				summary, e := snap.ScopedLedgerSummary(dbctx, a.Project, "incusbr-"+strings.TrimPrefix(a.Project, "user-"))
 				if e == nil {
 					report.ScopedLedger = &summary
+					if ledger != nil && ledger.RetiredLimit > 0 && summary.Retired >= ledger.RetiredLimit {
+						report.AddRoutedIssue("capacity", "SCOPED_RETIRED_IDENTITY_LIMIT", "ledger", "CONFIRMED", "NO_RESET_OR_COMPACTION")
+					}
 				} else {
 					report.AddIssue("database", "SCOPED_LEDGER_OBSERVATION_UNVERIFIED", "ledger", "UNVERIFIED")
 				}
@@ -127,6 +185,14 @@ func runDoctor(a doctorArgs) error {
 			report.Database = diagnostic.Source{State: "UNVERIFIED", Reason: "DIAGNOSTIC_DB_SCHEMA_OR_INTEGRITY_UNVERIFIED"}
 			report.AddIssue("database", report.Database.Reason, "ledger", "UNVERIFIED")
 		}
+	}
+	dbcancel()
+	// Native and ledger capture are distinct sources. Re-read the bounded
+	// ledger after native I/O; never advertise mixed epochs as all-clear.
+	nctx, ncancel := context.WithTimeout(ctx, 13*time.Second)
+	obs := doctorNative(nctx, a, report.Installation, snap, ledger)
+	ncancel()
+	if snap != nil {
 		if e = snap.Close(); e != nil {
 			report.Database.State = "UNVERIFIED"
 			report.Database.Reason = "PRIVATE_CAPTURE_CLEANUP_UNVERIFIED"
@@ -134,18 +200,89 @@ func runDoctor(a doctorArgs) error {
 			report.AddIssue("database", report.Database.Reason, "ledger", "UNVERIFIED")
 		}
 	}
-	dbcancel()
-	nctx, ncancel := context.WithTimeout(ctx, 5*time.Second)
-	legacy.Native = doctorNative(nctx, a, report.Installation)
-	ncancel()
+	legacy.Native = obs.Status
+	if ledger != nil && obs.LedgerDigest != "" {
+		reCtx, reCancel := context.WithTimeout(ctx, 3*time.Second)
+		after, err := state.OpenDiagnosticSnapshot(reCtx, a.DB)
+		same := false
+		if err == nil {
+			latest, err := after.ReadLedger(reCtx, a.Project, report.Installation.Mode, bridge)
+			same = err == nil && latest.ObservationDigest() == ledger.ObservationDigest() && obs.LedgerDigest == ledger.ObservationDigest()
+			if after.Close() != nil {
+				same = false
+			}
+		}
+		reCancel()
+		if !same {
+			obs.Inventory = diagnostic.Source{State: "UNVERIFIED", Reason: "NETWORK_LEDGER_CHANGED_OR_RECHECK_UNAVAILABLE"}
+			obs.InventoryInfo = nil
+			obs.Issues = nil
+			obs.Forward = diagnostic.Source{State: "UNVERIFIED", Reason: "LEDGER_EPOCH_CHANGED"}
+			obs.ForwardVerified = 0
+			obs.AddressCapacity = nil
+			obs.AddressCapacitySource = diagnostic.Source{State: "UNVERIFIED", Reason: "LEDGER_EPOCH_CHANGED"}
+		}
+	}
+	report.ClassifyNative(obs)
+	if obs.AddressCapacity != nil {
+		legacy.AddressCapacity = obs.AddressCapacity
+		legacy.AddressCapacityStatus = "OBSERVED"
+		if obs.AddressCapacity.RemainingIPv4UpperBound == 0 {
+			legacy.AddressCapacityStatus = "EXHAUSTED"
+		}
+	} else {
+		legacy.AddressCapacityStatus = "UNVERIFIED"
+	}
+	rootctx, rootcancel := context.WithTimeout(ctx, 4*time.Second)
+	report.RootPolicy = install.ObserveDiagnosticRootPolicy(rootctx, a.Project, report.Installation)
+	rootcancel()
+	if ledger != nil && ledger.PeerCapacity != nil && report.RootPolicy.Sequence != nil && (*report.RootPolicy.Sequence != ledger.PeerCapacity.CompletedLedgerEvents || *report.RootPolicy.ActiveDirections != ledger.PeerCapacity.ActiveDirections) {
+		report.AddRoutedIssue("root", "ROOT_SQLITE_POLICY_EPOCH_OR_OUTCOME_UNVERIFIED", "root-policy", "UNVERIFIED", "MCP_INSPECT_OR_ROOT_EVIDENCE_REQUIRED")
+	}
+	if report.RootPolicy.Conntrack == "MISSING" {
+		if report.Installation.Mode == "SCOPED_V2" {
+			report.AddRoutedIssue("installation", "SCOPED_CONNTRACK_MISSING", "conntrack", "CONFIRMED", "LOCAL_DEPENDENCY_REVIEW")
+		} else {
+			report.AddRoutedIssue("installation", "CURRENT_SCOPED_PREREQUISITE_NOT_PRESENT_MODE_UNVERIFIED", "conntrack", "UNVERIFIED", "INSPECT_INSTALLED_VERSION")
+		}
+	}
+	if report.RootPolicy.State == "JOURNAL_INCOMPLETE_OR_UNVERIFIED" {
+		report.AddRoutedIssue("root", "SCOPED_POLICY_JOURNAL_UNVERIFIED", "root-policy", "UNVERIFIED", "INSPECT_ROOT_EVIDENCE")
+	}
+	if report.RootPolicy.NewGrantHistoryAvailable != nil && !*report.RootPolicy.NewGrantHistoryAvailable {
+		report.AddRoutedIssue("capacity", "ROOT_POLICY_HISTORY_RESERVE", "root-policy", "CONFIRMED", "NO_RESET_OR_COMPACTION")
+	}
+	if report.RootPolicy.State == "OBSERVED" && report.RootPolicy.Kernel != "OBSERVED" {
+		report.AddRoutedIssue("root", "SCOPED_KERNEL_GUARD_UNVERIFIED", "root-guard", "UNVERIFIED", "INSPECT_ROOT_EVIDENCE")
+	}
+	report.MCP = doctorMCP(ctx, report.Installation)
+	if report.MCP.State != "OBSERVED" {
+		report.AddRoutedIssue("service", report.MCP.Reason, "mcp", "UNVERIFIED", "INSPECT_EVIDENCE")
+	}
+	policy, verified := install.ObserveDiagnosticForwardPolicy(ctx, doctorInstallPlan(a), report.Installation)
+	report.ForwardPolicy = diagnostic.Source{State: "UNVERIFIED", Reason: "unverified"}
+	if verified {
+		report.ForwardPolicy = diagnostic.Source{State: "OBSERVED", Reason: policy, EpochNS: time.Now().UnixNano()}
+	}
+	legacy.Native.ExternalForwardPolicy = report.ForwardPolicy.Reason
+	if verified && policy == "invalid" {
+		report.AddRoutedIssue("forward", "EFFECTIVE_FORWARD_POLICY_INVALID", "controller", "CONFIRMED", "LOCAL_CONFIGURATION_REVIEW")
+	}
+	warnings := legacy.Native.Warnings[:0]
+	for _, w := range legacy.Native.Warnings {
+		if !strings.HasPrefix(w, "FORWARD_EXTERNAL_POLICY_DENIED:") {
+			warnings = append(warnings, w)
+		}
+	}
+	legacy.Native.Warnings = warnings
+
 	if legacy.Native.Ready {
 		report.Native = diagnostic.Source{State: "OBSERVED", Reason: "RESTRICTED_NATIVE_PREFLIGHT", EpochNS: time.Now().UnixNano()}
 	} else {
 		report.Native = diagnostic.Source{State: "UNVERIFIED", Reason: legacy.Native.ErrorClass}
 		report.AddIssue("native", legacy.Native.ErrorClass, "project", "UNVERIFIED")
 	}
-	// Only compatibility preflight; D1 does not certify full health. Existing
-	// status remains unchanged; D2 expands shared classification and capacity.
+	// Compatibility preflight only: partial evidence never certifies full health.
 	legacy.Ready = legacy.MCPReady && legacy.Native.Ready && report.Installation.Mode != "CONFLICT"
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

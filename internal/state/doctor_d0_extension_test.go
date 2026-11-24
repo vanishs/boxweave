@@ -126,14 +126,14 @@ func TestPR177D0ExtensionScopedRecoveryReceiptAndReview(t *testing.T) {
 			}
 			seen := false
 			for _, i := range view.Issues {
-				if i.OperationID == id && i.Reason == "PROJECT_PEER_BARRIER" && i.Disposition == "HOST_REVIEW_REQUIRED" {
+				if i.OperationID == id && i.Reason == "PROJECT_PEER_BARRIER" && i.Disposition == "MCP_RECOVERY_INSPECTION_REQUIRED" {
 					seen = true
 				}
 			}
 			if !seen {
-				t.Fatal("expected generic current Activity classification", view)
+				t.Fatal("expected scoped MCP inspection route", view)
 			}
-			t.Log("D0X_SCOPED_ACTIVITY_HOST_REVIEW_HINT_NOT_FINAL_REPAIRABILITY")
+			t.Log("D2_SCOPED_ACTIVITY_MCP_INSPECT_NOT_PROOF")
 			req := RecoveryRequest{Layer: target.Layer, ActorID: tok.ID, TokenID: tok.ID, OriginalID: id, Key: "d0x-blocked-original-recovery"}
 			blocked, err := s.CommitRecovery(ctx, req, target, RecoveryProof{Kind: RecoveryBlocked, Reason: "SCOPED_PEER_ROOT_PROOF_REQUIRED"})
 			if err != nil || blocked.Receipt.State != "FAILED" || blocked.Disposition != RecoveryBlocked {

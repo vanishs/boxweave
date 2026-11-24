@@ -108,7 +108,7 @@ for x in (root,svc):
     d=x["diagnostic"]
     assert x["ready"] and x["native"]["ready"] and x["schema_version"]==6
     assert d["version"]==1 and d["database"]["state"]=="OBSERVED" and d["database"]["epoch_ns"]>0
-    assert d["coverage"]=="PARTIAL_D1_FOUNDATION" and not d["cross_source_atomic"] and d["mcp"]["state"]=="NOT_CHECKED"
+    assert d["coverage"]=="PARTIAL_D2_DIAGNOSIS" and not d["cross_source_atomic"] and d["mcp"]["reason"]=="LOCAL_HTTP_401_ONLY_AUTHENTICATED_MCP_NOT_CHECKED"
     assert d["installation"]["installed_identity"]=="VERIFIED" and d["installation"]["runtime"]=="VERIFIED"
 r,s=(x["diagnostic"]["installation"] for x in (root,svc))
 if sys.argv[3]=="1":
@@ -117,6 +117,22 @@ if sys.argv[3]=="1":
     assert s["candidate"]=="SCOPED_V2" and s["mode"]=="UNVERIFIED" and s["root_proof"]=="ROOT_AUTHORITY_REQUIRED",s
 else:
     assert r["mode"]=="LEGACY" and s["mode"]=="LEGACY",(r,s)
+for x in (root,svc):
+    d=x["diagnostic"]
+    assert d["ledger"]["active_count"]==0 and d["ledger"]["forward_confirmed"]==0,d
+    assert d["native_inventory"]["state"]=="OBSERVED" and d["native_inventory_info"]["inventory_scanned"],d
+    assert d["forward_devices"]["state"]=="OBSERVED" and d["forward_verified"]==0,d
+    assert d["oauth"]["state"]=="OBSERVED" and d["tunnel"]["state"]=="NOT_CHECKED" and d["packet_reachability"]["state"]=="NOT_CHECKED",d
+    assert d["forward_policy"]["state"]=="OBSERVED",d
+if sys.argv[3]=="1":
+    assert root["diagnostic"]["root_policy"]["state"]=="OBSERVED" and root["diagnostic"]["root_policy"]["kernel_guard"]=="OBSERVED",root["diagnostic"]["root_policy"]
+    assert root["diagnostic"]["ledger"]["peer_capacity"]["retained_directions"]==0
+    assert "address_retirement" not in root and "address_retirement" not in svc
+    assert svc["diagnostic"]["root_policy"]["state"]=="ROOT_AUTHORITY_REQUIRED"
+else:
+    assert root["diagnostic"]["root_policy"]["state"]=="NOT_APPLICABLE"
+    assert root["address_retirement"]["pending"]==0
+print("PR177_D2_INSTALLED_EMPTY_DIAGNOSTIC_COVERAGE=PASS",flush=True)
 print("PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS",flush=True)
 D1CHECK
 test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
@@ -127,6 +143,24 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
+  sudo "$installed" doctor -project "$project" > "$work/d2-scoped-active.json"
+  python3 - "$work/d2-scoped-active.json" <<'D2ACTIVE'
+import json,sys
+x=json.load(open(sys.argv[1]));d=x["diagnostic"];p=d["root_policy"];l=d["ledger"]
+assert d["installation"]["mode"]=="SCOPED_V2" and p["state"]=="OBSERVED" and p["kernel_guard"]=="OBSERVED",p
+assert l["network_observed"] and x["project_capacity"]["owned"]>=4
+assert d["scoped_ledger"]["retired"]>=1 and l["peer_capacity"]["active_directions"]>=3
+assert p["sequence"]==l["peer_capacity"]["completed_ledger_events"] and p["active_directions"]==l["peer_capacity"]["active_directions"],(p,l["peer_capacity"])
+assert "address_retirement" not in x and not any(i["code"]=="LEGACY_IPV4_RETIREMENT_PENDING" for i in d["issues"])
+# A changing independent native inventory is never a false healthy count.
+if d["native_inventory"]["state"]=="OBSERVED":
+    assert d["native_inventory_info"]["owned"]>=4
+else:
+    assert d["native_inventory"]["state"] in ("UNVERIFIED","PARTIAL")
+    if d["native_inventory"]["state"]=="UNVERIFIED": assert "native_inventory_info" not in d
+print("PR177_D2_SCOPED_ACTIVE_RETIRED_DIAGNOSTIC=PASS",flush=True)
+D2ACTIVE
+
   sudo python3 scripts/pr178_n4_native.py "$project" "$work/actor.receipt"
   sudo python3 scripts/pr178_n4_concurrent.py "$project" "$work/actor.receipt"
   sudo python3 scripts/pr178_n4_reincarnation.py "$project" "$work/actor.receipt"
@@ -141,6 +175,22 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   test "${#original}" = 32
   (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 15m > "$work/n4-degraded.receipt")
   sudo python3 scripts/pr178_n4_degraded.py "$project" "$work/n4-degraded.receipt" "$original"
+  d2_pid="$(sudo systemctl show boxweave.service -p MainPID --value)"
+  d2_rc=0
+  sudo "$installed" doctor -project "$project" > "$work/d2-scoped-degraded.json" || d2_rc=$?
+  test "$d2_rc" -le 1
+  python3 - "$work/d2-scoped-degraded.json" "$original" <<'D2DEGRADED'
+import json,sys
+x=json.load(open(sys.argv[1]));d=x["diagnostic"];p=d["root_policy"];l=d["ledger"]
+assert d["mcp"]["state"]=="OBSERVED",d["mcp"]
+assert p["state"]=="JOURNAL_INCOMPLETE_OR_UNVERIFIED" and p["kernel_guard"]!="OBSERVED",p
+orig=next(v for v in l["active_operations"] if v["original_id"]==sys.argv[2])
+assert orig["state"]=="UNKNOWN" and orig["claim_protection"]=="RETAINED" and orig["live_claims"]==5 and orig["recovery_route"]=="MCP_RECOVERY_INSPECTION_REQUIRED",orig
+assert "address_retirement" not in x and any(i["code"]=="SCOPED_POLICY_JOURNAL_UNVERIFIED" for i in d["issues"])
+print("PR177_D2_SCOPED_DEGRADED_DIAGNOSTIC=PASS",flush=True)
+D2DEGRADED
+  test "$d2_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
+
   exit 0
 fi
 sudo python3 scripts/n2_installed_lifecycle.py mcp-retry "$project" "$work/actor.receipt"
