@@ -1,5 +1,7 @@
 # BoxWeave v1 — Unified Doctor + Recover (PR #177 design and migration lessons)
 
+**D3 candidate update (2026-11-23):** [Read-only recovery plan and Box evidence](V1_PR177_D3_RECOVERY_PLAN_2026-11-23.md). D2 installed JSON assertion corrected; D2/D3 independent CI still required. D4 apply is not implemented.
+
 > **D1 accepted, D2 diagnosis candidate:** [D2 implementation, Box evidence and CI gates](V1_PR177_D2_DIAGNOSIS_2026-11-23.md). D1 exact-head CI all four passed. D2 shared diagnosis, mode-qualified retirement/capacity, bounded activity/history, Native/Root/Forward/OAuth coverage and stable issue routes delivered; review D2 exact-head CI before D3. Routes are not repair authority.
 
 > **D0 accepted, D1 foundation delivered for CI:** [D1 implementation and Box evidence](V1_PR177_D1_FOUNDATION_2026-11-23.md). Check exact D1 HEAD CI including new installed mode/authority markers before D2. Doctor now captures a bounded private locked SQLite epoch and never calls state.Open on source; this handle is not a Root witness. Do not repeat D0.

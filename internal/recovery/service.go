@@ -26,7 +26,21 @@ type Observer interface {
 	ReadRecordedOutput(context.Context, string, int64, int64) ([]byte, bool, error)
 	ReadGuestFile(context.Context, string, string, string, int64, int) (native.GuestFilePage, error)
 }
+
+// ObservationStore exposes only the existing read predicates. Diagnostic
+// snapshots implement this interface without exporting their private Store.
+type ObservationStore interface {
+	ReadRecoveryTarget(context.Context, string, string) (state.RecoveryTarget, error)
+	ExecGCReviewInspect(context.Context, string, string) (state.ExecGCReview, error)
+	CheckDependentDeleteRecovery(context.Context, state.RecoveryTarget) error
+	CheckRecoveryCreateBinding(context.Context, state.RecoveryTarget, state.RecoveryProof) error
+	CreatePinRepairStatus(context.Context, state.RecoveryTarget) (string, error)
+	ReadOriginalCreatePin(context.Context, state.RecoveryTarget) (state.VerifiedCreateBinding, error)
+	CheckCreatePinRepair(context.Context, state.RecoveryTarget, state.RecoveryProof) error
+}
 type Service struct {
+	ReadStore ObservationStore
+
 	Store  *state.Store
 	Native Observer
 	Layer  string
@@ -34,6 +48,16 @@ type Service struct {
 	// No plan, approval assertion or root request parameters come from MCP.
 	PeerWitness       func(context.Context, string) (state.RootPeerResult, error)
 	ScopedPeerWitness func(context.Context, string) (state.ScopedPeerRootReceipt, error)
+}
+
+func (s Service) reader() ObservationStore {
+	if s.ReadStore != nil {
+		return s.ReadStore
+	}
+	if s.Store != nil {
+		return s.Store
+	}
+	return nil
 }
 
 type View struct {
@@ -110,10 +134,10 @@ func ObserveGC(ctx context.Context, n Observer, r state.ExecGCReview) (string, e
 }
 
 func (s Service) Inspect(ctx context.Context, id, stream string) (Result, error) {
-	if !validStream(stream) {
+	if !validStream(stream) || s.reader() == nil {
 		return Result{}, state.ErrInvalid
 	}
-	t, e := s.Store.ReadRecoveryTarget(ctx, s.Layer, id)
+	t, e := s.reader().ReadRecoveryTarget(ctx, s.Layer, id)
 	if e != nil {
 		return Result{}, e
 	}
@@ -121,6 +145,9 @@ func (s Service) Inspect(ctx context.Context, id, stream string) (Result, error)
 	return Result{View: v}, nil
 }
 func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result, error) {
+	if s.ReadStore != nil || s.Store == nil {
+		return Result{}, state.ErrInvalid
+	}
 	if r.Layer != s.Layer {
 		return Result{}, state.ErrInvalid
 	}
@@ -189,7 +216,7 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 		if t.Action != "box_exec" {
 			return finish(state.RecoveryBlocked, "GC_REQUIRES_ORIGINAL_EXEC")
 		}
-		gc, e := s.Store.ExecGCReviewInspect(ctx, t.ID, stream)
+		gc, e := s.reader().ExecGCReviewInspect(ctx, t.ID, stream)
 		if e != nil || gc.Project != s.Layer {
 			return finish(state.RecoveryBlocked, "GC_REVIEW_NOT_AVAILABLE")
 		}
@@ -252,7 +279,7 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 		p.Fingerprint = fingerprint(t.ID, t.UUID, proof.PlanSHA256, proof.PostNativeDigestSHA256)
 		return view, p
 	}
-	if t.DependentDelete && (s.Store == nil || s.Store.CheckDependentDeleteRecovery(ctx, t) != nil) {
+	if t.DependentDelete && (s.reader() == nil || s.reader().CheckDependentDeleteRecovery(ctx, t) != nil) {
 		return finish(state.RecoveryBlocked, "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED")
 	}
 	if t.Action == "port_forward_create" || t.Action == "port_forward_delete" {
@@ -294,7 +321,7 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 			Target string `json:"target_operation_id"`
 		}
 		if json.Unmarshal([]byte(t.SafeIntent), &in) == nil {
-			target, e := s.Store.ReadRecoveryTarget(ctx, s.Layer, in.Target)
+			target, e := s.reader().ReadRecoveryTarget(ctx, s.Layer, in.Target)
 			if e == nil && target.State == "CANCELLED" && target.NativeID == "" {
 				return finish(state.RecoveryBlocked, "TARGET_CANCELLED_ORIGINAL_CAUSALITY_UNPROVED")
 			}

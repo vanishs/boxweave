@@ -193,7 +193,7 @@ func (s *Store) CheckDependentDeleteRecovery(ctx context.Context, t RecoveryTarg
 	return tx.Commit()
 }
 
-func finishRecoveryForwardTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof, parent string) error {
+func checkRecoveryForwardTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof, parent string) error {
 	if !t.ForwardReady || p.Forward != t.Forward || p.Fingerprint == "" || p.Reason != "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED" {
 		return ErrResourceLocked
 	}
@@ -203,6 +203,13 @@ func finishRecoveryForwardTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, 
 		want = append(want, deleteParentKey(parent))
 	}
 	if e := recoveryClaimKeys(ctx, tx, t, want); e != nil {
+		return e
+	}
+	return nil
+}
+
+func finishRecoveryForwardTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof, parent string) error {
+	if e := checkRecoveryForwardTx(ctx, tx, t, p, parent); e != nil {
 		return e
 	}
 	return finishVerifiedForwardTx(ctx, tx, t.ID, t.Action == "port_forward_create", "UNKNOWN", "RECOVERY_FORWARD_TERMINAL_NO_REPLAY")

@@ -2,6 +2,7 @@ package diagnostic
 
 import (
 	"encoding/json"
+	"github.com/vanishs/boxweave/internal/state"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,15 @@ func TestPR177D1IssueIdentityAndCoverage(t *testing.T) {
 	}
 	b, e := json.Marshal(r)
 	if e != nil || strings.Contains(string(b), "GoVersion") {
+		t.Fatal(string(b), e)
+	}
+}
+
+func TestPR177D2InventoryJSONContract(t *testing.T) {
+	r := NewReport("user-1001")
+	r.NativeInventoryInfo = &state.NativeNetworkAuditInfo{InventoryScanned: true}
+	b, e := json.Marshal(r)
+	if e != nil || !strings.Contains(string(b), `"entire_project_inventory_scanned":true`) || strings.Contains(string(b), `"inventory_scanned":`) {
 		t.Fatal(string(b), e)
 	}
 }

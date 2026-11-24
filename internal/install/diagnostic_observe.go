@@ -25,6 +25,7 @@ type DiagnosticInstallation struct {
 	Coverage          string `json:"coverage"`
 	Manifest          string `json:"manifest"`
 	InstalledIdentity string `json:"installed_identity"`
+	IdentitySHA256    string `json:"identity_sha256,omitempty"`
 	Runtime           string `json:"runtime"`
 	RootJournal       string `json:"root_journal"`
 	RootProof         string `json:"root_proof"`
@@ -384,6 +385,7 @@ func ObserveDiagnosticInstallation(ctx context.Context, p Plan, db string) Diagn
 		return diagnosticClassify(o, false)
 	}
 	o.Runtime = "VERIFIED"
+	o.IdentitySHA256 = diagnosticHash(append(append([]byte("boxweave-diagnostic-install-v1\n"), b...), []byte("\n"+svc["MainPID"])...))
 	o.Reason = "MODE_EVIDENCE_INCOMPLETE"
 	return diagnosticClassify(o, scoped)
 }

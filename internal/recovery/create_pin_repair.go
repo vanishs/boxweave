@@ -19,10 +19,10 @@ func (s Service) observeCreatePinRepair(ctx context.Context, t state.RecoveryTar
 		v.Disposition, v.Reason = state.RecoveryBlocked, reason
 		return v, state.RecoveryProof{Kind: state.RecoveryBlocked, Reason: reason}
 	}
-	if s.Store == nil {
+	if s.reader() == nil {
 		return block("CREATE_PIN_REPAIR_STORE_UNAVAILABLE")
 	}
-	status, err := s.Store.CreatePinRepairStatus(ctx, t)
+	status, err := s.reader().CreatePinRepairStatus(ctx, t)
 	if err != nil {
 		return block("CREATE_PIN_REPAIR_LEDGER_UNVERIFIED")
 	}
@@ -99,7 +99,7 @@ func (s Service) observeCreatePinRepair(ctx context.Context, t state.RecoveryTar
 	p := state.RecoveryProof{Kind: state.RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED",
 		NativeID: t.NativeID, UUID: t.UUID, CreateBinding: state.VerifiedCreateBinding(pin),
 		Fingerprint: fingerprint(t.ID, t.NativeID, t.UUID, first.Fingerprint, pin.Bridge, pin.ACL, pin.MAC, pin.IPv4, pin.IPv6)}
-	if e = s.Store.CheckCreatePinRepair(ctx, t, p); e != nil {
+	if e = s.reader().CheckCreatePinRepair(ctx, t, p); e != nil {
 		return block("CREATE_PIN_REPAIR_CONFLICT_OR_BUSY")
 	}
 	v.Disposition, v.ProposedAction, v.Reason = "SAFE_RECOVER", state.RecoveryRepairPin, p.Reason

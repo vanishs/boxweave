@@ -36,6 +36,15 @@ func run() error {
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if command == "recover-plan-worker" {
+		if len(os.Args) != 2 {
+			return errors.New("private plan worker accepts no arguments")
+		}
+		return recoverPlanWorker()
+	}
+	if command == "recover" && planFlagPresent(os.Args[2:]) {
+		return recoverPlanCLI(os.Args[2:])
+	}
 	if command == "doctor-native-worker" {
 		if len(os.Args) != 2 {
 			return errors.New("private diagnostic worker accepts no user arguments")

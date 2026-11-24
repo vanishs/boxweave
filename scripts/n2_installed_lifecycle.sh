@@ -120,7 +120,7 @@ else:
 for x in (root,svc):
     d=x["diagnostic"]
     assert d["ledger"]["active_count"]==0 and d["ledger"]["forward_confirmed"]==0,d
-    assert d["native_inventory"]["state"]=="OBSERVED" and d["native_inventory_info"]["inventory_scanned"],d
+    assert d["native_inventory"]["state"]=="OBSERVED" and d["native_inventory_info"]["entire_project_inventory_scanned"],d
     assert d["forward_devices"]["state"]=="OBSERVED" and d["forward_verified"]==0,d
     assert d["oauth"]["state"]=="OBSERVED" and d["tunnel"]["state"]=="NOT_CHECKED" and d["packet_reachability"]["state"]=="NOT_CHECKED",d
     assert d["forward_policy"]["state"]=="OBSERVED",d
@@ -137,6 +137,19 @@ print("PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS",flush=True)
 D1CHECK
 test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
 echo PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS
+d3_absent="d1-$(printf '%064d' 0)"
+d3_rc=0
+sudo "$installed" recover --plan --issue "$d3_absent" -project "$project" > "$work/d3-absent.json" || d3_rc=$?
+test "$d3_rc" = 1
+python3 - "$work/d3-absent.json" <<'D3ABSENT'
+import json,sys
+p=json.load(open(sys.argv[1]))
+assert p["status"]=="BLOCKED_UNPROVEN" and p["reason"]=="ISSUE_NOT_PRESENT_OR_OUTSIDE_COVERAGE"
+assert not p["can_repair"] and not p["apply_available"] and "review_sha256" not in p and not p["native_retried"],p
+print("PR177_D3_INSTALLED_ABSENT_ISSUE_NO_EFFECT=PASS",flush=True)
+D3ABSENT
+test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
+
 
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 if test "${PR178_SCOPED_N2:-0}" = 1; then
@@ -189,6 +202,21 @@ assert orig["state"]=="UNKNOWN" and orig["claim_protection"]=="RETAINED" and ori
 assert "address_retirement" not in x and any(i["code"]=="SCOPED_POLICY_JOURNAL_UNVERIFIED" for i in d["issues"])
 print("PR177_D2_SCOPED_DEGRADED_DIAGNOSTIC=PASS",flush=True)
 D2DEGRADED
+  d3_issue="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]))["diagnostic"];print(next(i["id"] for i in d["issues"] if i["code"]=="PROJECT_PEER_BARRIER" and i.get("original_id")==sys.argv[2]))' "$work/d2-scoped-degraded.json" "$original")"
+  d3_rc=0
+  sudo "$installed" recover --plan --issue "$d3_issue" -project "$project" > "$work/d3-scoped-degraded.json" || d3_rc=$?
+  test "$d3_rc" = 1
+  python3 - "$work/d3-scoped-degraded.json" "$original" <<'D3DEGRADED'
+import json,sys
+p=json.load(open(sys.argv[1]))
+assert p["status"]=="BLOCKED_UNPROVEN" and p["original_id"]==sys.argv[2] and p["original_state"]=="UNKNOWN",p
+assert p["claim_count"]==5 and not p["can_repair"] and not p["apply_available"] and not p["native_retried"] and "review_sha256" not in p,p
+assert p["mcp_inspect"]["arguments"]=={"operation_id":sys.argv[2],"mode":"inspect"}
+print("PR177_D3_INSTALLED_PARTIAL_ORIGINAL_PLAN_BLOCKED=PASS",flush=True)
+D3DEGRADED
+  # Existing authenticated degraded acceptance independently rechecks original
+  # and exactly five claims; planning must not create a recovery receipt.
+  sudo python3 scripts/pr178_n4_degraded.py "$project" "$work/n4-degraded.receipt" "$original"
   test "$d2_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
 
   exit 0

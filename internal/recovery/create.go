@@ -26,7 +26,7 @@ func (s Service) observeStagedCreate(ctx context.Context, t state.RecoveryTarget
 		return v, state.RecoveryProof{Kind: state.RecoveryBlocked, Reason: reason}
 	}
 	n, ok := s.Native.(createRecoveryObserver)
-	if !ok || s.Store == nil {
+	if !ok || s.reader() == nil {
 		return block("CREATE_STATIC_RECOVERY_OBSERVER_UNAVAILABLE")
 	}
 	var in struct {
@@ -95,7 +95,7 @@ func (s Service) observeStagedCreate(ctx context.Context, t state.RecoveryTarget
 	}
 	p := state.RecoveryProof{Kind: state.RecoverySettle, Reason: reason, NativeID: t.NativeID, UUID: box.UUID,
 		CreateBinding: state.VerifiedCreateBinding(b), Fingerprint: fingerprint(t.ID, t.NativeID, box.UUID, obs.Fingerprint, b.Bridge, b.ACL, b.MAC, b.IPv4, b.IPv6)}
-	if err = s.Store.CheckRecoveryCreateBinding(ctx, t, p); err != nil {
+	if err = s.reader().CheckRecoveryCreateBinding(ctx, t, p); err != nil {
 		return block("CREATE_STATIC_RESERVATION_OR_LEDGER_CONFLICT")
 	}
 	v.Disposition, v.ProposedAction, v.Reason = "SAFE_RECOVER", state.RecoverySettle, p.Reason

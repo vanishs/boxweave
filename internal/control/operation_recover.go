@@ -32,7 +32,7 @@ func (s *Service) registerRecoveryTool(server *mcp.Server) {
 			defer cancel()
 			svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: principal.Layer, PeerWitness: recovery.ObserveCompletedPeer}
 			if s.ScopedPeerFresh {
-				svc.ScopedPeerWitness = install.NativeScopedPeerCall
+				svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
 			}
 			var out recovery.Result
 			switch in.Mode {

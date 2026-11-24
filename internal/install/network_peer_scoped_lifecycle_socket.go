@@ -18,6 +18,29 @@ const scopedLifecycleSocket = "/run/boxweave-scoped-lifecycle.sock"
 
 type ScopedLifecycleReceipt = scopedLifecycleRecord
 
+// Recovery is a distinct read-only request, not a phase-dependent
+// use of the dispatch request. A race to DISPATCHING can only refuse.
+func scopedLifecycleRequestKind(req NativePeerRootRequest, action, phase string) string {
+	if req == (NativePeerRootRequest{OperationID: req.OperationID, ReconcileApproved: true}) {
+		if action == "box_peer_set" && phase == "UNKNOWN" {
+			return "PEER_RECOVER"
+		}
+		return ""
+	}
+	if req != (NativePeerRootRequest{OperationID: req.OperationID}) {
+		return ""
+	}
+	switch {
+	case action == "box_peer_set" && phase == "DISPATCHING":
+		return "PEER_APPLY"
+	case action == "box_create" && phase == "VERIFYING":
+		return "CREATE"
+	case action == "box_delete" && phase == "VERIFYING":
+		return "DELETE"
+	}
+	return ""
+}
+
 // Fixed installed Root server: only original IDs arrive from the restricted
 // controller. Scope, DB, policy, native identity and effect direction are
 // independently derived from protected local state.
@@ -75,39 +98,31 @@ func NativeScopedLifecycleServe(ctx context.Context) error {
 		return err
 	}
 	return nativePeerRootServeListener(ctx, ln, uint32(uid), func(callCtx context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {
-		if req != (NativePeerRootRequest{OperationID: req.OperationID}) {
-			return NativePeerRootResponse{}, errors.New("scoped lifecycle accepts only an exact original ID")
-		}
 		orig, err := db.Get(callCtx, req.OperationID)
 		if err != nil {
 			return NativePeerRootResponse{}, errors.New("unverified lifecycle original")
 		}
-		if orig.Action == "box_peer_set" {
+		kind := scopedLifecycleRequestKind(req, orig.Action, orig.State)
+		if kind == "PEER_RECOVER" || kind == "PEER_APPLY" {
 			var rec state.ScopedPeerRootReceipt
-			switch orig.State {
-			case "DISPATCHING":
-				rec, err = nativeScopedPeerApply(callCtx, db, req.OperationID)
-			case "UNKNOWN":
+			if kind == "PEER_RECOVER" {
 				rec, err = nativeScopedPeerRecover(callCtx, db, req.OperationID)
-			default:
-				return NativePeerRootResponse{}, errors.New("unverified Peer original")
+			} else {
+				rec, err = nativeScopedPeerApply(callCtx, db, req.OperationID)
 			}
 			if err != nil {
 				return NativePeerRootResponse{}, err
 			}
 			return NativePeerRootResponse{Status: rec.Status, ScopedPeer: &rec}, nil
 		}
-		if orig.State != "VERIFYING" {
-			return NativePeerRootResponse{}, errors.New("unverified lifecycle phase")
-		}
 		var receipt scopedLifecycleRecord
-		switch orig.Action {
-		case "box_create":
+		switch kind {
+		case "CREATE":
 			receipt, err = nativeScopedCreateApply(callCtx, db, req.OperationID)
-		case "box_delete":
+		case "DELETE":
 			receipt, err = nativeScopedDeleteApply(callCtx, db, req.OperationID)
 		default:
-			return NativePeerRootResponse{}, errors.New("unsupported scoped lifecycle action")
+			return NativePeerRootResponse{}, errors.New("unverified lifecycle request or phase")
 		}
 		if err != nil {
 			return NativePeerRootResponse{}, err
@@ -121,7 +136,7 @@ func NativeScopedLifecycleCall(ctx context.Context, original, kind string) (Scop
 	if kind != "CREATE" && kind != "DELETE" {
 		return zero, errors.New("invalid lifecycle kind")
 	}
-	out, err := nativeScopedRootCall(ctx, original)
+	out, err := nativeScopedRootCall(ctx, NativePeerRootRequest{OperationID: original})
 	if err != nil {
 		return zero, err
 	}
@@ -133,21 +148,30 @@ func NativeScopedLifecycleCall(ctx context.Context, original, kind string) (Scop
 }
 
 func NativeScopedPeerCall(ctx context.Context, original string) (state.ScopedPeerRootReceipt, error) {
+	return nativeScopedPeerRequest(ctx, original, false)
+}
+
+// NativeScopedPeerRecoverCall never sends an effect-capable request.
+// Old helpers that do not understand this selector refuse; no fallback.
+func NativeScopedPeerRecoverCall(ctx context.Context, original string) (state.ScopedPeerRootReceipt, error) {
+	return nativeScopedPeerRequest(ctx, original, true)
+}
+func nativeScopedPeerRequest(ctx context.Context, original string, recoveryOnly bool) (state.ScopedPeerRootReceipt, error) {
 	var zero state.ScopedPeerRootReceipt
-	out, e := nativeScopedRootCall(ctx, original)
+	out, e := nativeScopedRootCall(ctx, NativePeerRootRequest{OperationID: original, ReconcileApproved: recoveryOnly})
 	if e != nil {
 		return zero, e
 	}
 	r := out.ScopedPeer
-	if out.ScopedLifecycle != nil || out.Error != "" || out.Status != "COMPLETE_VERIFIED" || r == nil || r.OriginalID != original || r.Status != out.Status || r.VerifiedSteps != 4 {
+	if out.ScopedLifecycle != nil || out.Error != "" || out.Status != "COMPLETE_VERIFIED" || r == nil || r.OriginalID != original || r.Status != out.Status || r.VerifiedSteps != 4 || r.RecoveryOnly != recoveryOnly {
 		return zero, errors.New("scoped Peer root outcome unverified")
 	}
 	return *r, nil
 }
 
-func nativeScopedRootCall(ctx context.Context, original string) (NativePeerRootResponse, error) {
+func nativeScopedRootCall(ctx context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {
 	var zero NativePeerRootResponse
-	if !scopedLifecycleID.MatchString(original) {
+	if !scopedLifecycleID.MatchString(req.OperationID) {
 		return zero, errors.New("invalid scoped lifecycle original")
 	}
 	var dial net.Dialer
@@ -169,7 +193,7 @@ func nativeScopedRootCall(ctx context.Context, original string) (NativePeerRootR
 	}
 	stop := context.AfterFunc(ctx, func() { uc.Close() })
 	defer stop()
-	if err = json.NewEncoder(uc).Encode(NativePeerRootRequest{OperationID: original}); err != nil {
+	if err = json.NewEncoder(uc).Encode(req); err != nil {
 		return zero, err
 	}
 	if err = uc.CloseWrite(); err != nil {

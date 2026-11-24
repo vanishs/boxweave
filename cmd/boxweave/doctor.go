@@ -119,9 +119,7 @@ func doctorMCP(ctx context.Context, identity install.DiagnosticInstallation) dia
 	return diagnostic.Source{State: "OBSERVED", Reason: "LOCAL_HTTP_401_ONLY_AUTHENTICATED_MCP_NOT_CHECKED", EpochNS: time.Now().UnixNano()}
 }
 
-func runDoctor(a doctorArgs) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagnostic.Report) {
 	report := diagnostic.NewReport(a.Project)
 	legacy := control.HostStatus{Version: version, Commit: commit, GoVersion: report.GoVersion}
 	instctx, instcancel := context.WithTimeout(ctx, 5*time.Second)
@@ -284,9 +282,16 @@ func runDoctor(a doctorArgs) error {
 	}
 	// Compatibility preflight only: partial evidence never certifies full health.
 	legacy.Ready = legacy.MCPReady && legacy.Native.Ready && report.Installation.Mode != "CONFLICT"
+	return legacy, report
+}
+
+func runDoctor(a doctorArgs) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	legacy, report := collectDoctor(ctx, a)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	if e = enc.Encode(struct {
+	if e := enc.Encode(struct {
 		control.HostStatus
 		Diagnostic diagnostic.Report `json:"diagnostic"`
 	}{legacy, report}); e != nil {
