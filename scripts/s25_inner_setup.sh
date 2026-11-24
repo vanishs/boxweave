@@ -61,7 +61,7 @@ if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list
 fi
 echo S25_INNER_HTTPS_ONLY_APT_SOURCES=PASS
 apt-get update -qq
-apt-get install -y --no-install-recommends ca-certificates curl gpg git openssl iproute2 python3 >/dev/null
+apt-get install -y --no-install-recommends ca-certificates curl gpg git openssl iproute2 python3 nftables conntrack >/dev/null
 curl -fsSL --retry 2 --max-time 40 https://pkgs.zabbly.com/key.asc -o /tmp/s25-zabbly.asc
 fingerprint="$(gpg --show-keys --with-colons /tmp/s25-zabbly.asc | awk -F: '$1=="fpr"{print $10;exit}')"
 test "$fingerprint" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
@@ -142,14 +142,6 @@ hash="$(sha256sum "$candidate" | awk '{print $1}')"
 test "$hash" = "$binary_sha"
 "$candidate" install-stage -project "$project" \
   -source-binary "$candidate" -expect-sha256 "$hash" -approve-stage > /root/s25-stage.json
-runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
-  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  /usr/local/bin/boxweave doctor -project "$project" > /root/s25-doctor.json
-python3 - <<'S25_INNER_DOCTOR_ASSERT'
-import json
-s=json.load(open("/root/s25-doctor.json"))
-assert s["ready"] and s["native"]["ready"],s
-S25_INNER_DOCTOR_ASSERT
 for name in admin1 admin2 peer; do
  runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
@@ -157,6 +149,24 @@ for name in admin1 admin2 peer; do
  chmod 0600 "/root/s25-$name.secret"
 done
 "$candidate" install-activate -project "$project" -approve-local > /root/s25-activate.json
+# Doctor is observation-only. Explicit token creation initializes the ledger;
+# activate the exact staged service before checking installed readiness.
+runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  /usr/local/bin/boxweave doctor -project "$project" > /root/s25-doctor.json || {
+ python3 - <<'S25_INNER_DOCTOR_FAILURE'
+import json
+s=json.load(open("/root/s25-doctor.json"))
+d=s.get("diagnostic",{})
+print("S25_INNER_DOCTOR_FAILED", {k:d.get(k,{}).get("reason") for k in ("database","native","mcp")}, "native_error",s.get("native",{}).get("error_class"))
+S25_INNER_DOCTOR_FAILURE
+ exit 1
+}
+python3 - <<'S25_INNER_DOCTOR_ASSERT'
+import json
+s=json.load(open("/root/s25-doctor.json"))
+assert s["ready"] and s["native"]["ready"],s
+S25_INNER_DOCTOR_ASSERT
 systemctl is-active --quiet boxweave.service
 curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
  -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' | grep -qx 401
