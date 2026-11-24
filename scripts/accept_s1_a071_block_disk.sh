@@ -89,6 +89,10 @@ sudo runuser -u boxweave -- "$bin" build-info
 echo "S1_A071_TESTED_SOURCE_SHA=$commit"
 sha256sum "$bin"
 
+# Explicitly initialize the disposable ledger using the existing fixture
+# status path. Doctor no longer initializes a missing database.
+sudo runuser -u boxweave -- "$bin" status -db "$db" -project "$project" > /dev/null
+
 # Keep all readback in the actual unprivileged Project; no root MCP worker.
 sudo runuser -u boxweave -- "$bin" doctor -db "$db" -project "$project" > "$work/positive.json"
 python3 - "$work/positive.json" <<'PY'

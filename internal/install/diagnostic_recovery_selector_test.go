@@ -1,0 +1,35 @@
+package install
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPR177D3ScopedExplicitReadOnlySelector(t *testing.T) {
+	id := strings.Repeat("a", 32)
+	for _, tc := range []struct {
+		action, phase string
+		recover       bool
+		want          string
+	}{
+		{"box_peer_set", "UNKNOWN", true, "PEER_RECOVER"},
+		{"box_peer_set", "DISPATCHING", true, ""},
+		{"box_peer_set", "ADMITTED", true, ""},
+		{"box_peer_set", "SUCCEEDED", true, ""},
+		{"box_peer_set", "UNKNOWN", false, ""},
+		{"box_peer_set", "DISPATCHING", false, "PEER_APPLY"},
+		{"box_create", "VERIFYING", true, ""},
+		{"box_delete", "VERIFYING", true, ""},
+		{"box_create", "VERIFYING", false, "CREATE"},
+		{"box_delete", "VERIFYING", false, "DELETE"},
+	} {
+		req := NativePeerRootRequest{OperationID: id, ReconcileApproved: tc.recover}
+		if got := scopedLifecycleRequestKind(req, tc.action, tc.phase); got != tc.want {
+			t.Fatal(tc, got)
+		}
+	}
+	if got := scopedLifecycleRequestKind(NativePeerRootRequest{OperationID: id, ReconcileApproved: true, PlanSHA256: strings.Repeat("b", 64)}, "box_peer_set", "UNKNOWN"); got != "" {
+		t.Fatal("ambiguous request", got)
+	}
+	t.Log("D3_EXPLICIT_ROOT_SELECTOR_NEVER_DISPATCHES_PASS")
+}

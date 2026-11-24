@@ -24,15 +24,7 @@ func (s *Service) readNativeNetworkActivity(ctx context.Context, p RequestPrinci
 	if e != nil {
 		return state.ActivityResult{}, e
 	}
-	expected := make([]native.NetworkScanExpected, 0, len(ledger.Boxes))
-	for _, b := range ledger.Boxes {
-		exact := b.OriginalCount == 1 && b.OriginalProof && b.OriginalState == "SUCCEEDED" && b.OriginalResource == "box:"+b.Name &&
-			b.BindingCount == 1 && b.BindingState == "PINNED" && b.NIC == "eth0" &&
-			b.Bridge != "" && b.ACL != "" && b.MAC != "" && b.IPv4 != "" && b.IPv6 != ""
-		expected = append(expected, native.NetworkScanExpected{
-			Name: b.Name, UUID: b.UUID, OriginalID: b.OriginalID, Bridge: b.Bridge, ACL: b.ACL, MAC: b.MAC, IPv4: b.IPv4, IPv6: b.IPv6, HasPin: exact,
-		})
-	}
+	expected := DiagnosticNetworkExpected(ledger)
 	scan, e := s.Native.ScanProjectNativeNetwork(ctx, expected)
 	if e != nil {
 		// Read failures do not prove empty native inventory. Report a
@@ -87,6 +79,24 @@ func (s *Service) readNativeNetworkActivity(ctx context.Context, p RequestPrinci
 	return s.Store.PageNativeNetworkIssues(ctx, p.Layer, p.TokenID, in.BoxID, in.Limit, in.Cursor, hex.EncodeToString(hash[:]), issues, info)
 }
 
+// DiagnosticNetworkExpected shares the exact pin predicate with Doctor.
+func DiagnosticNetworkExpected(ledger state.NativeNetworkLedger) []native.NetworkScanExpected {
+	expected := make([]native.NetworkScanExpected, 0, len(ledger.Boxes))
+	for _, b := range ledger.Boxes {
+		exact := b.OriginalCount == 1 && b.OriginalProof && b.OriginalState == "SUCCEEDED" && b.OriginalResource == "box:"+b.Name &&
+			b.BindingCount == 1 && b.BindingState == "PINNED" && b.NIC == "eth0" &&
+			b.Bridge != "" && b.ACL != "" && b.MAC != "" && b.IPv4 != "" && b.IPv6 != ""
+		expected = append(expected, native.NetworkScanExpected{
+			Name: b.Name, UUID: b.UUID, OriginalID: b.OriginalID, Bridge: b.Bridge, ACL: b.ACL, MAC: b.MAC, IPv4: b.IPv4, IPv6: b.IPv6, HasPin: exact,
+		})
+	}
+	return expected
+}
+
+// DiagnosticNetworkIssues is observation-only; never establishes recovery authority.
+func DiagnosticNetworkIssues(ledger state.NativeNetworkLedger, scan native.NetworkScanResult) []state.ActivityIssue {
+	return projectNativeNetworkIssues(ledger, scan, "")
+}
 func projectNativeNetworkIssues(ledger state.NativeNetworkLedger, scan native.NetworkScanResult, boxID string) []state.ActivityIssue {
 	issues := []state.ActivityIssue{}
 	matched := map[string]state.NativeNetworkBox{}

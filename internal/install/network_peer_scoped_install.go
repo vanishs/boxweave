@@ -25,6 +25,9 @@ func NativeScopedFreshReview(ctx context.Context) (NativePeerFreshGuardReview, e
 	if err := scopedFreshEffectiveAbsent(); err != nil {
 		return NativePeerFreshGuardReview{}, err
 	}
+	if err := verifyScopedPrerequisiteExecutables(); err != nil {
+		return NativePeerFreshGuardReview{}, err
+	}
 	return nativePeerFreshGuardReview(ctx)
 }
 func NativeScopedGuardBoot(ctx context.Context) error {

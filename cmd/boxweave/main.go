@@ -36,6 +36,27 @@ func run() error {
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if command == "recover-apply-worker" {
+		if len(os.Args) != 2 {
+			return state.ErrInvalid
+		}
+		return recoverApplyWorker()
+	}
+	if command == "recover-plan-worker" {
+		if len(os.Args) != 2 {
+			return errors.New("private plan worker accepts no arguments")
+		}
+		return recoverPlanWorker()
+	}
+	if command == "recover" && planFlagPresent(os.Args[2:]) {
+		return recoverPlanCLI(os.Args[2:])
+	}
+	if command == "doctor-native-worker" {
+		if len(os.Args) != 2 {
+			return errors.New("private diagnostic worker accepts no user arguments")
+		}
+		return doctorNativeWorker()
+	}
 	if command == "recover-worker" {
 		if len(os.Args) != 2 {
 			return errors.New("private worker accepts no user arguments")
@@ -467,6 +488,9 @@ func run() error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(m)
 	}
+	if command == "doctor" {
+		return runDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser})
+	}
 	if command == "serve" {
 		if err := install.CheckScopedServeMode(*scopedFresh); err != nil {
 			return err
@@ -601,15 +625,12 @@ func run() error {
 		}
 		svc.Native.ExternalForwardAllow = external
 		return svc.ListenAndServe()
-	case "status", "doctor":
+	case "status":
 		status := svc.Status(ctx)
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(status); err != nil {
 			return err
-		}
-		if command == "doctor" && !status.Ready {
-			return errors.New("preflight incomplete")
 		}
 		return nil
 	case "token-create":

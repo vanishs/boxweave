@@ -68,6 +68,9 @@ jobs:
       - name: Python MCP loopback client and protocol negative tests
         if: steps.scope.outputs.full == 'true'
         run: python3 -m unittest discover -s scripts -p 'test_mcp_testkit.py' -q
+      - name: Integrated Doctor/Recover fixture regressions
+        if: steps.scope.outputs.full == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_pr177_installed_recovery.py' -q
       - name: Offline guided upgrade approval and fail-closed tests
         if: steps.scope.outputs.full == 'true'
         run: python3 -m unittest discover -s scripts -p 'test_guided_upgrade.py' -q

@@ -32,6 +32,7 @@ test-stable-gate:
 
 verify: lint test-race test-mcp-python test-uninstall test-stable-gate
 	$(PYTHON) -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'
+	$(PYTHON) -m unittest discover -s scripts -p 'test_pr177_installed_recovery.py' -q
 
 hooks:
 	sh scripts/install-hooks.sh

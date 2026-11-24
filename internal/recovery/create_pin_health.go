@@ -15,7 +15,7 @@ func (s Service) observeHealthyCreatePin(ctx context.Context, t state.RecoveryTa
 		v.Disposition, v.Reason = state.RecoveryBlocked, reason
 		return v, state.RecoveryProof{Kind: state.RecoveryBlocked, Reason: reason}
 	}
-	pin, e := s.Store.ReadOriginalCreatePin(ctx, t)
+	pin, e := s.reader().ReadOriginalCreatePin(ctx, t)
 	if e != nil {
 		return block("CREATE_PIN_LEDGER_CONFLICT")
 	}

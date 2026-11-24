@@ -23,6 +23,15 @@ func (s *Store) ReadCreateAddressHolds(ctx context.Context, project, bridge stri
 		return zero, e
 	}
 	defer tx.Rollback()
+	out, e := readCreateAddressHoldsTx(ctx, tx, project, bridge)
+	if e != nil {
+		return zero, e
+	}
+	return out, tx.Commit()
+}
+func readCreateAddressHoldsTx(ctx context.Context, tx *sql.Tx, project, bridge string) (networklimits.AddressHolds, error) {
+	zero := networklimits.AddressHolds{}
+	var e error
 	if e = verifyIPv4RetirementHistory(ctx, tx, project, bridge, ""); e != nil {
 		return zero, e
 	}
@@ -159,9 +168,6 @@ func (s *Store) ReadCreateAddressHolds(ctx context.Context, project, bridge stri
 		e = er
 	}
 	if e != nil {
-		return zero, e
-	}
-	if e = tx.Commit(); e != nil {
 		return zero, e
 	}
 	return holds, nil

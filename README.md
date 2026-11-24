@@ -74,6 +74,8 @@ BoxWeave does **not** choose the application's components, run an Agent schedule
 
 **Breaking RC8 change:** SQLite schema v5; incompatible old ledgers are rejected. Preserve original receipts and native resources; fresh isolated installation, credentials and reauthorization are required. Never reset a live host without separate operator approval. [Reconstruction policy](docs/process/VERSIONING.md).
 
+**PR #177 Doctor/Recover candidate (not released):** [operator guide](docs/process/DOCTOR_RECOVER.md) for read-only diagnosis, original-specific reviewed recovery and MCP recheck. No automatic repair or new remote Host authority.
+
 ## Security and scope
 
 - **Host boundary:** the MCP principal can operate only exact BoxWeave-owned Incus resources. No host shell/files, foreign Box adoption, generic Incus admin API, general ACL DSL, Caddy, managed certificates, guest resident Agent or cross-layer orchestrator.

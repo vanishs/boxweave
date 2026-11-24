@@ -70,7 +70,7 @@ func validProofSHA(s string) bool { return len(s) == 64 && strings.Trim(s, "0123
 func ValidCompletedPeerProof(p RootPeerResult) bool {
 	return p.Status == "RECONCILE_VERIFIED" && validProofSHA(p.PlanSHA256) && p.MutationComplete && !p.ReadyForPeer && p.ProbedScopes == 4 && p.DeletedScopes >= 0 && p.DeletedScopes <= 4 && p.KernelVerified && p.VerifiedNICs >= 2 && validProofSHA(p.PostNativeDigestSHA256)
 }
-func finishRecoveryPeerTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof) error {
+func checkRecoveryPeerTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof) error {
 	if t.Action != "box_peer_set" || t.State != "UNKNOWN" || t.Released || t.DependentDelete || !t.PeerReady || t.Name == "" || t.UUID == "" || t.Incarnation == "" || p.UUID != t.UUID || p.NativeID != t.NativeID || p.Reason != "ROOT_COMPLETED_POSTSTATE_VERIFIED" || p.Fingerprint == "" || !ValidCompletedPeerProof(p.Peer) {
 		return ErrResourceLocked
 	}
@@ -116,6 +116,14 @@ func finishRecoveryPeerTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p R
 			return ErrResourceLocked
 		}
 	}
+	return nil
+}
+
+func finishRecoveryPeerTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof) error {
+	if e := checkRecoveryPeerTx(ctx, tx, t, p); e != nil {
+		return e
+	}
+	in := t.Peer.Intent
 	if in.Allow {
 		return finishCompletedUnknownRootPeerGrantTx(ctx, tx, t.ID)
 	}

@@ -74,20 +74,22 @@ type Service struct {
 }
 
 type HostStatus struct {
-	TrackingID            string                      `json:"tracking_id"`
-	Version               string                      `json:"version"`
-	Commit                string                      `json:"commit"`
-	BinarySHA256          string                      `json:"binary_sha256,omitempty"`
-	GoVersion             string                      `json:"go_version"`
-	SchemaVersion         int                         `json:"schema_version"`
-	MCPReady              bool                        `json:"mcp_ready"`
-	Native                native.Status               `json:"native"`
-	Ready                 bool                        `json:"ready"`
-	Attention             *attentionSnapshot          `json:"attention,omitempty"`
-	ProjectCapacity       *state.ProjectBoxCapacity   `json:"project_capacity,omitempty"`
-	AddressCapacity       *native.AddressCapacity     `json:"address_capacity,omitempty"`
-	AddressRetirement     *state.IPv4RetirementStatus `json:"address_retirement,omitempty"`
-	AddressCapacityStatus string                      `json:"address_capacity_status,omitempty"`
+	TrackingID              string                        `json:"tracking_id"`
+	Version                 string                        `json:"version"`
+	Commit                  string                        `json:"commit"`
+	BinarySHA256            string                        `json:"binary_sha256,omitempty"`
+	GoVersion               string                        `json:"go_version"`
+	SchemaVersion           int                           `json:"schema_version"`
+	MCPReady                bool                          `json:"mcp_ready"`
+	Native                  native.Status                 `json:"native"`
+	Ready                   bool                          `json:"ready"`
+	Attention               *attentionSnapshot            `json:"attention,omitempty"`
+	ProjectCapacity         *state.ProjectBoxCapacity     `json:"project_capacity,omitempty"`
+	AddressCapacity         *native.AddressCapacity       `json:"address_capacity,omitempty"`
+	AddressRetirement       *state.IPv4RetirementStatus   `json:"address_retirement,omitempty"`
+	AddressCapacityStatus   string                        `json:"address_capacity_status,omitempty"`
+	ScopedPeerCapacity      *state.DiagnosticPeerCapacity `json:"scoped_peer_capacity,omitempty"`
+	AddressRetirementPolicy string                        `json:"address_retirement_policy,omitempty"`
 }
 
 func newTrackingID() (string, error) {
@@ -121,13 +123,21 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.ProjectCapacity = &cap
 	}
 	out.Ready = out.MCPReady && out.Native.Ready
-	if out.MCPReady {
+	if out.MCPReady && !s.ScopedPeerFresh {
 		if retirement, e := s.Store.ReadIPv4RetirementStatus(ctx, s.Native.Project); e == nil {
 			if retirement.Pending > 0 && !install.NativeRetirementSocketPresent() {
 				retirement.LastDeferredReason = "RETIREMENT_HELPER_NOT_CONFIGURED"
 			}
 			out.AddressRetirement = &retirement
 		}
+	}
+	if s.ScopedPeerFresh {
+		out.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
+		if cap, e := s.Store.ReadDiagnosticPeerCapacity(ctx, s.Native.Project); e == nil {
+			out.ScopedPeerCapacity = &cap
+		}
+	} else {
+		out.AddressRetirementPolicy = "LEGACY_IPV4_RETIREMENT"
 	}
 	if out.Ready {
 		if capacity, e := s.Native.ReadCreateAddressCapacity(ctx, s.Store.ReadCreateAddressHolds); e == nil {

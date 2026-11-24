@@ -97,6 +97,7 @@ func (s *Store) ReadRecoveryTarget(ctx context.Context, layer, id string) (Recov
 // kernel-verified host-local root worker. LocalReviewer is never a wire field.
 type RecoveryRequest struct {
 	Layer, ActorID, TokenID, LocalReviewer, OriginalID, Stream, Key, WorkRef, AgentRef string
+	Review                                                                             *ReviewedRecoveryBinding
 }
 type RecoveryProof struct {
 	Kind, Reason, NativeID, UUID, Fingerprint string
@@ -138,10 +139,18 @@ func recoveryAdmission(r RecoveryRequest) (Admission, error) {
 	} else if !validHexID(actor) || !validHexID(token) {
 		return Admission{}, ErrInvalid
 	}
+	review := ""
+	if r.Review != nil {
+		if r.LocalReviewer == "" || r.Stream != "" || !r.Review.valid() {
+			return Admission{}, ErrInvalid
+		}
+		review = r.Review.ReviewSHA256
+	}
 	intent, _ := json.Marshal(struct {
 		Original string `json:"original_operation_id"`
 		Stream   string `json:"stream,omitempty"`
-	}{r.OriginalID, r.Stream})
+		Review   string `json:"review_sha256,omitempty"`
+	}{r.OriginalID, r.Stream, review})
 	return Admission{Layer: r.Layer, ActorID: actor, TokenID: token, Key: r.Key, Action: "operation_recover", SafeIntent: intent, WorkRef: r.WorkRef, AgentRef: r.AgentRef}, nil
 }
 
@@ -250,6 +259,11 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	if nowTarget != t {
 		return RecoveryRecord{}, ErrConflict
 	}
+	if r.Review != nil {
+		if e = checkReviewedRecoveryTx(ctx, tx, r, t, p); e != nil {
+			return RecoveryRecord{}, e
+		}
+	}
 	id, e := newID()
 	if e != nil {
 		return RecoveryRecord{}, e
@@ -286,36 +300,9 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 		}
 		outcome, success = "SETTLED", true
 	} else if p.Kind == RecoverySettle || p.Kind == RecoveryBind {
-		if r.Stream != "" || t.State != "UNKNOWN" || t.Released || t.Name == "" || t.Resource != "box:"+t.Name {
-			return RecoveryRecord{}, ErrResourceLocked
-		}
-		if t.DependentDelete {
-			if e = recoveryDependentDeleteReady(ctx, tx, t); e != nil {
-				return RecoveryRecord{}, e
-			}
-		}
-		parent, e := recoveryDeleteChildParent(ctx, tx, t)
+		parent, e := checkGenericRecoveryScopeTx(ctx, tx, t, r.Stream)
 		if e != nil {
 			return RecoveryRecord{}, e
-		}
-		var busy int
-		e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>? AND o.id<>? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING') AND
-   (o.action='box_peer_set' OR NOT EXISTS(SELECT 1 FROM recovery_audit a WHERE a.operation_id=o.id AND a.decision='RELEASED')) AND
-   (o.action='box_peer_set' OR o.resource_key=? OR (?<>'' AND o.box_uuid=? AND o.incarnation=?) OR EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.resource_key='delete-project:'||o.layer)
- OR EXISTS(SELECT 1 FROM operation_resource_claims c JOIN operation_resource_claims orig ON orig.operation_id=? AND c.layer=orig.layer AND c.resource_key=orig.resource_key WHERE c.operation_id=o.id) OR ?<>'' OR ?=1)`,
-			t.Layer, t.ID, parent, t.Resource, t.UUID, t.UUID, t.Incarnation, t.ID, parent, t.DependentDelete).Scan(&busy)
-		if e != nil {
-			return RecoveryRecord{}, e
-		}
-		if busy != 0 {
-			return RecoveryRecord{}, ErrResourceLocked
-		}
-		e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM exec_output_gc WHERE project=? AND state IN ('DELETE_SENT','REVIEW_REQUIRED') AND ((?<>'' AND box_uuid=?) OR name=?)`, t.Layer, t.UUID, t.UUID, t.Name).Scan(&busy)
-		if e != nil {
-			return RecoveryRecord{}, e
-		}
-		if busy != 0 {
-			return RecoveryRecord{}, ErrResourceLocked
 		}
 		if p.Kind == RecoveryBind {
 			if t.Action != "box_create" || t.UUID != "" || t.Incarnation != "" || p.UUID == "" || p.Fingerprint == "" || p.Reason != "CREATE_MARKER_EXACT_IDENTITY" {
@@ -406,13 +393,56 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	// Link audit to immutable original; digest includes exact recovery receipt,
 	// original version and the bounded observation. No native or guest bytes.
 	if success {
-		raw, _ := json.Marshal([]any{id, t.ID, t.UpdatedAt, t.NativeID, t.UUID, outcome, p.Reason, p.Fingerprint})
+		evidence := []any{id, t.ID, t.UpdatedAt, t.NativeID, t.UUID, outcome, p.Reason, p.Fingerprint}
+		if r.Review != nil {
+			evidence = append(evidence, reviewDigestOf(r))
+		}
+		raw, _ := json.Marshal(evidence)
 		if _, e = tx.ExecContext(ctx, "INSERT INTO recovery_audit(operation_id,at,reviewer,decision,evidence_digest) VALUES(?,?,?,?,?)", t.ID, now, a.ActorID, "RECOVERY_"+outcome, digest(string(raw))); e != nil {
 			return RecoveryRecord{}, e
 		}
+	}
+	if r.Review != nil && time.Now().UnixNano() >= r.Review.ExpiresNS {
+		return RecoveryRecord{}, ErrConflict
 	}
 	if e = tx.Commit(); e != nil {
 		return RecoveryRecord{}, e
 	}
 	return RecoveryRecord{Receipt: Receipt{ID: id, TrackingID: tracking, State: phase, Action: a.Action, BoxUUID: uuid, Incarnation: inc, WorkRef: a.WorkRef, AgentRef: a.AgentRef, ErrorClass: errClass, CreatedAt: now, UpdatedAt: now, NextAction: nextAction(phase, a.Action, id)}, OriginalID: t.ID, Disposition: outcome, Reason: p.Reason}, nil
+}
+
+// Shared read-only preconditions for the existing writer and D3 plan.
+func checkGenericRecoveryScopeTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, stream string) (string, error) {
+	if stream != "" || t.State != "UNKNOWN" || t.Released || t.Name == "" || t.Resource != "box:"+t.Name {
+		return "", ErrResourceLocked
+	}
+	if t.DependentDelete {
+		if e := recoveryDependentDeleteReady(ctx, tx, t); e != nil {
+			return "", e
+		}
+	}
+	parent, e := recoveryDeleteChildParent(ctx, tx, t)
+	if e != nil {
+		return "", e
+	}
+	var busy int
+	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>? AND o.id<>? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING') AND
+   (o.action='box_peer_set' OR NOT EXISTS(SELECT 1 FROM recovery_audit a WHERE a.operation_id=o.id AND a.decision='RELEASED')) AND
+   (o.action='box_peer_set' OR o.resource_key=? OR (?<>'' AND o.box_uuid=? AND o.incarnation=?) OR EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.resource_key='delete-project:'||o.layer)
+ OR EXISTS(SELECT 1 FROM operation_resource_claims c JOIN operation_resource_claims orig ON orig.operation_id=? AND c.layer=orig.layer AND c.resource_key=orig.resource_key WHERE c.operation_id=o.id) OR ?<>'' OR ?=1)`,
+		t.Layer, t.ID, parent, t.Resource, t.UUID, t.UUID, t.Incarnation, t.ID, parent, t.DependentDelete).Scan(&busy)
+	if e != nil {
+		return "", e
+	}
+	if busy != 0 {
+		return "", ErrResourceLocked
+	}
+	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM exec_output_gc WHERE project=? AND state IN ('DELETE_SENT','REVIEW_REQUIRED') AND ((?<>'' AND box_uuid=?) OR name=?)`, t.Layer, t.UUID, t.UUID, t.Name).Scan(&busy)
+	if e != nil {
+		return "", e
+	}
+	if busy != 0 {
+		return "", ErrResourceLocked
+	}
+	return parent, nil
 }

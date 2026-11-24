@@ -202,6 +202,9 @@ sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
 socket=/var/lib/incus/unix.socket.user
 
+# Initialize this disposable ledger explicitly, not as a side effect of Doctor.
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" status -db "$db" -incus-socket "$socket" -project "$project" > /dev/null
+
 # Negative control: the same real Incus daemon may accept a NIC with
 # ingress default allow. Our own doctor MUST fail closed before native
 # Create/Start when that setting is weaker than the owned ACL contract.

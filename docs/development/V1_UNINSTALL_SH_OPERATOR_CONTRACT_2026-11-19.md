@@ -4,6 +4,37 @@
 
 **2026-11-19, Draft PR #153 only: implemented but NOT accepted on a physical production host.** This complements the [RC.7→RC8 teardown/reinstall lessons and proposed design](V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md). The existing installed ChatGPT L0 controller (Schema v4, `bc1e8447`) was **not modified** in development. This tool is a **host-root-local, pre-release, installer-manifest-bound** decommissioning aid. It is not a generic machine factory reset.
 
+## RC12→RC13 real Host retirement compatibility (PR #177, not released RC13)
+
+The published RC13 uninstall entrypoint is immutable. During owner-authorized physical RC12 teardown, all 18 exact registered Boxes and their Forward dependencies were successfully deleted via authenticated RC12 MCP and a root-only SQLite pre-deletion archive was integrity-checked. The still-running controller retained a historical reviewed `box_start UNKNOWN`, a terminal `box_wait_ready TIMED_OUT`, a bounded Exec-output archive, and a Go installer rollback backup. Published RC13 `--plan --scope full` wrongly rejected the owned Exec archive before it could report any useful blockers. Two operator-identified test-only systemd drop-ins were independently SHA-verified and privately archived before removal, without touching other units.
+
+A **subsequent tested** installer/uninstaller containing this patch adds an independently read-only preview of the *same* guided full workflow:
+
+```sh
+sudo sh uninstall.sh --plan --guided-full-plan --scope full --project user-1001
+```
+
+This prints blockers/hashed evidence; it **does not apply**, stop, delete, or archive anything. After separate local review, `sudo sh uninstall.sh --full` still requires an exact interactive `REMOVE user-1001` approval and fresh byte/inventory readback. Unlike manual non-guided `--apply`, guided `--full` verifies original Go backup receipt, file ownership, exact names and digests; it copies old rollback material into the private fsynced retirement archive, and removes the old backup only after controller retirement. It preserves the still-UNKNOWN original as historical evidence, accepting a previously released Box-local UNKNOWN only with exact immutable lineage to a successful later Box Delete; network UNKNOWN/foreign claims never inherit that exemption. `TIMED_OUT` is an explicit terminal status. Neither native Project/global Incus nor Cloudflare is reset; credentials do not migrate to a fresh RC13 SQLite ledger.
+
+The source patch does **not** change published RC13 bytes. Do not run unvalidated branch source on a real Host; require full offline tests, native CI, a reviewed and digest-pinned delivery artifact, and a fresh target-Host plan before executing.
+
+## Exact resume after an interrupted guided retirement (PR #177)
+
+This is **not a fresh uninstall**. If `--full` has already fsynced a `retired-XXXXXXXX` archive and the exact native rollback then fails *before* writing `ROLLBACK_IN_FLIGHT`, the controller remains stopped with audit `STARTED`. An operator may first resolve a verified foreign native drift (do not overwrite the original journal) and use:
+
+```sh
+sudo sh uninstall.sh --resume-plan --project user-1001 \
+  --retirement-archive /var/lib/boxweave-retired/retired-XXXXXXXX
+# Only when ready=true, explicitly reviewed:
+sudo sh uninstall.sh --resume --project user-1001 \
+  --retirement-archive /var/lib/boxweave-retired/retired-XXXXXXXX
+# type RESUME user-1001 on the trusted Host console
+```
+
+Read-only preflight requires the **same original** `STARTED` audit review SHA, original archived `review.json` and plan input hash, root-owned private archive with no unexpected entries, all copied originals and exact binary/unit/backup/exec proofs, the same empty Box inventory and SQLite semantic hash, source journal still `APPLIED`, and inactive controller. A moved/changed host, active service, altered unit, unknown native work, nonempty Box inventory, foreign/changed archive contents, mismatch between journal and saved plan, or any unrelated blocker refuses without writing. Both plan and confirmed resume independently repeat this check. A partial native rollback (`ROLLBACK_IN_FLIGHT`) is **never** resumed by this path.
+
+Confirmed `--resume` does **not** invoke original `audited_write`, does **not** regenerate the archive, and does **not** replay Box stop/delete operations. It proceeds from the already archived/stopped phase, invokes the original journal-approved native rollback and archive, then performs exact controller cleanup, and marks the **original** audit `COMPLETE` only on success. Errors leave original audit and materials intact for specific recovery; do not run `--full` again.
+
 ## Commands and approval model
 
 No arguments or `--help` displays help and performs no filesystem, service, Incus or network action.

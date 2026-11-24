@@ -34,6 +34,7 @@ class FakeHost(unittest.TestCase):
             "AUDIT": root / "uninstall-audit.json",
             "BACKUP": root / "installer-backup",
             "RETIRED": root / "retired",
+            "SCOPED_JOURNAL": root / "scoped-journal",
         }
         for name, p in self.paths.items():
             patcher = mock.patch.object(u, name, p)
@@ -111,6 +112,46 @@ class FakeHost(unittest.TestCase):
         }))
         self.paths["STATE"].joinpath("install-manifest.json").chmod(0o600)
         self.box = "11111111-2222-3333-4444-555555555555"
+
+    def test_scoped_journal_blocks_every_legacy_retirement_entry(self):
+        plan = self.plan()
+        u.SCOPED_JOURNAL.mkdir()
+        with mock.patch.object(u.os, "geteuid", return_value=0):
+            for argv in (
+                ["--plan", "--scope", "service", "--project", "user-1001"],
+                ["--plan", "--guided-full-plan", "--scope", "full", "--project", "user-1001"],
+                ["--apply", "--scope", "service", "--project", "user-1001"],
+                ["--full"],
+                ["--resume-plan", "--project", "user-1001", "--retirement-archive", "/unused"],
+                ["--resume", "--project", "user-1001", "--retirement-archive", "/unused"],
+            ):
+                with self.subTest(argv=argv), self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+                    u.main(argv)
+        for invoke in (
+            lambda: u.apply(plan),
+            lambda: u.apply_with_serve_lock(plan),
+            lambda: u.resume_interrupted_retirement(plan, "/unused"),
+        ):
+            with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+                invoke()
+        self.assertEqual(self.cmds, [])
+        self.assertFalse(u.AUDIT.exists())
+        self.assertTrue(u.SCOPED_JOURNAL.is_dir())
+
+    def test_scoped_manifest_or_dangling_journal_never_falls_back_to_legacy(self):
+        manifest_path = u.STATE / "install-manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["scoped_peer_mode"] = "scoped-v2"
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+            self.plan()
+        del manifest["scoped_peer_mode"]
+        manifest_path.write_text(json.dumps(manifest))
+        u.SCOPED_JOURNAL.symlink_to(u.SCOPED_JOURNAL.parent / "missing")
+        with self.assertRaisesRegex(u.UninstallError, "scoped v2 retirement"):
+            self.plan()
+        self.assertEqual(self.cmds, [])
+        self.assertFalse(u.AUDIT.exists())
 
     def fake_command(self, args, **kwargs):
         if args[:2] == ["systemctl", "show"]:
@@ -530,6 +571,156 @@ class FakeHost(unittest.TestCase):
         self.assertFalse(self.plan("full")["ready"])
         self.insert("UPDATE operations SET state='FAILED' WHERE id=?", ("d"*32,))
         self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+
+    def test_guided_plan_reads_exec_archive_without_any_mutation(self):
+        directory = u.STATE / u.EXEC_ARCHIVE_NAME
+        directory.mkdir(mode=0o700)
+        entry = directory / ("a" * 32 + ".stderr")
+        entry.write_bytes(b"original-output")
+        entry.chmod(0o600)
+        original = u.inspect_exec_archive
+        # CI synthetic user != host's dedicated uid; preserve all other checks.
+        with mock.patch.object(u, "inspect_exec_archive",
+                               side_effect=lambda uid: original(directory.stat().st_uid)), \
+                mock.patch.object(u.os, "geteuid", return_value=0), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(u.main(["--plan", "--guided-full-plan", "--scope", "full",
+                                     "--project", "user-1001"]), 0)
+        data = json.loads(output.getvalue())
+        self.assertTrue(data["ready"])
+        self.assertEqual(data["scope"], "full")
+        self.assertTrue(data["guided"])
+        self.assertEqual(len(data["exec_archive"]["files"]), 1)
+        self.assertEqual(entry.read_bytes(), b"original-output")
+        self.assertFalse(u.AUDIT.exists())
+        self.assertEqual(self.cmds, [])
+
+    def test_guided_terminal_timeout_and_released_historical_start(self):
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("s"*32, "user-1001", self.box, "UNKNOWN", "expired", "box_start", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("w"*32, "user-1001", self.box, "TIMED_OUT", "", "box_wait_ready", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("d"*32, "user-1001", self.box, "SUCCEEDED", "native", "box_delete", self.box))
+        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?,?,?)",
+                    (self.box, "user-1001", "retired", "DELETED", 20, self.box, "d"*32))
+        # No RELEASED proof => fail closed even though native Box no longer exists.
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+        self.insert("INSERT INTO recovery_audit VALUES(?,?,?,?,?)",
+                    (1, "s"*32, "RELEASED", 10, "a"*64))
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"], plan["blockers"])
+        self.assertEqual(plan["sqlite"]["unresolved_operations"], 0)
+        self.assertEqual(len(plan["sqlite"]["historical_released_other"]), 1)
+        self.assertFalse(self.plan("full")["ready"])
+        self.insert("UPDATE operations SET state='FAILED' WHERE id=?", ("d"*32,))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+
+    def test_guided_released_unknown_cannot_bypass_network_original(self):
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("p"*32, "user-1001", self.box, "UNKNOWN", "expired", "box_peer_set", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("d"*32, "user-1001", self.box, "SUCCEEDED", "native", "box_delete", self.box))
+        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?,?,?)",
+                    (self.box, "user-1001", "retired", "DELETED", 20, self.box, "d"*32))
+        self.insert("INSERT INTO recovery_audit VALUES(?,?,?,?,?)",
+                    (1, "p"*32, "RELEASED", 10, "a"*64))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+
+    def test_guided_archives_verified_prior_installer_backup(self):
+        u.BACKUP.mkdir(mode=0o700)
+        previous = {"schema": 2, "native_project": "user-1001",
+                    "native_socket": "/var/lib/incus/unix.socket.user",
+                    "service_user": "boxweave", "binary_path": str(u.BINARY),
+                    "state_dir": str(u.STATE),
+                    "binary_sha256": u.sha(b"prior-binary")}
+        files = {"binary": b"prior-binary", "unit": b"prior-unit"}
+        for name, body in files.items():
+            (u.BACKUP / name).write_bytes(body)
+            (u.BACKUP / name).chmod(0o600)
+        receipt = {"Schema": 1, "Previous": previous,
+                   "PreviousUnitSHA256": u.sha(files["unit"]),
+                   "PreviousDBSHA256": "", "PreviousWALSHA256": "",
+                   "PreviousSHMSHA256": ""}
+        (u.BACKUP / "receipt.json").write_text(json.dumps(receipt))
+        (u.BACKUP / "receipt.json").chmod(0o600)
+        self.assertFalse(self.plan("full")["ready"])
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"], plan["blockers"])
+        self.assertEqual(len(plan["installer_backup"]["files"]), 3)
+        result = u.apply(plan)
+        saved = Path(result["retirement_archive"])
+        for name, body in files.items():
+            self.assertEqual((saved / ("installer-backup-" + name)).read_bytes(), body)
+        self.assertTrue((saved / "installer-backup-receipt.json").is_file())
+        self.assertFalse(u.BACKUP.exists())
+
+    def test_guided_untrusted_backup_cannot_be_retired(self):
+        u.BACKUP.mkdir(mode=0o700)
+        (u.BACKUP / "unexpected").write_text("foreign")
+        with self.assertRaises(u.UninstallError):
+            u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue((u.BACKUP / "unexpected").exists())
+
+    def prepare_interrupted_native_retirement(self):
+        self.install_retirement_fixture()
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"], plan["blockers"])
+        u.audited_write({"status": "STARTED", "scope": "full",
+                         "host_sha256": plan["host_machine_id_sha256"],
+                         "review_sha256": plan["review_sha256"],
+                         "actions": plan["actions"],
+                         "historical_released_exec": plan["sqlite"]["historical_released_exec"],
+                         "historical_released_other": plan["sqlite"]["historical_released_other"]})
+        archive = u.archive_controller(plan)
+        self.assertEqual(u.audit_status()["status"], "STARTED")
+        return plan, archive
+
+    def test_interrupted_retirement_exact_archive_resume_and_audit(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        receipt, old_plan = u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertTrue(receipt["ready"])
+        self.assertEqual(receipt["phase"], "ARCHIVED_BEFORE_NATIVE_ROLLBACK")
+        self.assertEqual(old_plan["review_sha256"], plan["review_sha256"])
+        self.assertEqual(self.cmds, [])
+        result = u.resume_interrupted_retirement(old_plan, archive)
+        self.assertEqual(result["outcome"], "COMPLETE")
+        self.assertEqual(result["retirement_archive"], archive)
+        self.assertEqual(u.audit_status()["status"], "COMPLETE")
+        self.assertFalse(u.STATE.exists())
+        self.assertFalse(u.BINARY.exists())
+        self.assertFalse(u.NATIVE.exists())
+        self.assertEqual(len(list(u.RETIRED.glob("retired-*"))), 1)
+        self.assertTrue((Path(archive) / "review.json").is_file())
+
+    def test_interrupted_resume_rejects_archive_drift_without_effect(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        (Path(archive) / "boxweave.bin").write_bytes(b"drift")
+        with self.assertRaisesRegex(u.UninstallError, "copy changed"):
+            u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertEqual(self.cmds, [])
+        self.assertEqual(u.audit_status()["status"], "STARTED")
+        self.assertTrue(u.NATIVE.exists())
+
+    def test_interrupted_resume_rejects_original_audit_drift(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        audit = json.loads(u.AUDIT.read_text())
+        audit["review_sha256"] = "c" * 64
+        u.AUDIT.write_text(json.dumps(audit))
+        with self.assertRaisesRegex(u.UninstallError, "audit and archived plan disagree"):
+            u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertEqual(self.cmds, [])
+        self.assertTrue(u.BINARY.exists())
+
+    def test_interrupted_resume_rejects_native_inflight(self):
+        plan, archive = self.prepare_interrupted_native_retirement()
+        native = json.loads(u.NATIVE.read_text())
+        native["status"] = "ROLLBACK_IN_FLIGHT"
+        u.NATIVE.write_text(json.dumps(native))
+        with self.assertRaises(u.UninstallError):
+            u.inspect_interrupted_retirement("user-1001", archive)
+        self.assertEqual(self.cmds, [])
+        self.assertEqual(u.audit_status()["status"], "STARTED")
 
     def test_guided_native_dependency_and_live_operation_refusals(self):
         entry = {"name": "bw-example", "type": "container", "status": "Running",
