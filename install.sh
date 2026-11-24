@@ -226,6 +226,37 @@ def refuse_scoped_existing():
             raise InstallError("scoped manifest: preserve original, no legacy adoption or upgrade")
 
 
+# Mirror the Go Stage retirement-reader contract even when installing an
+# older immutable Release. Never run these executables or install packages.
+RETIREMENT_READERS = (
+    ("/usr/sbin/ip", "iproute2"),
+    ("/usr/sbin/bridge", "iproute2"),
+    ("/usr/sbin/nft", "nftables"),
+    ("/usr/sbin/conntrack", "conntrack"),
+)
+
+
+def retirement_reader_preflight(stat_path=os.stat):
+    failures = []
+    for path, package in RETIREMENT_READERS:
+        try:
+            info = stat_path(path)
+        except FileNotFoundError:
+            failures.append("INSTALL_MISSING_PREREQUISITE: " + path +
+                            " (Debian/Ubuntu package: " + package + ")")
+            continue
+        except OSError:
+            failures.append("INSTALL_PREREQUISITE_UNVERIFIED: " + path)
+            continue
+        if (info.st_uid != 0 or not stat.S_ISREG(info.st_mode) or
+                info.st_mode & 0o022 or not info.st_mode & 0o111):
+            failures.append("INSTALL_PREREQUISITE_UNVERIFIED: " + path)
+    if failures:
+        raise InstallError("; ".join(failures) +
+                           "; resolve locally and review again; no installation changes")
+    return True
+
+
 def scoped_review(candidate, project):
     review = command_json([str(candidate), "native-scoped-fresh-plan"])
     machine = Path("/etc/machine-id").read_text(encoding="ascii").strip()
@@ -582,6 +613,7 @@ def main():
         native_args = ["-project", args.project, "-pool", args.pool,
                        "-network", args.network, "-acl", args.acl] if fresh_guided else []
         if fresh_guided and not args.scoped_peer_fresh:
+            retirement_reader_preflight()
             plan = subprocess.check_output([str(candidate), "native-prepare-plan", *native_args],
                                            text=True)
             review = json.loads(plan)
@@ -594,12 +626,13 @@ def main():
                 out.write("Type INSTALL " + args.project + " to approve this exact plan: ")
                 out.flush()
                 if inp.readline().strip() != "INSTALL " + args.project:
-                    raise InstallError("installation not approved")
+                    raise InstallError("OPERATOR_APPROVAL_REQUIRED: installation not approved; no installation changes")
             if current_host_digest() != host_digest:
                 raise InstallError("host changed after approval")
             if subprocess.check_output([str(candidate), "native-prepare-plan", *native_args],
                                        text=True) != plan:
                 raise InstallError("native plan changed after approval; review again")
+            retirement_reader_preflight()
         if args.scoped_peer_fresh:
             scoped = scoped_review(candidate, args.project)
             scoped_sha = scoped["ReviewSHA256"]
@@ -609,7 +642,7 @@ def main():
                     out.write("Type INSTALL SCOPED " + args.project + " to approve this exact plan: ")
                     out.flush()
                     if inp.readline().strip() != "INSTALL SCOPED " + args.project:
-                        raise InstallError("scoped installation not approved")
+                        raise InstallError("OPERATOR_APPROVAL_REQUIRED: scoped installation not approved; no installation changes")
             elif scoped_sha != args.scoped_fresh_review_sha256:
                 raise InstallError("scoped fresh review digest changed")
             if current_host_digest() != host_digest or scoped_review(candidate, args.project) != scoped:

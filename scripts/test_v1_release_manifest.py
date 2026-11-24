@@ -115,7 +115,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-24.04", s2)
         self.assertIn("runs-on: ubuntu-24.04", s25)
 
-    def exercise_guided_install(self, answer, drift=False, native_ready=True):
+    def exercise_guided_install(self, answer, drift=False, native_ready=True, missing_reader=False, reader_drift=False):
         content = (ROOT / "install.sh").read_text()
         embedded = content.split("<<'PY_BOXWEAVE_INSTALL'\n", 1)[1].rsplit("\nPY_BOXWEAVE_INSTALL", 1)[0]
         ns = {}
@@ -167,6 +167,12 @@ class ReleaseTests(unittest.TestCase):
             calls.append(argv[1])
             return mock.Mock(returncode=0)
 
+        checks = []
+        def reader_preflight():
+            checks.append(True)
+            if missing_reader or (reader_drift and len(checks) > 1):
+                raise ns["InstallError"]("INSTALL_MISSING_PREREQUISITE: /usr/sbin/conntrack")
+        ns["retirement_reader_preflight"] = reader_preflight
         ns["Path"] = fake_path
         ns["current_host_digest"] = lambda: "e" * 64
         ns["select_release"] = lambda *_: (candidate, "1.0.0-rc.8", source, hashlib.sha256(candidate).hexdigest())
@@ -196,11 +202,20 @@ class ReleaseTests(unittest.TestCase):
 
     def test_guided_install_decline_and_changed_plan(self):
         calls, error = self.exercise_guided_install("NO")
+        self.assertIn("OPERATOR_APPROVAL_REQUIRED", error)
         self.assertIn("not approved", error)
         self.assertEqual(calls, ["native-prepare-plan"])
         calls, error = self.exercise_guided_install("INSTALL user-1001", drift=True)
         self.assertIn("plan changed", error)
         self.assertNotIn("install-stage", calls)
+
+    def test_missing_reader_and_reader_drift_never_stage(self):
+        calls, error = self.exercise_guided_install("INSTALL user-1001", missing_reader=True)
+        self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
+        self.assertEqual(calls, [])
+        calls, error = self.exercise_guided_install("INSTALL user-1001", reader_drift=True)
+        self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
+        self.assertEqual(calls, ["native-prepare-plan", "native-prepare-plan"])
 
     def test_guided_install_incomplete_native_never_activates(self):
         calls, error = self.exercise_guided_install("INSTALL user-1001", native_ready=False)
