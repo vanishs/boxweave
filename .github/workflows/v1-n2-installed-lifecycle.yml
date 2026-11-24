@@ -25,6 +25,7 @@ on:
       - scripts/uninstall_core.py
       - scripts/n2_installed_lifecycle.*
       - scripts/pr178_n2_scoped_lifecycle.py
+      - scripts/pr182_scoped_retirement.py
       - scripts/pr178_n3_scoped_peer.py
       - scripts/pr178_n4_*.py
       - .github/workflows/v1-n2-installed-lifecycle.yml
@@ -39,10 +40,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped]
+        mode: [legacy, scoped, scoped-retirement]
     env:
       RUNNER_ENVIRONMENT: github-hosted
-      PR178_SCOPED_N2: ${{ matrix.mode == 'scoped' && '1' || '0' }}
+      PR178_SCOPED_N2: ${{ matrix.mode != 'legacy' && '1' || '0' }}
+      PR182_SCOPED_RETIREMENT: ${{ matrix.mode == 'scoped-retirement' && '1' || '0' }}
       N2_EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -65,6 +67,13 @@ jobs:
           grep -Fxq PR177_D2_INSTALLED_EMPTY_DIAGNOSTIC_COVERAGE=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS "$RUNNER_TEMP/n2-installed.log"
+          if test "$PR182_SCOPED_RETIREMENT" = 1; then
+            for marker in LIVE_REFUSED RETIRED_HISTORY INTERRUPTED_RESUMED NATIVE_RESTORED FOREIGN_UNCHANGED COMPLETE; do
+              grep -Fxq "PR182_SCOPED_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            grep -Fxq PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
+            exit 0
+          fi
           if test "$PR178_SCOPED_N2" = 1; then
             grep -Fxq INSTALL_SCOPED_READONLY_PLAN=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq INSTALL_SCOPED_STALE_PLAN_REFUSED=PASS "$RUNNER_TEMP/n2-installed.log"

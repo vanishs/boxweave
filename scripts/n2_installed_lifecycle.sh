@@ -198,6 +198,10 @@ test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
 if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
+  if test "${PR182_SCOPED_RETIREMENT:-0}" = 1; then
+    sudo python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt"
+    exit 0
+  fi
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
   sudo "$installed" doctor -project "$project" > "$work/d2-scoped-active.json"
   python3 - "$work/d2-scoped-active.json" <<'D2ACTIVE'
