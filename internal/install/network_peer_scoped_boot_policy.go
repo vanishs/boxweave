@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/lxc/incus/v7/shared/api"
+	"github.com/vanishs/boxweave/internal/networklimits"
 	"github.com/vanishs/boxweave/internal/state"
 	"golang.org/x/sys/unix"
 )
@@ -31,7 +32,7 @@ type scopedPeerBootPolicy struct {
 	Active                                                          []state.PeerGrantBinding
 }
 
-const scopedPeerBootPolicyLimit = 8192
+const scopedPeerBootPolicyLimit = networklimits.ScopedPeerHistoryLimit
 
 func scopedPeerBootPolicyName(n int) string { return fmt.Sprintf("policy-%08d.json", n) }
 

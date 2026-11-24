@@ -16,7 +16,7 @@ type scopedPeerGlobalWitness func(context.Context, state.ScopedPeerOriginalProof
 // Composition of the actual bounded native operations. The caller MUST
 // hold the installed Root/lifecycle mutex and acquire the fixed Root SDK,
 // durable original reader, host scope witness and root-owned journal.
-// Not an installed dispatcher until policy boot publication/recovery is wired.
+// The installed adapter publishes the verified boot policy after completion.
 func nativeScopedPeerExecute(ctx context.Context, dir string, uid uint32, host string,
 	read scopedPeerOriginalReader, r nativePeerScopedRootReader, driver nativePeerScopedACLDriver,
 	sysfs string, guard nativePeerGuardWitness, batch nativePeerGuardBatch, conntrack nativePeerConntrackRun, global scopedPeerGlobalWitness) (state.ScopedPeerRootReceipt, error) {

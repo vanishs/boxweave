@@ -56,7 +56,7 @@ func run() error {
 	serviceUser := f.String("service-user", "boxweave", "dedicated nonroot incus-only service account")
 	sourceBinary := f.String("source-binary", "", "source executable at approved exact digest")
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
-	scopedFresh := f.Bool("scoped-peer-fresh", false, "fresh-only scoped lifecycle candidate")
+	scopedFresh := f.Bool("scoped-peer-fresh", false, "fresh-only scoped Peer v2")
 	scopedReview := f.String("scoped-fresh-review-sha256", "", "exact local scoped fresh review digest")
 	approve := f.Bool("approve-stage", false, "explicitly authorize staging service files; no automatic start")
 	approveLocal := f.Bool("approve-local", false, "host-local root authorization to activate, upgrade or rollback")

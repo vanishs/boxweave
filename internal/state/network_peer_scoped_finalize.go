@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -85,8 +86,7 @@ func finalizeScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, r ScopedPeerR
 
 type ScopedPeerRootCall func(context.Context, string) (ScopedPeerRootReceipt, error)
 
-// ExecuteScopedPeerOriginal is an internal worker boundary. No registered
-// MCP caller exists until the installed Root executor is fully accepted.
+// ExecuteScopedPeerOriginal is the installed scoped MCP worker boundary.
 func (w Worker) ExecuteScopedPeerOriginal(id string, call ScopedPeerRootCall) error {
 	if w.Store == nil || call == nil {
 		return ErrInvalid
@@ -98,7 +98,11 @@ func (w Worker) ExecuteScopedPeerOriginal(id string, call ScopedPeerRootCall) er
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 	if e := w.Store.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
-		_ = w.Store.transition(context.Background(), id, "ADMITTED", "FAILED", "", "SCOPED_PEER_V2_PRE_DISPATCH_REFUSED")
+		detail := "SCOPED_PEER_V2_PRE_DISPATCH_REFUSED"
+		if errors.Is(e, ErrScopedPeerHistoryFull) {
+			detail = "SCOPED_PEER_V2_HISTORY_CAPACITY"
+		}
+		_ = w.Store.transition(context.Background(), id, "ADMITTED", "FAILED", "", detail)
 		return e
 	}
 	r, e := call(ctx, id)

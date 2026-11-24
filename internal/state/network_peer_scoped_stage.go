@@ -8,13 +8,15 @@ import (
 	"errors"
 	"slices"
 	"time"
+
+	"github.com/vanishs/boxweave/internal/networklimits"
 )
 
 // StageScopedPeerOriginal stages exactly one v2 grant/revoke in the SAME
 // SQLite write transaction that audits every owned Box, deterministic ACL
 // and dual-stack lease, native grant provenance, actor and resource claims.
-// It performs NO Incus/nft/conntrack/boot mutation; no MCP/Root caller exists
-// for this internal pathway until the full migration+recovery is accepted.
+// It performs NO Incus/nft/conntrack/boot mutation. The installed worker
+// uses StageAndClaimScopedPeerOriginal before calling Root.
 func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 	if s == nil || s.db == nil || s.auditReadOnly || !validHexID(id) {
 		return ErrInvalid
@@ -61,6 +63,8 @@ func (s *Store) StageAndClaimScopedPeerOriginal(ctx context.Context, id string) 
 	return tx.Commit()
 }
 
+var ErrScopedPeerHistoryFull = errors.New("scoped Peer policy history capacity reached")
+
 func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error {
 	var err error
 	var action, status, actor, token, layer, source, incarnation, resource string
@@ -86,6 +90,18 @@ func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error
 		i.SourceUUID == "" || i.TargetUUID == "" || i.SourceIncarnation == "" ||
 		i.TargetIncarnation == "" || resource != "peer-guard:"+i.Bridge {
 		return ErrResourceLocked
+	}
+	var used, activeCount int
+	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operation_events e JOIN operations o ON o.id=e.operation_id
+ WHERE o.layer=? AND o.action='box_peer_set' AND o.state='SUCCEEDED' AND e.state='SUCCEEDED'
+ AND e.safe_detail IN ('SCOPED_PEER_V2_GRANT_KERNEL_VERIFIED','SCOPED_PEER_V2_REVOCATION_KERNEL_VERIFIED')`, i.Project).Scan(&used); e != nil {
+		return e
+	}
+	if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM peer_grants WHERE project=? AND status='CONFIRMED'", i.Project).Scan(&activeCount); e != nil {
+		return e
+	}
+	if !networklimits.ScopedPeerHistoryCanAppend(used, activeCount, i.Allow) {
+		return ErrScopedPeerHistoryFull
 	}
 	inventory, e := readCompleteScopedNetworkAuditLedgerTx(ctx, tx, i.Project, i.Bridge)
 	if e != nil || len(inventory.Boxes) < 2 {

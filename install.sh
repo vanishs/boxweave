@@ -353,7 +353,7 @@ def main():
     mode.add_argument("--interactive", action="store_true", help="review and install/upgrade in one terminal")
     mode.add_argument("--plan", action="store_true", help="read-only plan (default)")
     mode.add_argument("--apply", action="store_true", help="apply on exact approved host")
-    parser.add_argument("--scoped-peer-fresh", action="store_true", help="fresh-only scoped N2 candidate; no legacy migration")
+    parser.add_argument("--scoped-peer-fresh", action="store_true", help="fresh-only scoped Peer v2; no legacy migration")
     parser.add_argument("--scoped-fresh-review-sha256", help="exact root-local native-scoped-fresh-plan review digest for --apply")
     parser.add_argument("--upgrade", action="store_true", help="explicitly upgrade an existing verified install")
     parser.add_argument("--project", help="pre-provisioned restricted native Incus Project")

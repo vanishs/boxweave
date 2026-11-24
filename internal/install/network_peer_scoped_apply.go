@@ -5,11 +5,11 @@ import (
 	"errors"
 	"reflect"
 
+	"github.com/vanishs/boxweave/internal/networklimits"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
-// Fixed production-capability composition, private until the installed
-// socket, lifecycle policy coexistence and real native acceptance pass.
+// Fixed production-capability composition behind the authenticated scoped Root socket.
 // The caller must hold a Root-wide lifecycle lock. No caller may supply
 // native tuples, ACL names, journal paths or executable commands.
 func nativeScopedPeerApply(ctx context.Context, db *state.Store, id string) (state.ScopedPeerRootReceipt, error) {
@@ -24,7 +24,7 @@ func nativeScopedPeerApply(ctx context.Context, db *state.Store, id string) (sta
 	if e = nativePeerFreshQuarantineReceipt(r); e != nil {
 		return zero, e
 	}
-	current, _, e := scopedPeerBootCurrent(nativePeerFreshJournalDir, 0, r, initial, "")
+	current, last, e := scopedPeerBootCurrent(nativePeerFreshJournalDir, 0, r, initial, "")
 	if e != nil {
 		return zero, e
 	}
@@ -42,6 +42,9 @@ func nativeScopedPeerApply(ctx context.Context, db *state.Store, id string) (sta
 	proof, e := read(ctx)
 	if e != nil {
 		return zero, e
+	}
+	if !networklimits.ScopedPeerHistoryCanAppend(last.Sequence, len(last.Active), proof.Intent.Allow) {
+		return zero, errors.New("scoped Peer policy history capacity reached before native effect")
 	}
 	// Bind the durable boot preimage to the freshly compiled native plan
 	// before the whole-original executor is permitted to create a journal.
