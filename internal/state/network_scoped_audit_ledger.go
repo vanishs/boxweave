@@ -82,7 +82,9 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 	}
 	// A retirement is not an ordinary live network audit. Require all
 	// resources and original operations to have settled. Historical retained
-	// identity rows have already been independently validated above.
+	// identity rows have already been independently validated above. Resource
+	// claim rows remain as durable historical lineage even after settlement;
+	// reject live, orphaned and foreign claims, not exact terminal history.
 	for _, q := range []string{
 		"SELECT count(*) FROM owned_boxes WHERE project!=? OR state!='DELETED'",
 		"SELECT count(*) FROM operations WHERE layer!=? OR state NOT IN ('SUCCEEDED','FAILED','CANCELLED','TIMED_OUT')",
@@ -90,7 +92,7 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 		"SELECT count(*) FROM network_address_fences WHERE project!=? OR state!='RELEASED'",
 		"SELECT count(*) FROM peer_grants WHERE project!=? OR status!='REVOKED'",
 		"SELECT count(*) FROM forward_claims WHERE project!=? OR state!='REVOKED'",
-		"SELECT count(*) FROM operation_resource_claims WHERE layer!=? OR 1=1",
+		"SELECT count(*) FROM operation_resource_claims c LEFT JOIN operations o ON o.id=c.operation_id WHERE c.layer!=? OR o.id IS NULL OR o.layer!=c.layer OR o.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','TIMED_OUT')",
 		"SELECT count(*) FROM network_ipv4_compactions WHERE project!=? OR 1=1",
 		"SELECT count(*) FROM network_ipv4_retirements WHERE project!=? OR 1=1",
 		"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=? OR 1=1",

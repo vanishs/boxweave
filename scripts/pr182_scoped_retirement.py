@@ -18,7 +18,11 @@ def run(*args):
 def check_plan(project):
     p = subprocess.run(["sh", "uninstall.sh", "--scoped", "--plan", "--project", project],
                        capture_output=True, text=True)
-    return p, json.loads(p.stdout)
+    try:
+        plan = json.loads(p.stdout)
+    except ValueError as exc:
+        raise AssertionError(f"Scoped plan did not return JSON (exit={p.returncode}): {p.stderr.strip()}") from exc
+    return p, plan
 
 
 def interrupted(project):

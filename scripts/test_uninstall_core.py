@@ -857,6 +857,24 @@ class FakeHost(unittest.TestCase):
         self.assertFalse(u.AUDIT.exists())
         self.assertFalse(u.SCOPED_FENCE.exists())
 
+    def test_scoped_native_quiescence_retained_terminal_only(self):
+        terminal = {"id": "11111111-1111-4111-8111-111111111111",
+                    "status": "Success", "status_code": 200, "may_cancel": False}
+        for items in ([], [terminal], [{**terminal, "status": "Failure", "status_code": 400}],
+                      [{**terminal, "status": "Cancelled", "status_code": 401}]):
+            with mock.patch.object(u, "command", return_value=(json.dumps(items), 0)):
+                u.require_quiescent_scoped_native("user-1001")
+        for items in ([{**terminal, "status": "Running", "status_code": 103}],
+                      [{**terminal, "status": "Running"}], [{**terminal, "may_cancel": True}],
+                      [{**terminal, "id": "unknown"}], [terminal, terminal], {"operations": []},
+                      [{**terminal, "status_code": 999}], [{"id": terminal["id"]}]):
+            with mock.patch.object(u, "command", return_value=(json.dumps(items), 0)):
+                with self.assertRaises(u.UninstallError):
+                    u.require_quiescent_scoped_native("user-1001")
+        with mock.patch.object(u, "command", return_value=(json.dumps([terminal]), 0)):
+            with self.assertRaises(u.UninstallError):
+                REAL_REQUIRE_QUIET("user-1001")
+
     def test_scoped_full_only_refuses_legacy_apply(self):
         with mock.patch.object(u.os, "geteuid", return_value=0):
             with self.assertRaisesRegex(u.UninstallError, "full-only"):

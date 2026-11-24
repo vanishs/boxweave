@@ -305,6 +305,31 @@ def require_quiescent_native(project):
         raise UninstallError("native operations present or unreadable: reconcile before retirement")
 
 
+def require_quiescent_scoped_native(project):
+    """Incus retains terminal operations briefly after MCP has settled them.
+    Check the exact native terminal state, never mistake retention for activity.
+    Legacy removal deliberately keeps its original stricter empty-list rule.
+    """
+    raw, _ = command(["incus", "operation", "list", "local:", "--project",
+                      project, "--format", "json"], timeout=25)
+    try:
+        data = json.loads(raw)
+    except ValueError as exc:
+        raise UninstallError("scoped native operation inventory unreadable") from exc
+    terminal = {200: "Success", 400: "Failure", 401: "Cancelled"}
+    if not isinstance(data, list):
+        raise UninstallError("scoped native operation inventory unverified")
+    seen = set()
+    for item in data:
+        if (not isinstance(item, dict) or not isinstance(item.get("id"), str) or
+                not VALID_UUID.fullmatch(item["id"]) or item["id"] in seen or
+                type(item.get("status_code")) is not int or
+                terminal.get(item["status_code"]) != item.get("status") or
+                item["status_code"] not in terminal or item.get("may_cancel") is not False):
+            raise UninstallError("scoped native operation active or unverified: settle original first")
+        seen.add(item["id"])
+
+
 def require_root_journal(path):
     info = checked_file(path, "file", 1024 * 1024)
     if info is not None:
@@ -628,7 +653,10 @@ def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False):
     incus = []
     if scope == "full":
         if guided:
-            require_quiescent_native(project)
+            if scoped:
+                require_quiescent_scoped_native(project)
+            else:
+                require_quiescent_native(project)
         incus = native_instances(project, guided=guided)
         expected = sorted(x["uuid"] for x in snapshot["boxes"]) if guided else sorted(box_uuids)
         if guided and box_uuids and sorted(box_uuids) != expected:
@@ -1361,7 +1389,7 @@ def scoped_verify_original(plan):
         raise UninstallError("original scoped ledger changed; preserve protected work")
     if native_instances(plan["project"], guided=True):
         raise UninstallError("scoped native consumers remain")
-    require_quiescent_native(plan["project"])
+    require_quiescent_scoped_native(plan["project"])
     if inspect_exec_archive(plan["service_user_uid"]) != plan["exec_archive"]:
         raise UninstallError("original scoped Exec archive changed")
     original = {x["name"]: x["info"] for x in plan["state_files"]}
@@ -1486,7 +1514,7 @@ def scoped_postcheck(plan, archive):
     if not isinstance(tables, list) or not tables or any(
             item.get("table", {}).get("name", "").startswith("bw_pg_") for item in tables):
         raise UninstallError("scoped guard absence not independently verified")
-    require_quiescent_native(project)
+    require_quiescent_scoped_native(project)
     if native_instances(project, guided=True) or list((Path("/sys/class/net") / bridge / "brif").iterdir()):
         raise UninstallError("native consumers appeared after retirement")
     scoped_incus_active()
