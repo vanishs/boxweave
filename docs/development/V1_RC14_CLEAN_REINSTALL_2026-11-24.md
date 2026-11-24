@@ -20,4 +20,3 @@ The deployed RC13 has schema 6, older Legacy Peer behavior and no new Go retirem
 - Isolated developer Box: unit and release tooling regressions; purge interruption and unknown archive refusal.
 - Clean CI VM: Legacy full uninstall, explicit completed-data purge and new Scoped controller on original Incus; scoped full retirement and independent purge.
 - All required source, quality, dual-architecture and native lifecycle checks green at merge head. Use the existing one-shot RC release branch; do not publish a tag by hand.
-
