@@ -30,6 +30,7 @@ type NativePeerScopedRootEvidence struct {
 type NativePeerScopedRootTransition struct {
 	OriginalID, Project, Bridge     string
 	SourceUUID, TargetUUID          string
+	IntentAllow                     bool
 	SourceACLName, TargetACLName    string
 	GuardBefore, GuardAfter         NativePeerGuardPlan
 	SourceACLBefore, SourceACLAfter api.NetworkACLsPost
@@ -107,7 +108,7 @@ func NativePeerScopedRootTransitionFromEvidence(proof state.ScopedPeerOriginalPr
 	}
 	out := NativePeerScopedRootTransition{
 		OriginalID: proof.OriginalID, Project: i.Project, Bridge: i.Bridge,
-		SourceUUID: source.UUID, TargetUUID: target.UUID,
+		SourceUUID: source.UUID, TargetUUID: target.UUID, IntentAllow: i.Allow,
 		SourceACLName: source.ACL, TargetACLName: target.ACL,
 		GuardBefore: before, GuardAfter: after,
 		OriginalBootAutostart: map[string]string{},
