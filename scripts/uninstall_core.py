@@ -326,6 +326,45 @@ def prepare_record():
             "review_sha256": approval}
 
 
+def native_retirement_precheck(project, native, binary):
+    """Use the exact installed Go reader; no independent rollback engine."""
+    if native["status"] == "ABSENT":
+        return None
+    if not binary or file_fingerprint(BINARY) != binary:
+        raise UninstallError("NATIVE_RETIREMENT_CHECK_UNVERIFIED: exact installed binary required")
+    require_root_owned(BINARY)
+    output, code = command([str(BINARY), "native-prepare-retirement-check",
+                            "-project", project, "-native-prepare-sha256",
+                            native["review_sha256"]], acceptable=(0, 1), timeout=90)
+    try:
+        report = json.loads(output)
+    except ValueError as exc:
+        raise UninstallError("NATIVE_RETIREMENT_CHECK_UNVERIFIED: use the matching installed Release uninstaller for older builds; preserve original state") from exc
+    if (not isinstance(report, dict) or report.get("project") != project or
+            report.get("review_sha256") != native["review_sha256"] or
+            report.get("journal_status") != native["status"]):
+        raise UninstallError("NATIVE_RETIREMENT_CHECK_UNVERIFIED: native review identity differs")
+    if report.get("reason") == "NATIVE_CONFIG_DRIFT":
+        raise UninstallError("NATIVE_CONFIG_DRIFT: Project/Profile/ACL differs from reviewed preparation; inspect original journal and local Doctor; no new retirement effects authorized")
+    if (code != 0 or report.get("ready") is not True or report.get("reason") != "OBSERVED" or
+            not VALID_SHA.fullmatch(str(report.get("observation_sha256", "")))):
+        raise UninstallError("NATIVE_RETIREMENT_CHECK_UNVERIFIED: preserve original native evidence")
+    if prepare_record() != native or file_fingerprint(BINARY) != binary:
+        raise UninstallError("native retirement evidence changed during read")
+    return report
+
+
+def check_original_native_precondition(plan):
+    if plan["scope"] != "full":
+        return
+    native = plan["native_prepare"]
+    if prepare_record() != native:
+        raise UninstallError("native journal changed after approval")
+    observed = native_retirement_precheck(plan["project"], native, plan["binary"])
+    if "native_retirement_precheck" in plan and observed != plan["native_retirement_precheck"]:
+        raise UninstallError("NATIVE_CONFIG_DRIFT: native retirement observation changed after approval")
+
+
 def systemd_status():
     state, code = command(["systemctl", "is-active", "boxweave.service"], acceptable=(0, 3, 4))
     if code == 0 and state != "active":
@@ -606,6 +645,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
     # Upgrade backups are separate and may contain credential/database copies.
     if scope != "service" and BACKUP.exists() and installer_backup is None:
         blockers.append("INSTALLER_BACKUP_REQUIRES_SEPARATE_RETENTION_REVIEW")
+    native_precheck = native_retirement_precheck(project, native, binary) if scope == "full" else None
     inputs = {
         "format": 1, "scope": scope, "guided": guided, "project": project, "host_machine_id_sha256": host,
         "service_user_uid": owner.pw_uid, "service_state": service,
@@ -613,7 +653,8 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
         "installer_backup": installer_backup,
         "retirement_verifier": retirement,
         "effective_unit": fragment, "uninstall_audit": audit,
-        "sqlite": snapshot, "native_prepare": native, "scriptlet_present": scriptlet is not None,
+        "sqlite": snapshot, "native_prepare": native, "native_retirement_precheck": native_precheck,
+        "scriptlet_present": scriptlet is not None,
         "incus_instances": incus, "allowlist": expected if scope == "full" else [],
         "native_approval": native_sha or "", "blockers": sorted(set(blockers)),
     }
@@ -749,6 +790,7 @@ def hold_stopped_serve_lock(plan):
 
 def apply(plan):
     refuse_scoped_retirement()
+    check_original_native_precondition(plan)
     # At this point the operator has already approved both exact digests;
     # no automatic retries or implicit "yes" on modified host state.
     if plan["service_state"] == "active":
@@ -812,6 +854,7 @@ def archive_controller(plan):
 
 def apply_with_serve_lock(plan, preserved_archive=None):
     refuse_scoped_retirement()
+    check_original_native_precondition(plan)
     # Stopping may legitimately checkpoint WAL; recheck native and SQLite
     # semantic blockers, not a fabricated claim that WAL bytes are immutable.
     after = inspect_sqlite(STATE / "ledger.sqlite", guided=plan.get("guided", False))
@@ -1069,7 +1112,7 @@ def main(argv=None):
             out.write("Type RESUME " + args.project + " to continue the original audited retirement: ")
             out.flush()
             if inp.readline().strip() != "RESUME " + args.project:
-                raise UninstallError("interrupted retirement continuation not approved")
+                raise UninstallError("OPERATOR_APPROVAL_REQUIRED: interrupted retirement continuation not approved; original audit unchanged")
         fresh, original = inspect_interrupted_retirement(args.project, args.retirement_archive)
         if fresh != snapshot:
             raise UninstallError("interrupted retirement evidence changed since approval")
@@ -1089,6 +1132,11 @@ def main(argv=None):
         parser.error("--scope and --project required for plan/apply")
     if os.geteuid() != 0 or sys.platform != "linux":
         raise UninstallError("root on the reviewed Linux host required for safe ledger/Incus inspection")
+    # A prior STARTED audit must direct operators to the original archive,
+    # even when current controller artifacts are already partially removed.
+    refuse_scoped_retirement()
+    if audit_status()["status"] == "STARTED" and not args.plan:
+        raise UninstallError("UNINSTALL_AUDIT_STARTED: do not repeat retirement; use --resume-plan --project PROJECT --retirement-archive EXACT_ORIGINAL_ARCHIVE if eligible")
     plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256,
                    guided=args.full or args.guided_full_plan)
     if args.plan:
@@ -1097,12 +1145,12 @@ def main(argv=None):
     if args.full:
         print(json.dumps(plan, indent=2, sort_keys=True), flush=True)
         if not plan["ready"]:
-            raise UninstallError("guided retirement blocked by current evidence")
+            raise UninstallError("guided retirement blocked by current evidence; preserve original receipts and inspect plan blockers")
         with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
             out.write("Type REMOVE " + args.project + " to approve deleting all listed Boxes and retiring this controller: ")
             out.flush()
             if inp.readline().strip() != "REMOVE " + args.project:
-                raise UninstallError("retirement not approved")
+                raise UninstallError("OPERATOR_APPROVAL_REQUIRED: retirement not approved; no retirement changes")
         fresh = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256, guided=True)
         if fresh["review_sha256"] != plan["review_sha256"] or not fresh["ready"]:
             raise UninstallError("host/scope/inventory drift; review again")
@@ -1115,6 +1163,7 @@ def main(argv=None):
             plan["review_sha256"] != args.confirm_review_sha256 or not plan["ready"]:
         raise UninstallError("host/scope/inventory drift or blockers: apply refused")
     refuse_scoped_retirement()
+    check_original_native_precondition(plan)
     audited_write({"status": "STARTED", "scope": plan["scope"],
                    "host_sha256": plan["host_machine_id_sha256"],
                    "review_sha256": plan["review_sha256"],
