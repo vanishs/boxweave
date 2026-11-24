@@ -61,6 +61,54 @@ func (s *Store) ReadCompleteScopedNetworkAuditLedger(ctx context.Context, projec
 // including MAC and two address fences per Box, under ONE SQLite snapshot.
 // A separate scoped Peer staging transaction uses this exact helper to
 // atomically prove the entire Project before committing a pending direction.
+// ReadScopedRetirementLedger permits an empty current inventory but retains
+// all retired identities and their exact durable Create/Delete lineages.
+func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	var zero ScopedNetworkAuditLedger
+	if s == nil || s.db == nil || !s.IsNetworkAuditReadOnly() {
+		return zero, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return zero, err
+	}
+	defer tx.Rollback()
+	ledger, err := readCompleteScopedNetworkAuditLedgerModeTx(ctx, tx, project, bridge, true)
+	if err != nil {
+		return zero, err
+	}
+	if len(ledger.Boxes) != 0 {
+		return zero, ErrResourceLocked
+	}
+	// A retirement is not an ordinary live network audit. Require all
+	// resources and original operations to have settled. Historical retained
+	// identity rows have already been independently validated above.
+	for _, q := range []string{
+		"SELECT count(*) FROM owned_boxes WHERE project!=? OR state!='DELETED'",
+		"SELECT count(*) FROM operations WHERE layer!=? OR state NOT IN ('SUCCEEDED','FAILED','CANCELLED','TIMED_OUT')",
+		"SELECT count(*) FROM network_bindings WHERE project!=? OR state!='RELEASED'",
+		"SELECT count(*) FROM network_address_fences WHERE project!=? OR state!='RELEASED'",
+		"SELECT count(*) FROM peer_grants WHERE project!=? OR status!='REVOKED'",
+		"SELECT count(*) FROM forward_claims WHERE project!=? OR state!='REVOKED'",
+		"SELECT count(*) FROM operation_resource_claims WHERE layer!=? OR 1=1",
+		"SELECT count(*) FROM network_ipv4_compactions WHERE project!=? OR 1=1",
+		"SELECT count(*) FROM network_ipv4_retirements WHERE project!=? OR 1=1",
+	} {
+		var n int
+		if err = tx.QueryRowContext(ctx, q, project).Scan(&n); err != nil {
+			return zero, err
+		}
+		if n != 0 {
+			return zero, ErrResourceLocked
+		}
+	}
+	p, err := readScopedTerminalPeerPolicyTx(ctx, tx, project, bridge)
+	if err != nil || len(p.Active) != 0 {
+		return zero, ErrResourceLocked
+	}
+	return ledger, tx.Commit()
+}
+
 func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, project, bridge string) (ScopedNetworkAuditLedger, error) {
 	return readCompleteScopedNetworkAuditLedgerModeTx(ctx, tx, project, bridge, false)
 }

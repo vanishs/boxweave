@@ -45,6 +45,9 @@ func scopedLifecycleRequestKind(req NativePeerRootRequest, action, phase string)
 // controller. Scope, DB, policy, native identity and effect direction are
 // independently derived from protected local state.
 func NativeScopedLifecycleServe(ctx context.Context) error {
+	if err := refuseScopedRetirementInProgress(); err != nil {
+		return err
+	}
 	r, _, err := nativePeerFreshVerifiedPlan()
 	if err != nil {
 		return err
@@ -98,6 +101,9 @@ func NativeScopedLifecycleServe(ctx context.Context) error {
 		return err
 	}
 	return nativePeerRootServeListener(ctx, ln, uint32(uid), func(callCtx context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {
+		if err := refuseScopedRetirementInProgress(); err != nil {
+			return NativePeerRootResponse{}, err
+		}
 		orig, err := db.Get(callCtx, req.OperationID)
 		if err != nil {
 			return NativePeerRootResponse{}, errors.New("unverified lifecycle original")

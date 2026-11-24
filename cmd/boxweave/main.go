@@ -28,7 +28,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-scoped-fresh-plan|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-retirement-check|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-plan|native-peer-root-reconcile|native-peer-root-unit-stage|native-peer-root-stage|native-peer-root-execute|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-scoped-fresh-plan|native-scoped-retirement-plan|native-scoped-retirement-resume-plan|native-scoped-retirement-restore|native-scoped-retirement-guard|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-retirement-check|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-plan|native-peer-root-reconcile|native-peer-root-unit-stage|native-peer-root-stage|native-peer-root-execute|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -120,10 +120,38 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "native-scoped-retirement-plan", "native-scoped-retirement-resume-plan", "native-scoped-retirement-restore", "native-scoped-retirement-guard", "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
+	}
+	if command == "native-scoped-retirement-plan" || command == "native-scoped-retirement-resume-plan" ||
+		command == "native-scoped-retirement-restore" || command == "native-scoped-retirement-guard" {
+		if os.Geteuid() != 0 {
+			return errors.New("scoped retirement requires local root")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		var report install.ScopedRetirementReview
+		var err error
+		switch command {
+		case "native-scoped-retirement-plan", "native-scoped-retirement-resume-plan":
+			if *approveLocal || *prepareSHA != "" {
+				return errors.New("read-only scoped retirement plan does not accept approval")
+			}
+			report, err = install.NativeScopedRetirementPlan(ctx, *project, command == "native-scoped-retirement-resume-plan")
+		default:
+			release, e := acquireMaintenanceLock()
+			if e != nil {
+				return e
+			}
+			defer release()
+			report, err = install.NativeScopedRetirementApply(ctx, *project, *prepareSHA, command == "native-scoped-retirement-guard", *approveLocal)
+		}
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(report)
 	}
 	if command == "native-scoped-fresh-plan" || command == "native-scoped-guard-boot" || command == "native-scoped-lifecycle-serve" {
 		if os.Geteuid() != 0 || len(os.Args) != 2 {
@@ -166,6 +194,9 @@ func run() error {
 			return err
 		}
 		defer release()
+		if err := install.CheckScopedRetirementFence(); err != nil {
+			return err
+		}
 	}
 	if command == "native-prepare-plan" || command == "native-prepare-apply" ||
 		command == "native-prepare-status" || command == "native-prepare-retirement-check" || command == "native-prepare-rollback" ||
@@ -501,6 +532,9 @@ func run() error {
 		if err := install.CheckScopedServeMode(*scopedFresh); err != nil {
 			return err
 		}
+	}
+	if err := install.CheckScopedRetirementFence(); err != nil {
+		return err
 	}
 	s, err := state.Open(*db)
 	if err != nil {
