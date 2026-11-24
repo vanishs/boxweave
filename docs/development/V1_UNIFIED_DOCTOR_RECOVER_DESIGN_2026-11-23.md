@@ -1,5 +1,7 @@
 # BoxWeave v1 — Unified Doctor + Recover (PR #177 design and migration lessons)
 
+> **Mandatory D0 extended findings:** [D1-D4 investigation and additional Box evidence](V1_PR177_D0_EXTENDED_D1_D4_INVESTIGATION_2026-11-23.md). Reuse the source/authority and leaf matrix; fix proven retirement/operation-cause/navigation classification gaps in D2, separate Root proof from restricted recovery worker, bind fresh review evidence separately from idempotency, and do not certify a moving DB/WAL copy. D0 extension is characterization only; review exact-head CI before D1.
+
 > **Current staged execution contract:** [D0-D5 plan](V1_PR177_D0_D5_DEVELOPMENT_PLAN_2026-11-23.md) and [D0 source/Box experiments](V1_PR177_D0_EXPERIMENTS_2026-11-23.md). The v1 merge is complete at e60de8f; all four baseline CI workflows passed. D0 characterizes readers only; new feature implementation starts with D1 after D0 CI. Every stage iterates and verifies inside a Box before submitting code and docs to CI. The cold SQLite WAL/SHM observation and immutable stale-read negative are mandatory D1 constraints.
 
 **Status:** Owner-approved design direction, **not yet implemented**. Recorded 2026-11-23. Implement on Draft PR [#177](https://github.com/vanishs/boxweave/pull/177), base `v1`, while preserving its existing guided-uninstall recovery. **Do not merge, promote, change the installed L0 or edit global Incus without explicit owner instruction.**
