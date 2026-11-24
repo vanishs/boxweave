@@ -32,6 +32,9 @@ SCOPED_GUARD_UNIT = Path("/etc/systemd/system/boxweave-scoped-guard.service")
 SCOPED_LIFECYCLE_UNIT = Path("/etc/systemd/system/boxweave-scoped-lifecycle.service")
 SCOPED_INCUS_DROPIN = Path("/etc/systemd/system/incus.service.d/50-boxweave-scoped-guard.conf")
 SCOPED_SOCKET = Path("/run/boxweave-scoped-lifecycle.sock")
+SCOPED_FENCE = Path("/var/lib/boxweave-scoped-retirement-v1.json")
+SCOPED_LOCK = Path("/run/lock/boxweave-scoped-retirement.lock")
+MAINTENANCE_LOCK = Path("/run/lock/boxweave-v1-maintenance.lock")
 VALID_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 VALID_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 VALID_SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -51,7 +54,7 @@ class UninstallError(Exception):
 def refuse_scoped_retirement():
     """Legacy retirement, including resume, cannot consume a scoped installation."""
     for path in (SCOPED_JOURNAL, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT,
-                 SCOPED_INCUS_DROPIN, SCOPED_SOCKET):
+                 SCOPED_INCUS_DROPIN, SCOPED_SOCKET, SCOPED_FENCE):
         try:
             path.lstat()
         except FileNotFoundError:
@@ -543,8 +546,9 @@ def inspect_exec_archive(uid):
     return {"device": info.st_dev, "inode": info.st_ino, "files": records}
 
 
-def inspect(scope, project, box_uuids, native_sha, guided=False):
-    refuse_scoped_retirement()
+def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False):
+    if not scoped:
+        refuse_scoped_retirement()
     if not VALID_NAME.fullmatch(project):
         raise UninstallError("exact valid --project required")
     if len(box_uuids) != len(set(box_uuids)) or any(not VALID_UUID.fullmatch(x) for x in box_uuids):
@@ -565,6 +569,8 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
             manifest.get("state_dir") != str(STATE) or \
             manifest.get("native_socket") != "/var/lib/incus/unix.socket.user":
         raise UninstallError("installer ownership/provenance mismatch")
+    if scoped and manifest.get("scoped_peer_mode") != "SCOPED_PEER_FRESH_V2":
+        raise UninstallError("exact installed Scoped Peer v2 manifest required")
     # An original v1 install's exact unit and binary hashes must still match.
     binary = file_fingerprint(BINARY)
     unit = file_fingerprint(UNIT)
@@ -802,7 +808,7 @@ def apply(plan):
         return apply_with_serve_lock(plan)
 
 
-def archive_controller(plan):
+def archive_controller(plan, reviewed_plan=None):
     # Preserve originals before native deletion. Separate names avoid
     # directory/binary basename collisions.
     RETIRED.mkdir(mode=0o700, exist_ok=True)
@@ -839,7 +845,7 @@ def archive_controller(plan):
             raise UninstallError("retirement copy changed during backup")
     with (dest / "review.json").open("xb") as out:
         os.fchmod(out.fileno(), 0o600)
-        out.write(canonical(plan) + b"\n")
+        out.write(canonical(reviewed_plan or plan) + b"\n")
         out.flush()
         os.fsync(out.fileno())
     for directory in (dest, RETIRED, RETIRED.parent):
@@ -1073,14 +1079,617 @@ def resume_interrupted_retirement(plan, archive):
     return result
 
 
+
+# Scoped retirement is a distinct full-only transaction. Ordinary workload
+# retirement remains MCP-owned; never use direct native Delete for scoped Boxes.
+SCOPED_MODE = "SCOPED_PEER_FRESH_V2"
+SCOPED_PHASES = ("APPROVED", "ARCHIVED", "NATIVE_RESTORED", "GUARD_REMOVED", "CLEANUP_STARTED")
+
+
+def scoped_private_dir(path):
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+        raise UninstallError("untrusted scoped retirement directory: " + str(path))
+
+
+def scoped_private_file(path, cap=None):
+    info = checked_file(path, "file", cap)
+    if info is None or info.st_nlink != 1 or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+        raise UninstallError("untrusted scoped retirement evidence: " + str(path))
+    return file_fingerprint(path)
+
+
+def scoped_sync_dir(path):
+    fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def scoped_write_json(path, value):
+    payload = canonical(value) + b"\n"
+    if len(payload) > 1024 * 1024:
+        raise UninstallError("scoped retirement receipt exceeds supported bound")
+    fd, temp = tempfile.mkstemp(prefix=".scoped-retirement-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            os.fchmod(out.fileno(), 0o600)
+            out.write(payload)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(temp, path)
+        scoped_sync_dir(path.parent)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+
+
+@contextmanager
+def scoped_lock(path):
+    fd = os.open(str(path), os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) |
+                 getattr(os, "O_CLOEXEC", 0), 0o600)
+    try:
+        st = os.fstat(fd)
+        if st.st_uid != 0 or st.st_nlink != 1 or not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != 0o600:
+            raise UninstallError("untrusted local maintenance lock")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise UninstallError("another local maintenance transaction is active") from exc
+        yield
+    finally:
+        os.close(fd)
+
+
+def scoped_tree(root):
+    scoped_private_dir(root)
+    h = hashlib.sha256()
+    count, total = 0, 0
+    def walk(directory, depth):
+        nonlocal count, total
+        if depth > 3:
+            raise UninstallError("unrecognized scoped Root journal depth")
+        scoped_private_dir(directory)
+        for child in sorted(directory.iterdir(), key=lambda x: x.name):
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,95}", child.name):
+                raise UninstallError("unrecognized scoped Root journal name")
+            rel = str(child.relative_to(root))
+            info = child.lstat()
+            if stat.S_ISDIR(info.st_mode):
+                h.update(canonical([rel, "dir"]) + b"\n")
+                walk(child, depth + 1)
+            else:
+                proof = scoped_private_file(child, 1024 * 1024)
+                count += 1
+                total += proof["size"]
+                if count > 100000 or total > 256 * 1024 * 1024:
+                    raise UninstallError("scoped Root journal exceeds verified archive bound")
+                h.update(canonical([rel, proof["sha256"], proof["size"]]) + b"\n")
+    walk(root, 0)
+    return {"sha256": h.hexdigest(), "files": count, "bytes": total}
+
+
+def scoped_properties(unit, *props):
+    raw, _ = command(["systemctl", "show", unit, *[v for p in props for v in ("-p", p)], "--no-pager"])
+    values = dict(line.split("=", 1) for line in raw.splitlines() if "=" in line)
+    if set(props) - values.keys():
+        raise UninstallError("effective service evidence unavailable: " + unit)
+    return values
+
+
+def scoped_units():
+    result = {}
+    for path in (SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_INCUS_DROPIN):
+        proof = file_fingerprint(path)
+        if proof is None or proof["mode"] != 0o644 or path.lstat().st_nlink != 1:
+            raise UninstallError("exact scoped unit/drop-in missing or changed")
+        require_root_owned(path)
+        if path != SCOPED_INCUS_DROPIN:
+            p = scoped_properties(path.name, "FragmentPath", "DropInPaths", "ActiveState", "UnitFileState")
+            if p["FragmentPath"] != str(path) or p["DropInPaths"] or p["UnitFileState"] != "static" or p["ActiveState"] not in ("active", "inactive", "failed"):
+                raise UninstallError("unrecognized effective scoped service")
+        result[str(path)] = proof
+    p = scoped_properties("incus.service", "Requires", "After", "ActiveState", "MainPID", "DropInPaths")
+    if (p["ActiveState"] != "active" or not p["MainPID"].isdigit() or int(p["MainPID"]) <= 1 or
+            SCOPED_GUARD_UNIT.name not in p["Requires"].split() or SCOPED_GUARD_UNIT.name not in p["After"].split() or
+            str(SCOPED_INCUS_DROPIN) not in p["DropInPaths"].split()):
+        raise UninstallError("effective original Incus guard dependency not verified")
+    return result
+
+
+def scoped_native(plan, action):
+    if file_fingerprint(BINARY) != plan["binary"]:
+        raise UninstallError("exact installed scoped executable changed")
+    require_root_owned(BINARY)
+    argv = [str(BINARY), "native-scoped-retirement-" + action, "-project", plan["project"]]
+    if action in ("restore", "guard"):
+        argv += ["-native-prepare-sha256", plan["scoped_native"]["review_sha256"], "-approve-local"]
+    raw, code = command(argv, acceptable=(0, 1), timeout=140)
+    if code:
+        raise UninstallError("SCOPED_NATIVE_PROOF_UNVERIFIED: inspect matching local Doctor/native retirement plan; preserve original evidence")
+    report = json.loads(raw)
+    if (not isinstance(report, dict) or report.get("project") != plan["project"] or
+            not VALID_SHA.fullmatch(str(report.get("review_sha256", ""))) or
+            not re.fullmatch(r"bw_pg_[0-9a-f]{16}", str(report.get("table", ""))) or
+            report.get("phase") not in ("INSTALLED", "PROFILE_RESTORED", "PROJECT_RESTORED", "NATIVE_RESTORED", "GUARD_ABSENT")):
+        raise UninstallError("scoped native retirement response identity invalid")
+    original = plan.get("scoped_native")
+    if original and any(report.get(k) != original.get(k) for k in ("project", "review_sha256", "retired", "table")):
+        raise UninstallError("scoped native review changed")
+    return report
+
+
+def scoped_plan(project):
+    if os.path.lexists(SCOPED_FENCE) or audit_status()["status"] == "STARTED":
+        raise UninstallError("SCOPED_RETIREMENT_IN_PROGRESS: review --resume-plan --scoped, do not start another")
+    plan = inspect("full", project, [], None, guided=True, scoped=True)
+    if (plan["binary"] is None or plan["unit"] is None or plan["native_prepare"]["status"] != "ABSENT" or
+            plan["retirement_verifier"] or plan["scriptlet_present"] or plan["installer_backup"] or os.path.lexists(BACKUP)):
+        raise UninstallError("mixed legacy/scoped installation evidence; no retirement")
+    for path in (BINARY, UNIT):
+        if path.lstat().st_nlink != 1:
+            raise UninstallError("untrusted installed file hardlink")
+    # Go Status validates exact unit contents, manifest and original Root receipts.
+    command([str(BINARY), "install-status", "-project", project], timeout=90)
+    plan["scoped_units"] = scoped_units()
+    plan["scoped_journal"] = scoped_tree(SCOPED_JOURNAL)
+    plan["mode"] = SCOPED_MODE
+    if plan["sqlite"]["boxes"] or plan["incus_instances"]:
+        plan["blockers"].append("SCOPED_LIVE_BOXES: retire all Boxes, Peer and Forward through MCP first")
+    if not plan["blockers"]:
+        try:
+            plan["scoped_native"] = scoped_native(plan, "plan")
+            if plan["scoped_native"]["phase"] != "INSTALLED" or plan["scoped_native"]["guard_present"] is not True:
+                raise UninstallError("original scoped guard not verified")
+        except UninstallError as exc:
+            plan["blockers"].append(str(exc))
+    else:
+        plan["scoped_native"] = None
+    for k in ("ready", "actions", "retained", "review_sha256"):
+        plan.pop(k, None)
+    plan["blockers"] = sorted(set(plan["blockers"]))
+    plan["review_sha256"] = sha(canonical(plan))
+    plan["ready"] = not plan["blockers"]
+    plan["actions"] = ["fence controller and Root lifecycle, then stop only these services",
+                       "archive original controller, Root journal and exact units",
+                       "restore exact original Project/Profile; remove detached quarantine ACL",
+                       "remove exact Incus guard drop-in and reload systemd without restarting Incus",
+                       "stop owned guard; remove only verified scoped guard table",
+                       "archive original Root journal and remove exact owned controller files"]
+    plan["retained"] = ["Incus, original Project/Profile/bridge, all other native resources and workloads",
+                        "private controller and Root audit archive, dedicated OS identity, external tunnel"]
+    if len(canonical(plan)) > 768 * 1024:
+        raise UninstallError("scoped retirement plan exceeds audit bound")
+    return plan
+
+
+def scoped_fence_value(record):
+    plan = record["scoped_plan"]
+    return {"schema": 1, "project": plan["project"], "review_sha256": plan["review_sha256"],
+            "native_review_sha256": plan["scoped_native"]["review_sha256"], "archive": record.get("archive", "")}
+
+
+def scoped_set_fence(record):
+    value = scoped_fence_value(record)
+    if os.path.lexists(SCOPED_FENCE):
+        scoped_private_file(SCOPED_FENCE, 8192)
+        prior = read_json(SCOPED_FENCE)
+        if any(prior.get(k) != value[k] for k in ("schema", "project", "review_sha256", "native_review_sha256")) or prior.get("archive") not in ("", value["archive"]):
+            raise UninstallError("scoped retirement fence belongs to another original")
+    scoped_write_json(SCOPED_FENCE, value)
+
+
+def scoped_audit(project):
+    status = audit_status()
+    record = read_json(AUDIT)
+    if status["status"] not in ("STARTED", "COMPLETE") or not record or record.get("mode") != SCOPED_MODE:
+        raise UninstallError("no matching original scoped retirement audit")
+    plan = record.get("scoped_plan")
+    if (not isinstance(plan, dict) or not plan.get("ready") or plan.get("mode") != SCOPED_MODE or
+            plan.get("project") != project or plan.get("host_machine_id_sha256") != machine_sha() or
+            record.get("review_sha256") != plan.get("review_sha256") or
+            record.get("phase") not in SCOPED_PHASES):
+        raise UninstallError("scoped original retirement identity mismatch")
+    inputs = {k: v for k, v in plan.items() if k not in ("review_sha256", "ready", "actions", "retained")}
+    if sha(canonical(inputs)) != plan["review_sha256"]:
+        raise UninstallError("original scoped review digest changed")
+    if os.path.lexists(SCOPED_FENCE):
+        scoped_private_file(SCOPED_FENCE, 8192)
+        fence = read_json(SCOPED_FENCE)
+        expected = scoped_fence_value(record)
+        if any(fence.get(k) != v for k, v in expected.items() if k != "archive") or fence.get("archive") not in ("", expected["archive"]):
+            raise UninstallError("original scoped fence differs")
+    elif record["phase"] != "APPROVED" and status["status"] != "COMPLETE":
+        raise UninstallError("original scoped retirement fence missing")
+    return record
+
+
+def scoped_advance(record, phase, **updates):
+    current = scoped_audit(record["scoped_plan"]["project"])
+    if current != record or current["status"] != "STARTED" or SCOPED_PHASES.index(phase) < SCOPED_PHASES.index(record["phase"]):
+        raise UninstallError("original scoped retirement audit changed")
+    updated = {**record, **updates, "phase": phase}
+    _replace_audit(updated)
+    return updated
+
+
+def scoped_copy(src, dst):
+    original = file_fingerprint(src)
+    if original is None or src.lstat().st_nlink != 1:
+        raise UninstallError("scoped archive source missing or linked")
+    fd = os.open(str(src), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(fd, "rb") as inp, Path(dst).open("xb") as out:
+        os.fchmod(out.fileno(), 0o600)
+        shutil.copyfileobj(inp, out)
+        out.flush()
+        os.fsync(out.fileno())
+    if file_fingerprint(src) != original or scoped_private_file(Path(dst))["sha256"] != original["sha256"]:
+        raise UninstallError("scoped archive copy changed")
+
+
+def scoped_state_files(plan):
+    validate_state_dir(STATE, plan["service_user_uid"])
+    files = []
+    for path in sorted(STATE.iterdir(), key=lambda x: x.name):
+        if path.name == EXEC_ARCHIVE_NAME:
+            continue
+        if path.name not in STATE_FILES:
+            raise UninstallError("unexpected scoped controller state entry")
+        info = checked_file(path, "file")
+        if info.st_nlink != 1 or stat.S_IMODE(info.st_mode) & 0o077:
+            raise UninstallError("unsafe scoped state file")
+        files.append({"name": path.name, "info": file_fingerprint(path)})
+    if not {"ledger.sqlite", "install-manifest.json", SERVE_LOCK_NAME} <= {x["name"] for x in files}:
+        raise UninstallError("incomplete original scoped controller state")
+    return files
+
+
+def scoped_verify_original(plan):
+    if file_fingerprint(BINARY) != plan["binary"] or file_fingerprint(UNIT) != plan["unit"]:
+        raise UninstallError("original scoped executable/unit drift")
+    if scoped_units() != plan["scoped_units"] or scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"]:
+        raise UninstallError("original scoped Root journal or unit drift")
+    if inspect_sqlite(STATE / "ledger.sqlite", guided=True) != plan["sqlite"] or plan["sqlite"]["blockers"]:
+        raise UninstallError("original scoped ledger changed; preserve protected work")
+    if native_instances(plan["project"], guided=True):
+        raise UninstallError("scoped native consumers remain")
+    require_quiescent_native(plan["project"])
+    if inspect_exec_archive(plan["service_user_uid"]) != plan["exec_archive"]:
+        raise UninstallError("original scoped Exec archive changed")
+    original = {x["name"]: x["info"] for x in plan["state_files"]}
+    current = {x["name"]: x["info"] for x in scoped_state_files(plan)}
+    for name in ("install-manifest.json", SERVE_LOCK_NAME):
+        if current.get(name) != original.get(name):
+            raise UninstallError("original scoped state identity drift")
+    if scoped_native(plan, "plan") != plan["scoped_native"]:
+        raise UninstallError("original scoped native proof changed")
+
+
+def scoped_inactive(unit):
+    p = scoped_properties(unit, "ActiveState", "MainPID")
+    if p != {"ActiveState": "inactive", "MainPID": "0"}:
+        raise UninstallError("owned service not proven inactive: " + unit)
+
+
+def scoped_archive(record):
+    plan = record["scoped_plan"]
+    scoped_verify_original(plan)
+    for unit in (UNIT.name, SCOPED_LIFECYCLE_UNIT.name):
+        command(["systemctl", "stop", unit], timeout=90)
+        scoped_inactive(unit)
+    if os.path.lexists(SCOPED_SOCKET):
+        raise UninstallError("scoped lifecycle socket remains after stop")
+    with hold_stopped_serve_lock(plan):
+        scoped_verify_original(plan)
+        cleanup = {"state_files": scoped_state_files(plan), "exec_archive": plan["exec_archive"]}
+        actual = {**plan, **cleanup}
+        archive = Path(archive_controller(actual, reviewed_plan=plan))
+        for raw, proof in plan["scoped_units"].items():
+            src = Path(raw)
+            if file_fingerprint(src) != proof:
+                raise UninstallError("scoped unit changed before archive")
+            scoped_copy(src, archive / ("scoped-" + src.name))
+        root_copy = archive / "scoped-journal"
+        shutil.copytree(SCOPED_JOURNAL, root_copy, symlinks=True, copy_function=scoped_copy)
+        # copytree's copy_function preserves neither owner nor modes; the
+        # private source directory mode is copied by copytree itself.
+        if scoped_tree(root_copy) != plan["scoped_journal"] or scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"]:
+            raise UninstallError("scoped Root journal archive not verified")
+        for directory, _, _ in os.walk(root_copy, topdown=False):
+            scoped_sync_dir(Path(directory))
+        scoped_write_json(archive / "cleanup.json", cleanup)
+        scoped_sync_dir(archive)
+        scoped_sync_dir(RETIRED)
+        record = scoped_advance(record, "ARCHIVED", archive=str(archive),
+                                cleanup_sha256=sha(canonical(cleanup)))
+        scoped_set_fence(record)
+    return record
+
+
+def scoped_archive_proof(record):
+    plan = record["scoped_plan"]
+    archive = Path(record.get("archive", ""))
+    if archive.parent != RETIRED or not re.fullmatch(r"retired-[a-z0-9_]{8}", archive.name):
+        raise UninstallError("exact original scoped retirement archive required")
+    scoped_private_dir(RETIRED)
+    scoped_private_dir(archive)
+    scoped_private_file(archive / "review.json")
+    scoped_private_file(archive / "cleanup.json")
+    cleanup = read_json(archive / "cleanup.json")
+    if read_json(archive / "review.json") != plan or sha(canonical(cleanup)) != record.get("cleanup_sha256"):
+        raise UninstallError("original scoped archive review or cleanup receipt changed")
+    if scoped_tree(archive / "scoped-journal") != plan["scoped_journal"]:
+        raise UninstallError("private scoped Root archive changed")
+    for name, proof in [("boxweave.bin", plan["binary"]), ("boxweave.service", plan["unit"])] + [
+            ("scoped-" + Path(raw).name, value) for raw, value in plan["scoped_units"].items()] + [
+            ("state-" + x["name"], x["info"]) for x in cleanup["state_files"]] + [
+            ("exec-" + x["name"], x["info"]) for x in (cleanup.get("exec_archive") or {}).get("files", [])]:
+        if scoped_private_file(archive / name)["sha256"] != proof["sha256"]:
+            raise UninstallError("original scoped archive copy changed: " + name)
+    return archive, cleanup
+
+
+def scoped_incus_active():
+    p = scoped_properties("incus.service", "ActiveState", "MainPID")
+    if p["ActiveState"] != "active" or not p["MainPID"].isdigit() or int(p["MainPID"]) <= 1:
+        raise UninstallError("Incus is not independently proven active")
+    return p
+
+
+def scoped_detach_guard(plan):
+    before = scoped_incus_active()
+    proof = plan["scoped_units"][str(SCOPED_INCUS_DROPIN)]
+    if os.path.lexists(SCOPED_INCUS_DROPIN):
+        exact_unlink(SCOPED_INCUS_DROPIN, proof)
+        scoped_sync_dir(SCOPED_INCUS_DROPIN.parent)
+    command(["systemctl", "daemon-reload"], timeout=90)
+    for unit in ("incus.service", "incus-startup.service"):
+        p = scoped_properties(unit, "Requires", "Wants", "BindsTo", "Requisite")
+        if any(SCOPED_GUARD_UNIT.name in v.split() for v in p.values()):
+            raise UninstallError("effective Incus dependency still requires scoped guard")
+    p = scoped_properties(SCOPED_GUARD_UNIT.name, "RequiredBy", "BoundBy", "RequisiteOf", "ConsistsOf", "PropagatesStopTo")
+    if any(set(v.split()) - {SCOPED_LIFECYCLE_UNIT.name, UNIT.name} for v in p.values()):
+        raise UninstallError("foreign service still depends on scoped guard; refuse stop")
+    command(["systemctl", "stop", SCOPED_GUARD_UNIT.name], timeout=90)
+    scoped_inactive(SCOPED_GUARD_UNIT.name)
+    if scoped_incus_active() != before:
+        raise UninstallError("Incus runtime changed during guard detachment")
+
+
+def scoped_postcheck(plan, archive):
+    p = read_json(archive / "scoped-journal" / "retirement-preimage.json")
+    project = plan["project"]
+    bridge = p["Origin"]["Bridge"]
+    if not VALID_NAME.fullmatch(bridge) or bridge != "incusbr-" + str(plan["service_user_uid"]):
+        raise UninstallError("archived scoped bridge identity mismatch")
+    for uri, expected in (("/1.0/projects/" + project, p["BeforeProject"]),
+                          ("/1.0/profiles/default?project=" + project, p["BeforeProfile"]),
+                          ("/1.0/networks/" + bridge + "?project=default", p["Bridge"])):
+        raw, _ = command(["incus", "query", "local:" + uri])
+        actual = json.loads(raw)
+        if not isinstance(actual, dict) or any(actual.get(k) != v for k, v in expected.items()):
+            raise UninstallError("restored native configuration not independently verified")
+    raw, _ = command(["incus", "query", "local:/1.0/network-acls?project=default"])
+    names = json.loads(raw)
+    if not isinstance(names, list) or any(not isinstance(n, str) or "/bw-" in n for n in names):
+        raise UninstallError("owned ACL absence not independently verified")
+    raw, _ = command(["/usr/sbin/nft", "-j", "-a", "list", "tables"])
+    tables = json.loads(raw).get("nftables")
+    if not isinstance(tables, list) or not tables or any(
+            item.get("table", {}).get("name", "").startswith("bw_pg_") for item in tables):
+        raise UninstallError("scoped guard absence not independently verified")
+    require_quiescent_native(project)
+    if native_instances(project, guided=True) or list((Path("/sys/class/net") / bridge / "brif").iterdir()):
+        raise UninstallError("native consumers appeared after retirement")
+    scoped_incus_active()
+
+
+def scoped_cleanup(record):
+    plan = record["scoped_plan"]
+    archive, cleanup = scoped_archive_proof(record)
+    for unit in (UNIT.name, SCOPED_LIFECYCLE_UNIT.name, SCOPED_GUARD_UNIT.name):
+        scoped_inactive(unit)
+    if os.path.lexists(SCOPED_SOCKET) or os.path.lexists(SCOPED_INCUS_DROPIN):
+        raise UninstallError("scoped service socket or dependency remains")
+    scoped_postcheck(plan, archive)
+    before = scoped_incus_active()
+    if os.path.lexists(UNIT):
+        if file_fingerprint(UNIT) != plan["unit"]:
+            raise UninstallError("controller unit drift")
+        command(["systemctl", "disable", UNIT.name])
+    for path in (UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_GUARD_UNIT):
+        if os.path.lexists(path):
+            exact_unlink(path, plan["unit"] if path == UNIT else plan["scoped_units"][str(path)])
+            scoped_sync_dir(path.parent)
+    command(["systemctl", "daemon-reload"], timeout=90)
+    # A previously interrupted cleanup may have removed an exact file. No
+    # new path or changed source may be adopted into the original retirement.
+    if os.path.lexists(STATE):
+        validate_state_dir(STATE, plan["service_user_uid"])
+        expected = {x["name"]: x["info"] for x in cleanup["state_files"]}
+        if set(x.name for x in STATE.iterdir()) - set(expected) - {EXEC_ARCHIVE_NAME}:
+            raise UninstallError("unexpected scoped controller state after archive")
+        if os.path.lexists(STATE / EXEC_ARCHIVE_NAME):
+            current = inspect_exec_archive(plan["service_user_uid"])
+            approved = cleanup.get("exec_archive")
+            if not approved or (current["device"], current["inode"]) != (approved["device"], approved["inode"]):
+                raise UninstallError("scoped Exec archive inode changed")
+            byname = {x["name"]: x["info"] for x in approved["files"]}
+            for item in current["files"]:
+                if byname.get(item["name"]) != item["info"]:
+                    raise UninstallError("unrecognized scoped Exec archive content")
+            for item in current["files"]:
+                exact_unlink(STATE / EXEC_ARCHIVE_NAME / item["name"], item["info"])
+            (STATE / EXEC_ARCHIVE_NAME).rmdir()
+        for name, proof in expected.items():
+            if name != SERVE_LOCK_NAME and os.path.lexists(STATE / name):
+                exact_unlink(STATE / name, proof)
+        if os.path.lexists(STATE / SERVE_LOCK_NAME):
+            exact_unlink(STATE / SERVE_LOCK_NAME, expected[SERVE_LOCK_NAME])
+        STATE.rmdir()
+        scoped_sync_dir(STATE.parent)
+    original = archive / "scoped-original"
+    if os.path.lexists(SCOPED_JOURNAL):
+        if os.path.lexists(original) or scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"]:
+            raise UninstallError("original scoped Root journal drift before archive move")
+        os.rename(SCOPED_JOURNAL, original)
+        scoped_sync_dir(SCOPED_JOURNAL.parent)
+        scoped_sync_dir(archive)
+    if scoped_tree(original) != plan["scoped_journal"]:
+        raise UninstallError("moved original scoped journal not verified")
+    if os.path.lexists(BINARY):
+        exact_unlink(BINARY, plan["binary"])
+        scoped_sync_dir(BINARY.parent)
+    if scoped_incus_active() != before:
+        raise UninstallError("Incus runtime changed during scoped file cleanup")
+    scoped_postcheck(plan, archive)
+    for path in (STATE, BINARY, UNIT, SCOPED_JOURNAL, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_INCUS_DROPIN, SCOPED_SOCKET):
+        if os.path.lexists(path):
+            raise UninstallError("scoped retirement postflight path remains")
+    result = {"outcome": "COMPLETE", "mode": SCOPED_MODE, "scope": "full",
+              "approved_review_sha256": plan["review_sha256"], "retirement_archive": str(archive),
+              "host_machine_id_sha256": plan["host_machine_id_sha256"], "retained": plan["retained"]}
+    audited_complete(plan["review_sha256"], result)
+    scoped_finish_fence(scoped_audit(plan["project"]))
+    return result
+
+
+def scoped_finish_fence(record):
+    if record["status"] != "COMPLETE":
+        raise UninstallError("cannot clear scoped fence before verified COMPLETE")
+    if os.path.lexists(SCOPED_FENCE):
+        scoped_private_file(SCOPED_FENCE, 8192)
+        if read_json(SCOPED_FENCE) != scoped_fence_value(record):
+            raise UninstallError("completed scoped original fence mismatch")
+        archive, _ = scoped_archive_proof(record)
+        scoped_postcheck(record["scoped_plan"], archive)
+        for path in (STATE, BINARY, UNIT, SCOPED_JOURNAL, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_INCUS_DROPIN, SCOPED_SOCKET):
+            if os.path.lexists(path):
+                raise UninstallError("completed scoped original has remaining path")
+        SCOPED_FENCE.unlink()
+        scoped_sync_dir(SCOPED_FENCE.parent)
+
+
+def scoped_resume_plan(project, archive_hint=None):
+    record = scoped_audit(project)
+    plan = record["scoped_plan"]
+    if archive_hint and archive_hint != record.get("archive"):
+        raise UninstallError("not the exact original scoped archive")
+    native = None
+    if record["status"] == "COMPLETE":
+        archive, _ = scoped_archive_proof(record)
+        scoped_postcheck(plan, archive)
+    elif record["phase"] == "APPROVED":
+        scoped_verify_original(plan)
+    else:
+        archive, _ = scoped_archive_proof(record)
+        if record["phase"] == "CLEANUP_STARTED":
+            scoped_postcheck(plan, archive)
+        else:
+            native = scoped_native(plan, "resume-plan")
+    return {"ready": True, "mode": SCOPED_MODE, "status": record["status"], "phase": record["phase"],
+            "project": project, "review_sha256": plan["review_sha256"], "archive": record.get("archive", ""),
+            "audit_sha256": audit_status()["sha256"], "native_observation": native}
+
+
+def scoped_continue(record):
+    plan = record["scoped_plan"]
+    if record["status"] == "COMPLETE":
+        scoped_finish_fence(record)
+        return record["result"]
+    with scoped_lock(MAINTENANCE_LOCK):
+        scoped_set_fence(record)
+    if record["phase"] == "APPROVED":
+        record = scoped_archive(record)
+    archive, cleanup = scoped_archive_proof(record)
+    # Hold the original controller lock through native and file cleanup.
+    # After a partial cleanup only the already removed final lock is absent.
+    lockplan = {**plan, "state_files": cleanup["state_files"]}
+    if record["phase"] == "CLEANUP_STARTED" and not os.path.lexists(STATE / SERVE_LOCK_NAME):
+        if os.path.lexists(STATE) and list(STATE.iterdir()):
+            raise UninstallError("serve lock disappeared before scoped state cleanup")
+        lockplan["state_files"] = []
+    with hold_stopped_serve_lock(lockplan):
+        for unit in (UNIT.name, SCOPED_LIFECYCLE_UNIT.name):
+            scoped_inactive(unit)
+        if record["phase"] == "ARCHIVED":
+            result = scoped_native(plan, "restore")
+            if result["phase"] != "NATIVE_RESTORED" or result["guard_present"] is not True:
+                raise UninstallError("original native restore not verified")
+            record = scoped_advance(record, "NATIVE_RESTORED")
+        if record["phase"] == "NATIVE_RESTORED":
+            scoped_detach_guard(plan)
+            result = scoped_native(plan, "guard")
+            if result["phase"] != "GUARD_ABSENT" or result["guard_present"] is not False:
+                raise UninstallError("exact guard retirement not verified")
+            record = scoped_advance(record, "GUARD_REMOVED")
+        if record["phase"] == "GUARD_REMOVED":
+            if scoped_native(plan, "resume-plan")["phase"] != "GUARD_ABSENT":
+                raise UninstallError("guard retirement evidence changed")
+            scoped_postcheck(plan, archive)
+            record = scoped_advance(record, "CLEANUP_STARTED")
+        return scoped_cleanup(record)
+
+
+def scoped_main(args):
+    if os.geteuid() != 0 or sys.platform != "linux":
+        raise UninstallError("scoped retirement requires local Linux root")
+    project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
+    if not VALID_NAME.fullmatch(project) or project != "user-" + str(pwd.getpwnam("boxweave").pw_uid):
+        raise UninstallError("exact dedicated scoped Project required")
+    if (args.apply or args.box_uuid or args.native_prepare_sha256 or args.confirm_host_sha256 or
+            args.confirm_review_sha256 or args.scope not in (None, "full") or args.guided_full_plan):
+        raise UninstallError("scoped retirement is full-only with terminal approval, not legacy apply/scope")
+    if args.resume_plan or args.resume:
+        snapshot = scoped_resume_plan(project, args.retirement_archive)
+        print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
+        if args.resume_plan:
+            return 0
+        prompt = "RESUME SCOPED " + project
+    else:
+        if not (args.plan or args.full) or args.retirement_archive:
+            raise UninstallError("use --scoped --plan or --scoped --full")
+        snapshot = scoped_plan(project)
+        print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
+        if args.plan:
+            return 0 if snapshot["ready"] else 2
+        if not snapshot["ready"]:
+            raise UninstallError("scoped retirement blocked; complete original MCP operations first")
+        prompt = "REMOVE SCOPED " + project
+    with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+        out.write("Type " + prompt + " to approve the exact scoped retirement: ")
+        out.flush()
+        if inp.readline().strip() != prompt:
+            raise UninstallError("OPERATOR_APPROVAL_REQUIRED: scoped retirement not approved")
+    with scoped_lock(SCOPED_LOCK):
+        if args.resume:
+            if scoped_resume_plan(project, args.retirement_archive) != snapshot:
+                raise UninstallError("original scoped retirement evidence changed after approval")
+            record = scoped_audit(project)
+        else:
+            with scoped_lock(MAINTENANCE_LOCK):
+                if scoped_plan(project) != snapshot:
+                    raise UninstallError("scoped retirement evidence changed after approval")
+                audited_write({"status": "STARTED", "mode": SCOPED_MODE, "scope": "full",
+                               "host_sha256": snapshot["host_machine_id_sha256"], "review_sha256": snapshot["review_sha256"],
+                               "phase": "APPROVED", "scoped_plan": snapshot, "archive": ""})
+                record = scoped_audit(project)
+                scoped_set_fence(record)
+        result = scoped_continue(record)
+    print(json.dumps(result, indent=2, sort_keys=True), flush=True)
+    return 0
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned Legacy uninstall (Scoped Peer v2 unsupported; no implicit deletion)")
+    parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned uninstall; explicit full-only Scoped Peer v2 retirement after MCP cleanup")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
     action.add_argument("--full", action="store_true", help="guided full retirement with terminal review and backup")
     action.add_argument("--resume-plan", action="store_true", help="read-only review of a stopped, archived STARTED retirement")
     action.add_argument("--resume", action="store_true", help="explicit terminal-approved continuation of the exact archived STARTED retirement")
+    parser.add_argument("--scoped", action="store_true", help="explicit full-only Scoped Peer v2 retirement; no native Box deletion")
     parser.add_argument("--retirement-archive", help="exact root-private original retirement archive for resume")
     parser.add_argument("--guided-full-plan", action="store_true",
                         help="with --plan --scope full: use the same guided read-only archive/inventory checks as --full")
@@ -1091,6 +1700,8 @@ def main(argv=None):
     parser.add_argument("--confirm-host-sha256", help="apply: exact machine SHA printed by plan")
     parser.add_argument("--confirm-review-sha256", help="apply: exact immutable inventory review SHA")
     args = parser.parse_args(argv)
+    if args.scoped:
+        return scoped_main(args)
     if not args.plan and not args.apply and not args.full and not args.resume_plan and not args.resume:
         parser.print_help()
         return 0 if not any((args.scope, args.project, args.box_uuid)) else 2

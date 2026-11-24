@@ -15,7 +15,6 @@ import (
 	"strings"
 	"syscall"
 
-	incus "github.com/lxc/incus/v7/client"
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/vanishs/boxweave/internal/peerscope"
 	"github.com/vanishs/boxweave/internal/state"
