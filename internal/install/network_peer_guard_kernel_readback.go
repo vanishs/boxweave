@@ -48,24 +48,41 @@ func nativePeerGuardEndpointExpr(bridge, proto, src, dst, sourceMAC, targetMAC s
 		nativePeerGuardMatch(nativePeerGuardPayload(proto, "saddr"), src, "=="),
 		nativePeerGuardMatch(nativePeerGuardPayload(proto, "daddr"), dst, "=="),
 	}
+	direction := "original"
 	if reply {
-		expr = append(expr, nativePeerGuardMatch(map[string]any{"ct": map[string]any{"key": "state"}},
-			[]string{"established", "related"}, "in"))
+		direction = "reply"
+	}
+	expr = append(expr, nativePeerGuardMatch(map[string]any{"ct": map[string]any{"key": "direction"}}, direction, "=="))
+	if reply {
+		expr = append(expr, nativePeerGuardMatch(map[string]any{"ct": map[string]any{"key": "state"}}, "established", "in"))
+	} else {
+		expr = append(expr, nativePeerGuardMatch(map[string]any{"ct": map[string]any{"key": "state"}}, []string{"established", "new"}, "in"))
 	}
 	return append(expr, map[string]any{"accept": nil})
 }
-func nativePeerGuardSubnetExpr(bridge, proto string, prefix netip.Prefix, drop bool) []any {
-	expr := []any{
+func nativePeerGuardSubnetExpr(bridge, proto string, prefix netip.Prefix) []any {
+	return []any{
 		nativePeerGuardMetaBridge(bridge),
 		nativePeerGuardMatch(nativePeerGuardPayload(proto, "saddr"), nativePeerGuardPrefix(prefix), "=="),
 		nativePeerGuardMatch(nativePeerGuardPayload(proto, "daddr"), nativePeerGuardPrefix(prefix), "=="),
+		map[string]any{"counter": map[string]any{"packets": 0, "bytes": 0}}, map[string]any{"drop": nil},
 	}
-	if drop {
-		return append(expr, map[string]any{"counter": map[string]any{"packets": 0, "bytes": 0}}, map[string]any{"drop": nil})
+}
+func nativePeerGuardNDExpr(bridge string) []any {
+	return []any{
+		nativePeerGuardMetaBridge(bridge),
+		nativePeerGuardMatch(nativePeerGuardPayload("ip6", "hoplimit"), 255, "=="),
+		nativePeerGuardMatch(nativePeerGuardPayload("icmpv6", "type"), map[string]any{"set": []string{"nd-neighbor-solicit", "nd-neighbor-advert"}}, "=="),
+		map[string]any{"accept": nil},
 	}
-	return append(expr, nativePeerGuardMatch(nativePeerGuardPayload("icmpv6", "type"),
-		map[string]any{"set": []string{"nd-neighbor-solicit", "nd-neighbor-advert"}}, "=="),
-		map[string]any{"accept": nil})
+}
+func nativePeerGuardIPv6DropExpr(bridge string, base, dest netip.Prefix) []any {
+	return []any{
+		nativePeerGuardMetaBridge(bridge),
+		nativePeerGuardMatch(nativePeerGuardPayload("ip6", "saddr"), map[string]any{"set": []any{nativePeerGuardPrefix(base), nativePeerGuardPrefix(netip.MustParsePrefix("fe80::/10"))}}, "=="),
+		nativePeerGuardMatch(nativePeerGuardPayload("ip6", "daddr"), nativePeerGuardPrefix(dest), "=="),
+		map[string]any{"counter": map[string]any{"packets": 0, "bytes": 0}}, map[string]any{"drop": nil},
+	}
 }
 
 // The compiler builds a SECOND representation of the intended policy, using
@@ -94,10 +111,10 @@ func nativePeerGuardExpectedKernelJSON(bridge string, base4, base6 netip.Prefix,
 		}
 	}
 	rules = append(rules,
-		nativePeerGuardSubnetExpr(bridge, "ip", base4.Masked(), true),
-		nativePeerGuardSubnetExpr(bridge, "ip6", base6.Masked(), true),
-		nativePeerGuardSubnetExpr(bridge, "ip6", netip.MustParsePrefix("fe80::/10"), false),
-		nativePeerGuardSubnetExpr(bridge, "ip6", netip.MustParsePrefix("fe80::/10"), true),
+		nativePeerGuardSubnetExpr(bridge, "ip", base4.Masked()),
+		nativePeerGuardNDExpr(bridge),
+		nativePeerGuardIPv6DropExpr(bridge, base6.Masked(), base6.Masked()),
+		nativePeerGuardIPv6DropExpr(bridge, base6.Masked(), netip.MustParsePrefix("fe80::/10")),
 	)
 	encoded, err := json.Marshal(rules)
 	return string(encoded), err

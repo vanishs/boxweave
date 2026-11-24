@@ -27,6 +27,14 @@ next="$(sha256sum "$work/candidate-b" | cut -d' ' -f1)"
 test "$first" != "$next"
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base conntrack nftables iproute2 >/dev/null
+# N3 guard prerequisite, not final installed Peer acceptance.
+if test "${PR178_SCOPED_N2:-0}" = 1; then
+  CGO_ENABLED=1 go test -c -o "$work/n3-direction.test" ./internal/install
+  for attempt in 1 2 3; do
+    sudo unshare --net -- env BOXWEAVE_PR178_DIRECTION_NETNS=isolated-v1 "$work/n3-direction.test" -test.run '^TestPR178N3NativeDirectionGuard$' -test.v
+  done
+  echo PR178_N3_GUARD_PREREQUISITE=PASS
+fi
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/key.asc"
 test "$(gpg --show-keys --with-colons "$work/key.asc" | awk -F: '$1=="fpr"{print $10;exit}')" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
 sudo install -m 0644 "$work/key.asc" /etc/apt/keyrings/bw-n2-install.asc

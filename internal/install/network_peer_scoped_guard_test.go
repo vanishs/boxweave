@@ -44,15 +44,15 @@ func TestPR178GuardNonDisruptiveDirectedDualStackAtomicText(t *testing.T) {
 		t.Fatal("guard lacks restricted bridge forward hook or uses global nft mutation")
 	}
 	for _, s := range []string{
-		"ip saddr 10.55.8.11 ip daddr 10.55.8.12 accept",
-		"ip6 saddr fd55:8::11 ip6 daddr fd55:8::12 accept",
-		"ip saddr 10.55.8.12 ip daddr 10.55.8.11 ct state established,related accept",
-		"ip6 saddr fd55:8::12 ip6 daddr fd55:8::11 ct state established,related accept",
-		"ip saddr 10.55.8.13 ip daddr 10.55.8.14 accept",
-		"ip6 saddr fd55:8::13 ip6 daddr fd55:8::14 accept",
+		"ip saddr 10.55.8.11 ip daddr 10.55.8.12 ct direction original ct state established,new accept",
+		"ip6 saddr fd55:8::11 ip6 daddr fd55:8::12 ct direction original ct state established,new accept",
+		"ip saddr 10.55.8.12 ip daddr 10.55.8.11 ct direction reply ct state established accept",
+		"ip6 saddr fd55:8::12 ip6 daddr fd55:8::11 ct direction reply ct state established accept",
+		"ip saddr 10.55.8.13 ip daddr 10.55.8.14 ct direction original ct state established,new accept",
+		"ip6 saddr fd55:8::13 ip6 daddr fd55:8::14 ct direction original ct state established,new accept",
 		"ip saddr 10.55.8.0/24 ip daddr 10.55.8.0/24 counter drop",
-		"ip6 saddr fd55:8::/64 ip6 daddr fd55:8::/64 counter drop",
-		"ip6 saddr fe80::/10 ip6 daddr fe80::/10 counter drop",
+		"ip6 saddr { fd55:8::/64, fe80::/10 } ip6 daddr fd55:8::/64 counter drop",
+		"ip6 saddr { fd55:8::/64, fe80::/10 } ip6 daddr fe80::/10 counter drop",
 		"icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert } accept",
 	} {
 		if !strings.Contains(after.Install, s) {
@@ -63,7 +63,7 @@ func TestPR178GuardNonDisruptiveDirectedDualStackAtomicText(t *testing.T) {
 		strings.Contains(after.Install, "ip6 saddr fd55:8::12 ip6 daddr fd55:8::11 accept") {
 		t.Fatal("replies became unconditionally authorized reverse grant")
 	}
-	if strings.Contains(before.Install, "ip saddr 10.55.8.11 ip daddr 10.55.8.12 accept") {
+	if strings.Contains(before.Install, "ip saddr 10.55.8.11 ip daddr 10.55.8.12 ct direction original ct state established,new accept") {
 		t.Fatal("prior guard mistakenly admitted A->B")
 	}
 	afterRevoke := pr178Guard(t, members, []state.PeerGrantBinding{cd}, []state.PeerGrantBinding{ab})

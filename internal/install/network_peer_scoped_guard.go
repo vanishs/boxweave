@@ -115,9 +115,10 @@ func nativePeerGuardCompile(t NativePrepareTarget, network *api.Network,
 	})
 	for _, pair := range pairs {
 		src, dst := byUUID[pair.SourceUUID], byUUID[pair.TargetUUID]
-		// For a directed A->B authorization, replies B->A are permitted ONLY
-		// while conntrack independently reports an established flow. A new
-		// B->A initiation never receives an unconditional reverse accept.
+		// Both halves must prove the conntrack direction. If B->A is
+		// independently granted, its original-direction rule must not
+		// keep replies to a revoked A->B connection alive (or vice versa).
+		// RELATED is not an authorization for a distinct data connection.
 		for _, fam := range []struct{ proto, source, target string }{
 			{"ip", src.IPv4, dst.IPv4}, {"ip6", src.IPv6, dst.IPv6},
 		} {
@@ -125,7 +126,7 @@ func nativePeerGuardCompile(t NativePrepareTarget, network *api.Network,
 				prefix, src.MAC, dst.MAC, fam.proto, fam.source, fam.proto, fam.target)
 			backward := fmt.Sprintf("%sether saddr %s ether daddr %s %s saddr %s %s daddr %s",
 				prefix, dst.MAC, src.MAC, fam.proto, fam.target, fam.proto, fam.source)
-			rules = append(rules, forward+" accept", backward+" ct state established,related accept")
+			rules = append(rules, forward+" ct direction original ct state established,new accept", backward+" ct direction reply ct state established accept")
 		}
 	}
 	// Restrict an entire exact Project bridge prefix rather than only the
@@ -137,10 +138,13 @@ func nativePeerGuardCompile(t NativePrepareTarget, network *api.Network,
 	rules = append(rules,
 		fmt.Sprintf("%sip saddr %s ip daddr %s counter drop",
 			prefix, base4.Masked(), base4.Masked()),
-		fmt.Sprintf("%sip6 saddr %s ip6 daddr %s counter drop",
-			prefix, base6.Masked(), base6.Masked()),
-		fmt.Sprintf("%sip6 saddr fe80::/10 ip6 daddr fe80::/10 meta l4proto icmpv6 icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert } accept", prefix),
-		fmt.Sprintf("%sip6 saddr fe80::/10 ip6 daddr fe80::/10 counter drop", prefix),
+		// Neighbor discovery must not depend on connection tracking:
+		// a solicited unicast NA can use a global source/destination.
+		// Only ND with the mandatory on-link hop limit is exempt.
+		fmt.Sprintf("%sip6 hoplimit 255 icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert } accept", prefix),
+		// Cover both ULA/link-local directions, including mixed pairs.
+		fmt.Sprintf("%sip6 saddr { %s, fe80::/10 } ip6 daddr %s counter drop", prefix, base6.Masked(), base6.Masked()),
+		fmt.Sprintf("%sip6 saddr { %s, fe80::/10 } ip6 daddr fe80::/10 counter drop", prefix, base6.Masked()),
 	)
 	var installed, replaced strings.Builder
 	fmt.Fprintf(&installed, "table bridge %s {\n chain protect {\n  type filter hook forward priority -250; policy accept;\n", name)

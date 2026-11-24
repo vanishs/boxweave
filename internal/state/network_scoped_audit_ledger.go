@@ -25,6 +25,7 @@ type ScopedNetworkAuditBinding struct {
 type ScopedNetworkAuditLedger struct {
 	Project, Bridge string
 	Boxes           []ScopedNetworkAuditBinding
+	Retired         []ScopedNetworkAuditRetiredBinding
 }
 
 // ReadCompleteScopedNetworkAuditLedger requires a complete, nonempty Project
@@ -120,6 +121,15 @@ func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, pro
 		return zero, ErrResourceLocked
 	}
 
+	historical, err := scopedRetiredOwners(ctx, tx, project, bridge)
+	if err != nil {
+		return zero, err
+	}
+	for uuid := range historical {
+		if _, exists := claimed[uuid]; exists {
+			return zero, ErrResourceLocked
+		}
+	}
 	// Read every Project binding, including unexpected historical rows.
 	// No disallowed row can disappear by filtering for the target ACL.
 	rows, err = tx.QueryContext(ctx,
@@ -136,9 +146,16 @@ func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, pro
 			break
 		}
 		box, ok := claimed[uuid]
+		old, retired := historical[uuid]
+		expectedState := "PINNED"
+		if retired {
+			box = old.ScopedNetworkAuditBinding
+			ok = true
+			expectedState = "RELEASED"
+		}
 		if !ok || found[uuid] || inc != box.Incarnation ||
 			nic != "eth0" || nw != bridge || acl != box.ACL ||
-			status != "PINNED" || !auditMAC(mac) ||
+			status != expectedState || !auditMAC(mac) ||
 			!auditIP(v4, false) || !auditIP(v6, true) ||
 			allIPs[v4] || allIPs[v6] || allMACs[mac] {
 			err = ErrResourceLocked
@@ -146,7 +163,12 @@ func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, pro
 		}
 		found[uuid], allIPs[v4], allIPs[v6], allMACs[mac] = true, true, true, true
 		box.MAC, box.IPv4, box.IPv6 = mac, v4, v6
-		claimed[uuid] = box
+		if retired {
+			old.ScopedNetworkAuditBinding = box
+			historical[uuid] = old
+		} else {
+			claimed[uuid] = box
+		}
 	}
 	if e := rows.Err(); err == nil {
 		err = e
@@ -157,13 +179,13 @@ func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, pro
 	if err != nil {
 		return zero, err
 	}
-	if len(found) != len(claimed) {
+	if len(found) != len(claimed)+len(historical) {
 		return zero, ErrResourceLocked
 	}
 
 	var foreign int
 	if err = tx.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM network_bindings WHERE bridge=? AND project!=? AND state!='RELEASED'",
+		"SELECT COUNT(*) FROM network_bindings WHERE bridge=? AND project!=?",
 		bridge, project).Scan(&foreign); err != nil {
 		return zero, err
 	}
@@ -174,20 +196,26 @@ func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, pro
 	// Every active dual-stack lease must be reserved exactly once, and
 	// no foreign/stale/released address may escape the full-bridge view.
 	rows, err = tx.QueryContext(ctx,
-		"SELECT family,address,project,box_uuid,incarnation,state FROM network_address_fences WHERE bridge=?", bridge)
+		"SELECT family,address,project,box_uuid,incarnation,state,COALESCE(operation_id,'') FROM network_address_fences WHERE bridge=?", bridge)
 	if err != nil {
 		return zero, err
 	}
 	seen := map[string]bool{}
 	for rows.Next() {
-		var family, addr, p, uuid, inc, status string
-		if err = rows.Scan(&family, &addr, &p, &uuid, &inc, &status); err != nil {
+		var family, addr, p, uuid, inc, status, op string
+		if err = rows.Scan(&family, &addr, &p, &uuid, &inc, &status, &op); err != nil {
 			break
 		}
 		b, ok := claimed[uuid]
+		wantState := "RESERVED"
+		if old, retired := historical[uuid]; retired {
+			b = old.ScopedNetworkAuditBinding
+			ok = op == old.DeleteID
+			wantState = "RELEASED"
+		}
 		key := uuid + "|" + family
 		if !ok || p != project || inc != b.Incarnation ||
-			status != "RESERVED" || seen[key] ||
+			status != wantState || seen[key] ||
 			!((family == "ipv4" && addr == b.IPv4) ||
 				(family == "ipv6" && addr == b.IPv6)) {
 			err = ErrResourceLocked
@@ -204,13 +232,21 @@ func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, pro
 	if err != nil {
 		return zero, err
 	}
-	if len(seen) != 2*len(claimed) {
+	if len(seen) != 2*(len(claimed)+len(historical)) {
 		return zero, ErrResourceLocked
 	}
 
 	result := ScopedNetworkAuditLedger{
 		Project: project, Bridge: bridge, Boxes: make([]ScopedNetworkAuditBinding, 0, len(claimed)),
 	}
+	for _, old := range historical {
+		verified, e := scopedRetiredOriginals(ctx, tx, project, bridge, old)
+		if e != nil {
+			return zero, e
+		}
+		result.Retired = append(result.Retired, verified)
+	}
+	slices.SortFunc(result.Retired, func(a, b ScopedNetworkAuditRetiredBinding) int { return strings.Compare(a.UUID, b.UUID) })
 	for _, box := range claimed {
 		result.Boxes = append(result.Boxes, box)
 	}
