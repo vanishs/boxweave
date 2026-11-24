@@ -1,8 +1,9 @@
-# Doctor and Recover: operator guide (PR #177 candidate)
+# Doctor and Recover: operator guide
 
-This guide describes the unreleased PR #177 candidate, not the
-published RC13 executable. Use the exact installed candidate's help and
-manifest. One binary, two local CLI entries, unchanged MCP catalog.
+This guide describes the merged v1 implementation from PR #177, not the
+published RC13 executable. D0–D5 passed exact-head CI and were merged on
+2026-11-24. Use the exact installed build's help and manifest. One binary,
+two local CLI entries, unchanged 23-tool MCP catalog. See [current status](../INDEX.md).
 
 ## Diagnose without modifying the installation
 

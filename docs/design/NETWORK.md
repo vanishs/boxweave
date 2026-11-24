@@ -1,5 +1,7 @@
 # Minimal native networking — no managed proxy
 
+**Current source (2026-11-24):** #178 is merged into v1, not RC13. Explicit fresh-only scoped v2 uses independent UUID-derived ACLs, bounded Root guard/lifecycle helpers, directional grant/revoke via MCP, default boot.autostart=true and preserved explicit false. Unrelated connections are preserved under accepted native conditions; no whole-Project STOP fallback. Scoped migration, upgrade, rollback and uninstall are unsupported. [Current architecture, capacity and evidence](../development/V1_PR178_N5_DELIVERY_2026-11-23.md) supersedes the historical shared-ACL experiments below for scoped mode. Legacy findings remain relevant only when legacy architecture is proven. See [release status](../INDEX.md).
+
 **2026-11-21 fresh-install policy refinement:** new installer-created service defaults to all; existing units/manual serve do not silently broaden authority. External binds still require explicit acknowledgment and native Project permission. [Policy](../development/V1_FORWARD_ALL_POLICY_2026-11-21.md).
 
 **2026-11-21 proposed update:** See [one-time Host forwarding authorization](../development/V1_FORWARD_ALL_POLICY_2026-11-21.md). Explicit operator all-mode supports wildcard listeners; default loopback and older exact mode remain.

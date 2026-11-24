@@ -1,10 +1,10 @@
 # UNKNOWN manual recovery — approved minimal local-operator procedure
 
-**PR #177 candidate (unreleased):** use the [Doctor/Recover operator guide](DOCTOR_RECOVER.md) for the new read-only issue plan and explicitly approved, evidence-bound apply. The older local recovery entries below remain historical or separately supported leaves, not blanket permission.
+**PR #177 merged into v1 (unreleased):** use the [Doctor/Recover operator guide](DOCTOR_RECOVER.md) for the new read-only issue plan and explicitly approved, evidence-bound apply. The older local recovery entries below remain historical or separately supported leaves, not blanket permission.
 
-**S5A2 update (2026-11-20):** the candidate adds MCP `operation_recover` and root-reviewed CLI `recover -action=diagnose|reconcile` (reconcile requires `-recovery-key`), sharing the bounded read-only native evidence path and durable recovery transaction. Existing protected CLI challenge/release remains unchanged; no remote approval or blanket lock release. The older text below describes its historical implementation checkpoint. [S5A2 evidence](../development/S5A2_RECOVERY_2026-11-20.md).
+**Historical S5A2 update (2026-11-20):** the candidate added MCP `operation_recover` and root-reviewed CLI `recover -action=diagnose|reconcile` (reconcile requires `-recovery-key`), sharing the bounded read-only native evidence path and durable recovery transaction. Existing protected CLI challenge/release remains unchanged; no remote approval or blanket lock release. The older text below describes its historical implementation checkpoint. [S5A2 evidence](../development/S5A2_RECOVERY_2026-11-20.md).
 
-**Status:** existing host-local challenge/release is implemented for registered owned UUIDs. The new unbound-Create **identity-binding** extension is implemented only in the separate pre-release UNKNOWN-repair test branch and is **not yet installed/native accepted**; do not use it to claim real HOST_GO approval. This is a host-local CLI/SQLite operation, **not** a new MCP tool, remote admin endpoint, replay daemon, or generalized lease management platform.
+**Historical implementation checkpoint:** existing host-local challenge/release is implemented for registered owned UUIDs. The new unbound-Create **identity-binding** extension is implemented only in the separate pre-release UNKNOWN-repair test branch and is **not yet installed/native accepted**; do not use it to claim real HOST_GO approval. This is a host-local CLI/SQLite operation, **not** a new MCP tool, remote admin endpoint, replay daemon, or generalized lease management platform.
 
 ## New: Create UNKNOWN before UUID registration (candidate, requires native acceptance)
 
