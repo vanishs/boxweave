@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lxc/incus/v7/shared/api"
 	"io/fs"
 	"reflect"
 	"strings"
@@ -13,13 +14,18 @@ import (
 const nativePeerFreshMode = "SCOPED_PEER_FRESH_V2"
 
 type nativePeerFreshEvidence struct {
-	Project, Bridge string
-	NativeSHA256    string
-	Guard           NativePeerGuardPlan
+	Project, Bridge    string
+	IPv4CIDR, IPv6CIDR string
+	NativeSHA256       string
+	Guard              NativePeerGuardPlan
 }
 
 // Lstat refuses even dangling links, empty legacy state and unreadable paths.
 func nativePeerFreshPathsAbsent(lstat func(string) (fs.FileInfo, error)) error {
+	return nativePeerFreshPathsAbsentExceptJournal(lstat, false)
+}
+
+func nativePeerFreshPathsAbsentExceptJournal(lstat func(string) (fs.FileInfo, error), ownJournal bool) error {
 	if lstat == nil {
 		return errors.New("fresh install path inventory unavailable")
 	}
@@ -28,8 +34,12 @@ func nativePeerFreshPathsAbsent(lstat func(string) (fs.FileInfo, error)) error {
 		"/usr/local/bin/boxweave", "/etc/systemd/system/boxweave.service",
 		"/etc/systemd/system/boxweave.service.d", nativePrepareJournalPath,
 		nativePeerRootUnitPath, nativeRetirementUnitPath, nativeRetirementSocketPath,
-		nativePeerGuardRootJournalDir,
+		nativePeerGuardRootJournalDir, nativePeerFreshJournalDir,
+		nativePeerRootSocketPath, nativePeerConntrackJournalPath, nativePeerConntrackOperationsDir, nativePeerConntrackLockPath,
 	} {
+		if ownJournal && path == nativePeerFreshJournalDir {
+			continue
+		}
 		info, err := lstat(path)
 		if info != nil || !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("unsupported existing or unreadable BoxWeave installation: %s; no upgrade or adoption", path)
@@ -60,10 +70,8 @@ func nativePeerFreshAdmission(ctx context.Context, upgrade bool,
 	if err != nil {
 		return zero, err
 	}
-	if first.Project == "" || first.Bridge == "" || !validRetirementReviewSHA(first.NativeSHA256) ||
-		!nativePeerGuardTablePattern.MatchString(first.Guard.Table) ||
-		first.Guard.DigestSHA256 != nativePeerGuardDigest(first.Guard) {
-		return zero, errors.New("fresh scoped native evidence incomplete")
+	if err := nativePeerFreshEvidenceValid(first); err != nil {
+		return zero, err
 	}
 	second, err := inspect(ctx)
 	if err != nil || !reflect.DeepEqual(first, second) {
@@ -84,6 +92,22 @@ func nativePeerFreshACLInventory(names []string) error {
 		if name == "" || strings.HasPrefix(name, "bw-") {
 			return errors.New("existing or ambiguous BoxWeave ACL; fresh scoped installation refuses adoption")
 		}
+	}
+	return nil
+}
+
+// Recompile the exact empty policy from independently observed bridge
+// addresses. A digest of a caller-constructed script alone is not evidence.
+func nativePeerFreshEvidenceValid(e nativePeerFreshEvidence) error {
+	if !strings.HasPrefix(e.Project, "user-") || e.Bridge != "incusbr-"+strings.TrimPrefix(e.Project, "user-") ||
+		!validRetirementReviewSHA(e.NativeSHA256) {
+		return errors.New("fresh scoped native evidence incomplete")
+	}
+	network := &api.Network{Name: e.Bridge, Type: "bridge", Managed: true, Status: "Created",
+		NetworkPut: api.NetworkPut{Config: api.ConfigMap{"ipv4.address": e.IPv4CIDR, "ipv6.address": e.IPv6CIDR}}}
+	want, err := nativePeerFreshInitialGuard(NativePrepareTarget{Project: e.Project, Network: e.Bridge, ACL: "bw-fresh-initial-guard"}, network)
+	if err != nil || want != e.Guard {
+		return errors.New("fresh scoped guard does not match exact empty policy")
 	}
 	return nil
 }

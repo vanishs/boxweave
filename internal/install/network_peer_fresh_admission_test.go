@@ -20,7 +20,7 @@ func pr178FreshEvidence(t *testing.T) nativePeerFreshEvidence {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return nativePeerFreshEvidence{Project: target.Project, Bridge: target.Network, NativeSHA256: strings.Repeat("a", 64), Guard: guard}
+	return nativePeerFreshEvidence{Project: target.Project, Bridge: target.Network, NativeSHA256: strings.Repeat("a", 64), Guard: guard, IPv4CIDR: "10.55.8.1/24", IPv6CIDR: "fd55:8::1/64"}
 }
 
 func TestPR178FreshInitialGuardBeforeAnyBox(t *testing.T) {

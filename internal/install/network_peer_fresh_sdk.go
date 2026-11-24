@@ -55,7 +55,7 @@ func nativePeerFreshSDKSnapshot(ctx context.Context, root incus.InstanceServer, 
 	if err != nil {
 		return zero, err
 	}
-	return nativePeerFreshEvidence{Project: project, Bridge: bridge, Guard: guard,
+	return nativePeerFreshEvidence{Project: project, Bridge: bridge, Guard: guard, IPv4CIDR: nw.Config["ipv4.address"], IPv6CIDR: nw.Config["ipv6.address"],
 		NativeSHA256: nativePrepareStateDigest(nativePeerFreshMode, scope.Before, scope.ETag, scope.Blocked, pr, ptag, pf, ftag, names)}, nil
 }
 
