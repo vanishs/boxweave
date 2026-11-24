@@ -69,7 +69,11 @@ func nativeScopedDeleteReview(ctx context.Context, c incus.InstanceServer, db *s
 	if err = nativeScopedLifecycleInventory(ctx, c, db, r, nw, "", p.Binding.ACL, p.Box.UUID); err != nil {
 		return zero, err
 	}
-	want, err := NativePeerScopedACLFromPolicySnapshot(NativePrepareTarget{Project: r.Project, Network: r.Bridge, ACL: p.Binding.ACL}, nw, nil, nil, NativePeerACLSubject{UUID: p.Box.UUID, IPv4: p.Binding.IPv4, IPv6: p.Binding.IPv6})
+	policy, err := nativeScopedTerminalPolicy(ctx, db, r)
+	if err != nil {
+		return zero, err
+	}
+	want, err := NativePeerScopedACLFromPolicySnapshot(NativePrepareTarget{Project: r.Project, Network: r.Bridge, ACL: p.Binding.ACL}, nw, policy.Active, policy.Revoked, NativePeerACLSubject{UUID: p.Box.UUID, IPv4: p.Binding.IPv4, IPv6: p.Binding.IPv6})
 	if err != nil {
 		return zero, err
 	}

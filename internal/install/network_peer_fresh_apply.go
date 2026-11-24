@@ -118,7 +118,11 @@ func nativePeerFreshVerifiedPlan() (nativePeerFreshJournalRecord, NativePeerGuar
 }
 
 func nativePeerFreshGuardRestore(ctx context.Context) error {
-	_, p, err := nativePeerFreshVerifiedPlan()
+	r, initial, err := nativePeerFreshVerifiedPlan()
+	if err != nil {
+		return err
+	}
+	p, _, err := scopedPeerBootCurrent(nativePeerFreshJournalDir, 0, r, initial, "")
 	if err != nil {
 		return err
 	}
@@ -142,5 +146,9 @@ func nativePeerFreshGuardCurrent(ctx context.Context, project, bridge string) (n
 	if r.Project != project || r.Bridge != bridge {
 		return r, errors.New("fresh guard scope changed")
 	}
-	return r, NativePeerGuardKernelReadback(ctx, p)
+	current, _, err := scopedPeerBootCurrent(nativePeerFreshJournalDir, 0, r, p, "")
+	if err != nil {
+		return r, err
+	}
+	return r, NativePeerGuardKernelReadback(ctx, current)
 }

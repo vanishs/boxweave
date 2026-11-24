@@ -128,7 +128,7 @@ func readScopedCreateOriginalTx(ctx context.Context, tx *sql.Tx, id, project, br
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE layer=? AND id<>? AND action IN ('box_create','box_delete','box_peer_set','box_update') AND state IN ('DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, project, id).Scan(&busy); err != nil || busy != 0 {
 		return zero, ErrResourceLocked
 	}
-	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM peer_grants WHERE project=?`, project).Scan(&busy); err != nil || busy != 0 {
+	if _, err = readScopedTerminalPeerPolicyTx(ctx, tx, project, bridge); err != nil {
 		return zero, ErrResourceLocked
 	}
 	return ScopedCreateOriginalProof{OriginalID: id, NativeID: nativeID, Intent: intent, Quarantine: pin}, nil

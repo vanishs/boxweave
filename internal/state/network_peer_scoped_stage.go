@@ -27,6 +27,42 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err = stageScopedPeerOriginalTx(ctx, tx, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// StageAndClaimScopedPeerOriginal closes the crash window between the
+// pending policy row and dispatch claim. No native effect is sent here.
+func (s *Store) StageAndClaimScopedPeerOriginal(ctx context.Context, id string) error {
+	if s == nil || s.db == nil || s.auditReadOnly || !validHexID(id) {
+		return ErrInvalid
+	}
+	tx, e := s.db.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	if e = stageScopedPeerOriginalTx(ctx, tx, id); e != nil {
+		return e
+	}
+	now := time.Now().UnixNano()
+	r, e := tx.ExecContext(ctx, "UPDATE operations SET state='DISPATCHING',updated_at=? WHERE id=? AND state='ADMITTED' AND action='box_peer_set'", now, id)
+	if e != nil {
+		return e
+	}
+	if n, e := r.RowsAffected(); e != nil || n != 1 {
+		return ErrState
+	}
+	if _, e = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES(?,?,'DISPATCHING','SCOPED_PEER_V2_CLAIMED')", id, now); e != nil {
+		return e
+	}
+	return tx.Commit()
+}
+
+func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error {
+	var err error
 	var action, status, actor, token, layer, source, incarnation, resource string
 	var raw []byte
 	err = tx.QueryRowContext(ctx, `SELECT action,state,actor_id,token_id,layer,box_uuid,
@@ -59,9 +95,15 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 	for _, b := range inventory.Boxes {
 		owners[b.UUID] = b
 	}
+	retiredOwners := map[string]bool{}
+	for _, b := range inventory.Retired {
+		owners[b.UUID] = b.ScopedNetworkAuditBinding
+		retiredOwners[b.UUID] = true
+	}
+
 	src, srcOK := owners[i.SourceUUID]
 	dst, dstOK := owners[i.TargetUUID]
-	if !srcOK || !dstOK || src.Incarnation != i.SourceIncarnation ||
+	if !srcOK || !dstOK || retiredOwners[i.SourceUUID] || retiredOwners[i.TargetUUID] || src.Incarnation != i.SourceIncarnation ||
 		dst.Incarnation != i.TargetIncarnation {
 		return ErrResourceLocked
 	}
@@ -69,15 +111,19 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 	if e != nil {
 		return ErrResourceLocked
 	}
-	rows, e := tx.QueryContext(ctx, `SELECT resource_key FROM operation_resource_claims
+	rows, e := tx.QueryContext(ctx, `SELECT resource_key,layer FROM operation_resource_claims
   WHERE operation_id=? ORDER BY resource_key`, id)
 	if e != nil {
 		return e
 	}
 	var claims []string
 	for rows.Next() {
-		var k string
-		if e = rows.Scan(&k); e != nil {
+		var k, l string
+		if e = rows.Scan(&k, &l); e != nil {
+			break
+		}
+		if l != i.Project {
+			e = ErrResourceLocked
 			break
 		}
 		claims = append(claims, k)
@@ -127,7 +173,7 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 		a, okA := owners[p.SourceUUID]
 		b, okB := owners[p.TargetUUID]
 		total++
-		if total > 32 || !okA || !okB || p.SourceUUID == p.TargetUUID ||
+		if total > 32 || !okA || !okB || p.SourceUUID == p.TargetUUID || (retiredOwners[p.SourceUUID] || retiredOwners[p.TargetUUID]) && (desired != 0 || state != "REVOKED") ||
 			p.SourceIncarnation != a.Incarnation || p.TargetIncarnation != b.Incarnation ||
 			p.SourceIPv4 != a.IPv4 || p.TargetIPv4 != b.IPv4 ||
 			p.SourceIPv6 != a.IPv6 || p.TargetIPv6 != b.IPv6 ||
@@ -229,5 +275,5 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 		id, time.Now().UnixNano()); e != nil {
 		return e
 	}
-	return tx.Commit()
+	return nil
 }

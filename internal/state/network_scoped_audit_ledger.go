@@ -62,6 +62,10 @@ func (s *Store) ReadCompleteScopedNetworkAuditLedger(ctx context.Context, projec
 // A separate scoped Peer staging transaction uses this exact helper to
 // atomically prove the entire Project before committing a pending direction.
 func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	return readCompleteScopedNetworkAuditLedgerModeTx(ctx, tx, project, bridge, false)
+}
+
+func readCompleteScopedNetworkAuditLedgerModeTx(ctx context.Context, tx *sql.Tx, project, bridge string, allowEmpty bool) (ScopedNetworkAuditLedger, error) {
 	var zero ScopedNetworkAuditLedger
 	if tx == nil || !strings.HasPrefix(project, "user-") || !auditName(project) || !auditName(bridge) {
 		return zero, ErrInvalid
@@ -117,7 +121,7 @@ func readCompleteScopedNetworkAuditLedgerTx(ctx context.Context, tx *sql.Tx, pro
 	if err != nil {
 		return zero, err
 	}
-	if len(claimed) == 0 {
+	if len(claimed) == 0 && !allowEmpty {
 		return zero, ErrResourceLocked
 	}
 

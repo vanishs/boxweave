@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vanishs/boxweave/internal/native"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
@@ -216,6 +217,21 @@ func TestPR178N3NativeDirectionGuard(t *testing.T) {
 	out, err := nativePeerGuardReplaceOnce(ctx, before, after, NativePeerGuardKernelReadback, nativePeerGuardFixedNftBatch)
 	if err != nil || !out.KernelVerified {
 		t.Fatalf("revocation failed %+v %v", out, err)
+	}
+	// Under the already-revoked guard, invalidate only the original AB
+	// tuples. BA and CD must remain in the kernel, not reconnect silently.
+	box := func(m NativePeerGuardMember) native.PeerACLBox {
+		return native.PeerACLBox{UUID: m.UUID, IPv4: m.IPv4, IPv6: m.IPv6, MAC: m.MAC}
+	}
+	report, err := nativeScopedDirectionalConntrackPurge(ctx, nativePeerConntrackOS, box(a), box(b), func(ctx context.Context) error { return NativePeerGuardKernelReadback(ctx, after) })
+	if err != nil || report.ProbedScopes != 2 || report.DeletedScopes != 2 {
+		t.Fatalf("exact directional purge: %+v %v", report, err)
+	}
+	for _, p := range []struct{ family, src, dst string }{{"ipv4", b.IPv4, a.IPv4}, {"ipv6", b.IPv6, a.IPv6}, {"ipv4", c.IPv4, d.IPv4}, {"ipv6", c.IPv6, d.IPv6}} {
+		found, e := nativePeerConntrackList(ctx, nativePeerConntrackOS, p.family, p.src, p.dst)
+		if e != nil || !found {
+			t.Fatalf("reverse/unrelated original tuple lost: %+v %v", p, e)
+		}
 	}
 	for _, v6 := range []bool{false, true} {
 		for _, udp := range []bool{false, true} {

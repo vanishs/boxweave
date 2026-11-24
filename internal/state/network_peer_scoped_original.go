@@ -3,7 +3,9 @@ package state
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -30,12 +32,13 @@ type ScopedPeerOriginalIntent struct {
 // An independent Root writer must redo SQLite/native/port/kernel proofs
 // with a durable original and locks held.
 type ScopedPeerOriginalProof struct {
-	OriginalID                  string
-	Intent                      ScopedPeerOriginalIntent
-	Inventory                   ScopedNetworkAuditLedger
-	Before, After, Revoked      []PeerGrantBinding
-	RevokedBefore, RevokedAfter []PeerGrantBinding
-	Regrant, RecoveryOnly       bool
+	OriginalID                      string
+	ActorID, TokenID, HistorySHA256 string
+	Intent                          ScopedPeerOriginalIntent
+	Inventory                       ScopedNetworkAuditLedger
+	Before, After, Revoked          []PeerGrantBinding
+	RevokedBefore, RevokedAfter     []PeerGrantBinding
+	Regrant, RecoveryOnly           bool
 }
 
 func scopedPeerResourceClaims(i ScopedPeerOriginalIntent) ([]string, error) {
@@ -76,6 +79,33 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 		return zero, e
 	}
 	defer tx.Rollback()
+	first, e := readScopedPeerOriginalTx(ctx, tx, id, project, bridge, expected)
+	if e != nil {
+		return zero, e
+	}
+	if e = tx.Commit(); e != nil {
+		return zero, e
+	}
+	again, e := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if e != nil {
+		return zero, e
+	}
+	defer again.Rollback()
+	second, e := readScopedPeerOriginalTx(ctx, again, id, project, bridge, expected)
+	if e != nil || !reflect.DeepEqual(first, second) {
+		return zero, ErrResourceLocked
+	}
+	if e = again.Commit(); e != nil {
+		return zero, e
+	}
+	return second, nil
+}
+
+func readScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id, project, bridge, expected string) (ScopedPeerOriginalProof, error) {
+	var zero ScopedPeerOriginalProof
+	if tx == nil || !validHexID(id) || !strings.HasPrefix(project, "user-") || !auditName(project) || !auditName(bridge) || expected != "DISPATCHING" && expected != "UNKNOWN" && expected != "VERIFYING" {
+		return zero, ErrInvalid
+	}
 	// One read transaction binds the complete Project NIC/MAC/IP/fence
 	// snapshot to the same original/claims/actor and all grant directions.
 	inventory, e := readCompleteScopedNetworkAuditLedgerTx(ctx, tx, project, bridge)
@@ -86,6 +116,12 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 	for _, b := range inventory.Boxes {
 		owners[b.UUID] = b
 	}
+	retiredOwners := map[string]bool{}
+	for _, b := range inventory.Retired {
+		owners[b.UUID] = b.ScopedNetworkAuditBinding
+		retiredOwners[b.UUID] = true
+	}
+
 	var action, status, actor, token, layer, source, incarnation, resource string
 	var raw []byte
 	e = tx.QueryRowContext(ctx, `SELECT action,state,actor_id,token_id,layer,box_uuid,
@@ -114,7 +150,7 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 	}
 	a, okA := owners[intent.SourceUUID]
 	b, okB := owners[intent.TargetUUID]
-	if !okA || !okB || a.Incarnation != intent.SourceIncarnation ||
+	if !okA || !okB || retiredOwners[intent.SourceUUID] || retiredOwners[intent.TargetUUID] || a.Incarnation != intent.SourceIncarnation ||
 		b.Incarnation != intent.TargetIncarnation {
 		return zero, ErrResourceLocked
 	}
@@ -122,15 +158,19 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 	if e != nil {
 		return zero, ErrResourceLocked
 	}
-	rows, e := tx.QueryContext(ctx, `SELECT resource_key FROM operation_resource_claims
+	rows, e := tx.QueryContext(ctx, `SELECT resource_key,layer FROM operation_resource_claims
   WHERE operation_id=? ORDER BY resource_key`, id)
 	if e != nil {
 		return zero, e
 	}
 	var claims []string
 	for rows.Next() {
-		var c string
-		if e = rows.Scan(&c); e != nil {
+		var c, l string
+		if e = rows.Scan(&c, &l); e != nil {
+			break
+		}
+		if l != project {
+			e = ErrResourceLocked
 			break
 		}
 		claims = append(claims, c)
@@ -176,7 +216,8 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 	}
 	var before, after, revoked []PeerGrantBinding
 	var pendingPair PeerGrantBinding
-	pending := 0
+	pending, total := 0, 0
+	history := sha256.New()
 	for rows.Next() {
 		var p PeerGrantBinding
 		var desired int
@@ -186,13 +227,25 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 			&p.TargetIPv6, &desired, &st, &original, &verified); e != nil {
 			break
 		}
+		total++
+		row, e2 := json.Marshal(struct {
+			Pair                      PeerGrantBinding
+			Desired                   int
+			State, Original, Verified string
+		}{p, desired, st, original, verified})
+		if e2 != nil {
+			e = e2
+			break
+		}
+		history.Write(row)
+		history.Write([]byte{'\n'})
 		src, ok1 := owners[p.SourceUUID]
 		dst, ok2 := owners[p.TargetUUID]
-		if !ok1 || !ok2 || p.SourceUUID == p.TargetUUID ||
+		if !ok1 || !ok2 || p.SourceUUID == p.TargetUUID || (retiredOwners[p.SourceUUID] || retiredOwners[p.TargetUUID]) && (desired != 0 || st != "REVOKED") ||
 			p.SourceIncarnation != src.Incarnation || p.TargetIncarnation != dst.Incarnation ||
 			p.SourceIPv4 != src.IPv4 || p.TargetIPv4 != dst.IPv4 ||
 			p.SourceIPv6 != src.IPv6 || p.TargetIPv6 != dst.IPv6 ||
-			len(before)+len(revoked) >= 32 {
+			total > 32 {
 			e = ErrResourceLocked
 			break
 		}
@@ -271,23 +324,21 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 	sort(revoked)
 	sort(revokedBefore)
 	sort(revokedAfter)
-	if e = tx.Commit(); e != nil {
-		return zero, e
-	}
-	again, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, project, bridge)
-	if e != nil || !reflect.DeepEqual(inventory, again) {
-		return zero, ErrResourceLocked
-	}
-	var stateNow string
-	var rawNow []byte
-	e = s.db.QueryRowContext(ctx, `SELECT state,safe_intent FROM operations WHERE id=?`, id).
-		Scan(&stateNow, &rawNow)
-	if e != nil || stateNow != expected || !bytes.Equal(rawNow, raw) ||
-		s.RequireActiveTokenID(ctx, token) != nil {
-		return zero, ErrResourceLocked
-	}
-	return ScopedPeerOriginalProof{OriginalID: id, Intent: intent, Inventory: inventory,
+	return ScopedPeerOriginalProof{OriginalID: id, ActorID: actor, TokenID: token, HistorySHA256: hex.EncodeToString(history.Sum(nil)), Intent: intent, Inventory: inventory,
 		Before: before, After: after, Revoked: revoked,
 		RevokedBefore: revokedBefore, RevokedAfter: revokedAfter,
 		Regrant: regrant == 1, RecoveryOnly: expected == "UNKNOWN"}, nil
+}
+
+// ScopedPeerProofSHA256 binds the complete durable original, including actor,
+// credential identity, all sibling directions and retained address history.
+// RecoveryOnly is a phase marker, not a change to the immutable intent.
+func ScopedPeerProofSHA256(p ScopedPeerOriginalProof) string {
+	p.RecoveryOnly = false
+	b, e := json.Marshal(p)
+	if e != nil {
+		return ""
+	}
+	h := sha256.Sum256(append([]byte("boxweave/scoped-peer-original/v2\n"), b...))
+	return hex.EncodeToString(h[:])
 }

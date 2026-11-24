@@ -93,13 +93,26 @@ func NativePeerScopedRootTransitionFromEvidence(proof state.ScopedPeerOriginalPr
 		return zero, fmt.Errorf("native Root project owner proof failed: %w", e)
 	}
 	targetConfig := NativePrepareTarget{Project: i.Project, Network: i.Bridge, ACL: source.ACL}
+	// Retired UUIDs retain their exact ACL tombstones on surviving
+	// owners, but have no live Guard member. The default deny covers them.
+	liveRevoked := func(rows []state.PeerGrantBinding) []state.PeerGrantBinding {
+		var out []state.PeerGrantBinding
+		for _, p := range rows {
+			_, a := identities[p.SourceUUID]
+			_, b := identities[p.TargetUUID]
+			if a && b {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
 	before, e := NativePeerGuardFromSnapshot(targetConfig, network, members,
-		proof.Before, proof.RevokedBefore)
+		proof.Before, liveRevoked(proof.RevokedBefore))
 	if e != nil {
 		return zero, fmt.Errorf("invalid preimage global guard: %w", e)
 	}
 	after, e := NativePeerGuardFromSnapshot(targetConfig, network, members,
-		proof.After, proof.RevokedAfter)
+		proof.After, liveRevoked(proof.RevokedAfter))
 	if e != nil {
 		return zero, fmt.Errorf("invalid postimage global guard: %w", e)
 	}

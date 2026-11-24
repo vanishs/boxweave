@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -133,9 +134,32 @@ func nativeScopedCreateLeaseCheck(c incus.InstanceServer, bridge, name string, b
 	return nil
 }
 
+// Lifecycle effects preserve the already published peer policy; the
+// terminal database snapshot alone does not authorize a native change.
+func nativeScopedTerminalPolicy(ctx context.Context, db *state.Store, r nativePeerFreshJournalRecord) (state.ScopedTerminalPeerPolicy, error) {
+	var zero state.ScopedTerminalPeerPolicy
+	policy, err := db.ReadScopedTerminalPeerPolicy(ctx, r.Project, r.Bridge)
+	if err != nil {
+		return zero, err
+	}
+	original, initial, err := nativePeerFreshVerifiedPlan()
+	if err != nil || original.Project != r.Project || original.Bridge != r.Bridge {
+		return zero, errors.New("scoped lifecycle root identity mismatch")
+	}
+	_, last, err := scopedPeerBootCurrent(nativePeerFreshJournalDir, 0, original, initial, "")
+	if err != nil || !slices.Equal(last.Active, policy.Active) {
+		return zero, errors.New("scoped lifecycle policy differs from published root policy")
+	}
+	return policy, nil
+}
+
 // Root verifies the entire dedicated native inventory, including other
 // independently owned Boxes. No write or power change to any of them.
 func nativeScopedLifecycleInventory(ctx context.Context, c incus.InstanceServer, db *state.Store, r nativePeerFreshJournalRecord, nw *api.Network, pending string, pendingACL string, absentUUID string) error {
+	policy, err := nativeScopedTerminalPolicy(ctx, db, r)
+	if err != nil {
+		return err
+	}
 	ledger, err := db.ReadNativeNetworkLedger(ctx, r.Project)
 	if err != nil {
 		return err
@@ -177,7 +201,7 @@ func nativeScopedLifecycleInventory(ctx context.Context, c incus.InstanceServer,
 		if err = native.ValidatePeerACLBox(inst, r.Project, r.Bridge, acl, native.PeerACLBox{Name: b.Name, UUID: b.UUID, MAC: b.MAC, IPv4: b.IPv4, IPv6: b.IPv6}, false); err != nil {
 			return err
 		}
-		want, err := NativePeerScopedACLFromPolicySnapshot(NativePrepareTarget{Project: r.Project, Network: r.Bridge, ACL: acl}, nw, nil, nil, NativePeerACLSubject{UUID: b.UUID, IPv4: b.IPv4, IPv6: b.IPv6})
+		want, err := NativePeerScopedACLFromPolicySnapshot(NativePrepareTarget{Project: r.Project, Network: r.Bridge, ACL: acl}, nw, policy.Active, policy.Revoked, NativePeerACLSubject{UUID: b.UUID, IPv4: b.IPv4, IPv6: b.IPv6})
 		if err != nil {
 			return err
 		}

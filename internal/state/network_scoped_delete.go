@@ -62,7 +62,7 @@ func readScopedDeleteOriginalTx(ctx context.Context, tx *sql.Tx, id, project, br
 	if err != nil || peer+forward != 0 {
 		return zero, ErrResourceLocked
 	}
-	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM peer_grants WHERE project=?", project).Scan(&n); err != nil || n != 0 {
+	if _, err = readScopedTerminalPeerPolicyTx(ctx, tx, project, bridge); err != nil {
 		return zero, ErrResourceLocked
 	}
 	return p, nil
