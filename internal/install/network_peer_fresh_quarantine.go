@@ -136,6 +136,15 @@ func nativePeerFreshQuarantineSetup(ctx context.Context) error {
 	if err != nil || again != before {
 		return errors.New("quarantine original drifted; preserve UNKNOWN")
 	}
+	preimage := scopedRetirementPreimage{
+		Schema: 1, Origin: r,
+		BeforeProject: pr.Writable(), BeforeProfile: pf.Writable(),
+		AfterProject: nativePrepareProject(pr.Writable()), AfterProfile: desired,
+		Bridge: nw.Writable(), Quarantine: acl,
+	}
+	if err = scopedRetirementPreimageWrite(d, preimage); err != nil {
+		return err
+	}
 	if err = c.CreateNetworkACL(acl); err != nil {
 		return err
 	}

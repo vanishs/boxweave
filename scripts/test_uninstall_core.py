@@ -34,6 +34,9 @@ class FakeHost(unittest.TestCase):
             "AUDIT": root / "uninstall-audit.json",
             "BACKUP": root / "installer-backup",
             "RETIRED": root / "retired",
+            "SCOPED_FENCE": root / "scoped-fence",
+            "SCOPED_LOCK": root / "scoped-lock",
+            "MAINTENANCE_LOCK": root / "maintenance-lock",
             "SCOPED_JOURNAL": root / "scoped-journal",
             "SCOPED_GUARD_UNIT": root / "scoped-guard",
             "SCOPED_LIFECYCLE_UNIT": root / "scoped-lifecycle",
@@ -829,6 +832,54 @@ class FakeHost(unittest.TestCase):
         u.SCRIPTLET.chmod(0o600)
         with self.assertRaisesRegex(u.UninstallError, "global Scriptlet"):
             self.plan("full")
+
+    def test_scoped_copy_accepts_copytree_string_paths_and_refuses_links(self):
+        source = Path(self.t.name) / "copy-source"
+        target = Path(self.t.name) / "copy-target"
+        source.write_bytes(b"exact original")
+        source.chmod(0o600)
+        with mock.patch.object(u, "scoped_private_file", side_effect=lambda p, cap=None: u.file_fingerprint(p)):
+            u.scoped_copy(str(source), str(target))
+            self.assertEqual(source.read_bytes(), target.read_bytes())
+            link = Path(self.t.name) / "linked-source"
+            link.symlink_to(source)
+            with self.assertRaises(u.UninstallError):
+                u.scoped_copy(str(link), str(target) + "-other")
+
+    def test_scoped_denial_creates_no_fence_or_audit(self):
+        plan = {"ready": True, "mode": u.SCOPED_MODE, "project": "user-1001"}
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                mock.patch.object(u, "scoped_plan", return_value=plan), \
+                mock.patch("builtins.open", side_effect=[io.StringIO("NO\n"), io.StringIO()]), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(u.UninstallError, "not approved"):
+                u.main(["--scoped", "--full", "--project", "user-1001"])
+        self.assertFalse(u.AUDIT.exists())
+        self.assertFalse(u.SCOPED_FENCE.exists())
+
+    def test_scoped_native_quiescence_retained_terminal_only(self):
+        terminal = {"id": "11111111-1111-4111-8111-111111111111",
+                    "status": "Success", "status_code": 200, "may_cancel": False}
+        for items in ([], [terminal], [{**terminal, "status": "Failure", "status_code": 400}],
+                      [{**terminal, "status": "Cancelled", "status_code": 401}]):
+            with mock.patch.object(u, "command", return_value=(json.dumps(items), 0)):
+                u.require_quiescent_scoped_native("user-1001")
+        for items in ([{**terminal, "status": "Running", "status_code": 103}],
+                      [{**terminal, "status": "Running"}], [{**terminal, "may_cancel": True}],
+                      [{**terminal, "id": "unknown"}], [terminal, terminal], {"operations": []},
+                      [{**terminal, "status_code": 999}], [{"id": terminal["id"]}]):
+            with mock.patch.object(u, "command", return_value=(json.dumps(items), 0)):
+                with self.assertRaises(u.UninstallError):
+                    u.require_quiescent_scoped_native("user-1001")
+        with mock.patch.object(u, "command", return_value=(json.dumps([terminal]), 0)):
+            with self.assertRaises(u.UninstallError):
+                REAL_REQUIRE_QUIET("user-1001")
+
+    def test_scoped_full_only_refuses_legacy_apply(self):
+        with mock.patch.object(u.os, "geteuid", return_value=0):
+            with self.assertRaisesRegex(u.UninstallError, "full-only"):
+                u.main(["--scoped", "--apply", "--scope", "full", "--project", "user-1001"])
+        self.assertFalse(u.SCOPED_FENCE.exists())
 
 
 if __name__ == "__main__":
