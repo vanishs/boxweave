@@ -1,6 +1,6 @@
 # Install BoxWeave
 
-This is the user-facing guide for the published v1 prerelease and the current source branch. Select an exact version before making changes. As of 2026-11-24, RC13 is the latest published v1 prerelease; stable v1 is unpublished. The newer scoped Peer and Doctor/Recover implementations are merged into v1 but not released.
+Select an exact published release and verify its assets. See [current source and release status](../STATUS.md); source features are not automatically present in a release. RC13 uses Legacy; the newer scoped, Doctor/Recover and purge features require a build containing their merged PRs.
 
 ## 1. Prepare the Host
 
@@ -31,9 +31,9 @@ sudo incus profile show default --project "$PROJECT"
 
 Do not add this user to incus-admin or sudo, or use the privileged Incus socket. If the confined Project or private bridge is missing, resolve native multi-user setup before installation. Never adopt unrelated resources or reuse an unknown BoxWeave ledger.
 
-## 2. Fresh installation: published RC13 (legacy architecture)
+## 2. Download verified installer and select mode
 
-Choose a pinned published release from [Releases](https://github.com/vanishs/boxweave/releases). The commands below use RC13, not floating branch code.
+Choose a pinned published release from [Releases](https://github.com/vanishs/boxweave/releases). Set RELEASE to the exact published tag you have verified. RC13 is the legacy example; use RC14 only after its Release and assets exist.
 
 ```sh
 RELEASE=v1.0.0-rc.13
@@ -63,18 +63,23 @@ The guided installer derives the dedicated Project, default pool, private incusb
 
 RC13 uses legacy Peer authorization. Some Peer work requires separate Host-local review and Root helper readiness; ordinary successful install does not prove Peer grant/revoke readiness. Inspect the original operation if approval or evidence is missing. Never treat a legacy repair as a scoped-v2 procedure.
 
-## 3. Scoped Peer v2: current source only
+## 3. Scoped Peer v2: explicit fresh installation
 
-This mode is not in RC13. Use an exact independently verified candidate on a fresh dedicated test host, or a future published release that explicitly contains it. The flag is --scoped-peer-fresh; its native scope is derived, not caller-selected. For a reviewed source candidate, the current wrapper supports a complete root-local read-only plan and an interactive approval. For example, set CANDIDATE to the absolute path of the independently verified binary and SHA256 to its reviewed digest:
+This mode is not in RC13. Use an exact published release containing #178 and #180, or an independently verified source candidate in an authorized test environment. The flag is --scoped-peer-fresh; its native scope is derived, not caller-selected. The matching wrapper supports a complete root-local read-only plan and an interactive approval. For a published release containing scoped mode, download and verify its installer as above and use:
+
+    sudo sh install.sh --plan --scoped-peer-fresh --version "$RELEASE"
+    sudo sh install.sh --interactive --scoped-peer-fresh --version "$RELEASE"
+
+For an independently reviewed local source candidate, set CANDIDATE to its absolute verified binary path and SHA256 to its reviewed digest:
 
 ```sh
 sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$CANDIDATE" --sha256 "$SHA256"
 sudo sh install.sh --interactive --scoped-peer-fresh --local-binary "$CANDIDATE" --sha256 "$SHA256"
 ```
 
-The plan prints the actual native scope and scoped_fresh_review_sha256 without persisting installation state. The interactive path rechecks the native review before staging. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../development/V1_PR178_N5_DELIVERY_2026-11-23.md).
+The plan prints the actual native scope and scoped_fresh_review_sha256 without persisting installation state. The interactive path rechecks the native review before staging. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../history/development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../history/development/V1_PR178_N5_DELIVERY_2026-11-23.md).
 
-No legacy migration/adoption, upgrade, rollback or backup commit is supported for scoped mode. PR #182 introduces a separate full-only retirement candidate for fresh installations that recorded the original native preimage; this is not a released feature. Do not delete Root journals, guard/lifecycle units, the Incus guard drop-in or state to bypass a refusal. Any surviving scoped installation evidence blocks legacy maintenance, even if the journal is absent. Unlike legacy Peer, routine scoped Peer grants/revokes are authenticated MCP operations after reviewed setup, and new Boxes default to boot.autostart=true while explicit false is preserved. The 1,024 owned-Box bound is not a physical capacity guarantee. Retained identities, addresses, directional grant history and Root policy records have separate limits.
+No legacy migration/adoption, upgrade, rollback or backup commit is supported for scoped mode. PR #182 implements a separate full-only retirement for fresh installations that recorded the original native preimage; use it only with an installed build and verified wrapper containing #182. Do not delete Root journals, guard/lifecycle units, the Incus guard drop-in or state to bypass a refusal. Any surviving scoped installation evidence blocks legacy maintenance, even if the journal is absent. Unlike legacy Peer, routine scoped Peer grants/revokes are authenticated MCP operations after reviewed setup, and new Boxes default to boot.autostart=true while explicit false is preserved. The 1,024 owned-Box bound is not a physical capacity guarantee. Retained identities, addresses, directional grant history and Root policy records have separate limits.
 
 ## 4. Verify installation
 
@@ -109,17 +114,17 @@ sudo sh install.sh --plan --upgrade --version "$RELEASE"
 sudo sh install.sh --upgrade --version "$RELEASE"
 ```
 
-Review the displayed source, host, existing backup and target. Prior backup closure requires the displayed approval and is irreversible; the replacement backup is retained. Do not run concurrent maintenance or force incompatible schema upgrades. Use the exact installed rollback/install-commit help and [guided upgrade contract](../development/V1_GUIDED_UPGRADE_2026-11-21.md) for separately reviewed backup operations.
+Review the displayed source, host, existing backup and target. Prior backup closure requires the displayed approval and is irreversible; the replacement backup is retained. Do not run concurrent maintenance or force incompatible schema upgrades. Use the exact installed rollback/install-commit help and [guided upgrade contract](../history/development/V1_GUIDED_UPGRADE_2026-11-21.md) for separately reviewed backup operations.
 
-For deliberate legacy retirement only, obtain the matching release's self-contained uninstall.sh, verify its checksum and read the exact release's help. The source checkout wrapper requires scripts/uninstall_core.py. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema, separately installed legacy Peer Root services or incomplete journals can block it. Use the original local review/recovery path for these rather than removing units or journals manually. Current source full retirement also checks exact native Project/Profile/ACL against the root preparation journal before approval and before effects. NATIVE_CONFIG_DRIFT or UNVERIFIED blocks it. Older installed builds lack this read-only helper; use the matching verified Release uninstaller, not the newer wrapper or a replacement binary. A prior STARTED audit directs you to the original exact archive and --resume-plan; never rerun --full. Do not use this legacy flow for scoped installs. See [retirement contract](../development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
+For deliberate legacy retirement only, first settle owned Peer/Forward dependencies and outstanding originals. Obtain the matching release's self-contained uninstall.sh, verify its checksum and read the exact release's help. The source checkout wrapper requires scripts/uninstall_core.py. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema, separately installed legacy Peer Root services or incomplete journals can block it. Use the original local review/recovery path for these rather than removing units or journals manually. Current source full retirement also checks exact native Project/Profile/ACL against the root preparation journal before approval and before effects. NATIVE_CONFIG_DRIFT or UNVERIFIED blocks it. Older installed builds lack this read-only helper; use the matching verified Release uninstaller, not the newer wrapper or a replacement binary. A prior STARTED audit directs you to the original exact archive and --resume-plan; never rerun --full. Do not use this legacy flow for scoped installs. See [retirement contract](../history/development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
 
 If installation or maintenance fails, retain the original manifest, journal and evidence. Do not blindly reinstall, erase the ledger, weaken confinement or reset unrelated native resources.
 
 The [historical detailed RC3–RC13 guide](https://github.com/vanishs/boxweave/blob/3165f8eedfad514ee4e5c733e7807d19ddbec2ee/docs/getting-started/MANUAL_INSTALL.md) is retained as historical reference, not a current recipe. [Developer documentation](../INDEX.md).
 
-### Scoped retirement (merged into v1; not in RC13)
+### Scoped retirement (requires #182)
 
-Use the matching verified candidate wrapper and installed binary. Stop/delete all owned Boxes and revoke Peer/Forward claims through normal MCP operations first; settle outstanding originals using the supported recovery workflow. The retirement plan refuses live or unsettled work and old scoped installations missing the original Project/Profile preimage.
+Use the matching verified release/candidate wrapper and installed binary. Stop/delete all owned Boxes and revoke Peer/Forward claims through normal MCP operations first; settle outstanding originals using the supported recovery workflow. The retirement plan refuses live or unsettled work and old scoped installations missing the original Project/Profile preimage.
 
 ```sh
 sudo sh uninstall.sh --scoped --plan
@@ -128,7 +133,7 @@ sudo sh uninstall.sh --scoped --full
 
 Review the exact plan and enter the displayed confirmation only if you intend to retire this controller. The controller and its scoped Root lifecycle service stop, original evidence is archived privately, the original native Project/Profile is restored, the owned quarantine ACL and exact guard are removed, and the owned controller files are retired. Incus, its bridge and unrelated native resources are retained. Never delete the original journal or bypass the guard manually.
 
-If interrupted, inspect the exact original audit and use `--scoped --resume-plan` then `--scoped --resume` instead of starting a new retirement. An unverifiable phase refuses and preserves the original evidence. No old scoped preimage reconstruction or migration is provided. Acceptance is tracked in [PR #182](https://github.com/vanishs/boxweave/pull/182).
+If interrupted, inspect the exact original audit and use `--scoped --resume-plan` then `--scoped --resume` instead of starting a new retirement. An unverifiable phase refuses and preserves the original evidence. No old scoped preimage reconstruction or migration is provided. Installed acceptance passed in [PR #182](https://github.com/vanishs/boxweave/pull/182).
 
 ### Completely erase retired controller data before a fresh install
 
@@ -141,4 +146,4 @@ sudo sh uninstall.sh --purge
 
 The erasure plan lists only recognized, reviewed completed retirement archives, closed native preparation journals and the completed audit. It refuses active or unverified native/controller artifacts, nonempty owned Project inventory, unknown archive entries, symlinks and incomplete retirements. If interrupted, repeat the read-only purge plan and approve the same original purge; installation is blocked while the durable purge receipt survives. Do not treat a purge as a way to release outstanding operations or to bypass an installation safety check. It is ordinary file removal, not a guarantee of forensic erasure of disks, snapshots or independent backups.
 
-For RC13, obtain the matching verified RC13 uninstaller for the original legacy retirement. Clean up owned Boxes, Peer and Forward via MCP and let native retirement operations settle. A separately staged legacy Peer Root unit or its journals, if present, needs exact local original review; the current generic purge intentionally refuses these residuals rather than deleting an unverified root capability. Retain evidence if the original retirement refuses. Do not substitute the new reader on an old installed binary. Run the new purge only after verified full retirement. No automatic migration, arbitrary native cleanup, removal of Incus itself, dedicated OS account, images or external tunnel is performed. The next Scoped install requires its own fresh native preview and explicit approval; the existing bridge address range is preserved and foreign native projects or customized topology may block admission. The original RC13 Host may still use a /24 bridge rather than the /21 provisioned by a new Incus bootstrap.
+For RC13, obtain the matching verified RC13 uninstaller for the original legacy retirement. Do not use the RC14 purge wrapper for that initial retirement. Clean up owned Boxes, Peer and Forward via MCP and let native retirement operations settle. A separately staged legacy Peer Root unit or its journals, if present, needs exact local original review; the current generic purge intentionally refuses these residuals rather than deleting an unverified root capability. Retain evidence if the original retirement refuses. Do not substitute the new reader on an old installed binary. Run the new purge only after verified full retirement. No automatic migration, arbitrary native cleanup, removal of Incus itself, dedicated OS account, images or external tunnel is performed. The next Scoped install requires its own fresh native preview and explicit approval; the existing bridge address range is preserved and foreign native projects or customized topology may block admission. The original RC13 Host may still use a /24 bridge rather than the /21 provisioned by a new Incus bootstrap.

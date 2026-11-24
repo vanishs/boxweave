@@ -66,7 +66,7 @@ S4/S5 native signoff is inferred.
 
 A **non-Draft** [temporary PR #118](https://github.com/vanishs/boxweave/pull/118) targeting `v1` used a previously known bad-format code commit `a86eca8b306783bce00ecf375649ccf729759e88`. Its *fresh* GitHub Actions [run #42597345601](https://github.com/vanishs/boxweave/actions/runs/42597345601) produced **`quality-gate=failure`**, and GitHub reported **`mergeable_state=blocked`** for the non-Draft PR. **No merge was attempted.** The test PR was closed after confirming rejection; branch `test/v1-quality-gate-negative-20261109` remains a cleanup-only test ref because the available GitHub connector has no branch-delete operation.
 
-**[Issue #117](https://github.com/vanishs/boxweave/issues/117): server-side rule accepted** on its original negative evidence. S1 later independently passed the [real native stage exit](../verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md) and [PR #115](https://github.com/vanishs/boxweave/pull/115) was merged into protected `v1` as commit `d29be2561b233ff250630719fcf7244217e0b384`, without bypassing required quality checks. **No GitHub Release or production installation was authorized.**
+**[Issue #117](https://github.com/vanishs/boxweave/issues/117): server-side rule accepted** on its original negative evidence. S1 later independently passed the [real native stage exit](../history/verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md) and [PR #115](https://github.com/vanishs/boxweave/pull/115) was merged into protected `v1` as commit `d29be2561b233ff250630719fcf7244217e0b384`, without bypassing required quality checks. **No GitHub Release or production installation was authorized.**
 
 A configuration reference is stored at [`v1-required-quality.example.json`](../../.github/rulesets/v1-required-quality.example.json). This reference is not an executable GitHub settings change and its name/review-toggle defaults may differ from the owner's live rule. GitHub's live rule is authoritative.
 
@@ -99,4 +99,4 @@ A configuration reference is stored at [`v1-required-quality.example.json`](../.
 - `S1=PARTIAL`, `BLOCKED`, missing evidence, open required issue or uncertain native outcome **blocks promotion**, even if source-format CI is green. S2–S5 likewise require their own phase exit.
 - Releases require an immutable source/tag/artifact SHA, candidate-native independent verifier and all public MCP/CLI acceptance. `quality-gate` alone is never a release proof.
 
-**One-line developer entry:** `make hooks && make verify`. Review [CONTRIBUTING](../../CONTRIBUTING.md), [S1 plan](../development/phases/01_FOUNDATION.md), and [final S1 acceptance matrix](../verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md).
+**One-line developer entry:** `make hooks && make verify`. Review [CONTRIBUTING](../../CONTRIBUTING.md), [S1 plan](../history/development/phases/01_FOUNDATION.md), and [final S1 acceptance matrix](../history/verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md).

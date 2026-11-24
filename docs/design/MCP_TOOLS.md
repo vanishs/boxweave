@@ -24,9 +24,9 @@ Current v1 source registers 23 public Tools, including Activity and Recovery. Th
 | `box_file_apply` | Mutation | Single owned guest regular file `create|replace|delete`; **native SFTP `O_EXCL` exclusive create PASSED**, but **conditional `replace/delete` must return `UNSUPPORTED` until atomic point-of-use hash/inode safeguards are actually established**. Never silently substitute ordinary overwrite/delete; no patch engine or recursive delete. |
 | `operation_get` | Read | Original scoped async receipt/status with optional bounded wait_ms and structured **failing phase, sanitized native error, last observed Box/dependent resources, evidence gaps, safe recovery hint and controller build identity**. |
 | `operation_list` | Read | Paginated owned operations, including UNKNOWN. |
-| `box_activity_get` | Read | `overview/issues/evidence`: Layer-authenticated, bounded SQLite original-operation/evidence readback; old blocking network/Peer/GC issues, signed keyset `next_cursor`; no native effects or task checkpoint. |
+| `box_activity_get` | Read | `overview/issues/evidence`: Layer-authenticated bounded SQLite original/evidence readback; issues distinguish blockers and history; native_network adds bounded read-only same-Project native comparison; signed cursors; no native effects or task checkpoint. |
 | `operation_output_get` | Read | Bounded/paginated guest Exec output and observed exit details after reconnect. |
-| `operation_cancel` | Mutation | Prove queued cancellation or request supported Exec termination; no speculative undo or UNKNOWN resolution. |
+| `operation_cancel` | Mutation | Cancel only a proven queued-undispatched original; detached running Exec/native work is not cancelable through the verified SDK path. No speculative undo or UNKNOWN resolution. |
 | `operation_recover` | Read diagnose / durable reconcile | Exact original evidence; deterministic settlement or identity binding; no re-dispatch or unproven claim release. |
 | `port_forward_list` | Read | List only native BoxWeave-owned TCP/UDP forwards and host binds. |
 | `port_forward_create` | Mutation | Native Incus host listener protocol/address/port -> verified owned Box UUID/guest port; default loopback is not LAN-reachable, explicit LAN/public bind authorized, native device verification and external reachability are separate. |
@@ -38,9 +38,9 @@ No `http_route_*`, `acl_rule_*`, `diagnostic_get`, Caddy API, generic host shell
 
 ## Exact native SDK mapping
 
-Native-facing baseline tools map to tagged upstream APIs in [the original 20/20 mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). The Go MCP SDK already supplies typed `mcp.AddTool`, Bearer auth middleware, Schema validation and tool-error handling. Incus `GetInstancePortForwardConn` is **not** persistent port publishing; `CreateNetworkPeer` is **not** a Box-to-Box ACL. Use native instance `proxy` devices and NIC-level ACL instead. Unproven native file CAS must remain UNSUPPORTED rather than simulated.
+Native-facing baseline tools map to tagged upstream APIs in [the original 20/20 mapping](../history/research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). The Go MCP SDK already supplies typed `mcp.AddTool`, Bearer auth middleware, Schema validation and tool-error handling. Incus `GetInstancePortForwardConn` is **not** persistent port publishing; `CreateNetworkPeer` is **not** a Box-to-Box ACL. Use native instance `proxy` devices and NIC-level ACL instead. Unproven native file CAS must remain UNSUPPORTED rather than simulated.
 
-**Last pre-development SDK P0 gate actually executed:** [2026-11-08 native Incus + real HTTP MCP results](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). Real SDK v1.8.0 Streamable HTTP discovery (new and legacy), auth, concurrent Token isolation, body cap and request-cancel handling **PASSED**. Native Incus v7.6.0 Exec/recorded output retrieval after SDK reconnect and live control-socket SIGTERM **PASSED with limitations**; native API did **not** supply atomic file conditional replace/delete. P0 SDK research is complete, **not** a claim that the v1 runtime and all 20 tools passed.
+**Last pre-development SDK P0 gate actually executed:** [2026-11-08 native Incus + real HTTP MCP results](../history/verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). Real SDK v1.8.0 Streamable HTTP discovery (new and legacy), auth, concurrent Token isolation, body cap and request-cancel handling **PASSED**. Native Incus v7.6.0 Exec/recorded output retrieval after SDK reconnect and live control-socket SIGTERM **PASSED with limitations**; native API did **not** supply atomic file conditional replace/delete. P0 SDK research is complete, **not** a claim that the v1 runtime and all 20 tools passed.
 
 ## Shared semantics
 

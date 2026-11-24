@@ -1,5 +1,7 @@
 # Agentless Box management
 
+**Reading rule:** current scope and runtime are in [status](../STATUS.md) and [product boundary](../decisions/PRODUCT_BOUNDARY.md). Dated source experiments, original design requirements and evidence below retain their original scope; they are not current installed signoff.
+
 **Decision:** A normal Box is a Linux container managed by the *host's* Incus daemon. The Box requires **no installed BoxWeave guest client, resident Agent, SSH daemon, or BoxWeave-specific in-guest service** for P0 lifecycle and execution.
 
 ## Management path
@@ -18,11 +20,11 @@ Native Incus guest file APIs are part of **P0**, enabling bounded listing/readin
 
 ## Native file API capability gate
 
-Incus v7.6.0 provides guest list/read, create/overwrite/append/delete and SFTP, but the normal SDK file upload/delete arguments do **not** carry an original content hash, ETag, or atomic compare-and-swap guard. A pre-read hash does not make concurrent `replace` or `delete` atomic, and ordinary create may overwrite unless separately proven exclusive. Keep the narrow `box_file_apply` contract but **do not claim strong conditional safety without a verified implementation**. Investigate a small one-shot SDK-based guest Exec where appropriate; otherwise return `UNSUPPORTED` for the affected mode and surface the missing guarantee. No guest daemon or custom patch engine is justified. See [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+Incus v7.6.0 provides guest list/read, create/overwrite/append/delete and SFTP, but the normal SDK file upload/delete arguments do **not** carry an original content hash, ETag, or atomic compare-and-swap guard. A pre-read hash does not make concurrent `replace` or `delete` atomic, and ordinary create may overwrite unless separately proven exclusive. Keep the narrow `box_file_apply` contract but **do not claim strong conditional safety without a verified implementation**. Investigate a small one-shot SDK-based guest Exec where appropriate; otherwise return `UNSUPPORTED` for the affected mode and surface the missing guarantee. No guest daemon or custom patch engine is justified. See [SDK fit review](../history/research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
 ## Second-pass native SDK call mode
 
-[Tagged-source second-pass investigation](../research/SDK_GAP_CLOSURE_2026-11-07.md) clarified two P0 constraints:
+[Tagged-source second-pass investigation](../history/research/SDK_GAP_CLOSURE_2026-11-07.md) clarified two P0 constraints:
 
 - **File create:** The Incus daemon's ordinary `CreateInstanceFile` regular-file overwrite path uses `O_CREATE|O_TRUNC`. It is not a create-if-absent API. The official `GetInstanceFileSFTP` client might permit `OpenFile(O_EXCL)` for a *native exclusive create*, but that precise server behavior and symlink/race cases need real negative tests. Do not report `create` success if an existing path could have been overwritten. Strong hash-conditional replace/delete remain unproved.
 - **Async Exec:** `ExecInstance(RecordOutput=true)` **with** non-nil stdout/stderr writer can block on native `op.Wait()` and consume/delete the SDK's recorded output before returning. The SDK's public `GetInstanceLogfile` is not the private exec-output reader. Prefer the official Exec websocket stream plus a BoxWeave worker-owned bounded output sink and early native operation receipt; prove lifecycle/output recovery instead of wrapping internal HTTP endpoints.
@@ -35,7 +37,7 @@ These are choices of native SDK **usage**, not reasons to reimplement the daemon
 
 **Files:** Stage-and-rename can prevent *partial bytes being visible* but is **not** atomic compare-and-swap relative to a concurrent guest writer or a changed symlink. Treat guest file-API response types (regular/directory/symlink) and actual path targets explicitly; lexical cleaning alone is not a trust boundary. `create` must not replace an existing path. `replace/delete` require an original revision/hash *and* point-of-use safety; if the official native API cannot supply the required race guarantees, return `UNSUPPORTED` without claiming an atomic conditional edit. Read size limits, stream closure, partial hash evidence and post-readback must remain truthful; do not introduce a file helper daemon.
 
-Historical concrete counterexamples and source risks are in [Containarium main/history review](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+Historical concrete counterexamples and source risks are in [Containarium main/history review](../history/research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
 
 ## Contrast with Containarium
 

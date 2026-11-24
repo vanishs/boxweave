@@ -1,5 +1,7 @@
 # Confirmed Go runtime and official SDKs
 
+**Reading rule:** current scope and runtime are in [status](../STATUS.md) and [product boundary](../decisions/PRODUCT_BOUNDARY.md). Dated source experiments, original design requirements and evidence below retain their original scope; they are not current installed signoff.
+
 **Decision:** The owner explicitly selected **Go + the official MCP Go SDK + the official Incus Go SDK** for the v1 rewrite. This supersedes the earlier Python implementation idea. These are imported Go modules, not additional runtime services or layers of MCP-to-MCP proxying.
 
 ## Mandatory dependencies
@@ -24,11 +26,11 @@ The `v7` component above identifies the currently reviewed Incus Go module path,
 - **Capability-first:** check actual API Extensions, network isolation, Incus Exec stream/exit behavior, storage support and recursive nesting; unsupported dependencies result in accurate structured errors rather than invented success.
 - **No extra management surface:** the host-local CLI exists only for host bootstrap and maintenance, and is not reachable as a public RPC endpoint.
 
-For correct per-request MCP auth metadata, Project initial Profile/root disk, Bridge NIC address/anti-spoof behavior, file upload exclusivity, Exec output and `GetOperationWait` shared transport semantics, follow the [second-pass SDK source report](../research/SDK_GAP_CLOSURE_2026-11-07.md), not assumptions based on method names.
+For correct per-request MCP auth metadata, Project initial Profile/root disk, Bridge NIC address/anti-spoof behavior, file upload exclusivity, Exec output and `GetOperationWait` shared transport semantics, follow the [second-pass SDK source report](../history/research/SDK_GAP_CLOSURE_2026-11-07.md), not assumptions based on method names.
 
-## Upstream source baseline (reviewed; not yet implemented)
+## Upstream source baseline (historical review)
 
-The 2026-11-07 [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) inspected released **Incus v7.6.0** (`github.com/lxc/incus/v7`) and **MCP Go SDK v1.8.0**. These are an engineering review baseline, **not** compiled v1 dependency pins. Use tagged modules and build against their supported Go toolchain before freezing release manifests.
+The 2026-11-07 [SDK fit review](../history/research/OFFICIAL_SDK_FIT_2026-11-07.md) inspected released **Incus v7.6.0** (`github.com/lxc/incus/v7`) and **MCP Go SDK v1.8.0**. These are an engineering review baseline, **not** compiled v1 dependency pins. Use tagged modules and build against their supported Go toolchain before freezing release manifests.
 
 Incus `Operation.WaitContext` may request native cancellation when its context expires; its ordinary instance methods are name-addressed and many lack context parameters; native guest file writes do not provide hash-based atomic compare-and-swap. The local Incus admin socket is not a restricted Project identity. MCP 2026-07-28 requires SDK Stateless Streamable HTTP, while BoxWeave durable operations remain in SQLite independently of MCP sessions.
 
@@ -36,7 +38,7 @@ Incus `Operation.WaitContext` may request native cancellation when its context e
 
 Incus **v7.6.0** declares `go 1.26.9` in its released `go.mod`; MCP Go SDK **v1.8.0** declares `go 1.25.0`. When using the reviewed Incus release, build with a compatible Go 1.26.9+ toolchain; users installing signed prebuilt BoxWeave binaries should not need a Go compiler.
 
-Use MCP `auth.RequireBearerToken`, typed `mcp.AddTool`, built-in localhost Host/DNS-rebinding protection and default 4 MiB body limit rather than reimplementing them. Use Incus native confined `incus`-group service-user credentials rather than assuming a privileged helper. Match native HTTP errors with `api.StatusErrorMatch`. The [20/20 mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) documents exact SDK methods and mismatched name traps.
+Use MCP `auth.RequireBearerToken`, typed `mcp.AddTool`, built-in localhost Host/DNS-rebinding protection and default 4 MiB body limit rather than reimplementing them. Use Incus native confined `incus`-group service-user credentials rather than assuming a privileged helper. Match native HTTP errors with `api.StatusErrorMatch`. The [20/20 mapping](../history/research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) documents exact SDK methods and mismatched name traps.
 
 ## Verification gates
 

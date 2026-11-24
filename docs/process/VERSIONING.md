@@ -1,74 +1,7 @@
 # v1 versioning and publication
 
-**Current publication status (2026-11-24):** RC13 is the latest published prerelease; stable pointer is UNPUBLISHED. Current v1 uses schema 6 and includes fresh-only scoped Peer and reviewed Doctor/Recover, not in RC13. Legacy upgrades require compatible verified state; scoped migration, upgrade, rollback, backup commit and uninstall are unsupported. No implicit reset or adoption. See [installation](../getting-started/MANUAL_INSTALL.md) and [current status](../INDEX.md). Historical RC examples below are not the current release.
+Read [current status](../STATUS.md), [VERSION](../../VERSION) and [stable selector](../../V1_PUBLISHED_RELEASE). VERSION, merged code and built artifacts are not publication. RC publication is not stable v1 or deployment authorization.
 
-**2026-11-13 distribution update:** See [v1 dedicated-host pilot + installer + Release contract](../development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). A checked, owner-authorized, reversible pre-release **physical development-host pilot** may occur before final HOST_GO/physical postflight, with no stable release or pointer promotion. The protected v1 branch's separate `V1_PUBLISHED_RELEASE` pointer is `UNPUBLISHED` until a reviewed stable release exists; do not infer it from `VERSION` or the mixed main/v1 GitHub latest Release endpoint.
+Owner scheme: 1.X.Y (X feature, Y patch), prerelease v1.X.Y-rc.N. Merge to protected v1 only after applicable exact checks and native evidence. For an authorized RC create release/v1.X.Y-rc.N from exact v1 head. The [release workflow](../../.github/workflows/v1-release.yml) builds dual architectures, runs source and isolated native S2/S2.5 gates, checks v1 head/tag/asset identity and publishes immutable prerelease assets. Do not republish an existing tag or advance v1 while the exact-head release gate is using it. Confirm actual Release and assets. Stable requires distinct reviewed candidate, reconciled evidence, required trusted signatures and owner authorization.
 
-**Version:** `1.0.0`, recorded in the root [VERSION](../../VERSION) file.
-
-**RC.3 publication addendum (2026-11-13):** [v1.0.0-rc.3](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.3) **is** now a published immutable prerelease with dual-arch release assets and green release CI. It does **not** set the stable pointer (`UNPUBLISHED`) or complete S5. The [manual installation guide](../getting-started/MANUAL_INSTALL.md) always pins an explicit prerelease tag and separates install from Box creation. Older planning language below reflects its historical pre-RC publication time.
-
-## Owner directive — pre-release compatibility and environment recreation (2026-11-18)
-
-Until the first **formally supported release**, or a separate explicit Owner promise for compatibility/retained state, **no backward compatibility is required**. This includes API/MCP Tools, CLI flags, roles/scopes, OAuth grants, SQLite schema, SDK-facing contracts and disposable developer environments/tests/CI. When obsolete design adds maintenance debt, remove it directly across source, tests and current docs. Do not create migration layers, deprecated aliases or parallel authorization branches just to support pre-release fixtures.
-
-**Before adopting an incompatible candidate, notify the Owner/users precisely what must be recreated.** Identify old controller install/config, SQLite database and original UNKNOWN receipts, tokens, OAuth clients/grants, ChatGPT/custom MCP connections and test fixtures. Safe sequence: (1) stop the old development controller; inspect and preserve any native original/UNKNOWN evidence; (2) obtain separate approval before clearing any real environment; (3) install the candidate in a fresh isolated controller and empty DB; (4) issue fresh role-free credentials and register/approve OAuth; (5) reconnect clients and repeat installed/negative tests; (6) retire the old environment only after native resource reconciliation and explicit authorization. Do **not** silently wipe, migrate, adopt or downgrade old data or host resources.
-
-**PR #153 breaking change:** Schema v4 rejects old v3 databases, the CLI flag -role has been removed, and OAuth permission scopes mcp:viewer/mcp:admin are unsupported. Old credentials and grants cannot upgrade into management authority. This is an unmerged source candidate and does not change the published RC in place. Exact-SHA independent native/real-ChatGPT acceptance is a separate gate.
-
-## Owner-defined scheme
-
-Use `1.X.Y` where:
-
-- `1` is the major line for this from-scratch BoxWeave design.
-- `X` is a feature increment. Completing a new feature slice increments X by 1 and resets Y to 0 (`1.0.0` -> `1.1.0`, or `1.3.2` -> `1.4.0`).
-- `Y` is a patch/fix increment for existing functionality (`1.3.0` -> `1.3.1`).
-- Do not bump a version for an unimplemented promise. One coherent release contains verified changes and the corresponding docs/acceptance state.
-
-## This initial branch
-
-`v1` began as a new source tree without inherited v0.x runtime. It now has independently accepted S1 and signed, merged S2 ([PR #130](https://github.com/vanishs/boxweave/pull/130)); its original [S1 evidence](../verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md), but the root `1.0.0` remains a **source baseline**, not a claim of production-ready 1.0.0 or completed S2.5–S5. No `v1.0.0` tag, formal release, stable installer pointer update or production deployment is justified by S1/S2 acceptance or the new BRIDGEHEAD **plan** alone. Only an exact independently verified **release-qualified full candidate** may enter the immutable v1 publication gate later.
-
-## Initial schema freeze — no user data migration before first deployment
-
-**Owner clarification (2026-11-09 PT):** v1 is pre-release and **has no real deployed persistent user database**. The S1 SchemaVersion=1 plus its installed/native test DB files are **disposable development fixtures, not a supported customer upgrade format**. S2 may revise initial SQLite DDL/version/fingerprint, indexes, domain models and worker/admission flow **directly**, without migrating S1 lab data or shipping compatibility shims. The new S2 first-install schema must still pass exact fresh bootstrap, crash/restart persistence, original UNKNOWN/idempotency and fail-closed malformed/foreign/legacy-lab schema checks. A mismatching previous S1 test DB is rejected, never silently adopted, upgraded or erased; new tests use distinct isolated files.
-
-**Pre-release compatibility boundary (owner decision, 2026-11-11):** v1's S2.5 dedicated-host pilot is explicitly **disposable development**, **not** a supported customer installation or an API/SQLite compatibility commitment. S1/S2 temporary databases, tool schemas and internal structures may change directly when doing so improves the final product. Every changed interface still requires updated documents and real Agent/native regression testing; safe behavior is not optional.
-
-**Do not confuse disposable with safe to wipe while live.** Retain exact native original Operation/UNKNOWN identities, SQLite revision and binary digest. If a pre-release schema change makes the old candidate incompatible, stop it safely, independently reconcile every possibly dispatched native effect and obtain explicit operator approval for any state reset/reprovision. Do not silently erase or adopt an unreconciled journal and do not promise a downgrade. A first **formal supported S5 release** freezes the public compatibility baseline, unless an owner separately and explicitly elects an earlier retained-data support contract. After that point, normal schema migration/rollback and external compatibility obligations apply.
-
-## Early BRIDGEHEAD candidate deployment is **not** publication
-
-After the fully accepted S2 artifact, the [S2.5 BRIDGEHEAD gate](../development/phases/025_BRIDGEHEAD.md) may install **exact checksum-bound, non-released development candidate bytes** first in a disposable native host and, with new exact-host operator consent plus accepted `PILOT_DEPLOY_GO` preflight, as a **dedicated, reversible, disposable development-only** physical-host installation **before** final BH-017/host postflight; [BH-001–BH-017](../verification/BRIDGEHEAD_ACCEPTANCE.md) and the required independent V remain mandatory for the later full HOST_GO verdict. This is neither a stable release, GitHub tag, production migration nor installer-pointer promotion. The dedicated real host must prove original resource ownership and independent fallback, with **no legacy `main` running on it**. L0 and nested Boxes still share their own Incus/Cowsql/storage failure domain. S4 and S5 must still pass **unchanged original** native and immutable publication gates; the later exact release binary may differ and must be reaccepted as required. This approved planning change grants **no present deployment authority**.
-
-## Later releases
-
-- Record exact source revision, immutable build/artifact identities and SHA-256, current version, change scope, native integration tests, denial tests and known risks.
-- CI should build and verify reproducibly and automatically publish a new immutable tag/Release for a successful build on `v1` with an unpublished VERSION and exact checked assets. **A successful release CI gate must include real candidate-installed native/nested regression evidence and independent verification of exact candidate artifact hashes**, not merely a unit test pass or an untrusted `PASS` marker. A GitHub Release does not imply a running host was upgraded.
-- Treat Git tag/asset publication as immutable. Never retarget a published tag or replace published bytes silently.
-- Feature and patch increments follow the owner's `1.X.Y` policy, with a separate decision for any future major version change.
-- **Accepted owner policy:** for a verified new-version candidate in `v1` with real deliverables and green CI, publish the exact immutable GitHub source release automatically, without requesting release-by-release approval. The immutable tag/release must not be recreated for an unchanged VERSION.
-- Explicit operator approval is still needed to promote an installer stable selector or deploy/change a real host.
-- Source artifacts and installed Go binaries must report the same version. Pin one version source of truth and include the exact dependency manifest (Go toolchain/MCP SDK/Incus SDK versions, observed runtime Incus and required API extension baseline) in release assets and local installation ledger. Do not conflate CI auto-publication with host dependency auto-upgrades during a separately initiated local install/update.
-
-## Candidate -> native acceptance -> automatic formal release
-
-For a bug in an actually installed first `1.0.0` release, the correction is normally `1.0.1` (Y patch) rather than a new feature X. This does **not** authorize tagging today's documents-only VERSION.
-
-1. Before formal publication, produce an **installable test candidate** from an exact commit with VERSION, binary digests and dependency manifest. It may come from CI candidate/test artifacts or locally built, independently verified bytes; it must **not require an already published GitHub Release** to be installed in an isolated nested Box.
-2. Reproduce the original native failure on the actual known-bad baseline where safe, then install the candidate **inside** a separate nesting-capable Box as an independent controller. Test the original mutation with dependencies, HTTP/real host-port behavior, native delete post-state, injected mid-delete fault/UNKNOWN recovery and all changed security boundaries. Use a guest-local MCP test client or separately operator-configured transport to reach an inner localhost MCP; no automatic cross-layer management API.
-3. An **independent Verifier** checks original reproduction and fix, exact source SHA and the **exact binary bytes** proposed for publishing, actual Incus/OS capabilities and negative side-effect evidence. CI must validate trustworthy real-test evidence bound to the candidate commit/digest (or execute those tests on a suitable isolated native/nested runner); do not accept an unverified user-supplied `passed: true` report. If mandatory nested/native tests cannot run, mark BLOCKED and **do not auto-publish a formal version**.
-4. **Only after** this expanded CI release gate is green does the owner's standing **automatic tag/GitHub Release** rule apply. Publish the verified immutable artifact/digest once, with traceable acceptance evidence and known limitations. Neither publication nor verification upgrades the first-version L0 host or repairs its pre-existing failed operations automatically.
-5. The physical host's administrator may **separately** upgrade L0 after formal publication, verify the installed digest, then safely reconcile the original failed Box/delete/forward under its original Operation evidence. No installer stable pointer is moved implicitly.
-
-Use [fault-driven scenario](../verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md) for detailed stages, baseline/candidate distinction and simulation versus actual evidence. Real native acceptance is part of the **release gate**, not post-release work.
-
-## Release metadata and workflow input safety
-
-The tag/version naming path is a security boundary: validate VERSION/tag input before release, carry externally influenced branch/tag strings into workflow steps as **data** (e.g. fixed environment variables), not unescaped source fragments inside a generated shell script. The published assets must report the same tagged VERSION and exact build SHA/digest as the independently verified candidate. Keep source, binary and release identities aligned even for documentation-only changes; **do not publish** the design-only `1.0.0` baseline. This hardens the existing release workflow without adding a signing/orchestration platform. See [Containarium incident review #1602/#549](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
-
-## Branch policy
-
-`main` remains the v0.x development line until the owner instructs otherwise. `v1` is independent in **contents**, using an entirely new source tree. Preserve old work in `main`; do not merge or automatically migrate its implementation into `v1`.
-
-Use scoped feature branches/PRs when concurrent Agent work may conflict, and preserve the current branch's review/CI policy. No workflow in the v1 design-only branch should auto-publish a source release just because `VERSION` exists.
+Before formally supported v1 or separate owner compatibility promise, do not add speculative migration layers for obsolete prerelease data/API/role fixtures. Notify users of exact incompatibilities; preserve original UNKNOWN, auth and native evidence; no silent reset/adoption/downgrade. Compatible Legacy upgrade only; Scoped fresh install, full retirement and reviewed completed-data purge. Issue fresh credentials and verify authenticated discovery after recreation. See [maintenance](../getting-started/MANUAL_INSTALL.md), [acceptance](../verification/ACCEPTANCE.md), [quality](QUALITY_GATES.md), [history](../history/README.md).

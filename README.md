@@ -27,7 +27,7 @@ Boxes deny private peer access by default. These workloads are examples, not bui
 
 [Download a release](https://github.com/vanishs/boxweave/releases) | [Installation](docs/getting-started/MANUAL_INSTALL.md) | [Usage](docs/getting-started/USE_BOXWEAVE.md)
 
-**Release status:** v1 is in prerelease development. As of 2026-11-24, [RC13](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.13) is the latest published v1 prerelease. The v1 source branch also contains newer scoped Peer and Doctor/Recover implementations; those changes are not in RC13. Check the release page and installed build identity before using source-only features.
+**Release status:** v1 is in prerelease development. See [current source and release status](docs/STATUS.md) and [published Releases](https://github.com/vanishs/boxweave/releases). Verify the exact installed build before using version-dependent features.
 
 ## Example agent request
 
@@ -40,7 +40,7 @@ Use operation_get to follow the original asynchronous operation and operation_ou
 - A management credential grants access to owned Boxes, including guest-root execution. Keep credentials private.
 - File tools support exclusive create, list and read; unsafe conditional replace/delete is refused. Use Git or guest commands for edits.
 - A native forward is not proof that an application is listening or externally reachable. Omitted host binds stay loopback.
-- The newer scoped Peer architecture requires an explicit fresh installation and does not support migration, upgrade or rollback. Full-only scoped retirement requires an original fresh native preimage and completed MCP cleanup; it is not in RC13. The clean-reinstall candidate adds explicit reviewed purge of completed retirement archives; never erase an unresolved original to force a fresh install. Older installations use the legacy architecture.
+- Scoped Peer v2 requires an explicit fresh installation; migration, upgrade and rollback are unsupported. Full-only scoped retirement and separately reviewed completed-data purge are available in the newer source, subject to the installed release and original evidence. See [maintenance](docs/getting-started/MANUAL_INSTALL.md).
 - Host configuration and evidence-bound local recovery remain operator responsibilities. BoxWeave is not a general host administration, cluster orchestration, backup or website publishing platform.
 
 ## Development
