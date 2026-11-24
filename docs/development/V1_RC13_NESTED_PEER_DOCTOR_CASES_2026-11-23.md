@@ -1,5 +1,7 @@
 # RC13 real nested Peer + Forward incident cases for unified Doctor / Recover (#177)
 
+> **Historical legacy RC13 fixture, not a scoped-v2 diagnosis specification.** #178 is now merged; apply these rules only when actual installed architecture is proven legacy. For scoped or uncertain mode follow [the mandatory post-#178 diagnostic contract](V1_DOCTOR_RECOVER_POST_PR178_CONTRACT_2026-11-23.md). Preserve original evidence.
+
 **Date:** 2026-11-23. **Status:** acceptance evidence / proposed diagnosis, NOT implemented. **Source:** immutable RC13 `6c995687ae38b5cd0e23c464dee84f40a33a01ef`. Scope: owned project `user-1001`, work ref `rc13-nested-peer-2026-11-23`. No root journal, token, machine-id digest, public tunnel address, or secret is copied here.
 
 **Owner decision:** file these observations under the existing **single `doctor` (read-only) / `recover` (evidence-bound, approved) design**. An independent Draft PR handles any actual runtime changes. Do not add a third repair engine, generic Host shell, OAuth bypass or automatic native replay.
