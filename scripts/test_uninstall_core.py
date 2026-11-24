@@ -75,6 +75,8 @@ class FakeHost(unittest.TestCase):
         self.incus.start()
         self.addCleanup(self.incus.stop)
         self.cmds = []
+        self.native_check_reason = "OBSERVED"
+        self.native_check_digest = "d" * 64
         self.quiet = mock.patch.object(u, "require_quiescent_native")
         self.quiet.start()
         self.addCleanup(self.quiet.stop)
@@ -172,6 +174,15 @@ class FakeHost(unittest.TestCase):
     def fake_command(self, args, **kwargs):
         if args[:2] == ["systemctl", "show"]:
             return ("FragmentPath=" + str(u.UNIT) + "\nDropInPaths=", 0)
+        if "native-prepare-retirement-check" in args:
+            current = u.prepare_record()
+            reason = self.native_check_reason
+            return (json.dumps({"project": args[args.index("-project")+1],
+                                "review_sha256": current["review_sha256"],
+                                "journal_status": current["status"],
+                                "observation_sha256": self.native_check_digest,
+                                "ready": reason == "OBSERVED", "reason": reason}),
+                    0 if reason == "OBSERVED" else 1)
         self.cmds.append(args)
         if args[:2] == ["systemctl", "stop"]:
             self.service = "inactive"
@@ -250,6 +261,48 @@ class FakeHost(unittest.TestCase):
         with self.assertRaisesRegex(u.UninstallError, "not stopped or changed"):
             u.apply(plan)
         self.assertTrue(u.BINARY.exists())
+
+    def test_native_drift_blocks_plan_before_any_effect(self):
+        self.install_retirement_fixture()
+        self.native_check_reason = "NATIVE_CONFIG_DRIFT"
+        self.service = "active"
+        with self.assertRaisesRegex(u.UninstallError, "NATIVE_CONFIG_DRIFT"):
+            u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertEqual(self.cmds, [])
+        self.assertFalse(u.AUDIT.exists())
+        self.assertEqual(self.service, "active")
+
+    def test_native_witness_change_after_approval_blocks_before_stop(self):
+        self.install_retirement_fixture()
+        self.service = "active"
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.native_check_digest = "e" * 64
+        with self.assertRaisesRegex(u.UninstallError, "NATIVE_CONFIG_DRIFT"):
+            u.apply(plan)
+        self.assertEqual(self.cmds, [])
+        self.assertEqual(self.service, "active")
+
+    def test_native_witness_unavailable_is_not_absence(self):
+        self.install_retirement_fixture()
+        self.native_check_reason = "NATIVE_RETIREMENT_CHECK_UNVERIFIED"
+        with self.assertRaisesRegex(u.UninstallError, "NATIVE_RETIREMENT_CHECK_UNVERIFIED"):
+            u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertEqual(self.cmds, [])
+
+    def test_original_started_audit_navigation_without_complete_controller(self):
+        u.audited_write({"status": "STARTED", "review_sha256": "a"*64})
+        prior = u.AUDIT.read_bytes()
+        u.BINARY.unlink()
+        with mock.patch.object(u.os, "geteuid", return_value=0), mock.patch("sys.stdout") as out:
+            self.assertEqual(u.main(["--plan", "--scope", "full", "--project", "user-1001"]), 2)
+            printed = "".join(c.args[0] for c in out.write.call_args_list)
+            self.assertIn("ORIGINAL_AUDIT_ONLY", printed)
+            self.assertIn("--resume-plan", printed)
+            self.assertNotIn("review_sha256", printed)
+            with self.assertRaisesRegex(u.UninstallError, "UNINSTALL_AUDIT_STARTED"):
+                u.main(["--full", "--project", "user-1001"])
+        self.assertEqual(prior, u.AUDIT.read_bytes())
+        self.assertEqual(self.cmds, [])
 
     def test_help_default_is_read_only(self):
         with mock.patch("sys.stdout") as output:

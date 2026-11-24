@@ -45,7 +45,13 @@ grep '  install.sh$' SHA256SUMS | sha256sum -c -
 sh install.sh --plan --version "$RELEASE" --project "$PROJECT"
 ```
 
-Review the script and the exact host/project/source/binary distribution plan. Legacy --plan is service-only; the guided fresh installer separately reviews native Project/Profile/ACL preparation before writes. The release checksums are not an independent signature. Do not pipe a remote script directly into a root shell.
+Review the script and the exact host/project/source/binary distribution plan. Legacy --plan is service-only; the guided fresh installer separately reviews native Project/Profile/ACL preparation before writes. With a matching current v1 source wrapper and verified candidate (not the immutable RC13 script), use a complete read-only Legacy preview first:
+
+```sh
+sudo sh install.sh --plan --guided-fresh-plan --local-binary "$CANDIDATE" --sha256 "$SHA256"
+```
+
+Set CANDIDATE to the exact verified binary path and SHA256 to its reviewed digest. The same native preparation and fixed-reader checks are repeated during --interactive; the preview is never approval. The release checksums are not an independent signature. Do not pipe a remote script directly into a root shell.
 
 On a fresh compatible host, run the guided installation from a trusted local terminal:
 
@@ -53,7 +59,7 @@ On a fresh compatible host, run the guided installation from a trusted local ter
 sudo sh install.sh --interactive --version "$RELEASE"
 ```
 
-The guided installer derives the dedicated Project, default pool, private incusbr-UID bridge and exclusive bw-user-UID-acl. If your existing pool/network differs, specify the actual approved --pool, --network and --acl (new exclusive ACL) as supported by that installer. Review the native preparation plan and type the requested INSTALL confirmation only for that exact target. It prepares the confined native resources, installs/activates the service, verifies configuration and offers optional OAuth setup. It does not install Incus itself, create a tunnel, or certify packet isolation or disk quota enforcement.
+The guided installer derives the dedicated Project, default pool, private incusbr-UID bridge and exclusive bw-user-UID-acl. If your existing pool/network differs, specify the actual approved --pool, --network and --acl (new exclusive ACL) as supported by that installer. Review the native preparation plan and type the requested INSTALL confirmation only for that exact target. In current v1 source the guided Legacy installer checks the required root-owned ip, bridge, nft and conntrack executables before asking for approval and again before staging; missing Debian/Ubuntu packages are reported for local operator review. It never installs them automatically. An approval refusal is not a partial installation. Current v1 prints INSTALL_PHASE markers before staged mutations; on INSTALL_PHASE_UNVERIFIED preserve the original manifest/journals and inspect local install-status and Doctor rather than reinstalling. GUIDED_INSTALL_COMPLETE precedes optional OAuth setup: OAUTH_ORIGIN_MISSING or OAUTH_CONFIGURATION_DEFERRED is not installation failure; OAUTH_CONFIGURATION_UNVERIFIED (exit 2) means finish the optional setup separately. Running-service Forward policy is only asserted from observed Doctor evidence, not the CLI environment. It prepares the confined native resources, installs/activates the service, verifies configuration and offers optional OAuth setup. It does not install Incus itself, create a tunnel, or certify packet isolation or disk quota enforcement.
 
 RC13 uses legacy Peer authorization. Some Peer work requires separate Host-local review and Root helper readiness; ordinary successful install does not prove Peer grant/revoke readiness. Inspect the original operation if approval or evidence is missing. Never treat a legacy repair as a scoped-v2 procedure.
 
@@ -105,7 +111,7 @@ sudo sh install.sh --upgrade --version "$RELEASE"
 
 Review the displayed source, host, existing backup and target. Prior backup closure requires the displayed approval and is irreversible; the replacement backup is retained. Do not run concurrent maintenance or force incompatible schema upgrades. Use the exact installed rollback/install-commit help and [guided upgrade contract](../development/V1_GUIDED_UPGRADE_2026-11-21.md) for separately reviewed backup operations.
 
-For deliberate legacy retirement only, obtain the matching release's self-contained uninstall.sh, verify its checksum and read the exact release's help. The source checkout wrapper requires scripts/uninstall_core.py. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema, separately installed legacy Peer Root services or incomplete journals can block it. Use the original local review/recovery path for these rather than removing units or journals manually. No scoped uninstall is supported. See [retirement contract](../development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
+For deliberate legacy retirement only, obtain the matching release's self-contained uninstall.sh, verify its checksum and read the exact release's help. The source checkout wrapper requires scripts/uninstall_core.py. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema, separately installed legacy Peer Root services or incomplete journals can block it. Use the original local review/recovery path for these rather than removing units or journals manually. Current source full retirement also checks exact native Project/Profile/ACL against the root preparation journal before approval and before effects. NATIVE_CONFIG_DRIFT or UNVERIFIED blocks it. Older installed builds lack this read-only helper; use the matching verified Release uninstaller, not the newer wrapper or a replacement binary. A prior STARTED audit directs you to the original exact archive and --resume-plan; never rerun --full. No scoped uninstall is supported. See [retirement contract](../development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
 
 If installation or maintenance fails, retain the original manifest, journal and evidence. Do not blindly reinstall, erase the ledger, weaken confinement or reset unrelated native resources.
 

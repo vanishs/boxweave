@@ -28,7 +28,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-scoped-fresh-plan|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-plan|native-peer-root-reconcile|native-peer-root-unit-stage|native-peer-root-stage|native-peer-root-execute|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-scoped-fresh-plan|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-retirement-check|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-plan|native-peer-root-reconcile|native-peer-root-unit-stage|native-peer-root-stage|native-peer-root-execute|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -120,7 +120,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -168,7 +168,7 @@ func run() error {
 		defer release()
 	}
 	if command == "native-prepare-plan" || command == "native-prepare-apply" ||
-		command == "native-prepare-status" || command == "native-prepare-rollback" ||
+		command == "native-prepare-status" || command == "native-prepare-retirement-check" || command == "native-prepare-rollback" ||
 		command == "native-prepare-archive" {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -193,6 +193,12 @@ func run() error {
 				return err
 			}
 			return enc.Encode(record)
+		case "native-prepare-retirement-check":
+			report, err := install.NativePrepareRetirementCheck(ctx, *project, *prepareSHA)
+			if e := enc.Encode(report); e != nil {
+				return e
+			}
+			return err
 		case "native-prepare-rollback":
 			record, err := install.NativePrepareRollback(ctx, *prepareSHA, *approveLocal)
 			if e := enc.Encode(record); e != nil {

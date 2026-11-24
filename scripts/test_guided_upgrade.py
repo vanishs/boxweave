@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
+import stat
 from unittest.mock import patch, Mock
 
 SOURCE = Path(__file__).resolve().parents[1] / "install.sh"
@@ -94,6 +95,29 @@ class GuidedUpgradeTests(unittest.TestCase):
                 self.assertIn("scoped_fresh_review_sha256=" + SHA, out.getvalue())
                 self.assertIn("PLAN_ONLY:", out.getvalue())
                 run.assert_not_called()
+
+    def test_retirement_reader_preflight_matches_go_fixed_paths(self):
+        paths = [p for p, _ in NS["RETIREMENT_READERS"]]
+        self.assertEqual(paths, ["/usr/sbin/ip", "/usr/sbin/bridge", "/usr/sbin/nft", "/usr/sbin/conntrack"])
+        source = (SOURCE.parent / "internal/install/local.go").read_text()
+        body = source.split("func verifyRetirementExecutables()", 1)[1]
+        self.assertIn(", ".join('"' + p + '"' for p in paths), body)
+        good = Mock(st_uid=0, st_mode=stat.S_IFREG | 0o755)
+        self.assertTrue(NS["retirement_reader_preflight"](lambda _: good))
+        for bad in (Mock(st_uid=1001, st_mode=stat.S_IFREG | 0o755),
+                    Mock(st_uid=0, st_mode=stat.S_IFREG | 0o775),
+                    Mock(st_uid=0, st_mode=stat.S_IFREG | 0o644),
+                    Mock(st_uid=0, st_mode=stat.S_IFDIR | 0o755)):
+            with self.assertRaisesRegex(ERR, "INSTALL_PREREQUISITE_UNVERIFIED"):
+                NS["retirement_reader_preflight"](lambda _: bad)
+        def missing(path):
+            if path.endswith(("conntrack", "nft")):
+                raise FileNotFoundError(path)
+            return good
+        with self.assertRaisesRegex(ERR, "INSTALL_MISSING_PREREQUISITE.*nftables.*conntrack"):
+            NS["retirement_reader_preflight"](missing)
+        with self.assertRaisesRegex(ERR, "INSTALL_PREREQUISITE_UNVERIFIED"):
+            NS["retirement_reader_preflight"](Mock(side_effect=PermissionError()))
 
     def test_release_order(self):
         f = NS["release_order"]

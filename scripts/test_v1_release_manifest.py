@@ -115,7 +115,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-24.04", s2)
         self.assertIn("runs-on: ubuntu-24.04", s25)
 
-    def exercise_guided_install(self, answer, drift=False, native_ready=True):
+    def exercise_guided_install(self, answer, drift=False, native_ready=True, missing_reader=False, reader_drift=False, plan_only=False, oauth_answer='n', oauth_origin='', oauth_error=False):
         content = (ROOT / "install.sh").read_text()
         embedded = content.split("<<'PY_BOXWEAVE_INSTALL'\n", 1)[1].rsplit("\nPY_BOXWEAVE_INSTALL", 1)[0]
         ns = {}
@@ -158,15 +158,26 @@ class ReleaseTests(unittest.TestCase):
                 return json.dumps({"status": "APPLIED"})
             if action == "native-prereq-plan":
                 return json.dumps({"config_ready": native_ready, "review_sha256": approval})
+            if action == "oauth-status":
+                return json.dumps({"Enabled": bool(oauth_origin), "Origin": oauth_origin})
             if action == "doctor":
                 return json.dumps({"ready": True, "mcp_ready": True, "native": {"ready": True},
                                    "version": "1.0.0-rc.8", "commit": source})
             raise AssertionError(argv)
 
         def run(argv, **kwargs):
-            calls.append(argv[1])
+            action = argv[1] if argv[0] != "runuser" else argv[5]
+            calls.append(action)
+            if oauth_error and action == "oauth-set-origin":
+                raise subprocess.CalledProcessError(1, argv)
             return mock.Mock(returncode=0)
 
+        checks = []
+        def reader_preflight():
+            checks.append(True)
+            if missing_reader or (reader_drift and len(checks) > 1):
+                raise ns["InstallError"]("INSTALL_MISSING_PREREQUISITE: /usr/sbin/conntrack")
+        ns["retirement_reader_preflight"] = reader_preflight
         ns["Path"] = fake_path
         ns["current_host_digest"] = lambda: "e" * 64
         ns["select_release"] = lambda *_: (candidate, "1.0.0-rc.8", source, hashlib.sha256(candidate).hexdigest())
@@ -175,17 +186,19 @@ class ReleaseTests(unittest.TestCase):
         with mock.patch.object(ns["os"], "geteuid", return_value=0), \
                 mock.patch.object(ns["os"].path, "lexists", return_value=False), \
                 mock.patch.object(ns["pwd"], "getpwnam", return_value=types.SimpleNamespace(pw_uid=1001)), \
-                mock.patch.object(ns["sys"], "argv", ["install.sh", "--interactive", "--version", "v1.0.0-rc.8"]), \
+                mock.patch.object(ns["sys"], "argv", ["install.sh", "--version", "v1.0.0-rc.8"] + (["--plan", "--guided-fresh-plan"] if plan_only else ["--interactive"])), \
                 mock.patch.object(ns["subprocess"], "check_output", side_effect=output), \
                 mock.patch.object(ns["subprocess"], "run", side_effect=run), \
                 mock.patch("builtins.open", side_effect=[io.StringIO(answer + "\n"), io.StringIO(),
-                                                         io.StringIO("n\n"), io.StringIO()]), \
+                                                         io.StringIO(oauth_answer + "\n" + oauth_origin + "\n"), io.StringIO()]), \
                 contextlib.redirect_stdout(io.StringIO()):
             try:
                 ns["main"]()
                 return calls, None
             except ns["InstallError"] as exc:
                 return calls, str(exc)
+            except SystemExit as exc:
+                return calls, "exit " + str(exc.code)
 
     def test_guided_install_approval_sequence_and_fail_closed(self):
         calls, error = self.exercise_guided_install("INSTALL user-1001")
@@ -196,11 +209,40 @@ class ReleaseTests(unittest.TestCase):
 
     def test_guided_install_decline_and_changed_plan(self):
         calls, error = self.exercise_guided_install("NO")
+        self.assertIn("OPERATOR_APPROVAL_REQUIRED", error)
         self.assertIn("not approved", error)
         self.assertEqual(calls, ["native-prepare-plan"])
         calls, error = self.exercise_guided_install("INSTALL user-1001", drift=True)
         self.assertIn("plan changed", error)
         self.assertNotIn("install-stage", calls)
+
+    def test_missing_reader_and_reader_drift_never_stage(self):
+        calls, error = self.exercise_guided_install("INSTALL user-1001", missing_reader=True)
+        self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
+        self.assertEqual(calls, [])
+        calls, error = self.exercise_guided_install("INSTALL user-1001", reader_drift=True)
+        self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
+        self.assertEqual(calls, ["native-prepare-plan"])
+
+    def test_complete_guided_preview_never_mutates(self):
+        calls, error = self.exercise_guided_install("NO", plan_only=True)
+        self.assertIsNone(error)
+        self.assertEqual(calls, ["native-prepare-plan"])
+        calls, error = self.exercise_guided_install("NO", plan_only=True, missing_reader=True)
+        self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
+        self.assertEqual(calls, [])
+
+    def test_oauth_deferred_and_failed_after_installed_postflight(self):
+        calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y")
+        self.assertIsNone(error)
+        self.assertEqual(calls[-3:], ["doctor", "oauth-setup", "oauth-status"])
+        calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y", oauth_origin="https://example.test")
+        self.assertIsNone(error)
+        self.assertEqual(calls[-4:], ["doctor", "oauth-setup", "oauth-set-origin", "oauth-status"])
+        calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y", oauth_origin="https://example.test", oauth_error=True)
+        self.assertEqual(error, "exit 2")
+        self.assertEqual(calls.count("install-activate"), 1)
+        self.assertEqual(calls[-1], "oauth-set-origin")
 
     def test_guided_install_incomplete_native_never_activates(self):
         calls, error = self.exercise_guided_install("INSTALL user-1001", native_ready=False)
