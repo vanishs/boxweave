@@ -261,6 +261,21 @@ class ReleaseTests(unittest.TestCase):
         self.assertLess(source.index('"native-prepare-apply"'), source.index('"install-activate"'))
         self.assertLess(source.index('"native-prereq-verify"'), source.index('"install-activate"'))
 
+    def test_s25_doctor_requires_initialized_and_activated_controller(self):
+        # Stage writes files, not SQLite. Doctor is observation-only.
+        for name in ("s25_bridgehead_lab.sh", "s25_inner_setup.sh"):
+            with self.subTest(layer=name):
+                source = (ROOT / "scripts" / name).read_text()
+                stage = source.index(" install-stage -project ")
+                token = source.index(" token-create >", stage)
+                activate = source.index(" install-activate -project ", stage)
+                doctor = source.index(" doctor -project ", stage)
+                self.assertLess(stage, token)
+                self.assertLess(token, activate)
+                self.assertLess(activate, doctor)
+                self.assertIn('assert s["ready"] and s["native"]["ready"]', source)
+                self.assertIn("nftables conntrack", source)
+
     def test_rc_flag_not_required_and_removed(self):
         script = (ROOT / "install.sh").read_text()
         self.assertNotIn("allow-prerelease", script)

@@ -112,3 +112,5 @@ Archived records describe their original checkpoint, including unresolved or sup
 - [04 NETWORK NESTING](phases/04_NETWORK_NESTING.md)
 - [05 RELEASE ACCEPTANCE](phases/05_RELEASE_ACCEPTANCE.md)
 - [README](phases/README.md)
+
+- [RC14 S2.5 Doctor regression](RC14_S25_DOCTOR_READONLY_REGRESSION_2026-11-24.md)

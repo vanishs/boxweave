@@ -19,7 +19,7 @@ echo "S25_LAB_SOURCE_SHA=$(git rev-parse HEAD)"
 echo S25_LAB_DISPOSABLE_HOST=PASS
 
 sudo apt-get update -qq
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 >/dev/null
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 iproute2 nftables conntrack >/dev/null
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/staging/zabbly.asc"
 fp="$(gpg --show-keys --with-colons "$work/staging/zabbly.asc" | awk -F: '$1=="fpr"{print $10;exit}')"
@@ -93,17 +93,27 @@ S25_PREREQ_ASSERT
 echo S25_LAB_NATIVE_PREREQ_EIGHT_CHECKS=PASS
 
 sudo /usr/local/bin/boxweave-s25-candidate install-stage -project "$project" -source-binary /usr/local/bin/boxweave-s25-candidate -expect-sha256 "$binary_sha" -approve-stage > "$work/private/stage.json"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave doctor -project "$project" > "$proof/doctor.json"
-python3 - "$proof/doctor.json" <<'S25_DOCTOR_ASSERT'
-import json,sys
-s=json.load(open(sys.argv[1]))
-assert s["ready"] and s["native"]["ready"],s
-S25_DOCTOR_ASSERT
 for name in admin1 admin2 admin3 peer; do
  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create > "$work/private/$name.secret"
  chmod 0600 "$work/private/$name.secret"
 done
 sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local > "$work/private/activated.json"
+# Doctor is observation-only. Explicit token creation initializes the ledger;
+# activate the exact staged service before checking installed readiness.
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave doctor -project "$project" > "$proof/doctor.json" || {
+ python3 - "$proof/doctor.json" <<'S25_DOCTOR_FAILURE'
+import json,sys
+s=json.load(open(sys.argv[1]))
+d=s.get("diagnostic",{})
+print("S25_DOCTOR_FAILED", {k:d.get(k,{}).get("reason") for k in ("database","native","mcp")}, "native_error",s.get("native",{}).get("error_class"))
+S25_DOCTOR_FAILURE
+ exit 1
+}
+python3 - "$proof/doctor.json" <<'S25_DOCTOR_ASSERT'
+import json,sys
+s=json.load(open(sys.argv[1]))
+assert s["ready"] and s["native"]["ready"],s
+S25_DOCTOR_ASSERT
 sudo systemctl is-active --quiet boxweave.service
 test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}')" = 401
 echo S25_LAB_LOOPBACK_MCP_UNAUTH_DENIAL=PASS
