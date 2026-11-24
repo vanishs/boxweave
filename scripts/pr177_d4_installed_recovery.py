@@ -47,6 +47,26 @@ def journal(original, mode):
     root=Path("/var/lib/boxweave-scoped-peer-v2")/("peer-"+original)
     return [(x.name,hashlib.sha256(x.read_bytes()).hexdigest()) for x in sorted(root.iterdir())]
 
+def recheck_original(client, original, state, native_id):
+    # A fresh authenticated client must agree with the local CLI and
+    # original receipt. Activity is durable evidence, not native proof.
+    op_row=client.operation_get(original)
+    evidence=client.activity("evidence",operation_id=original)["evidence"]
+    for row in (op_row,evidence["original"]):
+        assert row["operation_id"]==original and row["state"]==state,row
+        assert row.get("native_operation_id")==native_id,row
+    return evidence
+
+def cleanup_legacy(client, ids, fwd):
+    op(client,"port_forward_delete",{"forward_id":fwd},"d4-sibling-forward-delete")
+    # d4-a was independently verified Stopped; sibling stayed Running
+    # for the continuity witness. Never replay the original stop.
+    op(client,"box_stop",{"box_id":ids["d4-sibling"]},"d4-sibling-stop")
+    for name in ("d4-a","d4-sibling"):
+        op(client,"box_delete",{"box_id":ids[name]},"d4-delete-"+name)
+    wait_status(client,lambda x:x["address_retirement"]["pending"]==0,120)
+    print("PR177_D5_LEGACY_CLEANUP=PASS",flush=True)
+
 def main(project, receipt, testbin, mode):
     assert os.geteuid()==0 and mode in ("LEGACY","SCOPED_V2")
     names=["d4-a","d4-sibling"]+([] if mode=="LEGACY" else ["d4-b"])
@@ -137,6 +157,12 @@ def main(project, receipt, testbin, mode):
             assert len(status)==1 and status[0]["status"]=="Stopped",status
         doc=json.loads(run([BIN,"doctor","-project",project],capture_output=True,text=True).stdout)["diagnostic"]
         assert not any(i.get("original_id")==original and i["id"]==issue for i in doc["issues"])
+        with LoopbackMCP("http://127.0.0.1:18650/mcp",token=token(receipt),timeout=60) as reader:
+            recheck_original(reader,original,"SUCCEEDED",before[0][1] or None)
+            recovery=reader.operation_get(rec["operation"]["operation_id"])
+            assert recovery["state"]=="SUCCEEDED",recovery
+        assert db_state(original)==after and journal(original,mode)==oldjournal and pid()==controller
+        print("PR177_D5_AUTHENTICATED_POSTCHECK=PASS",mode,flush=True)
         assert not errors and rounds[0]>5,(errors,rounds)
         print("PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY=PASS",mode,rounds[0],flush=True)
     finally:
@@ -145,10 +171,7 @@ def main(project, receipt, testbin, mode):
     # Scoped dedicated fixtures may stay; do not alter unrelated peers.
     if mode=="LEGACY":
         with LoopbackMCP("http://127.0.0.1:18650/mcp",token=token(receipt),allow_mutations=True,timeout=60) as c:
-            op(c,"port_forward_delete",{"forward_id":fwd},"d4-sibling-forward-delete")
-            for name in names:
-                op(c,"box_delete",{"box_id":ids[name]},"d4-delete-"+name)
-            wait_status(c,lambda x:x["address_retirement"]["pending"]==0,120)
+            cleanup_legacy(c,ids,fwd)
 
 if __name__=="__main__":
     main(*sys.argv[1:])

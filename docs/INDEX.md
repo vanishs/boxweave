@@ -1,5 +1,7 @@
 # Documentation index
 
+**PR #177 Doctor/Recover delivery candidate (unreleased):** [Operator guide](process/DOCTOR_RECOVER.md) and [D5 integration evidence](development/V1_PR177_D5_DELIVERY_2026-11-24.md). Keep Draft pending exact CI and owner review.
+
 **PR #177 D2 diagnosis:** [implementation and Box evidence](development/V1_PR177_D2_DIAGNOSIS_2026-11-23.md). D1 accepted, D2 candidate requires exact-head CI before D3.
 
 **PR #177 D1 foundation:** [implementation and Box verification](development/V1_PR177_D1_FOUNDATION_2026-11-23.md). D0 accepted; D1 candidate requires exact-head CI before D2.

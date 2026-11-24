@@ -1,5 +1,7 @@
 # PR #177: staged Doctor / Recover delivery (D0-D5)
 
+**D5 delivery candidate (2026-11-24 PT):** [Integrated acceptance and evidence](V1_PR177_D5_DELIVERY_2026-11-24.md). D4 exact CI exposed a Legacy test cleanup failure after successful reviewed recovery; preserve positive evidence, require the corrected cleanup and new independent MCP postcheck in exact final CI. [Operator guide](../process/DOCTOR_RECOVER.md). Keep Draft; no merge, release or physical L0 changes.
+
 **D4 candidate update (2026-11-23 PT):** [Reviewed recovery execution and exact Box evidence](V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md). D2/D3 independent exact-head CI all four passed. D4 code, three focused Race rounds, full verify and fresh scoped installed positive recovery passed in Box. D4 independent CI is required before D5; legacy installed D4 and scoped partial apply refusal remain CI gates. Earlier staged-status notes below are historical, not instructions to redo accepted stages. Keep Draft; no v1 merge, release or physical L0 modification.
 
 **D3 candidate update (2026-11-23):** [Read-only recovery plan and Box evidence](V1_PR177_D3_RECOVERY_PLAN_2026-11-23.md). D2 installed JSON assertion corrected; D2/D3 independent CI still required. D4 apply is not implemented.
