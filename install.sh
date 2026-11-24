@@ -34,6 +34,7 @@ INSTALLED_UNIT = Path("/etc/systemd/system/boxweave.service")
 BACKUP_DIR = Path("/var/lib/boxweave-installer-backup")
 RESTRICTED_SOCKET = "/var/lib/incus/unix.socket.user"
 SCOPED_PATHS = (
+    Path("/var/lib/boxweave-purge-v1.json"),
     Path("/var/lib/boxweave-scoped-retirement-v1.json"),
     Path("/var/lib/boxweave-scoped-peer-v2"),
     Path("/etc/systemd/system/boxweave-scoped-guard.service"),
@@ -595,6 +596,12 @@ def main():
         current = upgrade_review["current"]
         if release_order(version) < release_order(current["version"]) or (version == current["version"] and sha != current["binary_sha256"]):
             raise InstallError("refuse downgrade or changed bytes under installed version")
+    if not args.upgrade and os.geteuid() == 0 and (fresh_guided or legacy_preview or args.scoped_peer_fresh or args.apply):
+        previous = Path("/var/lib/boxweave-uninstall-v1-audit.json")
+        if os.path.lexists(previous):
+            audit, _ = private_json(previous, 0)
+            if audit.get("status") != "COMPLETE":
+                raise InstallError("UNINSTALL_AUDIT_STARTED_OR_UNVERIFIED: preserve original audit; inspect matching uninstall --resume-plan, not a fresh install")
     if args.plan and not args.upgrade and os.path.lexists(STATE_DIR / "install-manifest.json"):
         raise InstallError("existing installation; use sudo sh install.sh --plan --upgrade --version TAG")
 
@@ -655,14 +662,8 @@ def main():
         raise InstallError("no verified installation to upgrade")
     if not installed and any(os.path.lexists(path) for path in ("/usr/local/bin/boxweave", "/etc/systemd/system/boxweave.service", "/var/lib/boxweave")):
         raise InstallError("unmanaged or legacy main installation detected: refuse adoption/co-installation")
-    if fresh_guided or legacy_preview:
-        if os.path.lexists("/var/lib/boxweave-native-prereq-v1.json"):
-            raise InstallError("existing Native journal; review and reconcile before guided install")
-        previous = Path("/var/lib/boxweave-uninstall-v1-audit.json")
-        if os.path.lexists(previous):
-            audit, _ = private_json(previous, 0)
-            if audit.get("status") != "COMPLETE":
-                raise InstallError("UNINSTALL_AUDIT_STARTED_OR_UNVERIFIED: preserve original audit; inspect matching uninstall --resume-plan, not a fresh install")
+    if (fresh_guided or legacy_preview) and os.path.lexists("/var/lib/boxweave-native-prereq-v1.json"):
+        raise InstallError("existing Native journal; review and reconcile before guided install")
     # The downloaded executable is public but Go installer verifies it under
     # the restricted service account. Use an accessible temporary directory.
     with tempfile.TemporaryDirectory(prefix="boxweave-v1-reviewed-") as folder:

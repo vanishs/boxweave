@@ -33,6 +33,7 @@ SCOPED_LIFECYCLE_UNIT = Path("/etc/systemd/system/boxweave-scoped-lifecycle.serv
 SCOPED_INCUS_DROPIN = Path("/etc/systemd/system/incus.service.d/50-boxweave-scoped-guard.conf")
 SCOPED_SOCKET = Path("/run/boxweave-scoped-lifecycle.sock")
 SCOPED_FENCE = Path("/var/lib/boxweave-scoped-retirement-v1.json")
+PURGE_FENCE = Path("/var/lib/boxweave-purge-v1.json")
 SCOPED_LOCK = Path("/run/lock/boxweave-scoped-retirement.lock")
 MAINTENANCE_LOCK = Path("/run/lock/boxweave-v1-maintenance.lock")
 VALID_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
@@ -299,16 +300,13 @@ def native_instances(project, guided=False):
 
 
 def require_quiescent_native(project):
-    raw, _ = command(["incus", "operation", "list", "local:", "--project",
-                      project, "--format", "json"], timeout=25)
-    if json.loads(raw) != []:
-        raise UninstallError("native operations present or unreadable: reconcile before retirement")
+    require_quiescent_scoped_native(project)
 
 
 def require_quiescent_scoped_native(project):
     """Incus retains terminal operations briefly after MCP has settled them.
     Check the exact native terminal state, never mistake retention for activity.
-    Legacy removal deliberately keeps its original stricter empty-list rule.
+    The same exact terminal observation is required for Legacy and Scoped.
     """
     raw, _ = command(["incus", "operation", "list", "local:", "--project",
                       project, "--format", "json"], timeout=25)
@@ -1726,12 +1724,258 @@ def scoped_main(args):
     return 0
 
 
+# A normal full retirement deliberately retains private evidence, including
+# SQLite and credentials. Erasure is a distinct local, reviewed transaction.
+# Never delete the audit or journals of a STARTED uninstall to make a new
+# installation appear clean.
+def purge_absent():
+    refuse_scoped_retirement()
+    for path in (STATE, UNIT, BINARY, NATIVE, SCRIPTLET, ROOT_UNIT, BACKUP,
+                 RETIREMENT_UNIT, RETIREMENT_SOCKET, SCOPED_FENCE, SCOPED_JOURNAL,
+                 SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_INCUS_DROPIN, SCOPED_SOCKET,
+                 Path("/run/boxweave-native-peer-root.sock"),
+                 Path("/var/lib/boxweave-native-peer-guard-v1"),
+                 Path("/var/lib/boxweave-native-peer-conntrack-v1"),
+                 Path("/var/lib/boxweave-native-peer-conntrack-v1.json"),
+                 Path("/var/lib/boxweave-native-peer-conntrack-v1.lock"),
+                 Path("/etc/systemd/system/boxweave.service.d")):
+        if os.path.lexists(path):
+            raise UninstallError("PURGE_ACTIVE_OR_UNREVIEWED_RESIDUE: " + str(path))
+    for unit in (UNIT.name, ROOT_UNIT.name, RETIREMENT_UNIT.name,
+                 SCOPED_GUARD_UNIT.name, SCOPED_LIFECYCLE_UNIT.name):
+        state = scoped_properties(unit, "LoadState", "ActiveState", "MainPID")
+        if state != {"LoadState": "not-found", "ActiveState": "inactive", "MainPID": "0"}:
+            raise UninstallError("purge requires absent effective service: " + unit)
+
+
+def purge_native_empty(project):
+    require_quiescent_native(project)
+    if native_instances(project, guided=True):
+        raise UninstallError("purge requires an empty original native Project")
+    uid = str(pwd.getpwnam("boxweave").pw_uid)
+    bridge = "incusbr-" + uid
+    raw, _ = command(["incus", "query", "local:/1.0/projects/" + project])
+    pr = json.loads(raw)
+    if (not isinstance(pr, dict) or pr.get("name") != project or
+            pr.get("config", {}).get("restricted") != "true" or
+            pr.get("config", {}).get("restricted.networks.access") != bridge):
+        raise UninstallError("original restricted Project identity unverified")
+    raw, _ = command(["incus", "query", "local:/1.0/network-acls?project=default"])
+    names = json.loads(raw)
+    if not isinstance(names, list) or any(not isinstance(n, str) or "/bw-" in n for n in names):
+        raise UninstallError("unreviewed native BoxWeave ACL remains")
+    raw, _ = command(["/usr/sbin/nft", "-j", "-a", "list", "tables"])
+    tables = json.loads(raw).get("nftables")
+    if not isinstance(tables, list) or not tables or any(
+            item.get("table", {}).get("name", "").startswith("bw_pg_") for item in tables):
+        raise UninstallError("unreviewed BoxWeave guard remains")
+    if list((Path("/sys/class/net") / bridge / "brif").iterdir()):
+        raise UninstallError("original bridge has live ports")
+    scoped_incus_active()
+
+
+def purge_dir_info(path):
+    scoped_private_dir(path)
+    st = path.lstat()
+    return {"device": st.st_dev, "inode": st.st_ino}
+
+
+def purge_inventory(project):
+    purge_absent()
+    purge_native_empty(project)
+    info = scoped_private_file(AUDIT, 1024 * 1024)
+    audit = read_json(AUDIT)
+    records = audit.get("history", []) + [audit]
+    if len(records) > 102 or audit.get("scope") != "full" or audit.get("status") != "COMPLETE":
+        raise UninstallError("purge requires a verified COMPLETE full retirement")
+    files = {str(AUDIT): info}
+    dirs = {}
+    archives = set()
+    if os.path.lexists(RETIRED):
+        dirs[str(RETIRED)] = purge_dir_info(RETIRED)
+    for record in records:
+        result = record.get("result", {})
+        review = record.get("review_sha256")
+        if (record.get("status") != "COMPLETE" or record.get("host_sha256") != machine_sha() or
+                result.get("outcome") != "COMPLETE" or result.get("approved_review_sha256") != review or
+                result.get("host_machine_id_sha256") != machine_sha() or
+                not VALID_SHA.fullmatch(str(review or ""))):
+            raise UninstallError("unverified historical retirement; preserve original evidence")
+        raw = result.get("retirement_archive")
+        if not raw:
+            continue
+        archive = Path(raw)
+        if (archive.parent != RETIRED or not re.fullmatch(r"retired-[a-z0-9_]{8}", archive.name)
+                or archive in archives):
+            raise UninstallError("unrecognized historical retirement archive")
+        archives.add(archive)
+        dirs[str(archive)] = purge_dir_info(archive)
+        review_path = archive / "review.json"
+        files[str(review_path)] = scoped_private_file(review_path, 1024 * 1024)
+        plan = read_json(review_path)
+        inputs = {k: v for k, v in plan.items() if k not in ("review_sha256", "ready", "actions", "retained")}
+        if (plan.get("project") != project or plan.get("scope") != "full" or
+                plan.get("host_machine_id_sha256") != machine_sha() or plan.get("review_sha256") != review or
+                sha(canonical(inputs)) != review or not plan.get("ready")):
+            raise UninstallError("historical archive review identity mismatch")
+        if record.get("mode") == SCOPED_MODE:
+            scoped_archive_proof(record)
+        permitted = {"review.json", "boxweave.bin", "boxweave.service", "native-prepare.json",
+                     RETIREMENT_UNIT.name}
+        permitted.update("state-" + x for x in STATE_FILES)
+        permitted.update("exec-" + x["name"] for x in (plan.get("exec_archive") or {}).get("files", []))
+        permitted.update("installer-backup-" + x["name"] for x in (plan.get("installer_backup") or {}).get("files", []))
+        if record.get("mode") == SCOPED_MODE:
+            permitted.update(("cleanup.json", "scoped-journal", "scoped-original"))
+            permitted.update("scoped-" + Path(x).name for x in plan["scoped_units"])
+        for path in sorted(archive.iterdir()):
+            if path.name not in permitted:
+                raise UninstallError("unrecognized retirement archive entry: " + str(path))
+            if path.name in ("scoped-journal", "scoped-original"):
+                if scoped_tree(path) != plan["scoped_journal"]:
+                    raise UninstallError("scoped original archive changed")
+                for directory, subdirs, names in os.walk(path, followlinks=False):
+                    parent = Path(directory)
+                    dirs[str(parent)] = purge_dir_info(parent)
+                    for name in subdirs:
+                        purge_dir_info(parent / name)
+                    for name in names:
+                        child = parent / name
+                        files[str(child)] = scoped_private_file(child, 1024 * 1024)
+            else:
+                files[str(path)] = scoped_private_file(path)
+        for name, proof in (("boxweave.bin", plan.get("binary")), ("boxweave.service", plan.get("unit"))):
+            if proof and files.get(str(archive / name), {}).get("sha256") != proof["sha256"]:
+                raise UninstallError("retirement archive binary/unit differs from review")
+    if os.path.lexists(RETIRED) and set(RETIRED.iterdir()) != archives:
+        raise UninstallError("unreferenced retirement archive; review original before purge")
+    # NativePrepareArchive creates only closed, exact root journals under
+    # this fixed basename. Bind their reviewed host/Project/digest before
+    # including them. No open or foreign native journals are erased.
+    for path in sorted(NATIVE.parent.glob(NATIVE.name + ".closed.*")):
+        if not re.fullmatch(re.escape(NATIVE.name) + r"\.closed\.[a-f0-9]{16}\.[0-9]{2}", path.name):
+            raise UninstallError("unknown closed native journal filename")
+        proof = scoped_private_file(path, 1024 * 1024)
+        rec = read_json(path)
+        plan = rec.get("plan", {})
+        native_host = sha(("boxweave-native-host-v1|" + Path("/etc/machine-id").read_text().strip()).encode())
+        if (rec.get("schema") != 1 or rec.get("status") != "ROLLED_BACK" or
+                plan.get("target", {}).get("project") != project or plan.get("host_sha256") != native_host or
+                not VALID_SHA.fullmatch(str(plan.get("review_sha256", ""))) or
+                path.name.split(".")[-2] != plan["review_sha256"][:16]):
+            raise UninstallError("closed native journal provenance unverified")
+        files[str(path)] = proof
+    if len(files) > 100000 or len(dirs) > 30000:
+        raise UninstallError("purge inventory exceeds supported bound")
+    return {"schema": 1, "project": project, "host_sha256": machine_sha(), "files": files, "directories": dirs}
+
+
+def purge_remaining(plan):
+    purge_absent()
+    purge_native_empty(plan["project"])
+    files = plan["files"]
+    dirs = plan["directories"]
+    if os.path.lexists(AUDIT) and scoped_private_file(AUDIT, 1024 * 1024) != files.get(str(AUDIT)):
+        raise UninstallError("original purge audit changed")
+    for raw, proof in dirs.items():
+        path = Path(raw)
+        if not os.path.lexists(path):
+            continue
+        if purge_dir_info(path) != proof:
+            raise UninstallError("reviewed purge directory identity changed")
+        if any(str(child) not in files and str(child) not in dirs for child in path.iterdir()):
+            raise UninstallError("unreviewed entry appeared in purge directory")
+    for raw, proof in files.items():
+        path = Path(raw)
+        if os.path.lexists(path) and scoped_private_file(path) != proof:
+            raise UninstallError("reviewed purge file identity changed")
+    for path in NATIVE.parent.glob(NATIVE.name + ".closed.*"):
+        if str(path) not in files:
+            raise UninstallError("new closed native journal appeared during purge")
+    if os.path.lexists(RETIRED) and str(RETIRED) not in dirs:
+        raise UninstallError("new retirement directory appeared during purge")
+
+
+def purge_review(project):
+    if os.path.lexists(PURGE_FENCE):
+        scoped_private_file(PURGE_FENCE, 1024 * 1024)
+        receipt = read_json(PURGE_FENCE)
+        plan = receipt["plan"]
+        if (receipt.get("schema") != 1 or receipt.get("review_sha256") != sha(canonical(plan)) or
+                plan.get("host_sha256") != machine_sha() or plan.get("project") != project):
+            raise UninstallError("original purge receipt identity mismatch")
+        purge_remaining(plan)
+        return receipt
+    plan = purge_inventory(project)
+    receipt = {"schema": 1, "plan": plan, "review_sha256": sha(canonical(plan))}
+    if len(canonical(receipt)) + 1 > 1024 * 1024:
+        raise UninstallError("purge receipt exceeds supported bound")
+    return receipt
+
+
+def purge_main(args):
+    if os.geteuid() != 0 or sys.platform != "linux":
+        raise UninstallError("purge requires original local Linux root")
+    project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
+    if project != "user-" + str(pwd.getpwnam("boxweave").pw_uid) or not VALID_NAME.fullmatch(project):
+        raise UninstallError("exact dedicated purge Project required")
+    if any((args.scoped, args.scope, args.retirement_archive, args.guided_full_plan, args.box_uuid,
+            args.native_prepare_sha256, args.confirm_host_sha256, args.confirm_review_sha256)):
+        raise UninstallError("purge is a separate completed-retirement action")
+    receipt = purge_review(project)
+    plan = receipt["plan"]
+    print(json.dumps({"ready": True, "project": project, "review_sha256": receipt["review_sha256"],
+                      "files": sorted(plan["files"]), "directories": sorted(plan["directories"]),
+                      "retained": ["Incus, dedicated OS identity, original native Project/bridge, image cache, external tunnel"],
+                      "irreversible": True}, indent=2, sort_keys=True), flush=True)
+    if args.purge_plan:
+        return 0
+    prompt = "PURGE " + project
+    with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+        out.write("Type " + prompt + " to permanently erase the reviewed retirement data: ")
+        out.flush()
+        if inp.readline().strip() != prompt:
+            raise UninstallError("OPERATOR_APPROVAL_REQUIRED: purge not approved")
+    with scoped_lock(SCOPED_LOCK), scoped_lock(MAINTENANCE_LOCK):
+        if purge_review(project) != receipt:
+            raise UninstallError("purge review changed after approval")
+        if not os.path.lexists(PURGE_FENCE):
+            scoped_write_json(PURGE_FENCE, receipt)
+        purge_remaining(plan)
+        for raw, proof in sorted(plan["files"].items()):
+            path = Path(raw)
+            if path != AUDIT and os.path.lexists(path):
+                exact_unlink(path, proof)
+                scoped_sync_dir(path.parent)
+        for raw, proof in sorted(plan["directories"].items(), key=lambda item: -len(Path(item[0]).parts)):
+            path = Path(raw)
+            if os.path.lexists(path):
+                if purge_dir_info(path) != proof:
+                    raise UninstallError("reviewed purge directory changed")
+                path.rmdir()
+                scoped_sync_dir(path.parent)
+        purge_remaining(plan)
+        if os.path.lexists(AUDIT):
+            exact_unlink(AUDIT, plan["files"][str(AUDIT)])
+            scoped_sync_dir(AUDIT.parent)
+        if any(os.path.lexists(raw) for raw in list(plan["files"]) + list(plan["directories"])):
+            raise UninstallError("reviewed purge path remains")
+        if read_json(PURGE_FENCE) != receipt:
+            raise UninstallError("original purge receipt changed")
+        PURGE_FENCE.unlink()
+        scoped_sync_dir(PURGE_FENCE.parent)
+    print(json.dumps({"outcome": "PURGED", "project": project, "review_sha256": receipt["review_sha256"]}))
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned uninstall; explicit full-only Scoped Peer v2 retirement after MCP cleanup")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
     action.add_argument("--full", action="store_true", help="guided full retirement with terminal review and backup")
+    action.add_argument("--purge-plan", action="store_true", help="read-only review of completed retirement data erasure")
+    action.add_argument("--purge", action="store_true", help="permanently erase reviewed completed retirement data; resume same original if interrupted")
     action.add_argument("--resume-plan", action="store_true", help="read-only review of a stopped, archived STARTED retirement")
     action.add_argument("--resume", action="store_true", help="explicit terminal-approved continuation of the exact archived STARTED retirement")
     parser.add_argument("--scoped", action="store_true", help="explicit full-only Scoped Peer v2 retirement; no native Box deletion")
@@ -1745,6 +1989,10 @@ def main(argv=None):
     parser.add_argument("--confirm-host-sha256", help="apply: exact machine SHA printed by plan")
     parser.add_argument("--confirm-review-sha256", help="apply: exact immutable inventory review SHA")
     args = parser.parse_args(argv)
+    if args.purge or args.purge_plan:
+        return purge_main(args)
+    if os.path.lexists(PURGE_FENCE):
+        raise UninstallError("PURGE_IN_PROGRESS: review --purge-plan; preserve original receipt")
     if args.scoped:
         return scoped_main(args)
     if not args.plan and not args.apply and not args.full and not args.resume_plan and not args.resume:
