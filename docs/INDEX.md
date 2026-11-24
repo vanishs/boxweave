@@ -23,6 +23,10 @@ Baseline verified on 2026-11-24: v1 commit [3165f8e](https://github.com/vanishs/
 | Diagnostics and recovery | [Operator guide](process/DOCTOR_RECOVER.md), [manual recovery](process/UNKNOWN_MANUAL_RECOVERY.md), [D4 contract](development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md), [D5 evidence](development/V1_PR177_D5_DELIVERY_2026-11-24.md) |
 | Terms and defaults | [Glossary](GLOSSARY.md), [defaults](decisions/DEFAULTS.md), [operational policies](decisions/P0_OPERATIONAL_POLICIES.md) |
 
+## Installation maintenance
+
+[Install/uninstall incident closure](development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md) records #177 follow-up work and verification. [Scoped retirement design](development/V1_SCOPED_RETIREMENT_DESIGN_2026-11-24.md) is a future review contract, not an enabled teardown feature.
+
 ## Contribute and verify
 
 - [AGENTS.md](../AGENTS.md), [Contributing](../CONTRIBUTING.md), [Agent workflow](development/AGENT_WORKFLOW.md) and [phase execution protocol](development/PHASE_EXECUTION_PROTOCOL.md).

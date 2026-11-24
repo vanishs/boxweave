@@ -106,6 +106,19 @@ CHECK
   echo INSTALL_SCOPED_WRAPPERS_REFUSE_LEGACY=PASS
   echo PR178_N2_FRESH_ONLY=PASS
 else
+  sudo incus project show "$project" > "$work/guided-project-before"
+  sudo incus profile show default --project "$project" > "$work/guided-profile-before"
+  sudo sh install.sh --plan --guided-fresh-plan --local-binary "$work/candidate-a" --sha256 "$first" > "$work/guided-plan.txt"
+  grep -Fq 'GUIDED_FRESH_PLAN_ONLY:' "$work/guided-plan.txt"
+  grep -Fq 'Reviewed native preparation:' "$work/guided-plan.txt"
+  test ! -e /var/lib/boxweave
+  test ! -e /var/lib/boxweave-native-prereq-v1.json
+  test ! -e /usr/local/bin/boxweave
+  sudo incus project show "$project" > "$work/guided-project-after"
+  sudo incus profile show default --project "$project" > "$work/guided-profile-after"
+  cmp "$work/guided-project-before" "$work/guided-project-after"
+  cmp "$work/guided-profile-before" "$work/guided-profile-after"
+  echo I2_GUIDED_LEGACY_PREVIEW_NO_EFFECT=PASS
   python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"
 fi
 installed=/usr/local/bin/boxweave
@@ -276,6 +289,34 @@ sudo "$installed" install-commit -project "$project" -approve-local >/dev/null
 test ! -e /var/lib/boxweave-installer-backup
 sudo python3 scripts/n2_installed_lifecycle.py mcp-read "$project" "$work/actor.receipt"
 echo N2_SCHEMA6_UPGRADE_ROLLBACK=PASS
+# Reproduce the historical third-party Project drift only in this clean CI VM.
+# Change a harmless reviewed description, not a security setting. Restore it
+# exactly before the existing full retirement acceptance.
+test -z "$(sudo incus list --all-projects -c n -f csv)"
+sudo sh uninstall.sh --plan --guided-full-plan --scope full --project "$project" > "$work/retirement-precheck.json"
+python3 - "$work/retirement-precheck.json" <<'PRECHECK'
+import json,sys
+x=json.load(open(sys.argv[1]))
+assert x["ready"] and x["native_retirement_precheck"]["ready"],x
+assert x["native_retirement_precheck"]["reason"]=="OBSERVED"
+PRECHECK
+pid_before="$(sudo systemctl show -p MainPID --value boxweave.service)"
+desc_before="$(sudo incus project get "$project" description --property)"
+restore_desc() { sudo incus project set "$project" "description=$desc_before" --property; }
+trap restore_desc EXIT
+sudo incus project set "$project" 'description=BoxWeave isolated CI drift fixture' --property
+if sudo sh uninstall.sh --plan --guided-full-plan --scope full --project "$project" > "$work/retirement-drift.log" 2>&1; then
+  echo "native drift was accepted" >&2
+  exit 1
+fi
+grep -Fq 'NATIVE_CONFIG_DRIFT' "$work/retirement-drift.log"
+test "$(sudo systemctl show -p MainPID --value boxweave.service)" = "$pid_before"
+sudo systemctl is-active --quiet boxweave.service
+test ! -e /var/lib/boxweave-uninstall-v1-audit.json
+restore_desc
+trap - EXIT
+test "$(sudo incus project get "$project" description --property)" = "$desc_before"
+echo I3_LEGACY_DRIFT_REFUSED_BEFORE_RETIREMENT=PASS
 python3 scripts/n2_installed_lifecycle.py tty-uninstall "$project"
 test ! -e /var/lib/boxweave
 test ! -e /usr/local/bin/boxweave

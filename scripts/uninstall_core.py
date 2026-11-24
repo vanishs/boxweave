@@ -1135,8 +1135,15 @@ def main(argv=None):
     # A prior STARTED audit must direct operators to the original archive,
     # even when current controller artifacts are already partially removed.
     refuse_scoped_retirement()
-    if audit_status()["status"] == "STARTED" and not args.plan:
-        raise UninstallError("UNINSTALL_AUDIT_STARTED: do not repeat retirement; use --resume-plan --project PROJECT --retirement-archive EXACT_ORIGINAL_ARCHIVE if eligible")
+    prior_audit = audit_status()
+    if prior_audit["status"] == "STARTED":
+        hint = "Do not repeat retirement; use --resume-plan --project PROJECT --retirement-archive EXACT_ORIGINAL_ARCHIVE if eligible; otherwise preserve the original audit for local review"
+        if args.plan:
+            print(json.dumps({"ready": False, "scope": args.scope, "project": args.project,
+                              "uninstall_audit": prior_audit, "blockers": ["PRIOR_UNINSTALL_INTERRUPTED_REVIEW_ORIGINAL_AUDIT"],
+                              "next_action": hint, "coverage": "ORIGINAL_AUDIT_ONLY"}, indent=2, sort_keys=True))
+            return 2
+        raise UninstallError("UNINSTALL_AUDIT_STARTED: " + hint)
     plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256,
                    guided=args.full or args.guided_full_plan)
     if args.plan:

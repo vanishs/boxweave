@@ -289,6 +289,21 @@ class FakeHost(unittest.TestCase):
             u.inspect("full", "user-1001", [], None, guided=True)
         self.assertEqual(self.cmds, [])
 
+    def test_original_started_audit_navigation_without_complete_controller(self):
+        u.audited_write({"status": "STARTED", "review_sha256": "a"*64})
+        prior = u.AUDIT.read_bytes()
+        u.BINARY.unlink()
+        with mock.patch.object(u.os, "geteuid", return_value=0), mock.patch("sys.stdout") as out:
+            self.assertEqual(u.main(["--plan", "--scope", "full", "--project", "user-1001"]), 2)
+            printed = "".join(c.args[0] for c in out.write.call_args_list)
+            self.assertIn("ORIGINAL_AUDIT_ONLY", printed)
+            self.assertIn("--resume-plan", printed)
+            self.assertNotIn("review_sha256", printed)
+            with self.assertRaisesRegex(u.UninstallError, "UNINSTALL_AUDIT_STARTED"):
+                u.main(["--full", "--project", "user-1001"])
+        self.assertEqual(prior, u.AUDIT.read_bytes())
+        self.assertEqual(self.cmds, [])
+
     def test_help_default_is_read_only(self):
         with mock.patch("sys.stdout") as output:
             self.assertEqual(u.main([]), 0)
