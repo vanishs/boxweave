@@ -113,11 +113,29 @@ func run() error {
 	recoveryReason := f.String("reason", "", "documented review reason")
 	recoveryAcknowledge := f.Bool("acknowledge-uncertain-native", false, "explicit acknowledgement that native effect may still be in flight")
 
+	maintenance := f.Bool("maintenance", false, "doctor: root-local read-only maintenance evidence")
 	if err := f.Parse(os.Args[2:]); err != nil {
 		return err
 	}
 	if f.NArg() != 0 {
 		return errors.New("unexpected arguments")
+	}
+	if *maintenance {
+		if command != "doctor" {
+			return errors.New("maintenance is doctor-only")
+		}
+		valid := true
+		f.Visit(func(v *flag.Flag) {
+			switch v.Name {
+			case "maintenance", "project":
+			default:
+				valid = false
+			}
+		})
+		if !valid {
+			return errors.New("maintenance accepts only exact project, no approval or override")
+		}
+		return runMaintenanceDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser})
 	}
 	switch command {
 	case "native-scoped-retirement-plan", "native-scoped-retirement-resume-plan", "native-scoped-retirement-restore", "native-scoped-retirement-guard", "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":

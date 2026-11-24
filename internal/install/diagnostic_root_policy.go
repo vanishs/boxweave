@@ -64,6 +64,11 @@ func ObserveDiagnosticRootPolicy(ctx context.Context, project string, identity D
 	if identity.Mode != "SCOPED_V2" || identity.RootProof != "VERIFIED" || ctx.Err() != nil {
 		return out
 	}
+	return observeScopedDiagnosticRootPolicy(ctx, project, out)
+}
+
+// Call only after independent root journal/scope proof; runtime need not be active.
+func observeScopedDiagnosticRootPolicy(ctx context.Context, project string, out DiagnosticRootPolicy) DiagnosticRootPolicy {
 	r, initial, e := nativePeerFreshVerifiedPlan()
 	if e != nil || r.Project != project {
 		return out

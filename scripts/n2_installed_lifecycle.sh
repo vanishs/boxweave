@@ -192,6 +192,12 @@ assert not p["can_repair"] and not p["apply_available"] and "review_sha256" not 
 print("PR177_D3_INSTALLED_ABSENT_ISSUE_NO_EFFECT=PASS",flush=True)
 D3ABSENT
 test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
+# H1A uses the installed exact-head observer, without requiring controller runtime.
+sudo python3 scripts/pr188_h1a_observe.py "$project" active-empty
+sudo systemctl stop boxweave.service
+sudo python3 scripts/pr188_h1a_observe.py "$project" offline-empty
+sudo systemctl start boxweave.service
+sudo systemctl is-active --quiet boxweave.service
 
 
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
@@ -203,6 +209,7 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
     exit 0
   fi
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr188_h1a_observe.py "$project" live
   sudo "$installed" doctor -project "$project" > "$work/d2-scoped-active.json"
   python3 - "$work/d2-scoped-active.json" <<'D2ACTIVE'
 import json,sys
