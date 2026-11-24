@@ -21,11 +21,15 @@ import (
 )
 
 const scopedRetirementFence = "/var/lib/boxweave-scoped-retirement-v1.json"
+const retirementPurgeFence = "/var/lib/boxweave-purge-v1.json"
 
 // Startup is fenced throughout retirement, including reboot/interruption.
 // The boot guard is intentionally NOT fenced: until its dependency is
 // detached, it must keep restoring the original protected policy.
 func refuseScopedRetirementInProgress() error {
+	if _, err := os.Lstat(retirementPurgeFence); !errors.Is(err, os.ErrNotExist) {
+		return errors.New("PURGE_IN_PROGRESS: preserve original purge receipt and review resume")
+	}
 	if _, err := os.Lstat(scopedRetirementFence); !errors.Is(err, os.ErrNotExist) {
 		return errors.New("SCOPED_RETIREMENT_IN_PROGRESS: preserve original audit and review resume")
 	}

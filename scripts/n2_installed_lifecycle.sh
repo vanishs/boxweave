@@ -341,4 +341,35 @@ assert (archive/"boxweave-ipv4-retirement.service").is_file()
 print("N2_FULL_UNINSTALL_PRESERVES_ARCHIVE=PASS",flush=True)
 PY
 rm -f "$work/actor.receipt"
+# Same Host, original Incus daemon and restricted Project retained. Erase
+# the reviewed completed Legacy archive, then install a fresh Scoped ledger.
+sudo sh uninstall.sh --purge-plan --project "$project" > "$work/purge-plan.json"
+sudo python3 - "$project" <<'PURGE'
+import sys
+sys.path.insert(0, "scripts")
+from n2_installed_lifecycle import tty_run
+p=sys.argv[1]
+tty_run(["sh", "uninstall.sh", "--purge", "--project", p], [(("Type PURGE "+p).encode(), "PURGE "+p)])
+PURGE
+test ! -e /var/lib/boxweave-uninstall-v1-audit.json
+test ! -e /var/lib/boxweave-retired
+test ! -e /var/lib/boxweave-purge-v1.json
+echo RC14_LEGACY_PURGE=PASS
+incus_pid="$(sudo systemctl show incus.service -p MainPID --value)"
+sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$work/candidate-a" --sha256 "$first" > "$work/scoped-reinstall-plan.txt"
+host="$(sed -n 's/^host_machine_id_sha256=//p' "$work/scoped-reinstall-plan.txt")"
+review="$(sed -n 's/^scoped_fresh_review_sha256=//p' "$work/scoped-reinstall-plan.txt")"
+sudo sh install.sh --apply --scoped-peer-fresh --project "$project" --local-binary "$work/candidate-a" --sha256 "$first" --confirm-host-sha256 "$host" --scoped-fresh-review-sha256 "$review"
+sudo "$installed" install-status -project "$project" > "$work/reinstall-status.json"
+sudo python3 - "$work/reinstall-status.json" <<'REINSTALL'
+import json, sqlite3, sys
+x=json.load(open(sys.argv[1]))
+assert x["scoped_peer_mode"]=="SCOPED_PEER_FRESH_V2" and x["service_active"],x
+db=sqlite3.connect("file:/var/lib/boxweave/ledger.sqlite?mode=ro",uri=True)
+for table in ("owned_boxes","operations","peer_grants","forward_claims","network_bindings","network_address_fences"):
+    assert db.execute("SELECT count(*) FROM "+table).fetchone()[0]==0,table
+print("RC14_FRESH_LEDGER=PASS",flush=True)
+REINSTALL
+test "$incus_pid" = "$(sudo systemctl show incus.service -p MainPID --value)"
+echo RC14_LEGACY_TO_SCOPED_REINSTALL=PASS
 echo N2_CLEAN_INSTALLED_LIFECYCLE_PASS

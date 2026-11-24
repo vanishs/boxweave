@@ -40,7 +40,7 @@ Use operation_get to follow the original asynchronous operation and operation_ou
 - A management credential grants access to owned Boxes, including guest-root execution. Keep credentials private.
 - File tools support exclusive create, list and read; unsafe conditional replace/delete is refused. Use Git or guest commands for edits.
 - A native forward is not proof that an application is listening or externally reachable. Omitted host binds stay loopback.
-- The newer scoped Peer architecture requires an explicit fresh installation and does not support migration, upgrade or rollback. A separate full-only scoped retirement candidate (PR #182) requires an original fresh native preimage and completed MCP cleanup; it is not in RC13. Older installations use the legacy architecture.
+- The newer scoped Peer architecture requires an explicit fresh installation and does not support migration, upgrade or rollback. Full-only scoped retirement requires an original fresh native preimage and completed MCP cleanup; it is not in RC13. The clean-reinstall candidate adds explicit reviewed purge of completed retirement archives; never erase an unresolved original to force a fresh install. Older installations use the legacy architecture.
 - Host configuration and evidence-bound local recovery remain operator responsibilities. BoxWeave is not a general host administration, cluster orchestration, backup or website publishing platform.
 
 ## Development

@@ -144,7 +144,7 @@ func refuseScopedLegacy() error {
 
 func refuseScopedLegacyPaths(lstat func(string) (fs.FileInfo, error)) error {
 	for _, path := range []string{nativePeerFreshJournalDir, scopedGuardUnitPath,
-		scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket, scopedRetirementFence} {
+		scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket, scopedRetirementFence, retirementPurgeFence} {
 		if info, err := lstat(path); info != nil || !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("scoped fresh evidence exists or cannot be inspected: %s; legacy maintenance unsupported", path)
 		}
