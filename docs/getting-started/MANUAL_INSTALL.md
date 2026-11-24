@@ -117,7 +117,7 @@ If installation or maintenance fails, retain the original manifest, journal and 
 
 The [historical detailed RC3–RC13 guide](https://github.com/vanishs/boxweave/blob/3165f8eedfad514ee4e5c733e7807d19ddbec2ee/docs/getting-started/MANUAL_INSTALL.md) is retained as historical reference, not a current recipe. [Developer documentation](../INDEX.md).
 
-### Scoped retirement (PR #182 candidate; not released)
+### Scoped retirement (merged into v1; not in RC13)
 
 Use the matching verified candidate wrapper and installed binary. Stop/delete all owned Boxes and revoke Peer/Forward claims through normal MCP operations first; settle outstanding originals using the supported recovery workflow. The retirement plan refuses live or unsettled work and old scoped installations missing the original Project/Profile preimage.
 
@@ -129,3 +129,16 @@ sudo sh uninstall.sh --scoped --full
 Review the exact plan and enter the displayed confirmation only if you intend to retire this controller. The controller and its scoped Root lifecycle service stop, original evidence is archived privately, the original native Project/Profile is restored, the owned quarantine ACL and exact guard are removed, and the owned controller files are retired. Incus, its bridge and unrelated native resources are retained. Never delete the original journal or bypass the guard manually.
 
 If interrupted, inspect the exact original audit and use `--scoped --resume-plan` then `--scoped --resume` instead of starting a new retirement. An unverifiable phase refuses and preserves the original evidence. No old scoped preimage reconstruction or migration is provided. Acceptance is tracked in [PR #182](https://github.com/vanishs/boxweave/pull/182).
+
+### Completely erase retired controller data before a fresh install
+
+A successful full retirement removes active controller state and owned Boxes, but deliberately leaves private retirement archives (including SQLite, historical command output and credential material). On a trusted local terminal, using the matching verified newer uninstaller containing this feature, separately review irreversible erasure:
+
+```sh
+sudo sh uninstall.sh --purge-plan
+sudo sh uninstall.sh --purge
+```
+
+The erasure plan lists only recognized, reviewed completed retirement archives, closed native preparation journals and the completed audit. It refuses active or unverified native/controller artifacts, nonempty owned Project inventory, unknown archive entries, symlinks and incomplete retirements. If interrupted, repeat the read-only purge plan and approve the same original purge; installation is blocked while the durable purge receipt survives. Do not treat a purge as a way to release outstanding operations or to bypass an installation safety check. It is ordinary file removal, not a guarantee of forensic erasure of disks, snapshots or independent backups.
+
+For RC13, obtain the matching verified RC13 uninstaller for the original legacy retirement. Clean up owned Boxes, Peer and Forward via MCP and let native retirement operations settle. A separately staged legacy Peer Root unit or its journals, if present, needs exact local original review; the current generic purge intentionally refuses these residuals rather than deleting an unverified root capability. Retain evidence if the original retirement refuses. Do not substitute the new reader on an old installed binary. Run the new purge only after verified full retirement. No automatic migration, arbitrary native cleanup, removal of Incus itself, dedicated OS account, images or external tunnel is performed. The next Scoped install requires its own fresh native preview and explicit approval; the existing bridge address range is preserved and foreign native projects or customized topology may block admission. The original RC13 Host may still use a /24 bridge rather than the /21 provisioned by a new Incus bootstrap.
