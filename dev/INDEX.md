@@ -30,6 +30,7 @@ Bootstrap registry, read directly by bwdev context. These paths are canonical re
 | tool.installed-lifecycle | Native lifecycle, only authorized clean test fixture | [script](../scripts/n2_installed_lifecycle.sh), [test scenarios](../scripts/n2_installed_lifecycle.py) | Existing |
 | tool.ci-scope | Source vs docs CI classification | [classifier](../scripts/ci_change_scope.py), [quality policy](../docs/process/QUALITY_GATES.md) | Existing |
 | verification.acceptance | Mandatory product tests | [acceptance](../docs/verification/ACCEPTANCE.md), [continuity](../docs/verification/CONTINUITY_ACCEPTANCE.md) | Existing |
+| knowledge.reliable-evolve | Material feedback and candidate review | [v0.6 plan](../docs/development/BDH_V06_RELIABLE_EVOLVE_PLAN.md) | Candidate |
 | knowledge.consolidation | Pre-release consolidation PR, runtime retirement and CI conversion | [plan](../docs/development/CONSOLIDATION_PLAN.md), [progress](../docs/development/CONSOLIDATION_PROGRESS.md) | Initial |
 | evidence.h5 | Historical test environment and SHA pitfalls | [H5 delivery](../docs/development/PR188_H5_DELIVERY.md) | Historical |
 | template.task | Start or replan task | [task card](templates/TASK.md) | Initial |

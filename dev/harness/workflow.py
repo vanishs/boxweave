@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from . import checkpoint, ci, context, evolution, learning, profiles, tasks, verification
+from . import checkpoint, ci, context, evolution, feedback, learning, profiles, tasks, verification, work
 from .common import HarnessError, observe
 
 
@@ -15,6 +15,7 @@ def start(args, root):
     data = {"status": "REVIEW_REQUIRED" if code else "START_PLAN",
             "environment": environment, "context": selected,
             "verification": verification.plan(root),
+            "feedback": {"protocol": feedback.PROTOCOL, "next": "Use work begin/boundary/feedback and supply --work-history at finish."},
             "note": "Read-only start unless explicit task initialization requested. No provisioning or native readiness claim."}
     inbox = Path(args.inbox) if args.inbox else root / "dev/learning"
     if inbox.is_dir():
@@ -80,11 +81,42 @@ def summary(args, root, finishing=False):
                                          for row in audit["records"]], "findings": audit["findings"]}
         if code:
             issues.append("Learning audit needs review")
+    work_history = getattr(args, "work_history", None)
+    disposition_text = args.learning_disposition or ""
+    if work_history:
+        envelope = work.read_history(work_history)
+        if envelope["work_ref"] != data["work_ref"]:
+            raise HarnessError("Feedback work_ref differs from task history")
+        if finishing:
+            if envelope["objective"] != data["objective"]:
+                issues.append("Feedback objective differs from task history")
+            if envelope["task_kind"] not in ("development", "harness", "release"):
+                issues.append("Feedback task kind differs from source delivery")
+            if args.checkpoint and envelope["attempt_ref"] != cp["attempt_ref"]:
+                issues.append("Feedback attempt differs from checkpoint")
+            target = envelope["target"]
+            if target["kind"] != "repository" or target["ref"] != args.repo or target["source_sha"] != source["commit"]:
+                issues.append("Feedback target differs from exact delivery repository and source")
+        result["feedback"], code = feedback.review(envelope, root, args.inbox)
+        result["work_state"] = envelope["state"]
+        if code or (finishing and result["feedback"]["status"] != "FEEDBACK_RECORDED"):
+            issues.append("Material learning feedback needs review")
+        if finishing and envelope["state"] != "RECORDED":
+            issues.append("Work envelope does not record a completed outcome")
+        if envelope.get("learning"):
+            decision = envelope["learning"]
+            disposition_text = decision["kind"] + ":" + decision["ref"]
+        if args.learning_disposition or getattr(args, "related_candidate", []):
+            issues.append("Use the structured work history instead of legacy learning flags")
+    elif finishing:
+        issues.append("No structured work feedback history supplied")
     if finishing:
         if any(row["state"] != "RECORDED" for row in data["tasks"]):
             issues.append("Task history contains unfinished work")
         disposition = args.learning_disposition or ""
-        if disposition.startswith("no-new-asset:"):
+        if work_history:
+            pass
+        elif disposition.startswith("no-new-asset:"):
             if not disposition.split(":", 1)[1].strip():
                 issues.append("No-new-asset disposition requires a reason")
         elif disposition.startswith("candidate:"):
@@ -99,7 +131,7 @@ def summary(args, root, finishing=False):
                 for key in related):
             issues.append("Related learning candidate missing or not linked to work ref")
         result["related_candidates"] = related
-        result["learning_disposition"] = args.learning_disposition
+        result["learning_disposition"] = disposition_text or None
         if not args.ci_snapshot:
             issues.append("No exact-head CI snapshot supplied")
         if not args.repo or not args.pr or not args.base_sha:
@@ -119,7 +151,8 @@ def summary(args, root, finishing=False):
              "Source: " + str(source["commit"]), "Task revision: " + str(data["revision"]),
              "Ready: " + (", ".join(data["ready"]) or "none"),
              "Review issues: " + ("; ".join(issues) or "none reported by local observations"),
-             "Learning: " + (args.learning_disposition or "not supplied"),
+             "Learning: " + (disposition_text or "not supplied"),
+             "Structured feedback: " + result.get("feedback", {}).get("status", "NOT_SUPPLIED"),
              "Independent review and existing gates remain required."]
     result["pr_summary"] = "\n".join(lines)
     if args.export:
@@ -152,6 +185,7 @@ def register_summary(parser):
     parser.add_argument("--pr", type=int)
     parser.add_argument("--base-sha")
     parser.add_argument("--learning-disposition")
+    parser.add_argument("--work-history", help="Structured work envelope history; required to claim feedback closure")
     parser.add_argument("--related-candidate", action="append", default=[])
     parser.add_argument("--export")
 

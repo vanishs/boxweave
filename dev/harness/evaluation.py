@@ -36,6 +36,24 @@ def _evaluate(root):
             except HarnessError:
                 ids = ["INVALID"]
             ok = ids == case["expected_states"]
+        elif kind == "feedback":
+            actual, _ = work.feedback.review(work.validate(case["envelope"]), root)
+            ids = [actual["status"]]
+            ok = ids == case["expected_states"]
+        elif kind == "feedback-witness":
+            # Reuse the canonical immutable witness; mutate only an in-memory copy.
+            row = read_json(repo_path(root, case["envelope_path"]))
+            if case["variant"] == "historical-improvement":
+                row["learning"] = {"kind":"improved", "ref":"BDH-L014"}
+            elif case["variant"] == "exact-unlink":
+                row.update(state="RECORDED", boundary="completion", learning_links=[],
+                           learning={"kind":"none","ref":"no-new-asset"})
+                row["asset_feedback"][0].update(decision="not-applicable",candidate=None,reason="unrelated")
+            else:
+                raise HarnessError("Unknown feedback witness variant")
+            actual, _ = work.feedback.review(work.validate(row), root)
+            ids = [actual["status"]]
+            ok = ids == case["expected_states"]
         elif kind == "task":
             ids = tasks.ready(case["spec"])
             ok = ids == case["expected_ready"]

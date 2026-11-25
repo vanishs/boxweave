@@ -1,6 +1,6 @@
 # bwdev: script-first development toolbox
 
-Status: v0.5 candidate in PR #189; source-tree CLI, no runtime or service change.
+Status: v0.6 candidate in stacked PR #192; source-tree CLI, no runtime or service change. Earlier version sections are historical where superseded by the protocol below.
 Read [BDH design](DEVELOPMENT_HARNESS.md) for the approved full framework and
 [developer entry](../../dev/README.md) for the currently usable subset.
 
@@ -127,7 +127,7 @@ Use learn capture/list/audit/review with an explicit local inbox. Each candidate
 
 ## v0.5 integrated workflow
 
-Use start with a named profile, path/query and optional spec/history pair. It loads declarative context domains and reports matching learning candidates; no setup/install is dispatched. profile observes prerequisites only. task replan preserves objective, existing task IDs and acceptance criteria; only pending dependency edges or new tasks may change. resume/status/finish compose task source, checkpoint work identity, local evidence, learning audit and CI snapshot. Export a fresh JSON summary and persist sanitized copies through the active PR. Finish requires exact repo/PR/base, CI snapshot, checkpoint, task dispositions, evidence and candidate:ID or no-new-asset:REASON. Even HANDOFF_SUMMARY is advisory.
+Use start with a named profile, path/query and optional spec/history pair. It loads declarative context domains and reports matching learning candidates; no setup/install is dispatched. profile observes prerequisites only. task replan preserves objective, existing task IDs and acceptance criteria; only pending dependency edges or new tasks may change. resume/status/finish compose task source, checkpoint work identity, local evidence, learning audit and CI snapshot. Export a fresh JSON summary and persist sanitized copies through the active PR. In v0.5, finish required exact repo/PR/base, CI snapshot, checkpoint, task dispositions, evidence and candidate:ID or no-new-asset:REASON; the reason-only learning flags are superseded in v0.6. Even HANDOFF_SUMMARY is advisory.
 
 CI: supply --repo OWNER/REPO --sha EXACT_HEAD --pr NUMBER --base-sha EXACT_BASE --snapshot FILE, or explicit --live with an authorized gh installation. Snapshot schema 1: repository, head_sha and runs containing GitHub id, path, event, head_sha, status, conclusion and pull_requests with number/base.sha/head.sha. Only matching current PR runs qualify; cancelled, missing, ambiguous and pending are distinct from reported success. Check jobs/artifacts separately. Default full scope; quality-only requires actual policy review and never changes CI.
 
@@ -139,4 +139,43 @@ Self-evolution: learn next identifies candidates/stale assets; start surfaces re
 
 The portable work plan/check/begin/boundary/resume/export commands share local immutable revisions with existing tools, but do not require a target checkout or impose development CI on support. Control source is not target identity. Guidance, operational, diagnosis, development, research, release and harness kinds select relevant contracts; small guidance need not create records. Boundary envelopes preserve work identity, scope, evidence and original Operations; require a learning disposition. UNKNOWN cannot be cleared by status changes. Export is local only; remote storage needs explicit authorized persistence. See [remote entry](../../dev/examples/REMOTE_ENTRY.md). Existing development gates are unchanged.
 
-Learning adds optional domains/signals/task kinds, qualitative impact/effort, distinct observations and deferral reason/condition. learn next selects by path, tags, query and task kind; relevant deferred records reappear with match reasons, not automatic effects. Repeated exact evidence is refused, work refs are caller labels not independent recurrence. Attached implementations prompt review. Work plan and start use the same selection logic. Development finish accepts additional related candidates only when the work ref is linked. Existing records remain readable. See [dual-loop plan](BDH_DUAL_LOOP_DELIVERY_PLAN.md).
+Learning adds optional domains/signals/task kinds, qualitative impact/effort, distinct observations and deferral reason/condition. learn next selects by path, tags, query and task kind; relevant deferred records reappear with match reasons, not automatic effects. Repeated exact evidence is refused, work refs are caller labels not independent recurrence. Attached implementations prompt review. Work plan and start use the same selection logic. The historical v0.5.1 finish accepted additional related candidates when the work ref was linked; v0.6 requires the exact structured association instead. Existing records remain readable. See [dual-loop plan](BDH_DUAL_LOOP_DELIVERY_PLAN.md).
+
+## v0.6 reliable material feedback
+
+See the [E1-E4 plan](BDH_V06_RELIABLE_EVOLVE_PLAN.md) and
+[protocol usage](../../dev/README.md#material-feedback-protocol-v06-candidate).
+New work histories start with feedback_protocol 1. Validate every revision
+and transition; preserve original facts/evidence and original Operations.
+Require feedback for listed materially used assets, resolve canonical IDs
+or file paths, reject alias/evidence duplicates, and reconcile current
+candidate links with exact observations. A corrected decision can replace
+a current link without erasing its earlier revision. Legacy work is readable
+and may be handed off, but cannot close without explicit protocol migration.
+Unavailable/malformed inboxes and unresolved reviews cannot close work.
+Source finish additionally binds work identity, objective, checkpoint attempt,
+repository and clean source SHA; existing task, checkpoint, evidence and CI
+gates still apply. These are local caller-record consistency checks, not proof
+of omitted facts, external persistence, independent recurrence or authority.
+
+For the v0.6 feedback candidate, learning read/mutation checks all local
+revisions for valid capture identity, observation prefix and lifecycle
+transitions. Linked duplicate captures require review. An implementation
+digest mismatch blocks a current improvement claim but does not erase an
+earlier observed reuse. These are caller-record consistency checks, not an
+authenticated or distributed append-only ledger.
+
+L4 review follow-up: work-bound implementation claims record the candidate
+attachment event revision, originating work and attempt, exact clean source
+commit and changed asset digest, implementation and distinct validation
+references. Historical unbound attachment/reuse remains readable without
+being a new improvement. A later same-work attempt needs explicit
+handoff evidence. Read-time history checks bind the event revision and
+reject relabeling of an unchanged attachment. Use separate local record
+storage when verifying a clean source; commit sanitized evidence later,
+with applicable exact-head CI/review. Exact recorded observations are
+checked independently of the proposed disposition; current/represented-attempt
+observations may not be omitted. Proposed link corrections require new
+review evidence and preserve the earlier revision. Conflicting exact
+recorded associations remain pending review; no deletion/rewrite mechanism
+or proof of external evidence is introduced.

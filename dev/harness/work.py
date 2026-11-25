@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from . import context, evolution, learning
+from . import context, evolution, feedback, learning
 from .common import HarnessError, observe
 from .records import latest, publish, read_json
 
@@ -22,7 +22,7 @@ STATES = ("ACTIVE", "BLOCKED", "UNKNOWN", "HANDOFF", "ANSWERED", "RECORDED")
 DISPOSITIONS = ("none", "reuse", "candidate", "deferred", "improved", "pending")
 FIELDS = {"kind", "schema_version", "revision", "work_ref", "attempt_ref", "task_kind",
           "objective", "risk", "authority", "target", "state", "next_safe_action",
-          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links"}
+          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links", "feedback_protocol", "implementation_claim"}
 
 
 def string(value, field, limit=512):
@@ -67,15 +67,26 @@ def validate(data):
     refs(data.get("original_operations", []), "original_operations")
     refs(data.get("related_work", []), "related_work")
     refs(data.get("learning_links", []), "learning_links")
-    feedback = data.get("asset_feedback", [])
-    if not isinstance(feedback, list) or len(feedback) > 32:
+    items = data.get("asset_feedback", [])
+    if not isinstance(items, list) or len(items) > 32:
         raise HarnessError("Invalid asset feedback")
-    for item in feedback:
-        if (not isinstance(item, dict) or set(item) != {"asset", "outcome", "evidence"}
-                or item["outcome"] not in ("helped", "misled", "missing", "uncertain")):
-            raise HarnessError("Invalid asset feedback item")
-        string(item["asset"], "feedback asset")
-        string(item["evidence"], "feedback evidence")
+    protocol = data.get("feedback_protocol")
+    if "feedback_protocol" in data and (type(protocol) is not int or protocol != feedback.PROTOCOL):
+        raise HarnessError("Unknown feedback protocol")
+    seen = set()
+    for item in items:
+        if protocol == feedback.PROTOCOL:
+            feedback.validate_item(item)
+        else:
+            if (not isinstance(item, dict) or set(item) != {"asset", "outcome", "evidence"}
+                    or item["outcome"] not in ("helped", "misled", "missing", "uncertain")):
+                raise HarnessError("Invalid asset feedback item")
+            string(item["asset"], "feedback asset")
+            string(item["evidence"], "feedback evidence")
+        key = feedback.identity(item)
+        if key in seen:
+            raise HarnessError("Duplicate feedback identity")
+        seen.add(key)
     if "boundary" in data and data["boundary"] not in ("failure", "correction", "decision", "handoff", "completion", "progress", "ci"):
         raise HarnessError("Unknown material boundary")
     disposition = data.get("learning")
@@ -84,6 +95,16 @@ def validate(data):
                 or disposition.get("kind") not in DISPOSITIONS):
             raise HarnessError("Invalid learning disposition")
         string(disposition.get("ref"), "learning ref")
+    claim = data.get("implementation_claim")
+    if claim is not None:
+        if (not isinstance(claim, dict) or set(claim) != {"candidate_revision", "implementation_ref", "validation_evidence", "handoff_ref"}
+                or type(claim["candidate_revision"]) is not int or claim["candidate_revision"] < 2
+                or not disposition or disposition["kind"] != "improved"):
+            raise HarnessError("Invalid work implementation claim")
+        for key in ("implementation_ref", "validation_evidence"):
+            string(claim[key], key)
+        if claim["handoff_ref"] is not None:
+            string(claim["handoff_ref"], "handoff_ref")
     if data["state"] != "ACTIVE" and disposition is None:
         raise HarnessError("Boundary requires learning disposition")
     if data["state"] == "ANSWERED" and data["task_kind"] not in ("guidance", "research"):
@@ -120,15 +141,39 @@ def advance(old, new, expected):
     if old["state"] in ("BLOCKED", "HANDOFF") and new["state"] not in ("BLOCKED", "HANDOFF", "UNKNOWN"):
         if set(new["evidence"]) == set(old["evidence"]):
             raise HarnessError("Blocked work needs new reconciliation evidence")
-    for key in ("evidence", "used_assets", "original_operations", "related_work", "learning_links"):
+    for key in ("evidence", "used_assets", "original_operations", "related_work"):
         if not set(old.get(key, [])).issubset(new.get(key, [])):
             raise HarnessError("Cannot remove original references: " + key)
+    # Candidate links are review decisions, not original facts. Prior links
+    # remain in immutable revisions when an incorrect association is corrected.
+    if new.get("feedback_protocol") != feedback.PROTOCOL and not set(old.get("learning_links", [])).issubset(new.get("learning_links", [])):
+        raise HarnessError("Cannot remove legacy learning links without explicit protocol migration")
+    feedback.preserve(old, new)
     for key, prior in old["target"].items():
         if prior is not None and prior != "unknown" and new["target"][key] != prior:
             if key in ("version", "source_sha") and new["target"][key] is not None and new["target"]["ref"] == old["target"]["ref"] and set(new["evidence"]) - set(old["evidence"]):
                 continue
             raise HarnessError("Target identity changed without new version evidence; use linked new work")
     return new
+
+
+def read_history(directory):
+    """Validate every work revision and transition, including imported copies."""
+    last = validate(latest(directory))
+    prior = None
+    for number in range(1, last["revision"] + 1):
+        current = validate(read_json(Path(directory) / f"{number:08d}.json"))
+        if current.get("revision") != number:
+            raise HarnessError("Work revision differs from history position")
+        if prior is None:
+            if current["state"] != "ACTIVE":
+                raise HarnessError("Work history must begin with an active envelope")
+        else:
+            advance(prior, {key: value for key, value in current.items() if key != "revision"}, number - 1)
+        prior = current
+    if prior != last:
+        raise HarnessError("Work history changed while reading")
+    return last
 
 
 def summary(row):
@@ -174,6 +219,7 @@ def plan(root, task_kind, query, paths=(), domains=(), signals=(), inbox=None):
             "required": ["dev/BOOTSTRAP.md", "AGENTS.md", "dev/INDEX.md"],
             "assets": items[:7], "outcome_gate": gate,
             "control_source": observe(root),
+            "feedback": {"protocol": feedback.PROTOCOL, "next": "For material work, begin an envelope; record feedback at boundaries and reconcile before closing."},
             "note": "Control checkout is not target identity. No effect, permission, or record created. Guidance may use manual GitHub-only entry."}
 
 
@@ -188,17 +234,24 @@ def register(parser):
     p.add_argument("--inbox")
     v = sub.add_parser("check", help="Validate a portable envelope without writing")
     v.add_argument("file")
+    f = sub.add_parser("feedback", help="Reconcile material feedback with the learning inbox (read-only)")
+    f.add_argument("file")
+    f.add_argument("--inbox")
     b = sub.add_parser("begin", help="Publish a new local envelope from sanitized JSON")
     b.add_argument("directory")
     b.add_argument("file")
+    b.add_argument("--inbox")
     s = sub.add_parser("status")
     s.add_argument("directory")
+    s.add_argument("--inbox")
     a = sub.add_parser("boundary", help="Record a material boundary with expected local revision")
     a.add_argument("directory")
     a.add_argument("file")
     a.add_argument("--expect", required=True, type=int)
+    a.add_argument("--inbox")
     r = sub.add_parser("resume", help="Read original envelope and reconciliation requirements")
     r.add_argument("directory")
+    r.add_argument("--inbox")
     e = sub.add_parser("export", help="Exclusive local portable export, not remote persistence")
     e.add_argument("directory")
     e.add_argument("file")
@@ -207,19 +260,33 @@ def register(parser):
 def run(args, root):
     if args.action == "plan":
         return plan(root, args.kind, args.query, args.path, args.domain, args.signal, args.inbox), 0
+    inbox = getattr(args, "inbox", None)
+    if args.action == "feedback":
+        return feedback.review(validate(read_json(args.file)), root, inbox)
     if args.action in ("check", "begin"):
         row = validate(read_json(args.file))
         if args.action == "begin":
             if row["state"] != "ACTIVE" or row.get("revision") is not None:
                 raise HarnessError("Begin requires a new active envelope, not an imported history")
+            if row.get("feedback_protocol") != feedback.PROTOCOL:
+                raise HarnessError("New work history requires feedback protocol 1; check legacy records read-only")
             row = publish(args.directory, 0, row)
     else:
-        row = validate(latest(args.directory))
+        row = read_history(args.directory)
         if args.action == "boundary":
             updated = advance(row, read_json(args.file), args.expect)
+            if updated["state"] in ("RECORDED", "ANSWERED"):
+                reviewed, code = feedback.review(updated, root, inbox)
+                if code or reviewed["status"] != "FEEDBACK_RECORDED":
+                    return {"status": "REVIEW_REQUIRED", "published": False, "feedback": reviewed,
+                            "note": "Record an explicit active or handoff boundary and reconcile before closing."}, 1
             row = publish(args.directory, args.expect, updated)
         elif args.action == "resume":
             result = summary(row)
+            result["feedback"], _ = feedback.review(row, root, inbox)
+            result["issues"].extend(result["feedback"]["issues"])
+            if result["issues"]:
+                result["status"] = "REVIEW_REQUIRED"
             return result, 1 if result["issues"] else 0
         elif args.action == "export":
             fd = os.open(args.file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -228,6 +295,7 @@ def run(args, root):
                 stream.write("\n")
             return {"status": "EXPORTED_LOCAL", "file": str(args.file),
                     "note": "Not remote persistence. Save approved sanitized record via Git/PR; if unavailable mark pending."}, 0
+    reviewed, _ = feedback.review(row, root, inbox)
     return {"status": "RECORDED" if args.action in ("begin", "boundary") else "OBSERVED",
-            "record": row,
+            "record": row, "feedback": reviewed,
             "note": "Caller record only; local publication is not remote persistence or target proof. Reconcile original evidence before effects."}, 0

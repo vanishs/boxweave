@@ -3,7 +3,9 @@
 This is the canonical startup entry for BDH on any Agent surface.
 Apply BDH to every BoxWeave task, not every message: usage, support,
 installation, diagnosis, design/research, docs, development, release and
-BDH itself. Use the smallest workflow that fits the goal and risk.
+BDH itself. Use the smallest workflow that fits the goal and risk. For material work,
+use the current authorized task checkout's feedback protocol and toolbox
+when available; retain the canonical safety and acceptance requirements.
 
 ## Load the task context
 

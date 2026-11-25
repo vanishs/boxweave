@@ -25,7 +25,7 @@ COMMANDS = {
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="bwdev", description="BoxWeave development toolbox")
     parser.add_argument("--json", action="store_true", help="Machine-readable output")
-    parser.add_argument("--version", action="version", version="bwdev 0.5.1")
+    parser.add_argument("--version", action="version", version="bwdev 0.6.0-dev.1")
     sub = parser.add_subparsers(dest="command", required=True)
     for name, (module, help_text) in COMMANDS.items():
         module.register(sub.add_parser(name, help=help_text))

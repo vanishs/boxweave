@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dev"))
-from harness import ci, evaluation, profiles, tasks, workflow, verification
+from harness import ci, evaluation, profiles, records, tasks, workflow, verification
 from harness.common import HarnessError
 
 SHA = "a" * 40
@@ -78,6 +78,7 @@ class WorkflowTests(unittest.TestCase):
             parent = Path(tmp)
             root = parent / "repo"
             root.mkdir()
+            (root / "dev/learning").mkdir(parents=True)
             def git(*args):
                 return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
             git("init", "-q")
@@ -107,11 +108,45 @@ class WorkflowTests(unittest.TestCase):
             args = argparse.Namespace(history=history, checkpoint=cp, evidence=[str(evidence)],
                        inbox=None, repo=REPO, ci_snapshot=snap, pr=1, base_sha="c"*40,
                        learning_disposition="no-new-asset: fixture only", export=None)
+            work_history = parent / "work"
+            envelope = {"kind": "work", "schema_version": 1, "feedback_protocol": 1,
+                        "work_ref": "fixture/handoff", "attempt_ref": "one",
+                        "task_kind": "development", "objective": "test", "risk": "standard",
+                        "authority": "fixture only", "state": "RECORDED", "boundary": "completion",
+                        "target": {"kind": "repository", "ref": REPO, "version": None, "source_sha": sha},
+                        "next_safe_action": "review", "evidence": ["fixture"], "used_assets": [],
+                        "learning": {"kind": "none", "ref": "fixture has no reusable feedback"}}
+            initial = dict(envelope, state="ACTIVE", learning=None)
+            initial.pop("boundary")
+            records.publish(work_history, 0, initial)
+            records.publish(work_history, 1, envelope)
             with patch.dict(verification.CHECKS, {"fixture": ("python", "-c", "pass")}):
                 verification.execute(root, "fixture", evidence, 10)
+                missing, missing_code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(missing_code, 1)
+                self.assertIn("No structured work feedback history supplied", missing["issues"])
+                args.work_history = work_history
+                args.learning_disposition = None
                 result, code = workflow.summary(args, root, finishing=True)
                 self.assertEqual(code, 0, result)
                 self.assertEqual(result["status"], "HANDOFF_SUMMARY")
+                for field, value, message in (
+                    ("attempt_ref", "other", "Feedback attempt differs from checkpoint"),
+                    ("objective", "other", "Feedback objective differs from task history"),
+                    ("target", dict(envelope["target"], source_sha="b"*40),
+                     "Feedback target differs from exact delivery repository and source"),
+                ):
+                    wrong = parent / ("work-" + field)
+                    changed = dict(envelope, **{field: value})
+                    first = dict(changed, state="ACTIVE", learning=None)
+                    first.pop("boundary")
+                    records.publish(wrong, 0, first)
+                    records.publish(wrong, 1, changed)
+                    args.work_history = wrong
+                    invalid, invalid_code = workflow.summary(args, root, finishing=True)
+                    self.assertEqual(invalid_code, 1)
+                    self.assertIn(message, invalid["issues"])
+                args.work_history = work_history
                 args.base_sha = "d"*40
                 self.assertEqual(workflow.summary(args, root, finishing=True)[1], 1)
                 args.repo = "wrong/repository"

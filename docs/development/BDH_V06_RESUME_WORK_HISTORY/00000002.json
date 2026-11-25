@@ -1,0 +1,71 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "resume-probe-20261125",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "RC14 file operations 1c1527882ace4220eed366161bdadac3, 325e1d799645c0bbb035ffc47a8989a4, cd3392600a221353661ab89aa8464da2, a32f3c1a8e69706b83273e975c09d41d, 2a8cf657375d9cf87a75cd9e6087a974; assembly bbc96accba782c7b86bcad9043a5a15b and hash recheck 151099bc179d284e20cb9344eea7cb59 exit 0",
+      "observation": "Reused exclusive chunk creation and short Exec; verified prior chunks, refused wrong/missing chunks, recovered a deliberately short 300-byte fixture via a new path, and verified 102402-byte binary assembly plus exclusive publication. Actual SFTP interruption and durable crash recovery remain untested.",
+      "outcome": "helped",
+      "reason": "Distinct verified reuse; defer full helper; no promotion."
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "resume-probe-20261125",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "07ec6f62c22bf951ed8dad9c810e2df1",
+      "observation": "Read original completed receipts and file bytes before bounded duplicate and collision probes; retained bad fixture.",
+      "outcome": "helped",
+      "reason": "Existing continuity guidance worked."
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "resume-probe-20261125",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "0771cf8cc67ed12e9a0da2e05d06ccc9",
+      "observation": "Work plan rediscovered L014 before investigation; began local work history and appended expected rev8 observation in separate inbox.",
+      "outcome": "helped",
+      "reason": "Existing workflow worked; no implementation claim."
+    }
+  ],
+  "attempt_ref": "resume-probe-20261125",
+  "authority": "Owned development Box and PR192 evidence only; no complete helper, parent edits, merge or release",
+  "boundary": "handoff",
+  "evidence": [
+    "0771cf8cc67ed12e9a0da2e05d06ccc9",
+    "RC14 file operations 1c1527882ace4220eed366161bdadac3, 325e1d799645c0bbb035ffc47a8989a4, cd3392600a221353661ab89aa8464da2, a32f3c1a8e69706b83273e975c09d41d, 2a8cf657375d9cf87a75cd9e6087a974; assembly bbc96accba782c7b86bcad9043a5a15b and hash recheck 151099bc179d284e20cb9344eea7cb59 exit 0",
+    "07ec6f62c22bf951ed8dad9c810e2df1",
+    "a839e197132f6a2299c087f83ffc43e0"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014 existing procedure; local isolated revision 9, no new implementation"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Persist probe and structured record in PR; reconcile isolated L014 revision 9 into repository only after concurrent-head review; defer helper",
+  "objective": "Investigate interruption and recovery reliability of bounded guest-file chunk transfer",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave#192",
+    "source_sha": "abaa9726dd90048375337ea83f1be7260319db42",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.task-resume",
+    "tool.bwdev"
+  ],
+  "work_ref": "boxweave/pr192-transfer-resume"
+}

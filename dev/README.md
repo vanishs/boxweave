@@ -1,6 +1,6 @@
 # BoxWeave Development Harness (BDH) — toolbox and workflow
 
-**Status: bootstrap plus bwdev v0.5.1.** This is a task-side development and operational learning layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
+**Status: bootstrap plus bwdev v0.6.0-dev.1 (stacked candidate).** This is a task-side development and operational learning layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
 
 Universal activation and dual-loop design and rollout gates: [universal activation and dual-loop delivery plan](../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md).
 
@@ -23,6 +23,69 @@ The target does not need a checkout. Follow [GitHub-only entry](examples/REMOTE_
 for remote tasks. UNKNOWN remains UNKNOWN; use linked reconciled work only
 after independent review. Version changes on the same target need new evidence.
 A material outcome record is a caller assertion, not independent PASS.
+
+## Material feedback protocol (v0.6 candidate)
+
+For material tasks use the current task checkout's envelope template with
+feedback_protocol 1. Preserve actual feedback facts at each boundary.
+Record only materially used assets in used_assets, not selected or merely
+discovered assets; every listed asset needs feedback. A missing asset can
+be recorded as an explicit gap, not falsely counted as helpful use.
+Each material asset_feedback item
+records asset (registry ID or canonical path), evidence, outcome, attempt_ref,
+observation, decision, candidate (ID or null), and reason. Decisions: linked,
+no-change, not-applicable (explain why related candidates do not apply),
+pending. Link known relevant candidates with learn observe and the expected
+revision; include their IDs in learning_links. Never invent an observation
+or force a new asset. Use the same sanitized evidence reference and fact in
+the work record and learning revision.
+
+Run bwdev work feedback FILE to review exact local links; work boundary and
+resume also surface review. Pending feedback can be durably handed off
+without blocking independent product work; a final RECORDED/ANSWERED
+boundary cannot assert closure with unresolved feedback. New work begin
+requires protocol 1. Legacy histories remain readable and may be handed off,
+but completion requires explicit reconciliation to protocol 1; no automatic
+migration. Reconcile known assets, evidence, candidate observations, current
+learning links and inbox availability. Corrected candidate decisions may
+change current links only with a new correction_ref in the item and new
+review evidence in the envelope; earlier links and facts remain in prior
+revisions. An exact recorded observation must remain linked, even when
+the proposal is declared not-applicable; missing observations from current/represented attempts
+also require review. Conflicting recorded associations require explicit
+review/handoff, not an automatic unlink or rewritten observation.
+
+A historical implementation attachment substantiates reuse, not a new
+improvement. For an improved disposition, attach a changed asset on a
+clean source with learn attach --work-ref WORK --attempt-ref ATTEMPT
+(in addition to expected revision, implementation-ref and validation-evidence).
+Record an exact linked observation for that originating attempt. Add
+implementation_claim to the work envelope with candidate_revision
+(the attachment event revision, not necessarily latest observation
+revision), implementation_ref, validation_evidence and handoff_ref
+(null for the originating attempt). Include the two evidence references
+in evidence; target.source_sha must equal the attachment's observed clean
+commit. A later attempt of the same work requires an additional explicit
+handoff review reference in evidence. Unchanged asset/digest or old
+validation evidence is not a new bound improvement. Legacy unbound
+attachments remain readable and support reuse only. Use an authorized
+separate inbox/control record location while validating clean source;
+persist the reviewed records through Git/PR afterwards, distinguish
+tested code SHA from a later evidence-only commit, and run applicable
+exact-head checks for delivery. These are consistency checks of supplied
+references, not authentication of external evidence or automatic promotion.
+
+Use bwdev finish with --work-history DIRECTORY for structured delivery review,
+rather than legacy reason-only learning flags. The complete work history,
+objective, checkpoint attempt and exact repository/source must agree. This is an advisory
+record check, not proof of remote persistence, completeness of observations,
+native acceptance, or independent learning efficacy.
+
+For GitHub-only tasks, record the same fields in an authorized PR/issue or
+a portable pending record and reconcile in a control checkout when available.
+Tiny read-only questions need no record. If the current task ref implements
+a newer authorized harness, use that checkout's instructions and tools while
+retaining the canonical v1 safety and acceptance requirements.
 
 ## Quick start (optional Python CLI)
 
@@ -96,8 +159,9 @@ learn defer records a reason and reconsideration condition. Relevant deferred
 items reappear without auto-promotion or execution; reopen via review to
 CANDIDATE before attach. start and work plan show reasons and next actions.
 Exact evidence duplicates are refused; semantic duplication and independent
-recurrence need review. Finish accepts --related-candidate for additional
-candidates linked to the work or observations. Missing inbox is not no-learning.
+recurrence need review. The v0.5.1 legacy --related-candidate finish
+flag is historical; use structured learning_links and exact observations
+in the protocol-1 envelope. Missing or invalid inbox is not no-learning.
 
 ## Integrated workflow (v0.5)
 
@@ -117,10 +181,10 @@ profile and verification plan. Initialization is explicit. Resume reads
 original local records; it does not replay native effects. Status and finish
 can include checkpoint, repeatable --evidence, --inbox and exact CI snapshot.
 Use --export with a fresh local filename for a JSON handoff and copy the
-pr_summary field into the active PR after sanitizing. Finish requires a
-learning disposition (candidate:ID from the same work ref and supplied
-inbox, or no-new-asset:REASON), recorded tasks, local evidence, checkpoint
+pr_summary field into the active PR after sanitizing. Finish requires --work-history DIRECTORY with reconciled protocol-1
+feedback and a recorded outcome, recorded tasks, local evidence, checkpoint
 and exact repo/PR/base/CI metadata; unresolved items remain REVIEW_REQUIRED.
+The v0.5 reason-only --learning-disposition flag cannot establish closure.
 A handoff summary is never permission to merge.
 
 See [v0.5 usage and contracts](../docs/development/BWDEV_DESIGN.md#v05-integrated-workflow).
