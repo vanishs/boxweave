@@ -1,4 +1,4 @@
-# BDH v0.7 V1a  residual evidence and review readiness
+# BDH v0.7 V1a  -  residual evidence and review readiness
 
 Status: first V1 source slice Box-verified; V1b durable opportunity decisions
 and review-range reconciliation remain open. Do not claim V1-V5 closure.

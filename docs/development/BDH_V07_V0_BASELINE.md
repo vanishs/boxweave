@@ -1,4 +1,4 @@
-# BDH v0.7 V0  Box baseline and defect reproduction
+# BDH v0.7 V0  -  Box baseline and defect reproduction
 
 Status: local baseline and gap reproduction complete; CI and later phases
 are separate. This is an explicit harness development investigation, not

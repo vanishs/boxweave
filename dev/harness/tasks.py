@@ -89,6 +89,8 @@ def run(args, root):
     directory = Path(args.directory)
     if args.action == "init":
         spec = read_json(args.spec)
+        if isinstance(spec, dict) and "improvement" in spec:
+            raise HarnessError("Materialize a selected episode through learn episode")
         if not isinstance(spec, dict) or not isinstance(spec.get("tasks"), list):
             raise HarnessError("Expected task specification object")
         for row in spec["tasks"]:
@@ -105,6 +107,8 @@ def run(args, root):
         if data.get("kind") != "task" or data.get("schema_version") != 1:
             raise HarnessError("Unsupported task record kind/version")
         rows = validate(data)
+        if "improvement" in data:
+            raise HarnessError("Use learn episode to inspect or advance selected improvement histories")
         if args.action == "replan":
             if args.expect != data["revision"] or not nonempty(args.note):
                 raise HarnessError("Revision conflict or missing replan reason")

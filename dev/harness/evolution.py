@@ -1,5 +1,8 @@
 """Deterministic cross-task learning selection; no executable candidate content."""
+import hashlib
+import json
 import re
+from pathlib import PurePosixPath
 
 from .common import HarnessError
 
@@ -10,6 +13,8 @@ OUTCOMES = ("helped", "misled", "missing", "recurred", "uncertain")
 OPEN = ("CANDIDATE", "STALE", "DEFERRED")
 REVIEWABLE = (*OPEN, "VERIFIED", "ACTIVE")
 COST_UNITS = ("manual-actions", "tool-calls", "bytes", "milliseconds", "tokens")
+DECISIONS = ("preserve", "defer", "reject", "select")
+EPISODE_STEPS = ("implement", "validate", "review", "deliver", "benefit")
 OBSERVATION_FIELDS = {"work_ref", "attempt_ref", "evidence", "observation", "outcome"}
 STOP = {"task", "work", "with", "from", "this", "that", "test", "tests", "boxweave", "harness", "review", "evidence", "agent", "using", "actual", "record"}
 
@@ -88,7 +93,147 @@ def validate(row):
         count = deferred["observation_count"]
         if type(count) is not int or not 0 <= count <= len(observations):
             raise HarnessError("Invalid reconsideration observation count")
+    reviews = row.get("opportunity_reviews", [])
+    if not isinstance(reviews, list) or len(reviews) > 200:
+        raise HarnessError("Invalid opportunity reviews")
+    for event in reviews:
+        validate_decision(event)
     return row
+
+
+def proposal_path(path):
+    bounded(path, "proposal asset")
+    if (PurePosixPath(path).as_posix() != path or path.startswith("/")
+            or any(part in (".", "..", ".git") for part in PurePosixPath(path).parts)):
+        raise HarnessError("Proposal asset must be canonical and repository-relative")
+    if not (path.startswith(("dev/", "docs/development/"))
+            or re.fullmatch(r"scripts/test_bwdev[^/]*\.py", path)):
+        raise HarnessError("Proposal outside bounded BDH source scope")
+    return path
+
+
+def validate_proposal(value, asset=None):
+    fields = {"objective", "assets", "authority_ref", "risk", "source_sha",
+              "baseline", "expected_outcome", "max_attempts", "acceptance", "next_safe_action"}
+    if not isinstance(value, dict) or set(value) != fields:
+        raise HarnessError("Invalid improvement proposal fields")
+    for key in ("objective", "authority_ref", "baseline", "expected_outcome", "next_safe_action"):
+        bounded(value[key], "proposal " + key)
+    if value["risk"] not in ("low", "standard", "high"):
+        raise HarnessError("Invalid proposal risk")
+    if not isinstance(value["source_sha"], str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value["source_sha"]):
+        raise HarnessError("Proposal requires exact source SHA")
+    if type(value["max_attempts"]) is not int or not len(EPISODE_STEPS) <= value["max_attempts"] <= 50:
+        raise HarnessError("Invalid improvement attempt budget")
+    assets = value["assets"]
+    if not isinstance(assets, list) or not 1 <= len(assets) <= 16:
+        raise HarnessError("Proposal requires bounded affected assets")
+    for path in assets:
+        proposal_path(path)
+    if len(set(assets)) != len(assets) or (asset is not None and asset not in assets):
+        raise HarnessError("Proposal must uniquely include the candidate asset")
+    acceptance = value["acceptance"]
+    if not isinstance(acceptance, dict) or set(acceptance) != set(EPISODE_STEPS):
+        raise HarnessError("Proposal must cover every episode step")
+    for step in EPISODE_STEPS:
+        bounded(acceptance[step], "acceptance " + step)
+    return value
+
+
+def episode_id(candidate_id, basis):
+    return "BDH-E-" + hashlib.sha256((candidate_id + ":" + basis).encode()).hexdigest()[:32]
+
+
+def validate_decision(event):
+    fields = {"reviewed_revision", "basis", "decision", "reason", "review_ref",
+              "when", "asset_sha256", "trigger_ref", "evidence", "covered_observation_count",
+              "observation_count", "proposal", "episode_id"}
+    if not isinstance(event, dict) or set(event) != fields:
+        raise HarnessError("Invalid opportunity decision fields")
+    if type(event["reviewed_revision"]) is not int or event["reviewed_revision"] < 1:
+        raise HarnessError("Invalid reviewed revision")
+    if not isinstance(event["basis"], str) or not re.fullmatch(r"[0-9a-f]{64}", event["basis"]):
+        raise HarnessError("Invalid opportunity basis")
+    if event["decision"] not in DECISIONS:
+        raise HarnessError("Invalid opportunity decision")
+    for key in ("reason", "review_ref", "when"):
+        bounded(event[key], "decision " + key)
+    if event["trigger_ref"] is not None:
+        bounded(event["trigger_ref"], "decision trigger")
+    digest = event["asset_sha256"]
+    if digest is not None and (not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)):
+        raise HarnessError("Invalid reviewed asset digest")
+    evidence = event["evidence"]
+    if not isinstance(evidence, list) or len(evidence) > 201:
+        raise HarnessError("Invalid decision evidence range")
+    for ref in evidence:
+        bounded(ref, "decision evidence")
+    if len(set(evidence)) != len(evidence):
+        raise HarnessError("Duplicate decision evidence")
+    for key in ("covered_observation_count", "observation_count"):
+        count = event[key]
+        if type(count) is not int or not 0 <= count <= 200:
+            raise HarnessError("Invalid reviewed observation range")
+    if event["covered_observation_count"] > event["observation_count"]:
+        raise HarnessError("Invalid reviewed observation range")
+    if event["decision"] == "select":
+        validate_proposal(event["proposal"])
+        if not isinstance(event["episode_id"], str) or not re.fullmatch(r"BDH-E-[0-9a-f]{32}", event["episode_id"]):
+            raise HarnessError("Invalid improvement episode identity")
+    elif event["proposal"] is not None or event["episode_id"] is not None:
+        raise HarnessError("Only selection may bind an improvement proposal")
+    return event
+
+
+def asset_drift(row, digest):
+    impl = row.get("implementation")
+    return ((isinstance(impl, dict) and impl.get("asset_sha256") != digest)
+            or (row["state"] in ("VERIFIED", "ACTIVE") and row.get("reviewed_asset_sha256") != digest))
+
+
+def decision_context(row, coverage, digest):
+    return dict(coverage, asset_sha256=digest, asset_drift=asset_drift(row, digest))
+
+
+def review_basis(row, result, coverage):
+    if "asset_sha256" not in coverage or type(row.get("revision")) is not int:
+        return None
+    payload = {"id": row["id"], "revision": row["revision"], "state": row["state"],
+               "asset": row["asset"], "asset_sha256": coverage["asset_sha256"],
+               "review": {key: result[key] for key in
+                          ("status", "reasons", "evidence", "covered_observation_count",
+                           "coverage_event", "observation_count", "decision")}}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                                     ensure_ascii=True).encode()).hexdigest()
+
+
+def make_decision(row, coverage, *, basis, decision, reason, review_ref, when,
+                  trigger_ref=None, proposal=None):
+    if row["state"] not in REVIEWABLE:
+        raise HarnessError("Closed candidate; use a reviewed follow-up")
+    current = opportunity(row, coverage)
+    if current["basis"] is None or basis != current["basis"]:
+        raise HarnessError("Opportunity basis changed; review current evidence")
+    previous = row.get("opportunity_reviews", [])
+    if any(event["review_ref"] == review_ref for event in previous):
+        raise HarnessError("Opportunity review reference already recorded")
+    if trigger_ref is not None and (trigger_ref == review_ref or
+            any(event["trigger_ref"] == trigger_ref for event in previous)):
+        raise HarnessError("Review trigger must be distinct and new")
+    if current["status"] != "REVIEW_DUE" and trigger_ref is None:
+        raise HarnessError("No new review signal; explicit new trigger required")
+    if previous and previous[-1]["decision"] == "select":
+        raise HarnessError("Selected opportunity needs episode reconciliation before another decision")
+    if decision == "select":
+        validate_proposal(proposal, row["asset"])
+    elif proposal is not None:
+        raise HarnessError("Proposal only allowed when selecting")
+    return validate_decision({"reviewed_revision": row["revision"], "basis": basis,
+        "decision": decision, "reason": reason, "review_ref": review_ref, "when": when,
+        "asset_sha256": coverage["asset_sha256"], "trigger_ref": trigger_ref,
+        "evidence": current["evidence"], "covered_observation_count": current["covered_observation_count"],
+        "observation_count": current["observation_count"], "proposal": proposal,
+        "episode_id": episode_id(row["id"], basis) if decision == "select" else None})
 
 
 def add_observation(row, item):
@@ -128,24 +273,44 @@ def opportunity(row, coverage=None):
             if reason not in reasons:
                 reasons.append(reason)
             evidence.append(item["evidence"])
-    if row["state"] == "STALE" or coverage.get("asset_drift"):
+    decision = coverage.get("opportunity_decision")
+    decision_current = (decision is not None
+                        and coverage.get("decision_event") == coverage.get("coverage_event"))
+    same_asset = (decision_current and "asset_sha256" in coverage
+                  and decision["asset_sha256"] == coverage["asset_sha256"])
+    if (row["state"] == "STALE" or coverage.get("asset_drift")) and not same_asset:
         reasons.append("asset-review")
-    if condition is not None and len(observations) > condition["observation_count"]:
+    if decision_current and not same_asset and "asset_sha256" in coverage:
+        reasons.append("reviewed-asset-changed")
+    reconsider_count = condition["observation_count"] if condition is not None else None
+    if decision_current:
+        if decision["decision"] == "defer":
+            reconsider_count = count
+        elif reconsider_count is not None:
+            reconsider_count = max(reconsider_count, count)
+    if reconsider_count is not None and len(observations) > reconsider_count:
         reasons.append("reconsideration-new-evidence")
-        for item in observations[condition["observation_count"]:]:
+        for item in observations[reconsider_count:]:
             if item["evidence"] not in evidence:
                 evidence.append(item["evidence"])
-    if row["state"] == "CANDIDATE" and not row.get("implementation"):
+    if row["state"] == "CANDIDATE" and not row.get("implementation") and not decision_current:
         reasons.append("unimplemented-candidate")
         if row["evidence"] not in evidence:
             evidence.insert(0, row["evidence"])
-    return {"status": "REVIEW_DUE" if reasons else
-            ("COVERAGE_UNKNOWN" if count is None else "NO_NEW_REVIEW_SIGNAL"),
-            "reasons": reasons, "evidence": evidence,
-            "covered_observation_count": count,
-            "coverage_event": coverage.get("coverage_event"),
-            "observation_count": len(observations),
-            "note": "Advisory only; evidence references are not independent proof or authority."}
+    status = ("REVIEW_DUE" if reasons else
+              ("COVERAGE_UNKNOWN" if count is None else "NO_NEW_REVIEW_SIGNAL"))
+    if decision_current and not reasons:
+        status = "SELECTION_RECORDED" if decision["decision"] == "select" else "REVIEW_RECORDED"
+    reviews = row.get("opportunity_reviews", [])
+    if reviews and reviews[-1]["decision"] == "select":
+        status = "SELECTION_RECORDED"
+    result = {"status": status, "reasons": reasons, "evidence": evidence,
+              "covered_observation_count": count,
+              "coverage_event": coverage.get("coverage_event"),
+              "observation_count": len(observations),
+              "decision": reviews[-1] if status == "SELECTION_RECORDED" else (decision if decision_current else None),
+              "note": "Advisory only; evidence references are not independent proof or authority."}
+    return dict(result, basis=review_basis(row, result, coverage))
 
 
 def select(rows, *, task_kind=None, query="", paths=(), domains=(), signals=(), limit=8,
@@ -165,7 +330,7 @@ def select(rows, *, task_kind=None, query="", paths=(), domains=(), signals=(), 
         if row["state"] not in REVIEWABLE:
             continue
         review = opportunity(row, (review_context or {}).get(row["id"]))
-        if row["state"] not in OPEN and review["status"] != "REVIEW_DUE":
+        if row["state"] not in OPEN and review["status"] not in ("REVIEW_DUE", "SELECTION_RECORDED"):
             continue
         reasons = []
         if row["asset"] in path_set:
@@ -188,7 +353,11 @@ def select(rows, *, task_kind=None, query="", paths=(), domains=(), signals=(), 
             continue
         if not reasons:
             reasons.append("global-queue" if not filtered else "explicit-all")
-        if row["state"] == "DEFERRED":
+        if review["status"] == "SELECTION_RECORDED":
+            action = "reconcile selected improvement episode; no dispatch"
+        elif review["status"] == "REVIEW_RECORDED":
+            action = "preserve recorded decision; reconsider on new evidence or explicit trigger"
+        elif row["state"] == "DEFERRED":
             action = "review reconsideration condition; select or defer again"
         elif review["status"] == "REVIEW_DUE" and (row.get("implementation") or row["state"] != "CANDIDATE"):
             action = "review residual improvement opportunity"

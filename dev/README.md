@@ -191,8 +191,49 @@ a history-derived attachment/lifecycle-review boundary. It does not
 prove earlier issues were resolved, authorize work, establish independent
 recurrence, or mutate candidate state. Review can be due even when
 existing Skill use helped and the candidate is VERIFIED or ACTIVE.
-No durable opportunity decision or selected episode is implemented in
-V1a yet; preserve an explicit pending handoff.
+V1b records explicit review decisions; V2a/V2b bind a bounded selection
+to the existing local task history. Terminal resolution remains pending.
+
+### Durable decisions and improvement episodes (v0.7 V1b/V2 candidate)
+
+Inspect an exact candidate using:
+
+    python3 dev/bwdev --json learn opportunity dev/learning BDH-L014
+
+Use the returned revision and basis for an explicit decision:
+
+    python3 dev/bwdev --json learn decide INBOX ID --expect N --basis HASH --decision preserve --reason REASON --review-ref EVIDENCE --when CONDITION
+
+The choices preserve, defer, reject and select are opportunity dispositions,
+not lifecycle promotion. An explicit distinct trigger reference is needed
+when no new review signal exists. Select also needs --proposal FILE with
+objective, assets (canonical bounded harness paths including candidate asset),
+authority_ref, risk, exact clean source_sha, baseline, expected_outcome,
+max_attempts (5..50), acceptance (implement, validate, review, deliver,
+benefit), and next_safe_action.
+
+Keep mutable learning and task histories in an explicitly authorized
+directory outside the source worktree while checking clean source. Persist
+sanitized reviewed records through Git/PR. Inspect/materialize the selected
+episode with:
+
+    python3 dev/bwdev --json learn episode INBOX ID --expect N --history-root DIR
+    python3 dev/bwdev --json learn episode INBOX ID --expect N --history-root DIR --materialize
+
+The existing task DAG has one ready implement step. Explicit transitions use
+--event FILE --task-expect TASK_REVISION with step, to, attempt_ref,
+actor_ref, authority_ref, checkpoint_ref, evidence_ref, reason,
+reconcile_ref and outcome. WORKING and RECORDED use null outcome/reconcile;
+BLOCKED uses blocked or unknown and null reconcile; returning BLOCKED to
+PENDING requires resolved and distinct new reconcile_ref. No automatic
+dispatch; do not replay uncertain effects. Complete implement only with a
+new exact work-bound learning attachment. Later task records use the exact
+implemented clean source (use a distinct checkout for evidence publication).
+Separate reviewer/beneficiary references are necessary but not proof of
+independence. Final recorded outcomes remain review required; explicit
+terminal resolution and actual comparative utility are not yet implemented.
+
+See [V2 progress](../docs/development/BDH_V07_V2_PROGRESS.md).
 
 ## Integrated workflow (v0.5)
 

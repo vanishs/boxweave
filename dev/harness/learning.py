@@ -3,7 +3,7 @@ import hashlib
 import re
 from pathlib import Path
 
-from . import evolution
+from . import episodes, evolution
 from .common import HarnessError, observe, repo_path
 from .records import latest, publish, read_json
 
@@ -100,7 +100,13 @@ def read_history(directory, root, review_context=None):
         current = validate(read_json(Path(directory) / f"{number:08d}.json"), root)
         if current.get("revision") != number:
             raise HarnessError("Learning revision differs from history position")
+        reviews = current.get("opportunity_reviews", [])
+        prior_reviews = (prior or {}).get("opportunity_reviews", [])
+        if reviews[:len(prior_reviews)] != prior_reviews or len(reviews) > len(prior_reviews) + 1:
+            raise HarnessError("Cannot rewrite opportunity review history")
         if prior is None:
+            if reviews:
+                raise HarnessError("Initial capture cannot contain a review")
             if current["state"] != "CANDIDATE":
                 raise HarnessError("Learning history must begin with a candidate")
         else:
@@ -113,6 +119,22 @@ def read_history(directory, root, review_context=None):
                 raise HarnessError("Closed learning history has a further revision")
             if current["state"] != prior["state"] and current["state"] not in TRANSITIONS[prior["state"]]:
                 raise HarnessError("Invalid historical learning lifecycle transition")
+        if len(reviews) > len(prior_reviews):
+            event = reviews[-1]
+            # A decision is exactly one append-only event, not a combined
+            # state/observation/attachment edit with ambiguous evidence.
+            if any(current.get(k) != prior.get(k) for k in set(current) | set(prior)
+                   if k not in ("revision", "opportunity_reviews")):
+                raise HarnessError("Opportunity decision must be a separate revision")
+            ctx = evolution.decision_context(prior, coverage, event["asset_sha256"])
+            actual = evolution.make_decision(prior, ctx, basis=event["basis"],
+                decision=event["decision"], reason=event["reason"], review_ref=event["review_ref"],
+                when=event["when"], trigger_ref=event["trigger_ref"], proposal=event["proposal"])
+            if event != actual:
+                raise HarnessError("Opportunity review does not match prior revision")
+            coverage = {"covered_observation_count": len(current.get("observations", [])),
+                        "coverage_event": number, "decision_event": number,
+                        "opportunity_decision": event}
         impl = current.get("implementation")
         previous_impl = (prior or {}).get("implementation")
         if impl != previous_impl and isinstance(impl, dict) and "binding" in impl:
@@ -176,9 +198,9 @@ def audit(inbox, root):
                     or prior.get("commit") != source["commit"]
                     or prior.get("worktree") != "clean" or source["worktree"] != "clean"):
                 findings.append({"id": row["id"], "issue": "SOURCE_REVIEW_REQUIRED"})
-    for finding in findings:
-        if finding["issue"] in ("IMPLEMENTATION_CHANGED_OR_MISSING", "ASSET_CHANGED_OR_MISSING"):
-            review_context[finding["id"]]["asset_drift"] = True
+    for row in rows:
+        review_context[row["id"]] = evolution.decision_context(
+            row, review_context[row["id"]], asset_digest(root, row["asset"]))
     return {
         "status": "REVIEW_REQUIRED" if findings else "OBSERVED",
         "records": rows, "findings": findings, "review_context": review_context,
@@ -207,6 +229,27 @@ def register(parser):
         observation.add_argument(field, required=True)
     observation.add_argument("--outcome", choices=evolution.OUTCOMES, required=True)
     observation.add_argument("--residual-file", help="Explicit typed residual evidence JSON; omitted means unknown")
+    decide = sub.add_parser("decide", help="Record an explicit opportunity review; no dispatch")
+    decide.add_argument("inbox")
+    decide.add_argument("id")
+    decide.add_argument("--expect", type=int, required=True)
+    decide.add_argument("--basis", required=True)
+    decide.add_argument("--decision", choices=evolution.DECISIONS, required=True)
+    for field in ("--reason", "--review-ref", "--when"):
+        decide.add_argument(field, required=True)
+    decide.add_argument("--trigger-ref", help="New explicit review/reconsideration evidence, if no new signal")
+    decide.add_argument("--proposal", help="Bounded JSON proposal required for select")
+    opportunity = sub.add_parser("opportunity", help="Inspect one reviewable candidate even without a new signal")
+    opportunity.add_argument("inbox")
+    opportunity.add_argument("id")
+    episode = sub.add_parser("episode", help="Inspect or explicitly materialize selected episode task history")
+    episode.add_argument("inbox")
+    episode.add_argument("id")
+    episode.add_argument("--history-root", required=True)
+    episode.add_argument("--expect", type=int, required=True)
+    episode.add_argument("--materialize", action="store_true")
+    episode.add_argument("--event", help="Explicit JSON task transition; never dispatches work")
+    episode.add_argument("--task-expect", type=int, help="Expected task revision for transition")
     defer = sub.add_parser("defer", help="Record why and when to reconsider a candidate")
     defer.add_argument("inbox")
     defer.add_argument("id")
@@ -273,9 +316,36 @@ def run(args, root):
     else:
         if not inbox.is_dir() or inbox.is_symlink():
             raise HarnessError("Learning inbox missing or unsafe")
-        data = read_history(directory, root)
-        if data["id"] != key or data["revision"] != args.expect:
+        review_context = {}
+        data = read_history(directory, root, review_context)
+        if data["id"] != key or (args.action != "opportunity" and data["revision"] != args.expect):
             raise HarnessError("Learning identity/revision conflict")
+        if args.action == "opportunity":
+            if data["state"] not in evolution.REVIEWABLE:
+                raise HarnessError("Closed candidate; use reviewed follow-up")
+            ctx = evolution.decision_context(data, review_context[key], asset_digest(root, data["asset"]))
+            return {"status": "OBSERVED", "id": key, "revision": data["revision"],
+                    "opportunity": evolution.opportunity(data, ctx)}, 0
+        if args.action == "episode":
+            event = read_json(args.event) if args.event is not None else None
+            return episodes.materialize(data, root, Path(args.history_root), args.materialize,
+                                        candidate_dir=directory, event=event, task_expect=args.task_expect), 0
+        if args.action == "decide":
+            ctx = evolution.decision_context(data, review_context[key], asset_digest(root, data["asset"]))
+            proposal = read_json(args.proposal) if args.proposal is not None else None
+            if args.decision == "select":
+                evolution.validate_proposal(proposal, data["asset"])
+                episodes.check_scope(proposal, root)
+                source = observe(root)
+                if source["worktree"] != "clean" or source["commit"] != proposal["source_sha"]:
+                    raise HarnessError("Select requires the exact clean proposal source")
+            event = evolution.make_decision(data, ctx, basis=args.basis, decision=args.decision,
+                reason=args.reason, review_ref=args.review_ref, when=args.when,
+                trigger_ref=args.trigger_ref, proposal=proposal)
+            data["opportunity_reviews"] = [*data.get("opportunity_reviews", []), event]
+            result = publish(directory, args.expect, validate(data, root))
+            return {"status": "RECORDED", "record": result,
+                    "note": "Explicit opportunity decision only; no task assignment, effect or promotion."}, 0
         if args.action == "observe":
             if data["state"] in ("REJECTED", "DEPRECATED"):
                 raise HarnessError("Closed candidate; use reviewed follow-up")
@@ -287,6 +357,9 @@ def run(args, root):
             result = publish(directory, args.expect, validate(data, root))
             return {"status": "RECORDED", "record": result,
                     "note": "Observation linked; no automatic promotion or independent recurrence claim."}, 0
+        if (data.get("opportunity_reviews") and data["opportunity_reviews"][-1]["decision"] == "select"
+                and (args.action == "defer" or (args.action == "review" and args.to in ("REJECTED", "DEPRECATED")))):
+            raise HarnessError("Outstanding selected episode needs explicit reconciliation")
         if args.action == "defer":
             if data["state"] not in ("CANDIDATE", "VERIFIED"):
                 raise HarnessError("Only candidate or verified may be explicitly deferred")

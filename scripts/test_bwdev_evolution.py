@@ -1,15 +1,17 @@
 """Cross-task learning, deferred rediscovery and duplicate evidence guards."""
 import argparse
+import subprocess
 import copy
 import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dev"))
-from harness import evolution, feedback, learning, work
+from harness import episodes, evolution, feedback, learning, work
 from harness.common import HarnessError
 
 
@@ -189,6 +191,309 @@ class EvolutionTests(unittest.TestCase):
         stale = copy.deepcopy(selected)
         stale["state"] = "STALE"
         self.assertIn("asset-review", evolution.opportunity(stale)["reasons"])
+
+
+    def proposal(self):
+        return {"objective": "Reduce manual assembly steps", "assets": ["dev/skills/box-development/SKILL.md"],
+                "authority_ref": "fixture:explicit scope", "risk": "standard", "source_sha": "a"*40,
+                "baseline": "fixture baseline", "expected_outcome": "fewer manual steps",
+                "max_attempts": 8, "acceptance": {step: "fixture criterion " + step for step in evolution.EPISODE_STEPS},
+                "next_safe_action": "Review exact scope"}
+
+    def decide(self, decision, revision=None, basis=None, ref="fixture:decision", trigger=None, proposal=None):
+        row = self.invoke("next", "--domain", "box-exec")[0]["records"][0]
+        args = ["L100", "--expect", str(row["revision"] if revision is None else revision),
+                "--basis", basis or row["opportunity"]["basis"], "--decision", decision,
+                "--reason", "Reviewed exact evidence", "--review-ref", ref,
+                "--when", "New relevant observation or explicit review"]
+        if trigger:
+            args.extend(["--trigger-ref", trigger])
+        if decision == "select":
+            prop = self.proposal() if proposal is None else proposal
+            path = self.inbox.parent / (self.inbox.name + "-proposal.json")
+            self.addCleanup(path.unlink, missing_ok=True)
+            path.write_text(json.dumps(prop))
+            args.extend(["--proposal", str(path)])
+            with patch("harness.learning.observe", return_value={"commit": "a"*40, "worktree": "clean"}):
+                return self.invoke("decide", *args)[0]["record"]
+        return self.invoke("decide", *args)[0]["record"]
+
+    def test_review_decision_preserves_history_and_reopens(self):
+        self.capture()
+        before = self.invoke("next", "--domain", "box-exec")[0]["records"][0]
+        row = self.decide("preserve")
+        self.assertEqual(row["state"], "CANDIDATE")
+        after = self.invoke("next", "--domain", "box-exec")[0]["records"][0]
+        self.assertEqual(after["opportunity"]["status"], "REVIEW_RECORDED")
+        self.assertEqual(after["opportunity"]["evidence"], [])
+        self.assertEqual(row["opportunity_reviews"][0]["basis"], before["opportunity"]["basis"])
+        with self.assertRaises(HarnessError):
+            self.decide("preserve", ref="fixture:repeat")
+        with self.assertRaises(HarnessError):
+            self.decide("reject", revision=1)
+        self.invoke("observe", "L100", "--expect", "2", "--work-ref", "fixture:b",
+                    "--attempt-ref", "attempt", "--evidence", "fixture:positive",
+                    "--observation", "Useful without known gap", "--outcome", "helped")
+        self.assertEqual(self.invoke("next", "--domain", "box-exec")[0]["records"][0]
+                         ["opportunity"]["status"], "REVIEW_RECORDED")
+        self.observe(3, "fixture:c", "fixture:negative")
+        reopened = self.invoke("next", "--domain", "box-exec")[0]["records"][0]
+        self.assertEqual(reopened["opportunity"]["status"], "REVIEW_DUE")
+        self.assertEqual(reopened["opportunity"]["evidence"], ["fixture:negative"])
+        with self.assertRaises(HarnessError):
+            self.decide("reject", basis=before["opportunity"]["basis"], ref="fixture:second")
+        self.decide("reject", ref="fixture:second")
+        self.assertEqual(self.invoke("audit")[1], 0)
+
+    def test_deferral_and_explicit_trigger(self):
+        self.capture()
+        self.decide("defer")
+        self.invoke("observe", "L100", "--expect", "2", "--work-ref", "fixture:b",
+                    "--attempt-ref", "attempt", "--evidence", "fixture:positive",
+                    "--observation", "New relevant reuse", "--outcome", "helped")
+        self.assertEqual(self.invoke("next", "--domain", "box-exec")[0]["records"][0]
+                         ["opportunity"]["reasons"], ["reconsideration-new-evidence"])
+        self.decide("preserve", ref="fixture:second")
+        self.decide("preserve", ref="fixture:third", trigger="fixture:condition")
+        with self.assertRaises(HarnessError):
+            self.decide("preserve", ref="fixture:fourth", trigger="fixture:condition")
+
+    def test_selection_is_not_execution_or_promotion(self):
+        self.capture()
+        selected = self.decide("select")
+        self.assertEqual(selected["state"], "CANDIDATE")
+        row = self.invoke("next", "--domain", "box-exec")[0]["records"][0]
+        self.assertEqual(row["opportunity"]["status"], "SELECTION_RECORDED")
+        self.observe(2, "fixture:b", "fixture:negative")
+        with self.assertRaises(HarnessError):
+            self.decide("select", ref="fixture:duplicate")
+        self.assertEqual(self.invoke("audit")[1], 0)
+
+    def test_imported_decision_cannot_rewrite_or_cover_new_observation(self):
+        self.capture()
+        self.decide("preserve")
+        self.observe(2, "fixture:b", "fixture:negative")
+        path = self.inbox / "L100" / "00000003.json"
+        original = path.read_text()
+        for mutation in ("rewrite", "remove", "copy"):
+            row = json.loads(original)
+            if mutation == "rewrite":
+                row["opportunity_reviews"][0]["reason"] = "rewritten"
+            elif mutation == "remove":
+                row.pop("opportunity_reviews")
+            else:
+                row["opportunity_reviews"].append(copy.deepcopy(row["opportunity_reviews"][0]))
+            path.write_text(json.dumps(row))
+            with self.assertRaises(HarnessError):
+                learning.read_history(path.parent, ROOT)
+        path.write_text(original)
+        self.assertEqual(learning.read_history(path.parent, ROOT)["revision"], 3)
+
+
+    def test_episode_materialization_and_binding(self):
+        self.capture()
+        selected = self.decide("select")
+        history = self.inbox.parent / (self.inbox.name + "-episodes")
+        history.mkdir()
+        self.addCleanup(__import__("shutil").rmtree, history)
+        args = ["L100", "--expect", "2", "--history-root", str(history)]
+        observed = self.invoke("episode", *args)[0]
+        self.assertEqual(observed["status"], "SELECTED")
+        self.assertEqual(list(history.iterdir()), [])
+        with patch("harness.episodes.observe", return_value={"commit": "b"*40, "worktree": "clean"}):
+            with self.assertRaises(HarnessError):
+                self.invoke("episode", *args, "--materialize")
+        source = {"commit": "a"*40, "worktree": "clean"}
+        with patch("harness.episodes.observe", return_value=source):
+            result = self.invoke("episode", *args, "--materialize")[0]
+            again = self.invoke("episode", *args, "--materialize")[0]
+        self.assertEqual(result, again)
+        self.assertEqual(result["status"], "READY")
+        self.assertEqual(result["ready"], ["implement"])
+        self.assertEqual(result["episode_id"], selected["opportunity_reviews"][-1]["episode_id"])
+        folder = Path(result["history"])
+        self.assertEqual([p.name for p in folder.iterdir()], ["00000001.json"])
+        path = folder / "00000001.json"
+        row = json.loads(path.read_text())
+        row["tasks"][0]["acceptance"] = "rewritten"
+        path.write_text(json.dumps(row))
+        with self.assertRaises(HarnessError):
+            self.invoke("episode", *args)
+
+    def test_episode_proposal_scope_and_budget(self):
+        self.capture()
+        proposal = self.proposal()
+        for invalid in (dict(proposal, assets=["../escape"]),
+                        dict(proposal, assets=["internal/runtime.go"]),
+                        dict(proposal, assets=["dev/../AGENTS.md"]),
+                        dict(proposal, assets=["dev/skills/box-development/SKILL.md", "dev/skills/box-development/SKILL.md"]),
+                        dict(proposal, max_attempts=True),
+                        dict(proposal, max_attempts=1),
+                        dict(proposal, source_sha="not-a-sha"),
+                        dict(proposal, acceptance={"implement": "only this"})):
+            with self.subTest(invalid=invalid), self.assertRaises(HarnessError):
+                self.decide("select", proposal=invalid)
+        self.assertEqual(learning.read_history(self.inbox / "L100", ROOT)["revision"], 1)
+
+
+    def episode_fixture(self, proposal=None):
+        self.capture()
+        selected = self.decide("select", proposal=proposal)
+        history = self.inbox.parent / (self.inbox.name + "-lifecycle")
+        history.mkdir()
+        self.addCleanup(__import__("shutil").rmtree, history)
+        source = {"commit": "a"*40, "worktree": "clean"}
+        with patch("harness.episodes.observe", return_value=source):
+            initial = self.invoke("episode", "L100", "--expect", "2", "--history-root",
+                                  str(history), "--materialize")[0]
+        return selected, history, initial
+
+    def event(self, step, to, ref, actor="fixture-agent", attempt="attempt-one",
+              outcome=None, reconcile=None):
+        return {"step": step, "to": to, "attempt_ref": attempt, "actor_ref": actor,
+                "authority_ref": "fixture:explicit scope", "checkpoint_ref": "checkpoint:"+ref,
+                "evidence_ref": "evidence:"+ref, "reason": "fixture transition "+ref,
+                "reconcile_ref": reconcile, "outcome": outcome}
+
+    def advance_episode(self, history, event, task_revision, candidate_revision=2,
+                        source=None, mock_scope=True):
+        path = self.inbox.parent / (self.inbox.name + "-episode-event.json")
+        self.addCleanup(path.unlink, missing_ok=True)
+        path.write_text(json.dumps(event))
+        args = ["L100", "--expect", str(candidate_revision), "--history-root", str(history),
+                "--event", str(path), "--task-expect", str(task_revision)]
+        with patch("harness.episodes.observe", return_value=source or {"commit": "a"*40, "worktree": "clean"}):
+            if mock_scope:
+                with patch("harness.episodes.check_live_scope"):
+                    return self.invoke("episode", *args)[0]
+            return self.invoke("episode", *args)[0]
+
+    def test_episode_claim_unknown_reconciliation_and_replay(self):
+        selected, history, initial = self.episode_fixture()
+        event = self.event("implement", "WORKING", "claim")
+        claimed = self.advance_episode(history, event, 1)
+        self.assertEqual(claimed["status"], "ACTIVE")
+        self.assertEqual(claimed["attempts_used"], 1)
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, event, 1)
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("validate", "WORKING", "premature"), 2)
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("implement", "RECORDED", "false-complete"), 2)
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("implement", "BLOCKED", "other", actor="wrong",
+                                                    outcome="unknown"), 2)
+        unknown = self.advance_episode(history, self.event("implement", "BLOCKED", "unknown",
+                                       outcome="unknown"), 2,
+                                       source={"commit":"a"*40,"worktree":"dirty"})
+        self.assertEqual(unknown["status"], "UNKNOWN")
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("implement", "WORKING", "repeat", attempt="attempt-two"), 3)
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("implement", "PENDING", "self-review",
+                                                   outcome="resolved", reconcile="independent-ref"), 3)
+        ready = self.advance_episode(history, self.event("implement", "PENDING", "review",
+                                     actor="separate-agent", outcome="resolved", reconcile="independent-ref"), 3)
+        self.assertEqual(ready["status"], "READY")
+        self.assertEqual(ready["ready"], ["implement"])
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("implement", "WORKING", "same-attempt"), 4)
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("implement", "WORKING", "wrong-source", attempt="attempt-two"),
+                                 4, source={"commit":"b"*40,"worktree":"clean"})
+        new = self.advance_episode(history, self.event("implement", "WORKING", "new", attempt="attempt-two"), 4)
+        self.assertEqual(new["attempts_used"], 2)
+        path = Path(new["history"]) / "00000005.json"
+        raw = path.read_text()
+        row = json.loads(raw)
+        row["events"][0]["event"]["reason"] = "rewritten"
+        path.write_text(json.dumps(row))
+        with self.assertRaises(HarnessError):
+            self.invoke("episode", "L100", "--expect", "2", "--history-root", str(history))
+        path.write_text(raw)
+        observed = self.invoke("episode", "L100", "--expect", "2", "--history-root", str(history))[0]
+        self.assertEqual(observed["status"], "ACTIVE")
+        self.assertEqual(observed["revision"], 5)
+
+    def test_episode_bound_implementation_and_independent_outcomes(self):
+        selected, history, initial = self.episode_fixture()
+        eid = initial["episode_id"]
+        self.advance_episode(history, self.event("implement", "WORKING", "claim"), 1)
+        source = {"commit": "b"*40, "worktree": "clean"}
+        complete = self.event("implement", "RECORDED", "implementation-proof")
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, complete, 2, source=source)
+        with patch("harness.learning.observe", return_value=source), patch("harness.learning.asset_digest", return_value="c"*64):
+            attached = self.invoke("attach", "L100", "--expect", "2", "--implementation-ref",
+                        "fixture:new implementation", "--validation-evidence", complete["evidence_ref"],
+                        "--work-ref", eid, "--attempt-ref", "attempt-one")[0]["record"]
+        self.assertEqual(attached["revision"], 3)
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, complete, 2, 3, source={"commit":"d"*40,"worktree":"clean"})
+        ready = self.advance_episode(history, complete, 2, 3, source=source)
+        self.assertEqual(ready["ready"], ["validate"])
+        revision = 3
+        for step, actor in (("validate","fixture-agent"), ("review","review-agent"),
+                            ("deliver","fixture-agent"), ("benefit","benefit-agent")):
+            if step in ("review","benefit"):
+                with self.assertRaises(HarnessError):
+                    self.advance_episode(history, self.event(step,"WORKING","self:"+step,attempt="bad:"+step),
+                                         revision, 3, source=source)
+            claim = self.event(step,"WORKING","claim:"+step,actor=actor,attempt="attempt:"+step)
+            self.advance_episode(history, claim, revision, 3, source=source)
+            revision += 1
+            done = self.event(step,"RECORDED","result:"+step,actor=actor,attempt="attempt:"+step)
+            ready = self.advance_episode(history, done, revision, 3, source=source)
+            revision += 1
+        self.assertEqual(ready["status"], "OUTCOMES_RECORDED_REVIEW_REQUIRED")
+        self.assertEqual(ready["ready"], [])
+        self.assertEqual(ready["attempts_used"], 5)
+        self.assertEqual(self.invoke("opportunity", "L100")[0]["opportunity"]["status"], "SELECTION_RECORDED")
+
+    def test_episode_attempt_budget(self):
+        selected, history, initial = self.episode_fixture(dict(self.proposal(), max_attempts=5))
+        revision = 1
+        for i in range(5):
+            attempt = "attempt:"+str(i)
+            self.advance_episode(history, self.event("implement","WORKING","claim:"+str(i),attempt=attempt),revision)
+            revision += 1
+            self.advance_episode(history, self.event("implement","BLOCKED","blocked:"+str(i),attempt=attempt,
+                                 outcome="blocked"),revision)
+            revision += 1
+            self.advance_episode(history, self.event("implement","PENDING","resolved:"+str(i),attempt=attempt,
+                                 outcome="resolved",reconcile="reconcile:"+str(i)),revision)
+            revision += 1
+        with self.assertRaises(HarnessError):
+            self.advance_episode(history, self.event("implement","WORKING","exhausted",attempt="six"),revision)
+
+    def test_episode_live_scope_actual_git(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def git(*args):
+                return subprocess.check_output(["git","-C",str(root),*args],text=True,stderr=subprocess.STDOUT).strip()
+            git("init","-q")
+            git("config","user.email","fixture@example.invalid")
+            git("config","user.name","Fixture")
+            path = root / "dev/skills/box-development/SKILL.md"
+            path.parent.mkdir(parents=True)
+            path.write_text("initial\n")
+            git("add",".")
+            git("commit","-qm","baseline")
+            base = git("rev-parse","HEAD")
+            proposal = dict(self.proposal(),source_sha=base)
+            path.write_text("changed\n")
+            git("add",".")
+            git("commit","-qm","allowed")
+            head = git("rev-parse","HEAD")
+            event = self.event("implement","WORKING","scope")
+            episodes.check_live_scope(root,proposal,{"commit":head,"worktree":"clean"}, {}, event)
+            (root/"unrelated.txt").write_text("outside scope\n")
+            git("add",".")
+            git("commit","-qm","out of scope")
+            with self.assertRaises(HarnessError):
+                episodes.check_live_scope(root,proposal,{"commit":git("rev-parse","HEAD"),"worktree":"clean"}, {}, event)
+            with self.assertRaises(HarnessError):
+                episodes.check_live_scope(root,proposal,{"commit":head,"worktree":"dirty"}, {}, event)
 
 
 if __name__ == "__main__":
