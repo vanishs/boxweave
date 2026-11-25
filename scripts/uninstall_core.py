@@ -520,7 +520,7 @@ def effective_unit():
     if "FragmentPath" not in pairs or "DropInPaths" not in pairs:
         raise UninstallError("effective systemd unit cannot be verified")
     if pairs["DropInPaths"]:
-        raise UninstallError("unreviewed systemd drop-ins present")
+        raise UninstallError("unreviewed systemd drop-ins present: boxweave.service; inspect doctor --maintenance --summary and effective DropInPaths; preserve inherited policy")
     return pairs["FragmentPath"]
 
 
@@ -549,7 +549,7 @@ def retirement_service_state():
             pairs.get("DropInPaths") != "" or
             pairs.get("ActiveState") not in ("active", "inactive", "failed") or
             not re.fullmatch(r"[0-9]+", pairs.get("MainPID", ""))):
-        raise UninstallError("effective retirement verifier unit cannot be verified")
+        raise UninstallError("effective retirement verifier unit cannot be verified; inspect doctor --maintenance --summary and effective DropInPaths; preserve inherited policy")
     if (int(pairs["MainPID"]) > 1) != (pairs["ActiveState"] == "active"):
         raise UninstallError("retirement verifier process state ambiguous")
     return pairs["ActiveState"]
@@ -1385,7 +1385,7 @@ def scoped_units():
         if path != SCOPED_INCUS_DROPIN:
             p = scoped_properties(path.name, "FragmentPath", "DropInPaths", "ActiveState", "UnitFileState")
             if p["FragmentPath"] != str(path) or p["DropInPaths"] or p["UnitFileState"] != "static" or p["ActiveState"] not in ("active", "inactive", "failed"):
-                raise UninstallError("unrecognized effective scoped service")
+                raise UninstallError("unrecognized effective scoped service: " + path.name + "; inspect doctor --maintenance --summary and effective DropInPaths; preserve inherited policy")
         result[str(path)] = proof
     p = scoped_properties("incus.service", "Requires", "After", "ActiveState", "MainPID", "DropInPaths")
     if (p["ActiveState"] != "active" or not p["MainPID"].isdigit() or int(p["MainPID"]) <= 1 or

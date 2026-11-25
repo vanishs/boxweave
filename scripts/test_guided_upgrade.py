@@ -34,6 +34,20 @@ def review(previous=True):
                               build_commit="2"*40, receipt_sha256="3"*64) if previous else None)
 
 class GuidedUpgradeTests(unittest.TestCase):
+    def test_inherited_dropin_preflight_is_advisory_and_read_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            generic = root / "service.d"
+            generic.mkdir()
+            hint = NS["inherited_service_dropin_hint"]
+            self.assertEqual(hint([generic, root / "absent"]), "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF")
+            policy = generic / "zzz-lxc-service.conf"
+            policy.write_bytes(b"[Service]\nNoNewPrivileges=no\n")
+            before = policy.read_bytes()
+            self.assertEqual(hint([generic]), "POTENTIAL_INHERITED_SERVICE_DROPIN")
+            self.assertEqual(policy.read_bytes(), before)
+            self.assertEqual(hint([policy]), "INHERITED_SERVICE_DROPIN_UNVERIFIED")
+
     def test_scoped_residue_refuses_even_dangling_links(self):
         with tempfile.TemporaryDirectory() as folder:
             paths = tuple(Path(folder) / str(i) for i in range(5))

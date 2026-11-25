@@ -9,6 +9,7 @@ import sys
 import uninstall_core as u
 from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import op, pid, token, tty_run
+from pr188_scoped_roundtrip import network, second_install
 
 
 def run(*args):
@@ -45,7 +46,7 @@ def interrupted(project):
     raise AssertionError("interruption not reached")
 
 
-def main(project, receipt):
+def main(project, receipt, candidate=None, digest=None):
     assert os.geteuid() == 0
     # Normal full retirement previews the exact owned fixture without effects.
     with LoopbackMCP("http://127.0.0.1:18650/mcp", token=token(receipt),
@@ -54,8 +55,7 @@ def main(project, receipt):
                   "memory_mib": 256, "disk_gib": 2, "image": "local:boxweave-ubuntu-24.04",
                   "internet": True, "start": True}, "pr182-live")["box_uuid"]
         second = op(c, "box_create", {"name": "scoped-retirement-peer", "cpu": 1, "memory_mib": 256, "disk_gib": 2, "image": "local:boxweave-ubuntu-24.04", "internet": True, "start": True}, "pr188-peer-fixture")["box_uuid"]
-        op(c, "box_peer_set", {"source_box_id": uuid, "target_box_id": second, "allow": True}, "pr188-peer-direction")
-        op(c, "port_forward_create", {"box_id": uuid, "protocol": "tcp", "host_bind": "127.0.0.1", "host_port": 18082, "guest_port": 18080}, "pr188-forward-fixture")
+        network(c, uuid, second, "roundtrip-first")
         before = pid("boxweave.service")
         p, plan = check_plan(project)
         assert p.returncode == 0 and plan["ready"] and plan["mode"] == u.DRAIN_MODE, (p.stderr, plan)
@@ -122,6 +122,15 @@ def main(project, receipt):
     assert foreign == [run("incus", "query", "/1.0/projects/pr182-foreign"),
                        run("incus", "query", "/1.0/network-acls/pr182-foreign?project=default")]
     print("RC14_SCOPED_PURGE=PASS", flush=True)
+    if candidate is not None:
+        assert digest and os.environ.get("GITHUB_ACTIONS")=="true" and os.environ.get("RUNNER_ENVIRONMENT")=="github-hosted"
+        # The unchanged witnesses above are exact resources created by
+        # this fixture, not unrelated resources of an operator. Remove
+        # only them before asking the fresh exclusive plan to run again.
+        run("incus", "network", "acl", "delete", "pr182-foreign", "--project", "default")
+        run("incus", "project", "delete", "pr182-foreign")
+        second_install(project, receipt, candidate, digest, (uuid, second), incus_pid)
+
 
 
 if __name__ == "__main__":

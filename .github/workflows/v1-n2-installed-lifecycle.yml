@@ -50,6 +50,8 @@ on:
       - scripts/n2_installed_lifecycle.*
       - scripts/pr178_n2_scoped_lifecycle.py
       - scripts/pr182_scoped_retirement.py
+      - scripts/pr188_scoped_roundtrip.py
+      - scripts/test_scoped_roundtrip.py
       - scripts/pr178_n3_scoped_peer.py
       - scripts/pr178_n4_*.py
       - .github/workflows/v1-n2-installed-lifecycle.yml
@@ -124,6 +126,10 @@ jobs:
             grep -Fxq PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq RC14_SCOPED_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq 'PR188_ROUNDTRIP_NETWORK=PASS roundtrip-first' "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_ROUNDTRIP_SCOPED_FRESH_LEDGER_OLD_TOKEN_DENIED=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq 'PR188_ROUNDTRIP_NETWORK=PASS roundtrip-second' "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_ROUNDTRIP_SCOPED_REINSTALL_WORKLOAD=PASS "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
           if test "$PR178_SCOPED_N2" = 1; then

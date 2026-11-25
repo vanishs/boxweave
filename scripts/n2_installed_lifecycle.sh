@@ -234,7 +234,7 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
   if test "${PR182_SCOPED_RETIREMENT:-0}" = 1; then
-    sudo python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt"
+    sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt" "$work/candidate-a" "$first"
     exit 0
   fi
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"

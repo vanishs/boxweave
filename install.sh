@@ -273,6 +273,38 @@ def scoped_review(candidate, project):
     return review
 
 
+# Type-wide systemd service drop-ins can apply only once the unit is
+# installed: systemctl show of a not-found unit can report no DropInPaths.
+# This is a conservative advisory, NOT ownership proof or a permission to
+# ignore an effective drop-in. Never modify inherited systemd policy.
+def inherited_service_dropin_hint(paths=None):
+    if paths is None:
+        paths = ("/etc/systemd/system/service.d", "/run/systemd/system/service.d",
+                 "/usr/local/lib/systemd/system/service.d",
+                 "/usr/lib/systemd/system/service.d", "/lib/systemd/system/service.d")
+    try:
+        for folder in paths:
+            try:
+                with os.scandir(folder) as entries:
+                    if any(entry.name.endswith(".conf") for entry in entries):
+                        return "POTENTIAL_INHERITED_SERVICE_DROPIN"
+            except FileNotFoundError:
+                continue
+        return "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF"
+    except OSError:
+        return "INHERITED_SERVICE_DROPIN_UNVERIFIED"
+
+
+def print_lifecycle_preflight():
+    hint = inherited_service_dropin_hint()
+    print("maintenance_preflight=" + hint, flush=True)
+    if hint != "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF":
+        print("Maintenance warning: inherited service drop-ins may block verified activation (Legacy) or full retirement. Review effective units before installation; do not delete inherited policy. A working Scoped controller is not proof of retirement readiness.", flush=True)
+    else:
+        print("Maintenance preflight is advisory; only the installed effective-unit review can prove retirement readiness.", flush=True)
+    return hint
+
+
 def print_scoped_review(review):
     print("Reviewed scoped native preparation:", json.dumps(review, sort_keys=True), flush=True)
     # The displayed pool is derived from the exact reviewed CIDR, not an
@@ -711,6 +743,9 @@ def main():
     else:
         print("changes=only v1 Go installer-owned binary/unit/SQLite; no native preparation or tunnel")
     print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
+    if not args.upgrade and os.geteuid() == 0 and (args.scoped_peer_fresh or fresh_guided or legacy_preview):
+        print_lifecycle_preflight()
+
     if args.upgrade:
         print("forward_policy=preserve existing systemd unit and operator overrides; native Project permissions remain unchanged")
         if upgrade_review:
