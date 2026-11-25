@@ -2382,13 +2382,20 @@ def maintenance_main(args):
         if before.get("mounted_artifacts") or before.get("capture"):
             raise UninstallError("unsafe or unverified mount inventory")
         report = maintenance_observe(path, args.observer_sha256, project)
-    except (UninstallError, OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+    except UninstallError as exc:
         report = {}
+        before["observer_failure"] = {"state": "UNVERIFIED", "reason": str(exc)}
+    except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+        report = {}
+        before["observer_failure"] = {"state": "UNVERIFIED", "reason": "OBSERVER_EXEC_OR_JSON_UNAVAILABLE"}
+    failure = before.pop("observer_failure", None)
     after = maintenance_local_inventory(project, uid)
     if before != after or host != machine_sha():
         # Discard cross-source comparison; no favorable preview on drift.
         report = {}
         after["capture"] = {"state": "UNVERIFIED", "reason": "LOCAL_EVIDENCE_CHANGED"}
+    if failure:
+        after["observer_failure"] = failure
     plan = maintenance_preview(project, args.retention, host, report, after,
                                sha(Path(__file__).read_bytes()))
     if args.maintenance_recheck:

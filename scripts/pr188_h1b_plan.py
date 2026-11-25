@@ -50,7 +50,7 @@ def main():
     p, rc = read_plan(base, "--maintenance-plan", "retain")
     again, again_rc = read_plan(base, "--maintenance-plan", "retain")
     assert p == again and rc == again_rc, "stable preview changed"
-    assert p["observation"]["coverage"] == "BOUNDED_SOURCES_OBSERVED"
+    assert p["observation"].get("coverage") == "BOUNDED_SOURCES_OBSERVED", (p["blockers"], p["local_inventory"])
     expected = "OFFLINE_RETIREMENT_REVIEW" if args.phase == "offline-empty" else "NORMAL_CLEANUP_REVIEW"
     assert p["route"] == expected, p["route"]
     hard = {b["code"] for b in p["blockers"] if b["severity"] == "HARD"}
