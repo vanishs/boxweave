@@ -235,6 +235,23 @@ review with exact matching later learning evidence. Use the canonical
 history root (repository docs/development/BDH_V07_EPISODES or an external
 inbox sibling episodes directory). See V2c below.
 
+Independent review can explicitly reject an exact implemented source
+(event step review, to BLOCKED, outcome rejected). An already performed
+external review may be imported from READY with a distinct reviewer/attempt
+and original evidence; this is caller-recorded, not authenticated identity.
+Record a separate review/PENDING/rework event against that exact rejected
+source and attempt, with distinct reconciliation evidence. This resets the
+current DAG to implement, retaining all immutable prior events/attempts
+and the original budget. Corrected source must descend from the rejected
+implementation, stay inside selected assets, bind a new attachment and
+revalidate before independent review. Use --source-root for learn episode
+and learn attach with an external canonical inbox and clean scoped checkout
+when harness source differs from the scoped implementation. No new authority.
+A separate reviewer may resolve-episode --outcome abandon for a known
+pre-delivery blocker/rejection or exhausted budget with failure evidence;
+active, UNKNOWN or delivered effects cannot be abandoned. This reopens
+opportunity review without inventing benefit or promotion.
+
 Resolve only after every episode step is recorded and matching later
 ordinary-task learning evidence exists:
 
@@ -256,20 +273,47 @@ exclusive-create requests without network dispatch:
     python3 dev/transfer_plan.py plan --source SOURCE --output NEW_LOCAL_DIR --box BOX_UUID --target /tmp/NEW_FILE --work-ref WORK --transfer-ref UNIQUE_TRANSFER
 
 Source is nonempty, up to 4 MiB, with 1..40960-byte parts (at most 128).
-The output directory must not exist. Persist manifest and intent before
-dispatch; request JSON and readback pages contain source bytes, not safe
-to commit indiscriminately. Each action has a stable key and exact path.
-Use one authorized connector call per prepared request and preserve the
-original receipt. Maintain the intent journal with the original Operation
-ID, observed state, actual readback pages, and (for assembly only) exit
-code; never change an uncertain/attempted action back to NOT_SUBMITTED.
-Missing receipt/state, failure or digest mismatch means reconcile,
-not replay. No API credentials, network client or new MCP Tool.
+The output directory must not exist. Keep the original canonical bundle
+in a trusted local durable filesystem; request JSON and readback pages
+contain source bytes, not safe to commit indiscriminately. Each action
+has a stable key and exact path. Read current canonical status, never
+a saved NOT_SUBMITTED snapshot:
 
-    python3 dev/transfer_plan.py assess MANIFEST JOURNAL
+    python3 dev/transfer_plan.py assess BUNDLE
 
-Only after all part and manifest receipts and bytes match, invoke the
-same reviewed helper in the owned guest via a short explicit argv:
+Before EVERY connector dispatch, including assembly, atomically append
+and fsync its exact intent (expected revision from current assess):
+
+    python3 dev/transfer_plan.py begin BUNDLE --expect N --action ACTION
+
+Only a newly returned DISPATCH_INTENT_RECORDED permits the caller, with
+existing authority, to send that exact request once. The helper never
+dispatches. A concurrent claim, failed/uncertain begin, interrupted
+caller or missing receipt must be reconciled using the original key
+and actual original Operation, never begin again or use a stale output.
+Use the returned request file only for this immediate dispatch; confirm
+its SHA256 against the returned request_sha256. Preserve the original
+receipt before independent readback. Append the actual receipt and/or
+readback (not a replacement snapshot):
+
+    python3 dev/transfer_plan.py record BUNDLE --expect N --action ACTION --receipt RECEIPT_JSON
+
+Receipt fields: idempotency_key, operation_id, state, pages, exit_code.
+Use UNKNOWN with no invented Operation ID, pages or exit code if the
+original response is unavailable. Record observed success before or
+with readback; only assembly uses actual guest exit code. Reconcile via
+original Operation or manual owner review if no original receipt can
+be recovered; no reset to NOT_SUBMITTED, no automatic retry. Missing or
+changed history fails closed; legacy assess MANIFEST JOURNAL is refused.
+A copied/relocated bundle is not a new dispatch authorization. This
+local journal is not a distributed lock, tamper-proof storage or native
+power-loss proof. Keep actual original bundle, do not restore an older
+snapshot or copy it into a competing writer. No API credentials, network
+client or new MCP Tool.
+
+Only after all part and manifest receipts and bytes match, durably begin
+the assemble action, then invoke the same reviewed helper in the owned
+guest once via a short explicit argv with the returned exact key/path:
 
     python3 /REVIEWED/CHECKOUT/dev/transfer_plan.py assemble EXACT_GUEST_MANIFEST
 

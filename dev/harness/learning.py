@@ -267,12 +267,13 @@ def register(parser):
     episode.add_argument("--materialize", action="store_true")
     episode.add_argument("--event", help="Explicit JSON task transition; never dispatches work")
     episode.add_argument("--task-expect", type=int, help="Expected task revision for transition")
+    episode.add_argument("--source-root", help="Explicit source checkout for an external episode inbox")
     resolve = sub.add_parser("resolve-episode", help="Record explicit terminal episode review; no promotion")
     resolve.add_argument("inbox")
     resolve.add_argument("id")
     resolve.add_argument("--expect", type=int, required=True)
     resolve.add_argument("--task-expect", type=int, required=True)
-    resolve.add_argument("--outcome", choices=("benefit-confirmed", "reopen"), required=True)
+    resolve.add_argument("--outcome", choices=("benefit-confirmed", "reopen", "abandon"), required=True)
     for field in ("--review-ref", "--actor-ref", "--reason"):
         resolve.add_argument(field, required=True)
     defer = sub.add_parser("defer", help="Record why and when to reconsider a candidate")
@@ -289,6 +290,7 @@ def register(parser):
     attach.add_argument("--validation-evidence", required=True)
     attach.add_argument("--work-ref", help="Bind a new implementation to the originating work")
     attach.add_argument("--attempt-ref", help="Bind a new implementation to the originating attempt")
+    attach.add_argument("--source-root", help="Explicit source checkout for an external episode inbox")
     for action in ("list", "audit"):
         sub.add_parser(action).add_argument("inbox")
     nxt = sub.add_parser("next")
@@ -313,6 +315,13 @@ def register(parser):
 
 def run(args, root):
     inbox = Path(args.inbox)
+    source_root = getattr(args, "source_root", None)
+    if source_root is not None:
+        if inbox.resolve() == (root / "dev/learning").resolve():
+            raise HarnessError("Separate source checkout requires external canonical inbox")
+        root = Path(source_root).resolve()
+        if observe(root)["worktree"] != "clean":
+            raise HarnessError("Separate source checkout must be an exact clean Git root")
     if args.action in ("list", "audit", "next"):
         data, code = audit(inbox, root)
         if args.action == "next":

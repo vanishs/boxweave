@@ -23,14 +23,17 @@ If large inline argv is refused at admission, distinguish an explicit refusal wi
 For repeated or multi-part source transfers, prefer the candidate
 [offline transfer planner](../../transfer_plan.py) when a reviewed Python
 checkout is available. It prepares explicit exclusive-create request JSON,
-a stable bounded manifest and initial intent; it never dispatches MCP.
-Keep the original intent and per-call receipt/readback journal outside Git
-if source bytes are sensitive. Use assess to reconcile; missing/unknown
-or conflicting evidence stops retries. Submit only authorized exact
-requests, inspect original Operations and verify readback. Assemble with
-the reviewed helper in the owned guest only after all part and manifest
-receipts/readbacks are verified; confirm guest exit zero and independently
-hash all final readback pages. Existing target, missing/corrupt chunks,
+a stable bounded manifest and canonical immutable journal; it never
+dispatches MCP. Keep the original bundle outside Git if source bytes are
+sensitive. Use assess BUNDLE and durably begin the exact next action
+BEFORE dispatch (including assembly); only a newly successful begin
+may be used once with existing authority. Append original receipts and
+readback with record; never reset, replay or restore a stale snapshot.
+If interruption or missing/unknown/conflicting evidence occurs, inspect
+the original key/Operation or request manual reconciliation. Assemble
+with the reviewed helper in the owned guest only after all part and
+manifest receipts/readbacks are verified and assembly begin succeeded;
+confirm guest exit zero and independently hash all final readback pages. Existing target, missing/corrupt chunks,
 unproven outcome or unsupported exclusive publication must stop. The
 manual procedure remains the fallback, not authorization to bypass
 admission. The helper is a candidate until independent review and real

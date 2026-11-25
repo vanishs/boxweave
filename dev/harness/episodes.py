@@ -66,8 +66,10 @@ def validate_event(event):
         evolution.bounded(event[key], "episode " + key)
     if event["reconcile_ref"] is not None:
         evolution.bounded(event["reconcile_ref"], "episode reconciliation")
-    allowed = {"WORKING": (None,), "RECORDED": (None,), "BLOCKED": ("blocked", "unknown"),
-               "PENDING": ("resolved",)}
+    allowed = {"WORKING": (None,), "RECORDED": (None,), "BLOCKED": ("blocked", "unknown", "rejected"),
+               "PENDING": ("resolved", "rework")}
+    if event["outcome"] in ("rejected", "rework") and event["step"] != "review":
+        raise HarnessError("Only independent review can reject or initiate review rework")
     if event["outcome"] not in allowed[event["to"]]:
         raise HarnessError("Invalid episode transition outcome")
     if (event["to"] == "PENDING") != (event["reconcile_ref"] is not None):
@@ -118,7 +120,40 @@ def apply_event(data, event, source, candidate):
     events = updated["events"]
     if event["evidence_ref"] in {item["event"]["evidence_ref"] for item in events}:
         raise HarnessError("Episode transition needs distinct evidence reference")
-    if to == "WORKING":
+    if event["outcome"] == "rejected":
+        # Explicit import of an already performed external review is allowed
+        # from READY, without inventing a pre-review claim. Actor/reference
+        # strings identify supplied evidence; they are not authentication.
+        if source["worktree"] != "clean" or source["commit"] != rows["implement"].get("recorded_source"):
+            raise HarnessError("Rejection must bind exact implemented source")
+        if event["actor_ref"] in {a["actor_ref"] for a in attempts if a["step"] == "implement"}:
+            raise HarnessError("Review rejection requires independent actor reference")
+        if row["state"] == "PENDING" and event["step"] in tasks.ready(updated):
+            if len(attempts) >= proposal["max_attempts"] or event["attempt_ref"] in {a["attempt_ref"] for a in attempts}:
+                raise HarnessError("Review rejection needs a new attempt within budget")
+            attempts.append({key: event[key] for key in ("step", "attempt_ref", "actor_ref")})
+        elif (row["state"] != "WORKING" or row.get("attempt_ref") != event["attempt_ref"]
+                or row.get("actor_ref") != event["actor_ref"]):
+            raise HarnessError("Rejection must match ready review or its existing claim")
+        row.update(state="BLOCKED", attempt_ref=event["attempt_ref"], actor_ref=event["actor_ref"],
+                   checkpoint=event["checkpoint_ref"], note=event["reason"], evidence=event["evidence_ref"],
+                   blocker="rejected")
+    elif event["outcome"] == "rework":
+        if (row["state"] != "BLOCKED" or row.get("blocker") != "rejected"
+                or row.get("attempt_ref") != event["attempt_ref"]
+                or source["commit"] != rows["implement"].get("recorded_source")
+                or any(rows[step]["state"] != "PENDING" for step in ("deliver", "benefit"))):
+            raise HarnessError("Rework requires exact known rejected review before delivery")
+        refs = {item["event"]["evidence_ref"] for item in events}
+        refs.update(item["event"]["reconcile_ref"] for item in events)
+        if event["reconcile_ref"] in refs or event["reconcile_ref"] == event["evidence_ref"]:
+            raise HarnessError("Rework needs distinct explicit reconciliation evidence")
+        if len(attempts) + len(evolution.EPISODE_STEPS) > proposal["max_attempts"]:
+            raise HarnessError("Insufficient remaining attempt budget; preserve rejection or abandon")
+        # Keep every prior revision, event, and attempt. Invalidate all
+        # acceptance for the next implementation, including downstream steps.
+        updated["tasks"] = spec(candidate)["tasks"]
+    elif to == "WORKING":
         if event["step"] not in tasks.ready(updated):
             raise HarnessError("Episode step is not ready; reconcile existing claim")
         if len(attempts) >= proposal["max_attempts"]:
@@ -147,7 +182,12 @@ def apply_event(data, event, source, candidate):
             raise HarnessError("Transition does not match outstanding episode claim")
         if to == "RECORDED":
             if event["step"] == "implement":
-                bound_implementation(candidate, event, source, selected)
+                impl = bound_implementation(candidate, event, source, selected)
+                previous = [item for item in events if item["event"]["step"] == "implement"
+                            and item["event"]["to"] == "RECORDED"]
+                if previous and (source["commit"] == previous[-1]["source"]["commit"]
+                        or impl["binding"]["revision"] <= previous[-1]["candidate_revision"]):
+                    raise HarnessError("Rework requires a new committed implementation and attachment")
             elif source["commit"] != rows["implement"].get("recorded_source"):
                 raise HarnessError("Recorded step is not bound to implemented source")
             row.update(state=to, note=event["reason"], checkpoint=event["checkpoint_ref"],
@@ -158,6 +198,8 @@ def apply_event(data, event, source, candidate):
     else:
         if row["state"] != "BLOCKED" or row.get("attempt_ref") != event["attempt_ref"]:
             raise HarnessError("Reconcile the exact blocked episode attempt")
+        if row.get("blocker") == "rejected":
+            raise HarnessError("Rejected review requires explicit rework or abandonment, not ordinary retry")
         if row.get("blocker") == "unknown" and event["actor_ref"] == row.get("actor_ref"):
             raise HarnessError("Uncertain outcome needs separate reconciliation actor reference")
         refs = {item["event"]["evidence_ref"] for item in events}
@@ -215,7 +257,7 @@ def read_history(directory, expected, candidate, candidate_dir):
 
 def check_live_scope(root, proposal, source, candidate, event):
     check_source(source, event["to"] != "BLOCKED")
-    if event["to"] == "BLOCKED":
+    if event["to"] == "BLOCKED" and event["outcome"] != "rejected":
         return  # Preserve original evidence even when the worktree is dirty.
     check_scope(proposal, root)
     base = proposal["source_sha"]
@@ -252,6 +294,25 @@ def resolution_record(candidate, candidate_dir, root, history_root, *, task_revi
     if task["revision"] != task_revision:
         raise HarnessError("Resolution task revision conflict")
     rows = tasks.validate(task)
+    if outcome == "abandon":
+        if (rows["deliver"]["state"] != "PENDING" or rows["benefit"]["state"] != "PENDING"
+                or any(row["state"] == "WORKING" or row.get("blocker") == "unknown" for row in rows.values())):
+            raise HarnessError("Cannot abandon active, uncertain or delivered effects")
+        failures = [item for item in task["events"] if item["event"]["to"] == "BLOCKED"
+                    and item["event"]["outcome"] in ("blocked", "rejected")]
+        blocked = any(row["state"] == "BLOCKED" for row in rows.values())
+        exhausted = len(task["attempts"]) >= selected["proposal"]["max_attempts"]
+        if not failures or not (blocked or exhausted):
+            raise HarnessError("Abandonment requires known blocker/rejection or exhausted attempts with failure evidence")
+        used = {a["actor_ref"] for a in task["attempts"] if a["step"] == "implement"}
+        refs = {item["event"]["evidence_ref"] for item in task["events"]}
+        if actor_ref in used or review_ref in refs:
+            raise HarnessError("Abandonment requires separate review and distinct disposition evidence")
+        raw = (directory / f"{task_revision:08d}.json").read_bytes()
+        return evolution.validate_resolution({"episode_id": selected["episode_id"],
+            "task_revision": task_revision, "task_sha256": hashlib.sha256(raw).hexdigest(),
+            "outcome": outcome, "review_ref": review_ref, "actor_ref": actor_ref, "reason": reason,
+            "failure_evidence": failures[-1]["event"]["evidence_ref"], "resolved_revision": candidate["revision"]})
     if any(row["state"] != "RECORDED" for row in rows.values()):
         raise HarnessError("Resolve only after all episode steps are recorded")
     used = {item["actor_ref"] for item in task["attempts"]
@@ -331,12 +392,21 @@ def materialize(row, root, history_root, create=False, *, candidate_dir, event=N
         validate_event(event)
         source = observe(root)
         check_live_scope(root, proposal, source, row, event)
+        if event["step"] == "implement" and event["to"] == "RECORDED":
+            previous = [item for item in data["events"] if item["event"]["step"] == "implement"
+                        and item["event"]["to"] == "RECORDED"]
+            if previous and git(root, "merge-base", "--is-ancestor",
+                                previous[-1]["source"]["commit"], source["commit"]) is None:
+                raise HarnessError("Corrected source must descend from rejected implementation")
         updated = apply_event(data, event, source, row)
         records.publish(directory, task_expect, updated)
         data = read_history(directory, expected, row, candidate_dir)
     rows = tasks.validate(data)
     ready = tasks.ready(data)
-    if any(item["state"] == "BLOCKED" for item in rows.values()):
+    if rows["review"].get("blocker") == "rejected":
+        status = "REWORK_REQUIRED"
+        next_action = "Record explicit rework on rejected source or independent pre-delivery abandonment"
+    elif any(item["state"] == "BLOCKED" for item in rows.values()):
         status = "UNKNOWN" if any(item.get("blocker") == "unknown" for item in rows.values()) else "BLOCKED"
         next_action = "Preserve original checkpoint and reconcile exact blocked attempt before any new claim"
     elif any(item["state"] == "WORKING" for item in rows.values()):

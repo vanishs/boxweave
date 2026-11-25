@@ -112,7 +112,9 @@ def validate(row):
 
 def validate_resolution(value):
     fields = {"episode_id", "task_revision", "task_sha256", "outcome", "review_ref",
-              "actor_ref", "reason", "benefit_evidence", "resolved_revision"}
+              "actor_ref", "reason", "resolved_revision"}
+    evidence_key = "failure_evidence" if isinstance(value, dict) and value.get("outcome") == "abandon" else "benefit_evidence"
+    fields.add(evidence_key)
     if not isinstance(value, dict) or set(value) != fields:
         raise HarnessError("Invalid episode resolution fields")
     if not isinstance(value["episode_id"], str) or not re.fullmatch(r"BDH-E-[0-9a-f]{32}", value["episode_id"]):
@@ -122,9 +124,9 @@ def validate_resolution(value):
     for key in ("task_revision", "resolved_revision"):
         if type(value[key]) is not int or value[key] < 1:
             raise HarnessError("Invalid episode resolution revision")
-    if value["outcome"] not in ("benefit-confirmed", "reopen"):
+    if value["outcome"] not in ("benefit-confirmed", "reopen", "abandon"):
         raise HarnessError("Invalid episode resolution outcome")
-    for key in ("review_ref", "actor_ref", "reason", "benefit_evidence"):
+    for key in ("review_ref", "actor_ref", "reason", evidence_key):
         bounded(value[key], "episode resolution " + key)
     return value
 
@@ -344,10 +346,12 @@ def opportunity(row, coverage=None):
     selected = outstanding_selection(row)
     resolution = coverage.get("episode_resolution")
     if resolution is not None:
-        if resolution["outcome"] == "reopen":
-            reasons.append("episode-reopened")
-            if resolution["benefit_evidence"] not in evidence:
-                evidence.append(resolution["benefit_evidence"])
+        if resolution["outcome"] in ("reopen", "abandon"):
+            abandoned = resolution["outcome"] == "abandon"
+            reasons.append("episode-abandoned" if abandoned else "episode-reopened")
+            ref = resolution["failure_evidence" if abandoned else "benefit_evidence"]
+            if ref not in evidence:
+                evidence.append(ref)
         status = "REVIEW_DUE" if reasons else "EPISODE_RESOLVED"
     if selected is not None:
         status = "SELECTION_RECORDED"

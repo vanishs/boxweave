@@ -635,5 +635,126 @@ except HarnessError as e:
             self.assertEqual(len(list(Path(current["history"]).glob("*.json"))),2)
 
 
+    def test_review_rework_and_abandon_real_git_source(self):
+        # Real commits, exact scope and immutable replay, not a mock SHA.
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)/"repo"
+            root.mkdir()
+            def git(*args):
+                return subprocess.check_output(["git","-C",str(root),*args],text=True,stderr=subprocess.STDOUT).strip()
+            git("init","-q")
+            git("config","user.email","fixture@example.invalid")
+            git("config","user.name","Fixture")
+            asset=root/"dev/skills/box-development/SKILL.md"
+            asset.parent.mkdir(parents=True)
+            asset.write_text("initial\\n")
+            git("add",".")
+            git("commit","-qm","initial")
+            base=git("rev-parse","HEAD")
+            inbox=Path(temp)/"learning"
+            inbox.mkdir()
+            history=Path(temp)/"episodes"
+            history.mkdir()
+            def call(action,*args):
+                return learning.run(self.parser.parse_args([action,str(inbox),*args]),root)[0]
+            call("capture","L100","--work-ref","fixture/a","--observation","Residual",
+                 "--evidence","fixture:initial","--asset","dev/skills/box-development/SKILL.md",
+                 "--validation","fixture validation","--change-class","L2")
+            o=call("opportunity","L100")["opportunity"]
+            proposal=Path(temp)/"proposal.json"
+            proposal.write_text(json.dumps(dict(self.proposal(),source_sha=base,max_attempts=12)))
+            selected=call("decide","L100","--expect","1","--basis",o["basis"],"--decision","select",
+                 "--reason","selection","--review-ref","fixture:review","--when","new evidence",
+                 "--proposal",str(proposal))
+            eid=selected["record"]["opportunity_reviews"][-1]["episode_id"]
+            def episode(rev,*args):
+                return call("episode","L100","--expect",str(rev),"--history-root",str(history),*args)
+            episode(2,"--materialize")
+            def event(rev,taskrev,*args,**kw):
+                p=Path(temp)/"event.json"
+                p.write_text(json.dumps(self.event(*args,**kw)))
+                return episode(rev,"--event",str(p),"--task-expect",str(taskrev))
+            def attach(rev,attempt,ref):
+                call("attach","L100","--expect",str(rev),"--implementation-ref","fixture:"+ref,
+                     "--validation-evidence","evidence:"+ref,"--work-ref",eid,"--attempt-ref",attempt)
+            event(2,1,"implement","WORKING","initial",attempt="impl1")
+            asset.write_text("first implementation\\n")
+            git("add",".");git("commit","-qm","first")
+            first=git("rev-parse","HEAD")
+            attach(2,"impl1","impl1")
+            event(3,2,"implement","RECORDED","impl1",attempt="impl1")
+            event(3,3,"validate","WORKING","v1claim",attempt="v1")
+            event(3,4,"validate","RECORDED","v1done",attempt="v1")
+            with self.assertRaises(HarnessError):
+                event(3,5,"review","BLOCKED","self-fail",attempt="bad",outcome="rejected")
+            rejected=event(3,5,"review","BLOCKED","rejected",actor="reviewer",attempt="r1",outcome="rejected")
+            self.assertEqual(rejected["status"],"REWORK_REQUIRED")
+            self.assertEqual(rejected["attempts_used"],3)
+            with self.assertRaises(HarnessError):
+                event(3,6,"review","PENDING","retry",actor="reviewer",attempt="r1",outcome="resolved",reconcile="review:retry")
+            with self.assertRaises(HarnessError):
+                event(3,6,"deliver","WORKING","bad-delivery",attempt="bad")
+            # Copy the exact rejected history for the abandonment branch.
+            import shutil
+            other=Path(temp)/"abandon";other.mkdir()
+            shutil.copytree(inbox,other/"learning")
+            shutil.copytree(history,other/"episodes")
+            abandon=self.parser.parse_args(["resolve-episode",str(other/"learning"),"L100",
+                "--expect","3","--task-expect","6","--outcome","abandon","--review-ref","terminal:failure",
+                "--actor-ref","reviewer","--reason","Known rejected implementation; no benefit"])
+            result=learning.run(abandon,root)[0]["record"]
+            resolution=result["opportunity_resolutions"][-1]
+            self.assertEqual(resolution["failure_evidence"],"evidence:rejected")
+            self.assertNotIn("benefit_evidence",resolution)
+            self.assertEqual(learning.read_history(other/"learning/L100",root)["revision"],4)
+            due=learning.run(self.parser.parse_args(["opportunity",str(other/"learning"),"L100"]),root)[0]["opportunity"]
+            self.assertIn("episode-abandoned",due["reasons"])
+            self.assertEqual(due["status"],"REVIEW_DUE")
+            newer=dict(self.proposal(),source_sha=first,max_attempts=12)
+            proposal.write_text(json.dumps(newer))
+            follow=learning.run(self.parser.parse_args(["decide",str(other/"learning"),"L100","--expect","4",
+                "--basis",due["basis"],"--decision","select","--review-ref","fixture:new-selection",
+                "--reason","different approach","--when","review","--proposal",str(proposal)]),root)[0]["record"]
+            self.assertNotEqual(follow["opportunity_reviews"][-1]["episode_id"],eid)
+            # The live original returns to implement without rewriting history.
+            ready=event(3,6,"review","PENDING","rework",attempt="r1",outcome="rework",reconcile="review:repair")
+            self.assertEqual(ready["ready"],["implement"])
+            self.assertEqual(ready["attempts_used"],3)
+            event(3,7,"implement","WORKING","i2claim",attempt="impl2")
+            with self.assertRaises(HarnessError):
+                event(3,8,"implement","RECORDED","old-proof",attempt="impl2")
+            asset.write_text("corrected implementation\\n")
+            git("add",".");git("commit","-qm","corrected")
+            corrected=git("rev-parse","HEAD")
+            self.assertNotEqual(first,corrected)
+            attach(3,"impl2","impl2")
+            ready=event(4,8,"implement","RECORDED","impl2",attempt="impl2")
+            self.assertEqual(ready["ready"],["validate"])
+            with self.assertRaises(HarnessError):
+                event(4,9,"review","WORKING","early-review",actor="reviewer",attempt="bad")
+            event(4,9,"validate","WORKING","v2claim",attempt="v2")
+            event(4,10,"validate","RECORDED","v2done",attempt="v2")
+            event(4,11,"review","WORKING","r2claim",actor="reviewer",attempt="r2")
+            ready=event(4,12,"review","RECORDED","r2done",actor="reviewer",attempt="r2")
+            self.assertEqual(ready["ready"],["deliver"])
+            self.assertEqual(ready["attempts_used"],6)
+            self.assertEqual(episode(4)["revision"],13)
+            task=episodes.read_history(history/eid,episodes.spec(learning.read_history(inbox/"L100",root)),
+                                       learning.read_history(inbox/"L100",root),inbox/"L100")
+            self.assertEqual(task["tasks"][0]["recorded_source"],corrected)
+            self.assertEqual(task["events"][1]["source"]["commit"],first)
+            self.assertEqual(task["events"][4]["event"]["outcome"],"rejected")
+
+    def test_unknown_cannot_rework_or_abandon(self):
+        selected,history,initial=self.episode_fixture()
+        self.advance_episode(history,self.event("implement","WORKING","claim"),1)
+        self.advance_episode(history,self.event("implement","BLOCKED","unknown",outcome="unknown"),2)
+        with self.assertRaises(HarnessError):
+            self.invoke("resolve-episode","L100","--expect","2","--task-expect","3",
+                        "--outcome","abandon","--review-ref","terminal:unknown",
+                        "--actor-ref","separate-agent","--reason","Cannot know outcome")
+        self.assertEqual(self.invoke("episode","L100","--expect","2","--history-root",str(history))[0]["status"],"UNKNOWN")
+
+
 if __name__ == "__main__":
     unittest.main()
