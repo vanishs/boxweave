@@ -44,7 +44,7 @@ def asset_paths(root, asset, registry):
     if asset in registry:
         return registry[asset]
     path = repo_path(root, asset).relative_to(root.resolve()).as_posix()
-    return [path] if path == asset else []
+    return [path] if path == asset and (root / path).is_file() else []
 
 
 def matching_observation(candidate, row, item):
@@ -81,14 +81,22 @@ def _review(row, root, inbox=None):
     if disposition and disposition["kind"] in ("candidate", "deferred", "improved"):
         if not any(item["decision"] == "linked" and item["candidate"] == disposition["ref"] for item in items):
             issues.append("Learning disposition lacks matching linked feedback")
-    registry = {asset["id"]: asset["paths"] for asset in context.assets(root)} if items else {}
+    registry = {asset["id"]: asset["paths"] for asset in context.assets(root)} if items or row["used_assets"] else {}
+    accounted = {item["asset"] for item in items}
+    for asset in row["used_assets"]:
+        if asset not in accounted:
+            issues.append("Material used asset lacks feedback: " + asset)
+    linked = {item["candidate"] for item in items if item["decision"] == "linked"}
+    if set(row.get("learning_links", [])) != linked:
+        issues.append("Work learning links differ from linked feedback")
     inbox = Path(inbox) if inbox else root / "dev/learning"
-    candidates = learning.all_records(inbox, root) if inbox.is_dir() and not inbox.is_symlink() and items else []
+    candidates = learning.all_records(inbox, root) if inbox.is_dir() and not inbox.is_symlink() else []
     known = {candidate["id"]: candidate for candidate in candidates}
-    if items and not inbox.is_dir():
+    if not inbox.is_dir():
         issues.append("Learning inbox unavailable; do not infer no related candidates")
-    if items and inbox.is_symlink():
+    if inbox.is_symlink():
         issues.append("Unsafe learning inbox")
+    seen_paths = {}
     for item in items:
         validate_item(item)
         paths = asset_paths(root, item["asset"], registry)
@@ -98,6 +106,14 @@ def _review(row, root, inbox=None):
         result = {"asset": item["asset"], "evidence": item["evidence"], "decision": item["decision"],
                   "candidate": item["candidate"], "related": suggestions}
         problems = []
+        if not paths:
+            problems.append("Unknown asset ID or nonexistent canonical path")
+        for path in paths:
+            key = (path, item["evidence"])
+            previous = seen_paths.get(key)
+            if previous is not None and previous != item["asset"]:
+                problems.append("Duplicate feedback through asset alias: " + previous)
+            seen_paths[key] = item["asset"]
         if item["evidence"] not in row["evidence"]:
             problems.append("Feedback evidence absent from work record")
         if item["asset"] not in row["used_assets"] and item["outcome"] != "missing":

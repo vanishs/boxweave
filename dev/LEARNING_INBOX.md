@@ -55,4 +55,4 @@ The original historical report owns actual commands, IDs and results. These obse
 
 ## Universal activation / dual-loop learning
 
-- [BDH-L014 revision 5](learning/BDH-L014/00000005.json) structures historical BDH-L005 (do not duplicate), links real U2 friction, records deferral and rediscovery, and attaches the bounded Box source-transfer Skill improvement. Candidate remains pending review; subsequent work should inspect implementation rather than repeat it.
+- [BDH-L014 revision 5](learning/BDH-L014/00000005.json) structures historical BDH-L005 (do not duplicate), links real U2 friction, records deferral and rediscovery, and attaches the bounded Box source-transfer Skill improvement. [Revision 6](learning/BDH-L014/00000006.json) reconciles documented #191 reuse; [revision 7](learning/BDH-L014/00000007.json) records a distinct actual #192 transfer reuse. Candidate remains pending review; inspect implementation instead of duplicating it. Neither observation establishes independent Agent efficacy or promotion.

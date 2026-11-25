@@ -12,7 +12,7 @@
   "state": "ACTIVE",
   "next_safe_action": "Ask for observed version and read relevant installation contract",
   "evidence": [],
-  "used_assets": ["knowledge.maintenance"],
+  "used_assets": [],
   "asset_feedback": [],
   "learning_links": [],
   "learning": null

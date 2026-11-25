@@ -46,3 +46,49 @@ or fresh agent witness claimed.
 ## Local checkpoint evidence
 
 Operation 431199869b4ecf50fc7ff8ebc245da22 exited 0: 60 regression tests, deterministic Eval and learning audit passed. The real [P0 feedback envelope](BDH_V06_PR191_FEEDBACK.json) first reported REVIEW_REQUIRED against L014 revision 5, then the existing learn observe command appended revision 6 and the review reported FEEDBACK_RECORDED. Retrospective evidence, not a fresh Agent autonomous witness; candidate state remains CANDIDATE. E1/E2 implementation and E3 retrospective reconciliation are locally verified. E4 exact-head CI, independent L4 review and fresh ordinary-task witness remain open. No product code or workflow gate changes.
+
+## Continuation checkpoint (2026-11-25)
+
+Verified exact parent SHA unchanged, previous child head 64857b9923ecb8d200c29367c01e7c73ff22fdd2,
+and clean Box checkout of the same tree through operation
+1af7ab112860013b3b367c85bd36fd48 (guest exit 0). Previous push quality
+[45574869629](https://github.com/vanishs/boxweave/actions/runs/45574869629)
+and candidate [45574869775](https://github.com/vanishs/boxweave/actions/runs/45574869775)
+jobs passed for applicable source/dual-arch/manifest checks; native and
+release jobs were skipped, not accepted. No change to the paused parent.
+
+E1/E2: probe e6536621bb07dc9fbe1d76de509128ea exit 0 reproduced unaccounted
+material assets and unknown asset IDs falsely returning FEEDBACK_RECORDED,
+and legacy work begin/closure returning RECORDED. Added mandatory protocol
+on begin, fail-closed final boundaries, full work-history transition review,
+used-asset coverage, canonical asset validation, alias/evidence detection,
+current link reconciliation and unavailable/malformed inbox review. Source
+finish binds objective, checkpoint attempt, repository and clean source SHA.
+Correctable candidate links preserve original facts in prior revisions.
+After fixes, operation c4e5f1b31565ab2527f107be5076853b exit 0 ran 63 tests,
+10 Eval cases and confirmed the original revision-6 feedback; operation
+0797d13881364530f1e28620abfea7ec exit 0 ran 64 tests, 12 Eval cases and
+learning audit without findings. This is implementation self-review and
+local regression evidence, not independent L4 acceptance.
+
+E3: actual [continuation feedback](BDH_V06_CONTINUATION_FEEDBACK.json)
+records the implementer's admission refusal and verified L014 reuse,
+appended as revision 7 without a duplicate candidate or promotion.
+This is not a fresh ordinary-product-task Agent witness. Existing P0
+revision 6 is preserved. No product issue or transfer tool added.
+
+E4: exact new-head push CI, independent L4 review and fresh ordinary-task
+Agent witness remain required. For the independent witness, configure only
+the canonical one-line startup locator once; give a fresh Agent an ordinary
+bounded product investigation at the authorized child ref, without
+per-task BDH reminders or changes to paused #191. Record observed activation,
+asset discovery/use, material feedback disposition, exact observation or
+reasoned non-applicability, durable evidence and subsequent rediscovery.
+Do not treat fixture success, the implementer's own work, or a green CI
+as independent Agent behavior. If no independent Agent surface is
+available, keep both gates open. No integration or release authorized.
+
+Full repository staged format attempt 1f173f5f334e5c6e86bd2648251f9689
+exited 1 because the Box PATH lacked gofmt. No Go source is changed here.
+Validate every changed staged file and preserve full source format/build
+checks in CI; do not classify the environment failure as a code regression.

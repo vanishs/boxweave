@@ -131,9 +131,13 @@ def advance(old, new, expected):
     if old["state"] in ("BLOCKED", "HANDOFF") and new["state"] not in ("BLOCKED", "HANDOFF", "UNKNOWN"):
         if set(new["evidence"]) == set(old["evidence"]):
             raise HarnessError("Blocked work needs new reconciliation evidence")
-    for key in ("evidence", "used_assets", "original_operations", "related_work", "learning_links"):
+    for key in ("evidence", "used_assets", "original_operations", "related_work"):
         if not set(old.get(key, [])).issubset(new.get(key, [])):
             raise HarnessError("Cannot remove original references: " + key)
+    # Candidate links are review decisions, not original facts. Prior links
+    # remain in immutable revisions when an incorrect association is corrected.
+    if new.get("feedback_protocol") != feedback.PROTOCOL and not set(old.get("learning_links", [])).issubset(new.get("learning_links", [])):
+        raise HarnessError("Cannot remove legacy learning links without explicit protocol migration")
     feedback.preserve(old, new)
     for key, prior in old["target"].items():
         if prior is not None and prior != "unknown" and new["target"][key] != prior:
@@ -141,6 +145,25 @@ def advance(old, new, expected):
                 continue
             raise HarnessError("Target identity changed without new version evidence; use linked new work")
     return new
+
+
+def read_history(directory):
+    """Validate every work revision and transition, including imported copies."""
+    last = validate(latest(directory))
+    prior = None
+    for number in range(1, last["revision"] + 1):
+        current = validate(read_json(Path(directory) / f"{number:08d}.json"))
+        if current.get("revision") != number:
+            raise HarnessError("Work revision differs from history position")
+        if prior is None:
+            if current["state"] != "ACTIVE":
+                raise HarnessError("Work history must begin with an active envelope")
+        else:
+            advance(prior, {key: value for key, value in current.items() if key != "revision"}, number - 1)
+        prior = current
+    if prior != last:
+        raise HarnessError("Work history changed while reading")
+    return last
 
 
 def summary(row):
@@ -235,12 +258,14 @@ def run(args, root):
         if args.action == "begin":
             if row["state"] != "ACTIVE" or row.get("revision") is not None:
                 raise HarnessError("Begin requires a new active envelope, not an imported history")
+            if row.get("feedback_protocol") != feedback.PROTOCOL:
+                raise HarnessError("New work history requires feedback protocol 1; check legacy records read-only")
             row = publish(args.directory, 0, row)
     else:
-        row = validate(latest(args.directory))
+        row = read_history(args.directory)
         if args.action == "boundary":
             updated = advance(row, read_json(args.file), args.expect)
-            if updated.get("feedback_protocol") == feedback.PROTOCOL and updated["state"] in ("RECORDED", "ANSWERED"):
+            if updated["state"] in ("RECORDED", "ANSWERED"):
                 reviewed, code = feedback.review(updated, root, inbox)
                 if code or reviewed["status"] != "FEEDBACK_RECORDED":
                     return {"status": "REVIEW_REQUIRED", "published": False, "feedback": reviewed,

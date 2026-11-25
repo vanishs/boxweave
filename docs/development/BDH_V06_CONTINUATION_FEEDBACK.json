@@ -1,0 +1,50 @@
+{
+  "kind": "work",
+  "schema_version": 1,
+  "feedback_protocol": 1,
+  "work_ref": "boxweave/bdh-v06-pr191",
+  "attempt_ref": "continuation-20261125",
+  "task_kind": "harness",
+  "objective": "Reconcile actual L014 reuse during PR #192 continuation",
+  "risk": "standard",
+  "authority": "Owner authorized child development and evidence; no merge or publication",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "version": null,
+    "source_sha": "64857b9923ecb8d200c29367c01e7c73ff22fdd2"
+  },
+  "state": "HANDOFF",
+  "boundary": "progress",
+  "next_safe_action": "Review attached L014 implementation; independent review and ordinary task witness remain pending",
+  "evidence": [
+    "PR #192 continuation: inline Exec returned invalid admission; exclusive file e28709b988f7a074876f6c86f0e16d97 SUCCEEDED; short Exec 890ca73f3bcb75e89eb42f7fe2f125df exit 0; regression 0797d13881364530f1e28620abfea7ec exit 0"
+  ],
+  "used_assets": [
+    "skill.box-development"
+  ],
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "original_operations": [
+    "e28709b988f7a074876f6c86f0e16d97",
+    "890ca73f3bcb75e89eb42f7fe2f125df",
+    "0797d13881364530f1e28620abfea7ec"
+  ],
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "evidence": "PR #192 continuation: inline Exec returned invalid admission; exclusive file e28709b988f7a074876f6c86f0e16d97 SUCCEEDED; short Exec 890ca73f3bcb75e89eb42f7fe2f125df exit 0; regression 0797d13881364530f1e28620abfea7ec exit 0",
+      "outcome": "helped",
+      "attempt_ref": "continuation-20261125",
+      "observation": "A large inline source-edit Exec was refused at admission without an Operation receipt; reused L014 exclusive file creation and short execution, observed verified file result and exit-zero patch and regression.",
+      "decision": "linked",
+      "candidate": "BDH-L014",
+      "reason": "Actual bounded reuse by the implementer; no new asset or independent ordinary-task claim"
+    }
+  ],
+  "learning": {
+    "kind": "reuse",
+    "ref": "Existing L014 transfer procedure worked; retain candidate state"
+  }
+}

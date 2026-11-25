@@ -27,8 +27,11 @@ A material outcome record is a caller assertion, not independent PASS.
 ## Material feedback protocol (v0.6 candidate)
 
 For material tasks use the current task checkout's envelope template with
-feedback_protocol 1. Preserve actual feedback facts at each boundary;
-selected assets are not evidence of use. Each material asset_feedback item
+feedback_protocol 1. Preserve actual feedback facts at each boundary.
+Record only materially used assets in used_assets, not selected or merely
+discovered assets; every listed asset needs feedback. A missing asset can
+be recorded as an explicit gap, not falsely counted as helpful use.
+Each material asset_feedback item
 records asset (registry ID or canonical path), evidence, outcome, attempt_ref,
 observation, decision, candidate (ID or null), and reason. Decisions: linked,
 no-change, not-applicable (explain why related candidates do not apply),
@@ -40,10 +43,15 @@ the work record and learning revision.
 Run bwdev work feedback FILE to review exact local links; work boundary and
 resume also surface review. Pending feedback can be durably handed off
 without blocking independent product work; a final RECORDED/ANSWERED
-boundary cannot assert closure with unresolved protocol-1 feedback.
+boundary cannot assert closure with unresolved feedback. New work begin
+requires protocol 1. Legacy histories remain readable and may be handed off,
+but completion requires explicit reconciliation to protocol 1; no automatic
+migration. Reconcile known assets, evidence, candidate observations, current
+learning links and inbox availability. Corrected candidate decisions may
+change current links; earlier links and facts remain in prior revisions.
 Use bwdev finish with --work-history DIRECTORY for structured delivery review,
-rather than legacy reason-only learning flags. Legacy records remain readable
-but require explicit review; no automatic migration. This is an advisory
+rather than legacy reason-only learning flags. The complete work history,
+objective, checkpoint attempt and exact repository/source must agree. This is an advisory
 record check, not proof of remote persistence, completeness of observations,
 native acceptance, or independent learning efficacy.
 
@@ -125,8 +133,9 @@ learn defer records a reason and reconsideration condition. Relevant deferred
 items reappear without auto-promotion or execution; reopen via review to
 CANDIDATE before attach. start and work plan show reasons and next actions.
 Exact evidence duplicates are refused; semantic duplication and independent
-recurrence need review. Finish accepts --related-candidate for additional
-candidates linked to the work or observations. Missing inbox is not no-learning.
+recurrence need review. The v0.5.1 legacy --related-candidate finish
+flag is historical; use structured learning_links and exact observations
+in the protocol-1 envelope. Missing or invalid inbox is not no-learning.
 
 ## Integrated workflow (v0.5)
 
@@ -146,10 +155,10 @@ profile and verification plan. Initialization is explicit. Resume reads
 original local records; it does not replay native effects. Status and finish
 can include checkpoint, repeatable --evidence, --inbox and exact CI snapshot.
 Use --export with a fresh local filename for a JSON handoff and copy the
-pr_summary field into the active PR after sanitizing. Finish requires a
-learning disposition (candidate:ID from the same work ref and supplied
-inbox, or no-new-asset:REASON), recorded tasks, local evidence, checkpoint
+pr_summary field into the active PR after sanitizing. Finish requires --work-history DIRECTORY with reconciled protocol-1
+feedback and a recorded outcome, recorded tasks, local evidence, checkpoint
 and exact repo/PR/base/CI metadata; unresolved items remain REVIEW_REQUIRED.
+The v0.5 reason-only --learning-disposition flag cannot establish closure.
 A handoff summary is never permission to merge.
 
 See [v0.5 usage and contracts](../docs/development/BWDEV_DESIGN.md#v05-integrated-workflow).

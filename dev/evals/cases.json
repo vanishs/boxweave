@@ -313,6 +313,95 @@
       "expected_states": [
         "FEEDBACK_RECORDED"
       ]
+    },
+    {
+      "id": "feedback-unaccounted-material-asset",
+      "kind": "feedback",
+      "envelope": {
+        "kind": "work",
+        "schema_version": 1,
+        "feedback_protocol": 1,
+        "work_ref": "eval/feedback",
+        "attempt_ref": "fixture",
+        "task_kind": "development",
+        "objective": "fixture",
+        "risk": "standard",
+        "authority": "fixture only",
+        "target": {
+          "kind": "repository",
+          "ref": "fixture",
+          "version": null,
+          "source_sha": null
+        },
+        "state": "HANDOFF",
+        "boundary": "handoff",
+        "next_safe_action": "review",
+        "evidence": [
+          "fixture"
+        ],
+        "used_assets": [
+          "tool.bwdev"
+        ],
+        "asset_feedback": [],
+        "learning_links": [],
+        "learning": {
+          "kind": "none",
+          "ref": "fixture"
+        }
+      },
+      "expected_states": [
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "id": "feedback-unknown-asset",
+      "kind": "feedback",
+      "envelope": {
+        "kind": "work",
+        "schema_version": 1,
+        "feedback_protocol": 1,
+        "work_ref": "eval/feedback",
+        "attempt_ref": "fixture",
+        "task_kind": "development",
+        "objective": "fixture",
+        "risk": "standard",
+        "authority": "fixture only",
+        "target": {
+          "kind": "repository",
+          "ref": "fixture",
+          "version": null,
+          "source_sha": null
+        },
+        "state": "HANDOFF",
+        "boundary": "handoff",
+        "next_safe_action": "review",
+        "evidence": [
+          "fixture"
+        ],
+        "used_assets": [
+          "not-a-real-asset"
+        ],
+        "asset_feedback": [
+          {
+            "asset": "not-a-real-asset",
+            "evidence": "fixture",
+            "outcome": "helped",
+            "attempt_ref": "fixture",
+            "observation": "fixture",
+            "decision": "no-change",
+            "candidate": null,
+            "reason": "fixture"
+          }
+        ],
+        "learning_links": [],
+        "learning": {
+          "kind": "none",
+          "ref": "fixture"
+        }
+      },
+      "expected_states": [
+        "REVIEW_REQUIRED"
+      ]
     }
   ]
 }

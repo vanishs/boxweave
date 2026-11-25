@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 
 from . import checkpoint, ci, context, evolution, feedback, learning, profiles, tasks, verification, work
-from .records import latest
 from .common import HarnessError, observe
 
 
@@ -85,9 +84,19 @@ def summary(args, root, finishing=False):
     work_history = getattr(args, "work_history", None)
     disposition_text = args.learning_disposition or ""
     if work_history:
-        envelope = work.validate(latest(work_history))
+        envelope = work.read_history(work_history)
         if envelope["work_ref"] != data["work_ref"]:
             raise HarnessError("Feedback work_ref differs from task history")
+        if finishing:
+            if envelope["objective"] != data["objective"]:
+                issues.append("Feedback objective differs from task history")
+            if envelope["task_kind"] not in ("development", "harness", "release"):
+                issues.append("Feedback task kind differs from source delivery")
+            if args.checkpoint and envelope["attempt_ref"] != cp["attempt_ref"]:
+                issues.append("Feedback attempt differs from checkpoint")
+            target = envelope["target"]
+            if target["kind"] != "repository" or target["ref"] != args.repo or target["source_sha"] != source["commit"]:
+                issues.append("Feedback target differs from exact delivery repository and source")
         result["feedback"], code = feedback.review(envelope, root, args.inbox)
         result["work_state"] = envelope["state"]
         if code or (finishing and result["feedback"]["status"] != "FEEDBACK_RECORDED"):

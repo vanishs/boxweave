@@ -78,6 +78,7 @@ class WorkflowTests(unittest.TestCase):
             parent = Path(tmp)
             root = parent / "repo"
             root.mkdir()
+            (root / "dev/learning").mkdir(parents=True)
             def git(*args):
                 return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
             git("init", "-q")
@@ -115,7 +116,10 @@ class WorkflowTests(unittest.TestCase):
                         "target": {"kind": "repository", "ref": REPO, "version": None, "source_sha": sha},
                         "next_safe_action": "review", "evidence": ["fixture"], "used_assets": [],
                         "learning": {"kind": "none", "ref": "fixture has no reusable feedback"}}
-            records.publish(work_history, 0, envelope)
+            initial = dict(envelope, state="ACTIVE", learning=None)
+            initial.pop("boundary")
+            records.publish(work_history, 0, initial)
+            records.publish(work_history, 1, envelope)
             with patch.dict(verification.CHECKS, {"fixture": ("python", "-c", "pass")}):
                 verification.execute(root, "fixture", evidence, 10)
                 missing, missing_code = workflow.summary(args, root, finishing=True)
@@ -126,6 +130,23 @@ class WorkflowTests(unittest.TestCase):
                 result, code = workflow.summary(args, root, finishing=True)
                 self.assertEqual(code, 0, result)
                 self.assertEqual(result["status"], "HANDOFF_SUMMARY")
+                for field, value, message in (
+                    ("attempt_ref", "other", "Feedback attempt differs from checkpoint"),
+                    ("objective", "other", "Feedback objective differs from task history"),
+                    ("target", dict(envelope["target"], source_sha="b"*40),
+                     "Feedback target differs from exact delivery repository and source"),
+                ):
+                    wrong = parent / ("work-" + field)
+                    changed = dict(envelope, **{field: value})
+                    first = dict(changed, state="ACTIVE", learning=None)
+                    first.pop("boundary")
+                    records.publish(wrong, 0, first)
+                    records.publish(wrong, 1, changed)
+                    args.work_history = wrong
+                    invalid, invalid_code = workflow.summary(args, root, finishing=True)
+                    self.assertEqual(invalid_code, 1)
+                    self.assertIn(message, invalid["issues"])
+                args.work_history = work_history
                 args.base_sha = "d"*40
                 self.assertEqual(workflow.summary(args, root, finishing=True)[1], 1)
                 args.repo = "wrong/repository"

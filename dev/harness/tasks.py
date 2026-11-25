@@ -154,6 +154,7 @@ def run(args, root):
     eligible = ready(data)
     return {
         "status": "OBSERVED", "revision": data["revision"], "work_ref": data["work_ref"],
+        "objective": data["objective"],
         "ready": eligible, "tasks": data["tasks"] if args.action != "next" else [],
         "source": data.get("source"), "current_source": observe(root),
         "note": "RECORDED is a task note, not verified evidence or acceptance. Local revisions only; persist and reconcile through Git/PR.",

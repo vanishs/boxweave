@@ -13,9 +13,14 @@ in platform configuration. Use authorized GitHub access to resolve v1.
 Read the exact ref through GitHub; follow only relevant links. A remote
 support task does not require a local Git SHA or PR. Record actual target
 identity, evidence and next safe action; unknown stays null. Use the
-[example envelope](WORK_ENVELOPE.json) and boundary, learning kind/ref,
-optional related_work, learning_links, original_operations and
-asset_feedback fields. Persist sanitized material records via authorized
+[example envelope](WORK_ENVELOPE.json) with feedback_protocol 1 and
+boundary, learning kind/ref, related_work and original_operations as needed.
+Use used_assets for actual material use, not selected assets; record each
+asset_feedback fact, decision, candidate or null, and reason. Link exact
+candidate observations through learning_links and expected revisions.
+A missing or invalid inbox, unreviewed legacy record or unresolved feedback
+requires explicit pending review, not a completed claim.
+Persist sanitized material records via authorized
 Git/PR or mark pending. No raw dialogues, credentials or private logs.
 A control checkout can validate/revision records with bwdev work; without
 one use the same manual checklist, not a fabricated CLI result.
