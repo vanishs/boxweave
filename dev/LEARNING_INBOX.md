@@ -42,3 +42,7 @@ The original historical report owns actual commands, IDs and results. These obse
   as UNBOUND, and missing gofmt as BLOCKED. Evidence operation
   efc3d3a720706260d9a48ee95f9e3957. Preserve this distinction in future
   acceptance automation; independent clean-source results remain separate.
+
+## v0.4 structured learning
+
+- [BDH-L012](learning/BDH-L012/00000001.json): first durable structured candidate from actual CI status; keep as candidate until reviewed. Captured and audited by operation 3e071e56e76d684500fa0c62cf553a62.

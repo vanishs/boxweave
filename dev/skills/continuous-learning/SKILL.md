@@ -15,3 +15,5 @@ At task start discover existing assets via [index](../../INDEX.md). At material 
 6. Record disposition in PR/checkpoint: no-new-asset (reason), candidate/deferred (link), or improvement (evidence). Periodically revalidate, de-duplicate or deprecate based on source drift and observed usage. No requirement to invent new assets.
 
 No automated capture, promotion or scheduling is assumed. Use ordinary Git and GitHub today.
+
+Optional bwdev v0.4: use learn capture, audit and review with a local history directory; explicit review references do not prove external authorization or evidence. Preserve the Markdown inbox as navigation, use one canonical record per candidate and reconcile before activation. See [CLI contract](../../../docs/development/BWDEV_DESIGN.md).

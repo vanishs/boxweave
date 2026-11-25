@@ -28,9 +28,9 @@ def latest(directory):
     for index, path in enumerate(paths, 1):
         if path.name != f"{index:08d}.json" or path.is_symlink() or not path.is_file():
             raise HarnessError("Record history has a gap or unsafe entry")
-    data = read_json(paths[-1])
-    if not isinstance(data, dict) or type(data.get("revision")) is not int or data["revision"] != len(paths):
-        raise HarnessError("Revision does not match record history")
+        data = read_json(path)
+        if not isinstance(data, dict) or type(data.get("revision")) is not int or data["revision"] != index:
+            raise HarnessError("Revision does not match record history")
     return data
 
 

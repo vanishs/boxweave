@@ -87,6 +87,13 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(records.latest(self.directory)["revision"], 2)
         self.assertEqual((self.directory / "00000001.json").read_bytes(), first)
 
+    def test_corrupt_prior_revision_rejected(self):
+        records.publish(self.directory, 0, {"value": 0})
+        records.publish(self.directory, 1, {"value": 1})
+        (self.directory / "00000001.json").write_text('{"revision":9}')
+        with self.assertRaises(HarnessError):
+            records.latest(self.directory)
+
     def test_corrupt_history_rejected(self):
         records.publish(self.directory, 0, {"value": 0})
         (self.directory / "00000003.json").write_text('{"revision":3}')

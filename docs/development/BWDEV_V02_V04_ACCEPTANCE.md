@@ -33,3 +33,44 @@ negative check: efc3d3a720706260d9a48ee95f9e3957, exit 0, 18 tests.
 The real PR required full scope; local dirty-tree PASS was UNBOUND,
 and the format gate was BLOCKED. A local output digest is not independent
 CI evidence. Full Go and native tests remain assigned to CI.
+
+Final v0.3 regression and staged format: 0cb6488bd4913d7d8b41b10aec76c351,
+21 tests and seven changed paths, exit 0. Exact commit
+c85da136280d268e2548b06bde7c07a5a35d3d40, tree
+7899073c9b920e1bbcf8afaa5cd234128134ef27. Clean-head dogfooding
+0b89afff734085a0534848a328069714 ran verify run bwdev and verify inspect
+on that exact commit, exit 0, CLEAN_HEAD_OBSERVED and LOCAL_RECORD_MATCH.
+
+## v0.4
+
+At v0.4 start, v0.1 CI all four runs succeeded (quality 45549596188,
+source 45549596184, distribution 45549596149, installed 45549596239).
+Earlier Legacy fixture issue passed the new independent installed run.
+v0.2 quality run 45550362915 was cancelled after a newer head; source
+45550362949 succeeded. Remaining v0.2 and v0.3 runs were pending;
+do not treat superseded checks as final-head acceptance.
+
+Initial tests and live candidate capture/audit: 3e071e56e76d684500fa0c62cf553a62,
+26 tests, exit 0. BDH-L012 is persisted in dev/learning; no promotion.
+Combined regression and actual CLI checks: e872c6152d21b222d142f22597045d0a,
+28 tests plus scope and recovery-fixture registered checks, exit 0.
+Dirty worktree results remained UNBOUND; learning audit no findings.
+Early output retrieval was unavailable while the original operation ran;
+re-read the same operation and output, no replay.
+
+Actual delivery-task history and checkpoint:
+fe3d19735fe3be5b915e226bdb853c21, exit 0. Local directory
+/tmp/bdh-pr189-v04-task-history and /tmp/bdh-pr189-v04-handoff.json
+are retained in the same owned Box. Work_ref boxweave/pr189-bwdev;
+prior stages recorded with evidence, v0.4 working, final CI not accepted.
+The task history is an advisory local record, not independent approval.
+The PR, staged-tree evidence, original operations and this document
+are the durable handoff. Verify actual remote head before further effects.
+
+Observed value: the harness found missing toolchain capability, surfaced
+relevant assets, preserved revision conflicts, bound clean-source local
+results and captured a real learning candidate during its own development.
+No controlled baseline, human/Agent efficacy or distributed coordination
+proof is claimed. Full CI must validate the final exact head; no merge or
+release authorization assumed. No Go or product runtime changes in these
+increments. Existing installed/native gates remain authoritative.

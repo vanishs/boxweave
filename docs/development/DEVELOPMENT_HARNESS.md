@@ -1,6 +1,6 @@
 # BoxWeave Development Harness (BDH)
 
-**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [developer entry](../../dev/README.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.1](BWDEV_DESIGN.md) capabilities in that entry are implemented. No change to product runtime or its tool catalog.
+**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [developer entry](../../dev/README.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.4](BWDEV_DESIGN.md) capabilities in that entry are implemented. No change to product runtime or its tool catalog.
 
 ## 1. Objectives and boundaries
 
@@ -106,4 +106,4 @@ Do not wait for all stages; every increment is used on normal product work. This
 
 Start with current product needs; reorder or split later increments based on observed friction. Larger improvements are separately scoped PRs. Avoid large migrations, new central DB or agent orchestration until evidence shows need. No need to finish BDH to release BoxWeave.
 
-Bootstrap acceptance: cross-linked entry/index/template/skills, original policies intact, a real historical learning example with scope/limits and one populated task/checkpoint walkthrough, docs checks and normal PR review. Initial deterministic discovery, doctor and checkpoint commands are implemented separately in [bwdev v0.1](BWDEV_DESIGN.md); full automatic discovery, state machine, cross-writer locks and Agent efficacy remain future work.
+Bootstrap acceptance: cross-linked entry/index/template/skills, original policies intact, a real historical learning example with scope/limits and one populated task/checkpoint walkthrough, docs checks and normal PR review. Initial deterministic discovery, doctor, checkpoint, local task revisions, verification planning/evidence and learning lifecycle commands are implemented in [bwdev v0.4](BWDEV_DESIGN.md); distributed coordination, full automation and Agent efficacy remain future work.

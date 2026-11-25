@@ -1,6 +1,6 @@
 # BoxWeave Development Harness (BDH) — start here
 
-**Status: bootstrap plus bwdev v0.3.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
+**Status: bootstrap plus bwdev v0.4.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
 
 ## Quick start (optional Python CLI)
 
@@ -45,6 +45,18 @@ python3 dev/bwdev --json verify inspect /tmp/my-check-evidence
 
 Plan uses actual merge-base, committed, staged, unstaged and untracked paths. A missing base means conservative full scope. Only explicit registered source checks run; no native mutations or CI calls. Local PASS on a dirty tree remains UNBOUND. Inspect compares the observed clean HEAD, not evidence authenticity. Use the normal CI and installed/native contract for acceptance. The output digest is recorded, not the log; run the underlying script directly when you need its diagnostic output.
 
+## Learning toolbox (v0.4)
+
+Create a fresh explicit inbox directory with mkdir. Capture sanitized observations and references.
+
+```sh
+mkdir /tmp/my-learning-inbox
+python3 dev/bwdev --json learn capture /tmp/my-learning-inbox L001 --work-ref example/task --observation 'Record exact test scope' --evidence 'PR evidence link' --asset dev/skills/verification/SKILL.md --validation 'Review the scope regression' --change-class L2
+python3 dev/bwdev --json learn audit /tmp/my-learning-inbox
+```
+
+Use learn review with expected revision, explicit review/evidence references and applicable L4 independent-review or L5 owner references. A recorded VERIFIED or ACTIVE is a reviewer assertion, not authority, a registry update or independent proof. Audit detects exact duplicates and reviewed asset/source drift. Keep live histories outside the source worktree; persist sanitized copies in Git/PR and reconcile copies. Markdown inbox remains valid.
+
 ## Start, continue, finish
 
 1. Read [AGENTS.md](../AGENTS.md), confirm owner intent and active PR/branch/HEAD. Select the smallest workflow that fits the risk. For an ongoing task, locate its checkpoint and original workspace/operations before creating or changing anything.
@@ -68,4 +80,4 @@ Risk, not diff size, determines profile. All profiles retain the existing safety
 
 ## First use and next improvement
 
-The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. The first CLI now covers environment observation, context discovery and basic checkpoint capture/check. Task continuity is now available via task init/next/status/transition. Verification planning and bounded local evidence are now available. Next priority: structured learning and asset lifecycle; see the [bwdev roadmap](../docs/development/BWDEV_DESIGN.md). See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.
+The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. The first CLI now covers environment observation, context discovery and basic checkpoint capture/check. Task continuity is now available via task init/next/status/transition. Verification planning and bounded local evidence are now available. Structured learning is now available; future automation is driven by real product work and controlled evaluation; see the [bwdev roadmap](../docs/development/BWDEV_DESIGN.md). See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.

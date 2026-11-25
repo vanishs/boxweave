@@ -1,6 +1,6 @@
 # bwdev: script-first development toolbox
 
-Status: v0.3 candidate in PR #189; source-tree CLI, no runtime or service change.
+Status: v0.4 candidate in PR #189; source-tree CLI, no runtime or service change.
 Read [BDH design](DEVELOPMENT_HARNESS.md) for the approved full framework and
 [developer entry](../../dev/README.md) for the currently usable subset.
 
@@ -102,7 +102,7 @@ the equivalent focused test. No runtime/native test result is inferred.
 | v0.1 (this PR) | Dispatcher, doctor, deterministic context, initial checkpoint capture/check; offline regressions, Box command demo, separate-process handoff simulation |
 | v0.2 (implemented local subset) | Task DAG, ready work, immutable local revisions and checkpoint references; remote reconciliation and distributed claims remain manual |
 | v0.3 (implemented local subset) | Change-scope plan, fixed source-only registry, local evidence capture and identity comparison |
-| v0.4 | Structured learning candidates and asset lifecycle validation, reuse existing Markdown/manual records |
+| v0.4 (implemented local subset) | Structured candidates, exact deduplication, reviewed lifecycle records, source/asset drift audit |
 | v0.5+ | Environment recipes, external adapters, controlled Agent evals based on demonstrated need |
 
 Each increment is useful on normal product work immediately. Version labels
@@ -119,3 +119,7 @@ Use the optional task subcommands with explicit JSON spec and local history dire
 ## v0.3 verification toolbox
 
 Use verify plan to inspect local origin/v1 merge base and actual change paths including index and untracked files; reuse the CI docs-only classifier where available. Missing/unknown context means FULL_OR_UNKNOWN. This is planning only; the authoritative CI check is unchanged. verify run CHECK DIRECTORY explicitly executes one registered offline source check with a bounded timeout, no shell interpolation and no native mutations. Output is hashed, not persisted or exposed by default; execute the underlying registered script directly for diagnostic output. Capture observed HEAD/worktree before and after. Only two clean observations of the same SHA qualify for CLEAN_HEAD_OBSERVED; this is not a guarantee against intermediate concurrent edits or ignored file changes. Dirty or unknown state is UNBOUND. verify inspect compares the record to current clean HEAD, without authenticating the record or proving independent CI/native acceptance. Each evidence directory is immutable and locally published; reruns require a fresh directory. Full CI/release and applicable installed/native gates remain mandatory.
+
+## v0.4 learning toolbox
+
+Use learn capture/list/audit/review with an explicit local inbox. Each candidate is a separate immutable revision history. Capture requires a stable ID, work ref, observation, evidence reference, canonical/planned asset path, validation plan and L1-L5 change class. Never store secrets or raw private dialogue. Exact normalized observation plus canonical asset path is the deduplication fingerprint; semantic duplicates and concurrent captures under different IDs require review. Audit flags duplicate records, missing/changed reviewed asset bytes and changed/dirty/unavailable source. Dispositions are caller-recorded CANDIDATE, DEFERRED, VERIFIED, ACTIVE, STALE, DEPRECATED or REJECTED, with bounded transitions; verification and activation require explicit review and evidence refs, L4 independent review and L5 owner ref. Activation requires unchanged asset and same clean source as verification. The CLI does not authenticate references, change the asset/index, grant permission or promote automatically. Keep active histories outside the observed source checkout; record-only commits also change HEAD and may require a fresh review. Persist sanitized histories with existing Git/PR coordination, not a new database.
