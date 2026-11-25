@@ -46,6 +46,18 @@ class TaskTests(unittest.TestCase):
             self.invoke("transition", "a", "--expect", "4", "--to", "PENDING", "--note", "reopen")
         self.assertEqual(records.latest(self.directory)["revision"], 4)
 
+    def test_replan_retains_acceptance_and_revision(self):
+        self.invoke("init", str(self.spec))
+        spec = json.loads(self.spec.read_text())
+        spec["tasks"].append({"id": "c", "acceptance": "c test", "depends_on": ["b"]})
+        self.spec.write_text(json.dumps(spec))
+        self.assertEqual(self.invoke("replan", str(self.spec), "--expect", "1", "--note", "add case")["revision"], 2)
+        spec["tasks"][0]["acceptance"] = "weakened"
+        self.spec.write_text(json.dumps(spec))
+        with self.assertRaises(HarnessError):
+            self.invoke("replan", str(self.spec), "--expect", "2", "--note", "invalid")
+        self.assertEqual(records.latest(self.directory)["revision"], 2)
+
     def test_cycle(self):
         spec = json.loads(self.spec.read_text())
         spec["tasks"][0]["depends_on"] = ["b"]

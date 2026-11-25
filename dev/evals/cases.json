@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "installer-context",
+      "kind": "context",
+      "paths": [
+        "internal/install"
+      ],
+      "query": "",
+      "expected_ids": [
+        "knowledge.maintenance",
+        "skill.verification",
+        "skill.box-development"
+      ]
+    },
+    {
+      "id": "old-cancelled-current-success",
+      "kind": "ci",
+      "repository": "owner/repo",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "snapshot": {
+        "schema_version": 1,
+        "repository": "owner/repo",
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runs": [
+          {
+            "id": 1,
+            "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "event": "pull_request",
+            "path": ".github/workflows/quality-gate.yml",
+            "status": "completed",
+            "conclusion": "cancelled"
+          },
+          {
+            "id": 2,
+            "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "event": "pull_request",
+            "path": ".github/workflows/quality-gate.yml",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      "expected_states": [
+        "REPORTED_SUCCESS"
+      ]
+    },
+    {
+      "id": "missing-current-ci",
+      "kind": "ci",
+      "repository": "owner/repo",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "snapshot": {
+        "schema_version": 1,
+        "repository": "owner/repo",
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runs": [
+          {
+            "id": 1,
+            "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "event": "pull_request",
+            "path": ".github/workflows/quality-gate.yml",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      "expected_states": [
+        "MISSING"
+      ]
+    },
+    {
+      "id": "dependency-blocked",
+      "kind": "task",
+      "spec": {
+        "work_ref": "fixture",
+        "objective": "preserve dependency",
+        "tasks": [
+          {
+            "id": "first",
+            "acceptance": "proof",
+            "depends_on": [],
+            "state": "BLOCKED",
+            "note": "fixture"
+          },
+          {
+            "id": "second",
+            "acceptance": "proof",
+            "depends_on": [
+              "first"
+            ],
+            "state": "PENDING"
+          },
+          {
+            "id": "independent",
+            "acceptance": "proof",
+            "depends_on": [],
+            "state": "PENDING"
+          }
+        ]
+      },
+      "expected_ready": [
+        "independent"
+      ]
+    }
+  ]
+}

@@ -119,6 +119,8 @@ def run(args, root):
         issues.append("dirty or unknown worktree requires independent review")
     if data["original_operations"]:
         issues.append("original Operations require independent readback")
+    if data["workspace"].get("path") != str(root):
+        issues.append("workspace path differs or unavailable")
     if data["workspace"]["kind"] == "box":
         issues.append("exact Box identity requires independent readback")
     return {

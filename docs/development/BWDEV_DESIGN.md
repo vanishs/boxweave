@@ -1,6 +1,6 @@
 # bwdev: script-first development toolbox
 
-Status: v0.4 candidate in PR #189; source-tree CLI, no runtime or service change.
+Status: v0.5 candidate in PR #189; source-tree CLI, no runtime or service change.
 Read [BDH design](DEVELOPMENT_HARNESS.md) for the approved full framework and
 [developer entry](../../dev/README.md) for the currently usable subset.
 
@@ -103,7 +103,8 @@ the equivalent focused test. No runtime/native test result is inferred.
 | v0.2 (implemented local subset) | Task DAG, ready work, immutable local revisions and checkpoint references; remote reconciliation and distributed claims remain manual |
 | v0.3 (implemented local subset) | Change-scope plan, fixed source-only registry, local evidence capture and identity comparison |
 | v0.4 (implemented local subset) | Structured candidates, exact deduplication, reviewed lifecycle records, source/asset drift audit |
-| v0.5+ | Environment recipes, external adapters, controlled Agent evals based on demonstrated need |
+| v0.5 (implemented) | Composed start/resume/status/finish, prerequisite recipes, exact-head CI read adapter, learning feedback and deterministic Eval |
+| v0.6+ | Comparative Agent evals, provisioning recipes and external integrations based on demonstrated need |
 
 Each increment is useful on normal product work immediately. Version labels
 are capability milestones, not a release schedule. Fix small tool problems
@@ -123,3 +124,13 @@ Use verify plan to inspect local origin/v1 merge base and actual change paths in
 ## v0.4 learning toolbox
 
 Use learn capture/list/audit/review with an explicit local inbox. Each candidate is a separate immutable revision history. Capture requires a stable ID, work ref, observation, evidence reference, canonical/planned asset path, validation plan and L1-L5 change class. Never store secrets or raw private dialogue. Exact normalized observation plus canonical asset path is the deduplication fingerprint; semantic duplicates and concurrent captures under different IDs require review. Audit flags duplicate records, missing/changed reviewed asset bytes and changed/dirty/unavailable source. Dispositions are caller-recorded CANDIDATE, DEFERRED, VERIFIED, ACTIVE, STALE, DEPRECATED or REJECTED, with bounded transitions; verification and activation require explicit review and evidence refs, L4 independent review and L5 owner ref. Activation requires unchanged asset and same clean source as verification. The CLI does not authenticate references, change the asset/index, grant permission or promote automatically. Keep active histories outside the observed source checkout; record-only commits also change HEAD and may require a fresh review. Persist sanitized histories with existing Git/PR coordination, not a new database.
+
+## v0.5 integrated workflow
+
+Use start with a named profile, path/query and optional spec/history pair. It loads declarative context domains and reports matching learning candidates; no setup/install is dispatched. profile observes prerequisites only. task replan preserves objective, existing task IDs and acceptance criteria; only pending dependency edges or new tasks may change. resume/status/finish compose task source, checkpoint work identity, local evidence, learning audit and CI snapshot. Export a fresh JSON summary and persist sanitized copies through the active PR. Finish requires exact repo/PR/base, CI snapshot, checkpoint, task dispositions, evidence and candidate:ID or no-new-asset:REASON. Even HANDOFF_SUMMARY is advisory.
+
+CI: supply --repo OWNER/REPO --sha EXACT_HEAD --pr NUMBER --base-sha EXACT_BASE --snapshot FILE, or explicit --live with an authorized gh installation. Snapshot schema 1: repository, head_sha and runs containing GitHub id, path, event, head_sha, status, conclusion and pull_requests with number/base.sha/head.sha. Only matching current PR runs qualify; cancelled, missing, ambiguous and pending are distinct from reported success. Check jobs/artifacts separately. Default full scope; quality-only requires actual policy review and never changes CI.
+
+Verification explicitly rejects empty discovery, reserves a fresh evidence directory before running, and optionally retains a private local log (--retain-log) with digest checks. Old command records remain historical; registry argv changes require new evidence. Never publish raw logs blindly. Eval covers fixed behavior cases, not Agent productivity.
+
+Self-evolution: learn next identifies candidates/stale assets; start surfaces related candidates. Implement the smallest useful improvement under existing authority, run targeted tests and eval, then learn attach with expected revision, implementation ref and validation evidence. This records the asset digest while keeping the candidate unpromoted. Audit detects drift; review through existing PR/change-class rules. No automatic code generation, promotion, scheduling or merge.

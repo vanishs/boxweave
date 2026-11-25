@@ -17,7 +17,10 @@ Bootstrap registry, read directly by bwdev context. These paths are canonical re
 | skill.verification | Testing, CI failure, native evidence | [verification](skills/verification/SKILL.md) | Initial |
 | skill.continuous-learning | Failure, correction, stage end, reusable improvement | [continuous-learning](skills/continuous-learning/SKILL.md) | Initial |
 | module.install | Edit installer internals | [local guide](../internal/install/AGENTS.md) | Initial |
-| tool.bwdev | Context, prerequisites, checkpoint, task, verify, learn | [CLI](bwdev), [contract](../docs/development/BWDEV_DESIGN.md) | Initial |
+| tool.bwdev | Integrated start/resume/status/finish, context, task, verify, learn, CI | [CLI](bwdev), [contract](../docs/development/BWDEV_DESIGN.md) | Initial |
+| knowledge.profiles | Task-specific environment prerequisites | [profiles](profiles.json), [box skill](skills/box-development/SKILL.md) | Initial |
+| tool.context-domains | Deterministic path associations | [domains](context_domains.json) | Initial |
+| verification.eval | Harness behavior and comparative evaluation plan | [eval guide](evals/README.md), [cases](evals/cases.json) | Initial |
 | tool.make | Format, Go/source checks | [Makefile](../Makefile) | Existing |
 | tool.mcp-testkit | Candidate HTTP MCP tests | [test kit](../scripts/mcp_testkit.py) | Existing |
 | tool.installed-lifecycle | Native lifecycle, only authorized clean test fixture | [script](../scripts/n2_installed_lifecycle.sh), [test scenarios](../scripts/n2_installed_lifecycle.py) | Existing |

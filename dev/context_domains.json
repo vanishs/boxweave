@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "domains": {
+    "internal/install": "installer maintenance install",
+    "internal/diagnostic": "diagnostic recovery maintenance",
+    "internal/recovery": "recovery operations diagnostic",
+    "internal/peerscope": "peer network operations",
+    "internal/networklimits": "peer network",
+    "internal/native": "native nesting network operations",
+    "internal/state": "operations checkpoint",
+    "internal/control": "mcp operations security",
+    "dev": "development skill workflow checkpoint",
+    "scripts": "tool testing verification"
+  }
+}

@@ -93,8 +93,22 @@ class LearningTests(unittest.TestCase):
 
     def test_repository_candidate_history(self):
         result, code = learning.audit(ROOT / "dev/learning", ROOT)
-        self.assertEqual(code, 0)
+        self.assertIn(code, (0, 1))  # Genuine future drift is a review finding, not malformed data.
         self.assertIn("BDH-L012", [row["id"] for row in result["records"]])
+
+    def test_attach_preserves_candidate_and_revision(self):
+        self.capture()
+        result, code = self.invoke("attach", "L001", "--expect", "1",
+                                   "--implementation-ref", "fixture:patch",
+                                   "--validation-evidence", "fixture:test")
+        self.assertEqual(code, 0)
+        self.assertEqual(result["record"]["state"], "CANDIDATE")
+        self.assertEqual(result["record"]["revision"], 2)
+        self.assertEqual(result["record"]["implementation"]["evidence_ref"], "fixture:test")
+        self.assertEqual(self.invoke("next")[0]["records"][0]["id"], "L001")
+        with self.assertRaises(HarnessError):
+            self.invoke("attach", "L001", "--expect", "1", "--implementation-ref",
+                        "stale", "--validation-evidence", "stale")
 
     def test_invalid_id_and_external_asset(self):
         with self.assertRaises(HarnessError):

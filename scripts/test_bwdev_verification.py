@@ -77,6 +77,18 @@ class VerificationTests(unittest.TestCase):
                      "commit", "--allow-empty", "-qm", "new candidate")
             self.assertEqual(verification.inspect(self.root, self.directory)[1], 1)
 
+    def test_optional_log_is_private_and_matches_digest(self):
+        import hashlib
+        with patch.dict(verification.CHECKS, {"fixture": ("python", "-c", "print('fixture')")}):
+            result, code = verification.execute(self.root, "fixture", self.directory, 10, retain_log=True)
+            self.assertEqual(code, 0)
+            log = self.directory / "output.log"
+            self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(hashlib.sha256(log.read_bytes()).hexdigest(), result["output_sha256"])
+            self.assertEqual(verification.inspect(self.root, self.directory)[1], 0)
+            log.write_text("tampered")
+            self.assertEqual(verification.inspect(self.root, self.directory)[1], 1)
+
     def test_timeout_is_unknown(self):
         with patch.dict(verification.CHECKS, {"fixture": ("python", "-c", "import time; time.sleep(5)")}):
             result, code = verification.execute(self.root, "fixture", self.directory, 1)

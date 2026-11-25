@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "development": {"require": ["git", "base"], "native_review": false, "purpose": "Python/tool and source navigation"},
+    "go-source": {"require": ["git", "base", "go", "make", "gofmt"], "native_review": false, "purpose": "Full local Go source checks"},
+    "native-lab": {"require": ["git", "base", "go", "make", "gofmt", "incus", "systemctl"], "native_review": true, "purpose": "Native installed acceptance; independently verify authority, nesting and fixture"},
+    "experiment": {"require": ["git"], "native_review": false, "purpose": "Isolated optional tool or evaluation trial"}
+  }
+}

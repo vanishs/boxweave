@@ -12,3 +12,5 @@ description: Resume BoxWeave development after interruption, lost replies, agent
 5. Continue the next ready task, or isolate blocker and work on unrelated safe tasks. At the next meaningful boundary update the durable checkpoint, preserve original evidence and write exact next safe action.
 
 References: [checkpoint contract](../../../docs/development/TASK_CHECKPOINT_CONTRACT.md), [template](../../templates/CHECKPOINT.md), [operations](../../../docs/design/OPERATIONS.md), [manual recovery](../../../docs/process/UNKNOWN_MANUAL_RECOVERY.md). This skill grants no authority and does not implement automatic resume or a task lock.
+
+Optional v0.5: use bwdev resume with original task history and explicit checkpoint; supply existing evidence and CI snapshot as available. Review REVIEW_REQUIRED items, preserve original operations, and export a sanitized handoff summary to the active PR. No replay or remote state authority.

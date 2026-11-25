@@ -94,6 +94,13 @@ def audit(inbox, root):
         if key in seen:
             findings.append({"id": row["id"], "issue": "DUPLICATE", "other": seen[key]})
         seen[key] = row["id"]
+        implementation = row.get("implementation")
+        if implementation is not None:
+            if (not isinstance(implementation, dict)
+                    or not nonempty(implementation.get("ref"))
+                    or not nonempty(implementation.get("evidence_ref"))
+                    or implementation.get("asset_sha256") != asset_digest(root, row["asset"])):
+                findings.append({"id": row["id"], "issue": "IMPLEMENTATION_CHANGED_OR_MISSING"})
         if row["state"] in ("VERIFIED", "ACTIVE"):
             if asset_digest(root, row["asset"]) != row["reviewed_asset_sha256"]:
                 findings.append({"id": row["id"], "issue": "ASSET_CHANGED_OR_MISSING"})
@@ -117,7 +124,13 @@ def register(parser):
     for key in ("--work-ref", "--observation", "--evidence", "--asset", "--validation"):
         capture.add_argument(key, required=True)
     capture.add_argument("--change-class", choices=("L1", "L2", "L3", "L4", "L5"), required=True)
-    for action in ("list", "audit"):
+    attach = sub.add_parser("attach", help="Link implemented improvement and tests without promoting the candidate")
+    attach.add_argument("inbox")
+    attach.add_argument("id")
+    attach.add_argument("--expect", type=int, required=True)
+    attach.add_argument("--implementation-ref", required=True)
+    attach.add_argument("--validation-evidence", required=True)
+    for action in ("list", "audit", "next"):
         sub.add_parser(action).add_argument("inbox")
     review = sub.add_parser("review", help="Record an explicit externally reviewed disposition")
     review.add_argument("inbox")
@@ -132,9 +145,16 @@ def register(parser):
 
 def run(args, root):
     inbox = Path(args.inbox)
-    if args.action in ("list", "audit"):
+    if args.action in ("list", "audit", "next"):
         data, code = audit(inbox, root)
-        return data, code if args.action == "audit" else 0
+        if args.action == "next":
+            data["records"] = [
+                {**row, "next_action": "review linked implementation" if row.get("implementation")
+                 else "select and validate a bounded improvement"}
+                for row in data["records"] if row["state"] in ("CANDIDATE", "STALE")
+            ]
+            data["note"] += " Select a bounded improvement; if implemented, attach evidence and request review."
+        return data, code if args.action in ("audit", "next") else 0
     key = safe_id(args.id)
     directory = inbox / key
     if args.action == "capture":
@@ -156,6 +176,18 @@ def run(args, root):
         data = validate(latest(directory), root)
         if data["id"] != key or data["revision"] != args.expect:
             raise HarnessError("Learning identity/revision conflict")
+        if args.action == "attach":
+            if data["state"] not in ("CANDIDATE", "STALE") or not nonempty(args.implementation_ref) or not nonempty(args.validation_evidence):
+                raise HarnessError("Attach requires a candidate/stale record and explicit implementation and evidence references")
+            digest = asset_digest(root, data["asset"])
+            if digest is None:
+                raise HarnessError("Implemented asset not present")
+            data["implementation"] = {"ref": args.implementation_ref,
+                                      "evidence_ref": args.validation_evidence,
+                                      "asset_sha256": digest, "source": observe(root)}
+            result = publish(directory, args.expect, data)
+            return {"status": "RECORDED", "record": result,
+                    "note": "Implementation linked; candidate state unchanged, independent review still required."}, 0
         if args.to not in TRANSITIONS[data["state"]] or not nonempty(args.review_ref):
             raise HarnessError("Invalid reviewed lifecycle transition")
         data.update(state=args.to, review_ref=args.review_ref)

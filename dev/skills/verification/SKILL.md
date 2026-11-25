@@ -13,3 +13,5 @@ description: Plan and execute applicable BoxWeave tests, diagnose CI failures, a
 6. If correction changes source, invalidate affected evidence and rerun gates. Keep blockers and limitations visible; don't merge until required conditions and authorization are satisfied.
 
 Historical example: [#188 H5](../../../docs/development/PR188_H5_DELIVERY.md) shows missing Git/base ref, populated fixture limits and source binding. Use it as bounded learning, not current success evidence. Update [learning inbox](../../LEARNING_INBOX.md) if there is reusable value.
+
+When CI overlaps across revisions, separate cancelled/superseded runs from actual failures. Use bwdev ci with the exact PR head, PR number and base SHA, from an authorized GitHub export or gh read. Inspect the specific current run, job and artifact before declaring acceptance. A missing, ambiguous, cancelled or pending current run is not PASS. See [BDH-L012](../../learning/BDH-L012/00000001.json) and the [CLI contract](../../../docs/development/BWDEV_DESIGN.md).

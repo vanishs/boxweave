@@ -46,3 +46,9 @@ The original historical report owns actual commands, IDs and results. These obse
 ## v0.4 structured learning
 
 - [BDH-L012](learning/BDH-L012/00000001.json): first durable structured candidate from actual CI status; keep as candidate until reviewed. Captured and audited by operation 3e071e56e76d684500fa0c62cf553a62.
+
+## v0.5 self-evolution
+
+- [BDH-L012 revision 2](learning/BDH-L012/00000002.json): implementation and validation attached; candidate remains pending independent review. CI helper, Skill, regression and Eval now implement this learning. Start surfaces it on relevant tasks; audit checks asset drift. Do not implement it twice.
+
+- [BDH-L013 revision 2](learning/BDH-L013/00000002.json): nonempty test discovery contract implemented and exercised; candidate pending review. This Box's builtin unittest already failed for zero tests, so no universal old-runner defect is asserted.

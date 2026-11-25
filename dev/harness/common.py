@@ -24,6 +24,9 @@ def git(root, *args):
 
 
 def observe(root):
+    top = git(root, "rev-parse", "--show-toplevel")
+    if top is None or Path(top).resolve() != root.resolve():
+        return {"commit": None, "branch": None, "worktree": "unknown", "base_commit": None}
     status = git(root, "status", "--porcelain=v1", "--untracked-files=normal")
     return {
         "commit": git(root, "rev-parse", "--verify", "HEAD"),

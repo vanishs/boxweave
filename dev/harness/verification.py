@@ -14,9 +14,9 @@ from .records import latest, publish
 
 
 CHECKS = {
-    "bwdev": ("python", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_bwdev*.py", "-v"),
-    "scope": ("python", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_ci_change_scope.py", "-v"),
-    "recovery-fixture": ("python", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_pr177_installed_recovery.py", "-v"),
+    "bwdev": ("python", "dev/harness/check_runner.py", "test_bwdev*.py"),
+    "scope": ("python", "dev/harness/check_runner.py", "test_ci_change_scope.py"),
+    "recovery-fixture": ("python", "dev/harness/check_runner.py", "test_pr177_installed_recovery.py"),
     "format": ("python", "scripts/check_format.py"),
 }
 
@@ -62,12 +62,17 @@ def plan(root):
     }
 
 
-def execute(root, check, directory, timeout):
+def execute(root, check, directory, timeout, retain_log=False):
     if not 1 <= timeout <= 600:
         raise HarnessError("Timeout must be 1..600 seconds")
     directory = Path(directory)
     if directory.exists() or directory.is_symlink():
         raise HarnessError("Evidence directory already exists; inspect rather than rerun")
+    # Reserve a fresh directory before running: concurrent callers must not both execute.
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError as exc:
+        raise HarnessError("Evidence directory already exists; inspect rather than rerun") from exc
     before = observe(root)
     command = [sys.executable, *CHECKS[check][1:]]
     result = "BLOCKED"
@@ -91,6 +96,11 @@ def execute(root, check, directory, timeout):
             except OSError:
                 reason = "cannot start registered check"
         log.seek(0)
+        if retain_log:
+            fd = os.open(directory / "output.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as saved:
+                shutil.copyfileobj(log, saved)
+            log.seek(0)
         digest = hashlib.sha256()
         count = 0
         for chunk in iter(lambda: log.read(65536), b""):
@@ -99,21 +109,23 @@ def execute(root, check, directory, timeout):
     after = observe(root)
     bound = bool(before["commit"] and before["commit"] == after["commit"]
                  and before["worktree"] == after["worktree"] == "clean")
-    data = publish(directory, 0, {
+    data = publish(directory / "record", 0, {
         "kind": "verification", "schema_version": 1, "check": check,
         "argv": list(CHECKS[check]), "source_before": before, "source_after": after,
         "result": result, "exit_code": code, "reason": reason,
         "output_sha256": digest.hexdigest(), "output_bytes": count,
         "binding": "CLEAN_HEAD_OBSERVED" if bound else "UNBOUND",
+        "log_retained": retain_log,
     })
     return {
         **data, "status": "LOCAL_RESULT",
-        "note": "Local recorded result, not an independent CI or native acceptance. Output is not retained by bwdev.",
+        "note": "Local recorded result, not an independent CI or native acceptance. Output retained locally only when explicitly requested.",
     }, 0 if result == "PASS" else 1
 
 
 def inspect(root, directory):
-    data = latest(directory)
+    directory = Path(directory)
+    data = latest(directory / "record" if (directory / "record").is_dir() else directory)
     if data.get("kind") != "verification" or data.get("schema_version") != 1:
         raise HarnessError("Unsupported verification record")
     check = data.get("check")
@@ -123,7 +135,7 @@ def inspect(root, directory):
     count = data.get("output_bytes")
     if (not isinstance(check, str) or check not in CHECKS
             or result not in ("PASS", "FAIL", "BLOCKED", "UNKNOWN")
-            or data.get("argv") != list(CHECKS[check])
+            or not isinstance(data.get("argv"), list)
             or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
             or type(count) is not int or count < 0
             or (result == "PASS" and (type(code) is not int or code != 0))
@@ -132,10 +144,22 @@ def inspect(root, directory):
         raise HarnessError("Invalid verification result")
     current = observe(root)
     before, after = data.get("source_before"), data.get("source_after")
-    matched = (isinstance(before, dict) and isinstance(after, dict)
+    matched = (data["argv"] == list(CHECKS[check]) and isinstance(before, dict) and isinstance(after, dict)
                and data.get("binding") == "CLEAN_HEAD_OBSERVED"
                and current["commit"] and before.get("commit") == after.get("commit") == current["commit"]
                and before.get("worktree") == after.get("worktree") == current["worktree"] == "clean")
+    if data.get("log_retained"):
+        log = directory / "output.log"
+        if not log.is_file() or log.is_symlink():
+            matched = False
+        else:
+            h = hashlib.sha256()
+            size = 0
+            with log.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(65536), b""):
+                    h.update(chunk)
+                    size += len(chunk)
+            matched = matched and h.hexdigest() == digest and size == count
     return {
         "status": "LOCAL_RECORD_MATCH" if matched else "REVIEW_REQUIRED",
         "check": data["check"], "result": data["result"], "source": current,
@@ -150,6 +174,7 @@ def register(parser):
     run.add_argument("check", choices=sorted(CHECKS))
     run.add_argument("directory", help="Fresh local evidence directory")
     run.add_argument("--timeout", type=int, default=120)
+    run.add_argument("--retain-log", action="store_true", help="Keep potentially sensitive local output; do not publish blindly")
     sub.add_parser("inspect").add_argument("directory")
 
 
@@ -157,5 +182,5 @@ def run(args, root):
     if args.action == "plan":
         return plan(root), 0
     if args.action == "run":
-        return execute(root, args.check, args.directory, args.timeout)
+        return execute(root, args.check, args.directory, args.timeout, args.retain_log)
     return inspect(root, args.directory)

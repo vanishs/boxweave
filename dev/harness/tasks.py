@@ -69,6 +69,11 @@ def register(parser):
     init = sub.add_parser("init", help="Create local task history from a JSON spec")
     init.add_argument("directory")
     init.add_argument("spec")
+    replan = sub.add_parser("replan", help="Revise pending dependencies or append tasks without removing acceptance")
+    replan.add_argument("directory")
+    replan.add_argument("spec")
+    replan.add_argument("--expect", type=int, required=True)
+    replan.add_argument("--note", required=True)
     for action in ("status", "next"):
         sub.add_parser(action).add_argument("directory")
     update = sub.add_parser("transition", help="Publish a new local revision")
@@ -100,6 +105,34 @@ def run(args, root):
         if data.get("kind") != "task" or data.get("schema_version") != 1:
             raise HarnessError("Unsupported task record kind/version")
         rows = validate(data)
+        if args.action == "replan":
+            if args.expect != data["revision"] or not nonempty(args.note):
+                raise HarnessError("Revision conflict or missing replan reason")
+            spec = read_json(args.spec)
+            if (not isinstance(spec, dict) or spec.get("work_ref") != data["work_ref"]
+                    or spec.get("objective") != data["objective"] or not isinstance(spec.get("tasks"), list)):
+                raise HarnessError("Replan must preserve work identity and objective")
+            proposed = []
+            for row in spec["tasks"]:
+                if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+                    raise HarnessError("Invalid proposed task")
+                original = rows.get(row["id"])
+                if original:
+                    if row.get("acceptance") != original["acceptance"]:
+                        raise HarnessError("Replan cannot change existing acceptance")
+                    if original["state"] != "PENDING" and row.get("depends_on") != original["depends_on"]:
+                        raise HarnessError("Replan cannot change active/recorded/blocked dependencies")
+                    row = dict(original, depends_on=row.get("depends_on"))
+                else:
+                    row = dict(row, state="PENDING")
+                proposed.append(row)
+            if not set(rows).issubset({row["id"] for row in proposed}):
+                raise HarnessError("Replan cannot remove existing tasks")
+            data["tasks"] = proposed
+            data["replan_note"] = args.note
+            validate(data)
+            data["source"] = observe(root)
+            data = publish(directory, args.expect, data)
         if args.action == "transition":
             if args.expect != data["revision"]:
                 raise HarnessError("Revision conflict; reload before editing")

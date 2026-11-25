@@ -6,18 +6,16 @@ from .common import HarnessError, repo_path
 
 LINK = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
 TOKEN = re.compile(r"[a-z0-9]+")
-DOMAINS = {
-    "internal/install": "installer maintenance install",
-    "internal/diagnostic": "diagnostic recovery maintenance",
-    "internal/recovery": "recovery operations diagnostic",
-    "internal/peerscope": "peer network operations",
-    "internal/networklimits": "peer network",
-    "internal/native": "native nesting network operations",
-    "internal/state": "operations checkpoint",
-    "internal/control": "mcp operations security",
-    "dev": "development skill workflow checkpoint",
-    "scripts": "tool testing verification",
-}
+def domain_rules(root):
+    from .records import read_json
+    data = read_json(repo_path(root, "dev/context_domains.json"))
+    if not isinstance(data, dict) or data.get("schema_version") != 1 or not isinstance(data.get("domains"), dict):
+        raise HarnessError("Invalid context domains")
+    domains = data["domains"]
+    for path, words in domains.items():
+        if not isinstance(words, str) or repo_path(root, path).relative_to(root.resolve()).as_posix() != path:
+            raise HarnessError("Invalid context domain")
+    return domains
 
 
 def assets(root):
@@ -76,11 +74,12 @@ def run(args, root):
     items = assets(root)
     words = set(TOKEN.findall(args.query.lower()))
     local = set()
+    domains = domain_rules(root)
     for path in args.path:
         candidate = repo_path(root, path)
         rel = candidate.relative_to(root.resolve()).as_posix()
         words.update(TOKEN.findall(rel.lower()))
-        for prefix, domain in DOMAINS.items():
+        for prefix, domain in domains.items():
             if rel == prefix or rel.startswith(prefix + "/"):
                 words.update(TOKEN.findall(domain))
         directory = candidate if candidate.is_dir() else candidate.parent

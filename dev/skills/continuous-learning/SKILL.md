@@ -17,3 +17,5 @@ At task start discover existing assets via [index](../../INDEX.md). At material 
 No automated capture, promotion or scheduling is assumed. Use ordinary Git and GitHub today.
 
 Optional bwdev v0.4: use learn capture, audit and review with a local history directory; explicit review references do not prove external authorization or evidence. Preserve the Markdown inbox as navigation, use one canonical record per candidate and reconcile before activation. See [CLI contract](../../../docs/development/BWDEV_DESIGN.md).
+
+For v0.5 use learn next to distinguish unimplemented candidates from those with implementation evidence. On a bounded improvement run relevant tests and Eval, attach the implementation/evidence with the expected revision, and persist the reviewed candidate history in Git. Start discovers related candidates; finish requires candidate:ID or an explicit no-new-asset reason. Do not auto-promote based on local tests.

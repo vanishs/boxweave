@@ -6,9 +6,11 @@ import sys
 
 from .common import observe
 
+REQUIREMENTS = ("git", "go", "make", "base", "gofmt", "incus", "systemctl")
+
 
 def register(parser):
-    parser.add_argument("--require", choices=("git", "go", "make", "base"),
+    parser.add_argument("--require", choices=REQUIREMENTS,
                         action="append", default=[])
 
 
@@ -32,6 +34,8 @@ def run(args, root):
             }
         except (OSError, subprocess.TimeoutExpired):
             tools[name] = {"status": "UNKNOWN"}
+    for name in ("gofmt", "incus", "systemctl"):
+        tools[name] = {"status": "AVAILABLE" if shutil.which(name) else "MISSING", "version": None}
     source = observe(root)
     required = set(args.require) | {"git"}
     blockers = sorted(name for name in required if name != "base"
