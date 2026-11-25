@@ -119,3 +119,53 @@ plan; L014 remains a candidate, no promotion. No native, parent or gate changes.
 
 Independent L4 review and fresh ordinary-product-task Agent acceptance are
 still outstanding; this is implementer review, not either independent gate.
+
+## E4 independent ordinary-task witness and reconciliation (2026-11-25)
+
+The owner opened a separate ChatGPT BoxWeave project session using only
+the existing one-line bootstrap locator and an ordinary bounded transfer
+investigation, without task-level BDH or feedback instructions. The
+[original investigation and manual pending handoff](https://github.com/vanishs/boxweave/pull/192#issuecomment-7157253835)
+on exact child source 8e1a41d917554dddb890584babe285a65c2395ac records
+actual activation, nonempty work-plan discovery, L014 reuse, limits and
+new improvement judgment. Installed controller RC14 is distinct from
+candidate source. The parent remained paused and unchanged.
+
+Original preflight 933990f0abb3e56f7441ca0e0d763733 and assembly
+4cf4da5f7f5dfd960fb71cf5de738a63 were reread with exit-zero outputs.
+Operation 097dc4721454f8d775c835dfb6d65921 (exit 0) independently
+rechecked the retained three parts and assembled 102400-byte file;
+SHA256 matched the original report. No repeat transfer or fabricated
+operation. The ordinary Agent recorded its feedback as pending in the
+PR instead of committing to the branch. It did not autonomously append
+the structured revision; the present implementer reconciled it after the
+owner returned the report and authorized continuation.
+
+[Reconciled feedback](BDH_V06_INDEPENDENT_TRANSFER_FEEDBACK.json) retains
+the original task identity, material assets, original receipts and
+manual handoff, not an invented historical CLI work history.
+Operation 4e5fa9dc9946f893fab7c9e6aadd8ecb (exit 0) observed REVIEW_REQUIRED
+before append, appended exactly one distinct observation at expected
+revision 7, then observed FEEDBACK_RECORDED and subsequent discovery of
+BDH-L014 revision 8. Candidate stays CANDIDATE with linked implementation;
+tool.bwdev feedback needs no new asset. The previous two feedback
+envelopes and history remain intact. This is a demonstrated human/Agent
+handoff plus structured reconciliation, not an unattended background
+loop, and does not prove all future Agents persist feedback themselves.
+
+Disposition: preserve existing verified bounded-transfer workflow;
+record the manifest/resume helper as a related follow-up, not a second
+capture of L014 or an implemented capability. Defer tool implementation
+until after v0.6 acceptance; a separate task should assess bounded
+chunking, per-part/full hashes, original-operation reconciliation,
+exclusive publication, interrupted/parallel writes, lost acknowledgement,
+binary/UTF-8 and multi-MiB tests. Do not expand product MCP or weaken
+admission; use original investigation for proposed acceptance criteria.
+
+Exact tested code head 8e1a41d passed quality 45577047102 and candidate
+45577047070 (source tooling, both architectures and exact-source manifest);
+native and publication jobs skipped by design. This evidence-only
+follow-up requires applicable exact-head checks. Independent ordinary
+task activation/use has actual evidence and structured reconciliation;
+independent L4 review must assess this witness and the full implementation.
+No independent L4 review is claimed or waived. No merge or release.

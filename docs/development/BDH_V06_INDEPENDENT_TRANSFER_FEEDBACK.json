@@ -1,0 +1,69 @@
+{
+  "kind": "work",
+  "schema_version": 1,
+  "feedback_protocol": 1,
+  "work_ref": "boxweave/pr192-transfer-audit",
+  "attempt_ref": "boundary-audit-20261125",
+  "task_kind": "development",
+  "objective": "Investigate large source transfer admission and existing workaround",
+  "risk": "standard",
+  "authority": "Owner authorized bounded child investigation and Box validation, no parent modification, merge or release",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "version": null,
+    "source_sha": "8e1a41d917554dddb890584babe285a65c2395ac"
+  },
+  "state": "HANDOFF",
+  "boundary": "handoff",
+  "next_safe_action": "Review L014 existing implementation and separately scope a manifest/resume helper; independent L4 review remains open",
+  "used_assets": [
+    "skill.box-development",
+    "tool.bwdev"
+  ],
+  "evidence": [
+    "PR #192 comment 7157253835; Box file creates d723098f4c4421d2af0b6396bc72e3c2, 262232686d8ff3a69204960b865a77d8, 36c880c8f63e0bb1c9763426a796015d; assembly 4cf4da5f7f5dfd960fb71cf5de738a63 exit 0; retained hashes rechecked 097dc4721454f8d775c835dfb6d65921 exit 0",
+    "Box preflight 933990f0abb3e56f7441ca0e0d763733 exit 0; nonempty work plan rediscovered L014 revision 7 as candidate with linked implementation",
+    "https://github.com/vanishs/boxweave/pull/192#issuecomment-7157253835",
+    "Installed controller RC14 commit 3fb71a6ddf47d13d165e5c039144aa66fad0eb05; Box 9d374e18-196a-493d-bf1f-2d582589f04d"
+  ],
+  "original_operations": [
+    "933990f0abb3e56f7441ca0e0d763733",
+    "3a8053960fbe558c2aa106580f472911",
+    "c40c6eed7b77c643e1ce384b93025de5",
+    "d723098f4c4421d2af0b6396bc72e3c2",
+    "262232686d8ff3a69204960b865a77d8",
+    "36c880c8f63e0bb1c9763426a796015d",
+    "4cf4da5f7f5dfd960fb71cf5de738a63",
+    "36c7a8c4033c32855642e79e566949e5"
+  ],
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "evidence": "PR #192 comment 7157253835; Box file creates d723098f4c4421d2af0b6396bc72e3c2, 262232686d8ff3a69204960b865a77d8, 36c880c8f63e0bb1c9763426a796015d; assembly 4cf4da5f7f5dfd960fb71cf5de738a63 exit 0; retained hashes rechecked 097dc4721454f8d775c835dfb6d65921 exit 0",
+      "outcome": "helped",
+      "attempt_ref": "boundary-audit-20261125",
+      "observation": "Fresh ordinary transfer investigation reused verified exclusive file creation and short Exec, measured RC14 4096-byte argv and 64 KiB file limits, assembled and hash-verified 100 KiB from three parts, and refused missing parts, wrong hash and collisions. A resumable transfer helper remains a proposal, not an implemented capability.",
+      "decision": "linked",
+      "candidate": "BDH-L014",
+      "reason": "Reconcile original manual pending feedback; reuse existing L014, retain candidate and consider larger separate improvement only after this PR."
+    },
+    {
+      "asset": "tool.bwdev",
+      "evidence": "Box preflight 933990f0abb3e56f7441ca0e0d763733 exit 0; nonempty work plan rediscovered L014 revision 7 as candidate with linked implementation",
+      "outcome": "helped",
+      "attempt_ref": "boundary-audit-20261125",
+      "observation": "Ordinary-task work plan independently rediscovered the relevant L014 linked implementation before actual Box investigation.",
+      "decision": "no-change",
+      "candidate": null,
+      "reason": "Existing deterministic discovery worked; no new asset necessary."
+    }
+  ],
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "learning": {
+    "kind": "reuse",
+    "ref": "Existing L014 procedure and discovery worked; structured observation reconciled from original manual handoff, no promotion."
+  }
+}
