@@ -524,6 +524,128 @@ def effective_unit():
     return pairs["FragmentPath"]
 
 
+# Narrow retirement contract for the exact Ubuntu systemd-255 distrobuilder
+# LXC generated policy. It is NOT a runtime-hardening waiver, an install
+# activation check or a generic drop-in allowlist. Live drain additionally
+# requires the exact approved scope and independent Go worker proof. Never change the inherited file. New variants fail closed.
+LXC_SERVICE_DROPIN = Path("/run/systemd/system/service.d/zzz-lxc-service.conf")
+LXC_SERVICE_DROPIN_SHA = "fcbd512cb8212c6f5720f28398f01e85ff96246aebb73e09cf449d2f3aa2c5b0"
+
+def lxc_retirement_policy():
+    virt, code = command(["systemd-detect-virt", "--container"], acceptable=(0, 1))
+    if code or virt.strip() != "lxc":
+        raise UninstallError("LXC_EMPTY_RETIREMENT_CONTAINER_UNVERIFIED")
+    for kind in ("uid", "gid"):
+        raw = Path("/proc/self/" + kind + "_map").read_text().splitlines()
+        rows = [tuple(map(int, line.split())) for line in raw]
+        if not rows or any(len(row) != 3 for row in rows) or rows[0][0] != 0 or rows[0][1] <= 0:
+            raise UninstallError("LXC_EMPTY_RETIREMENT_PARENT_IDENTITY_UNVERIFIED")
+    path = LXC_SERVICE_DROPIN
+    for parent in reversed(path.parents):
+        st = parent.lstat()
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            raise UninstallError("LXC_EMPTY_RETIREMENT_POLICY_PARENT_UNSAFE")
+    before = path.lstat()
+    if (not stat.S_ISREG(before.st_mode) or before.st_uid != 0 or before.st_gid != 0 or
+            stat.S_IMODE(before.st_mode) != 0o644 or before.st_nlink != 1 or before.st_size > 4096):
+        raise UninstallError("LXC_EMPTY_RETIREMENT_POLICY_UNSAFE")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        current = os.fstat(fd)
+        data = os.read(fd, 4097)
+        after = os.fstat(fd)
+        def stable(st):
+            return (st.st_dev,st.st_ino,st.st_mode,st.st_uid,st.st_gid,st.st_nlink,
+                    st.st_size,st.st_mtime_ns,st.st_ctime_ns)
+        if stable(current) != stable(before) or stable(current) != stable(after) or stable(path.lstat()) != stable(after) or sha(data) != LXC_SERVICE_DROPIN_SHA:
+            raise UninstallError("LXC_EMPTY_RETIREMENT_POLICY_CHANGED_OR_UNKNOWN")
+    finally:
+        os.close(fd)
+    # Generators may rewrite identical bytes during daemon-reload. Bind
+    # semantic content/path/mode, not a transient tmpfs inode.
+    return {"path": str(path), "sha256": sha(data), "mode": 0o644, "kind": "EXACT_LXC255_SCOPED_RETIREMENT"}
+
+def scoped_effective_review(path, allow_lxc=False):
+    props = scoped_properties(path.name, "FragmentPath", "DropInPaths")
+    if props["FragmentPath"] != str(path):
+        raise UninstallError("SCOPED_EFFECTIVE_FRAGMENT_UNVERIFIED:" + path.name)
+    if not props["DropInPaths"]:
+        return None
+    if not allow_lxc or props["DropInPaths"] != str(LXC_SERVICE_DROPIN):
+        raise UninstallError("SCOPED_EFFECTIVE_DROPIN_UNREVIEWED:" + path.name)
+    proof = lxc_retirement_policy()
+    # Exact root-owned fragment is independently matched to manifest /
+    # installed Go Status. The fixed policy changes no commands, users,
+    # dependencies or stop hooks. Verify manager state is current and
+    # ExecStart is still the exact fragment command.
+    names = ("FragmentPath", "DropInPaths", "LoadState", "NeedDaemonReload",
+             "Type", "User", "Group", "ExecStart", "KillMode", "UMask",
+             "RequiredBy", "BoundBy", "RequisiteOf", "ConsistsOf", "PropagatesStopTo",
+             "NoNewPrivileges", "ProtectSystem", "ProtectHome", "PrivateTmp",
+             "CapabilityBoundingSet", "AmbientCapabilities")
+    q = scoped_properties(path.name, *names)
+    info = checked_file(path, "file", 65536)
+    if info is None or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o644:
+        raise UninstallError("SCOPED_LXC_FRAGMENT_UNSAFE")
+    fragment = path.read_text().splitlines()
+    starts = [line.removeprefix("ExecStart=") for line in fragment if line.startswith("ExecStart=")]
+    allowed = {SCOPED_GUARD_UNIT.name: {"incus.service", SCOPED_LIFECYCLE_UNIT.name},
+               UNIT.name: set(), SCOPED_LIFECYCLE_UNIT.name: set()}[path.name]
+    if (q["FragmentPath"] != str(path) or q["DropInPaths"] != str(LXC_SERVICE_DROPIN) or
+            q["LoadState"] != "loaded" or q["NeedDaemonReload"] != "no" or
+            len(starts) != 1 or q["ExecStart"].count("argv[]=") != 1 or
+            "{ path=/usr/local/bin/boxweave ; argv[]=" + starts[0] + " ; ignore_errors=no ;" not in q["ExecStart"] or
+            q["KillMode"] != "control-group" or q["UMask"] != "0077" or q["Group"] or
+            q["Type"] != ("oneshot" if path == SCOPED_GUARD_UNIT else "simple") or
+            q["User"] != ("boxweave" if path == UNIT else "") or
+            any(set(q[key].split()) - allowed for key in ("RequiredBy", "BoundBy", "RequisiteOf", "ConsistsOf", "PropagatesStopTo"))):
+        raise UninstallError("SCOPED_LXC_EFFECTIVE_CONTRACT_UNVERIFIED:" + path.name)
+    if path == UNIT and (q["CapabilityBoundingSet"] or q["AmbientCapabilities"] or
+            q["ProtectSystem"] != "strict" or q["ProtectHome"] != "yes" or q["PrivateTmp"] != "yes"):
+        raise UninstallError("SCOPED_LXC_CONTROLLER_IDENTITY_UNVERIFIED")
+    # NNP=no is deliberately disclosed; the only permitted operation here
+    # is to retire an already installed controller under its exact approved scope. Do not
+    # treat this as a successful runtime security attestation.
+    if q["NoNewPrivileges"] != "no" or lxc_retirement_policy() != proof:
+        raise UninstallError("SCOPED_LXC_EFFECTIVE_POLICY_DRIFT")
+    return proof
+
+def scoped_effective_reviews(allow_lxc=False, allow_removed=False):
+    out = {}
+    for path in (UNIT, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT):
+        if allow_removed and not os.path.lexists(path):
+            q = scoped_properties(path.name, "LoadState", "ActiveState", "MainPID", "FragmentPath", "DropInPaths")
+            if q != {"LoadState":"not-found", "ActiveState":"inactive", "MainPID":"0", "FragmentPath":"", "DropInPaths":""}:
+                raise UninstallError("SCOPED_REMOVED_EFFECTIVE_UNIT_UNVERIFIED:" + path.name)
+            continue
+        proof = scoped_effective_review(path, allow_lxc)
+        if proof:
+            out[path.name] = proof
+    return out
+
+def scoped_verify_effective_reviews(plan, allow_removed=False):
+    expected = plan.get("scoped_effective_reviews", {})
+    # Match the complete approved unit body, not just the effective command.
+    # Keep clean-host historical cleanup/resume semantics unchanged.
+    if not expected and allow_removed:
+        return
+    if expected and any(proof != lxc_retirement_policy() for proof in expected.values()):
+        raise UninstallError("SCOPED_EFFECTIVE_RETIREMENT_POLICY_DRIFT")
+    for path in (UNIT, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT):
+        if allow_removed and not os.path.lexists(path):
+            continue
+        original = plan["unit"] if path == UNIT else plan["scoped_units"][str(path)]
+        if file_fingerprint(path) != original:
+            raise UninstallError("SCOPED_EFFECTIVE_UNIT_BODY_DRIFT:" + path.name)
+        require_root_owned(path)
+    actual = scoped_effective_reviews(bool(expected), allow_removed)
+    if allow_removed:
+        expected = {name: proof for name, proof in expected.items()
+                    if os.path.lexists(UNIT.parent / name)}
+    if actual != expected:
+        raise UninstallError("SCOPED_EFFECTIVE_RETIREMENT_REVIEW_DRIFT")
+
+
 def retirement_unit_body(project, bridge, acl):
     for value in (project, bridge, acl):
         if not isinstance(value, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", value):
@@ -682,7 +804,7 @@ def inspect_exec_archive(uid):
     return {"device": info.st_dev, "inode": info.st_ino, "files": records}
 
 
-def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False, offline_observer=None, offline=False):
+def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False, offline_observer=None, offline=False, scoped_empty_lxc=False):
     if not scoped:
         refuse_scoped_retirement()
     if not VALID_NAME.fullmatch(project):
@@ -719,7 +841,11 @@ def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False, o
         require_root_owned(BINARY)
         require_root_owned(UNIT)
     service = systemd_status()
-    fragment = effective_unit()
+    if scoped_empty_lxc and scoped:
+        scoped_effective_review(UNIT, True)
+        fragment = str(UNIT)
+    else:
+        fragment = effective_unit()
     if (unit and fragment != str(UNIT)) or (not unit and fragment not in ("", str(UNIT))):
         raise UninstallError("effective systemd unit is foreign or unexpectedly replaced")
     if binary is None and service == "active":
@@ -1375,7 +1501,7 @@ def scoped_properties(unit, *props):
     return values
 
 
-def scoped_units():
+def scoped_units(allow_empty_lxc=False):
     result = {}
     for path in (SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_INCUS_DROPIN):
         proof = file_fingerprint(path)
@@ -1384,8 +1510,10 @@ def scoped_units():
         require_root_owned(path)
         if path != SCOPED_INCUS_DROPIN:
             p = scoped_properties(path.name, "FragmentPath", "DropInPaths", "ActiveState", "UnitFileState")
-            if p["FragmentPath"] != str(path) or p["DropInPaths"] or p["UnitFileState"] != "static" or p["ActiveState"] not in ("active", "inactive", "failed"):
+            if p["FragmentPath"] != str(path) or (p["DropInPaths"] and not allow_empty_lxc) or p["UnitFileState"] != "static" or p["ActiveState"] not in ("active", "inactive", "failed"):
                 raise UninstallError("unrecognized effective scoped service: " + path.name + "; inspect doctor --maintenance --summary and effective DropInPaths; preserve inherited policy")
+            if allow_empty_lxc:
+                scoped_effective_review(path, True)
         result[str(path)] = proof
     p = scoped_properties("incus.service", "Requires", "After", "ActiveState", "MainPID", "DropInPaths")
     if (p["ActiveState"] != "active" or not p["MainPID"].isdigit() or int(p["MainPID"]) <= 1 or
@@ -1420,7 +1548,10 @@ def scoped_native(plan, action):
 def scoped_plan(project):
     if os.path.lexists(SCOPED_FENCE) or audit_status()["status"] == "STARTED":
         raise UninstallError("SCOPED_RETIREMENT_IN_PROGRESS: review --resume-plan --scoped, do not start another")
-    plan = inspect("full", project, [], None, guided=True, scoped=True)
+    # This alternative is only used for an empty Scoped installation.
+    if native_instances(project, guided=False):
+        raise UninstallError("SCOPED_LXC_EMPTY_RETIREMENT_REQUIRES_MCP_CLEANUP")
+    plan = inspect("full", project, [], None, guided=True, scoped=True, scoped_empty_lxc=True)
     if (plan["binary"] is None or plan["unit"] is None or plan["native_prepare"]["status"] != "ABSENT" or
             plan["retirement_verifier"] or plan["scriptlet_present"] or plan["installer_backup"] or os.path.lexists(BACKUP)):
         raise UninstallError("mixed legacy/scoped installation evidence; no retirement")
@@ -1429,7 +1560,12 @@ def scoped_plan(project):
             raise UninstallError("untrusted installed file mode or hardlink")
     # Go Status validates exact unit contents, manifest and original Root receipts.
     command([str(BINARY), "install-status", "-project", project], timeout=90)
-    plan["scoped_units"] = scoped_units()
+    plan["scoped_units"] = scoped_units(allow_empty_lxc=True)
+    reviewed = scoped_effective_reviews(allow_lxc=True)
+    if reviewed:
+        if plan["sqlite"]["boxes"] or plan["sqlite"]["unresolved_operations"] or plan["incus_instances"]:
+            raise UninstallError("SCOPED_LXC_EMPTY_RETIREMENT_REQUIRES_MCP_CLEANUP")
+        plan["scoped_effective_reviews"] = reviewed
     plan["scoped_journal"] = scoped_tree(SCOPED_JOURNAL)
     plan["mode"] = SCOPED_MODE
     if plan["sqlite"]["boxes"] or plan["incus_instances"]:
@@ -1548,7 +1684,8 @@ def scoped_state_files(plan):
 def scoped_verify_original(plan):
     if file_fingerprint(BINARY) != plan["binary"] or file_fingerprint(UNIT) != plan["unit"]:
         raise UninstallError("original scoped executable/unit drift")
-    if scoped_units() != plan["scoped_units"] or scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"]:
+    scoped_verify_effective_reviews(plan)
+    if scoped_units(allow_empty_lxc=bool(plan.get("scoped_effective_reviews"))) != plan["scoped_units"] or scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"]:
         raise UninstallError("original scoped Root journal or unit drift")
     if inspect_sqlite(STATE / "ledger.sqlite", guided=True) != plan["sqlite"] or plan["sqlite"]["blockers"]:
         raise UninstallError("original scoped ledger changed; preserve protected work")
@@ -1576,6 +1713,7 @@ def scoped_archive(record):
     plan = record["scoped_plan"]
     scoped_verify_original(plan)
     for unit in (UNIT.name, SCOPED_LIFECYCLE_UNIT.name):
+        scoped_verify_effective_reviews(plan)
         command(["systemctl", "stop", unit], timeout=90)
         scoped_inactive(unit)
     if os.path.lexists(SCOPED_SOCKET):
@@ -1645,6 +1783,7 @@ def scoped_incus_active():
 
 
 def scoped_detach_guard(plan):
+    scoped_verify_effective_reviews(plan)
     before = scoped_incus_active()
     proof = plan["scoped_units"][str(SCOPED_INCUS_DROPIN)]
     if os.path.lexists(SCOPED_INCUS_DROPIN):
@@ -1658,6 +1797,7 @@ def scoped_detach_guard(plan):
     p = scoped_properties(SCOPED_GUARD_UNIT.name, "RequiredBy", "BoundBy", "RequisiteOf", "ConsistsOf", "PropagatesStopTo")
     if any(set(v.split()) - {SCOPED_LIFECYCLE_UNIT.name, UNIT.name} for v in p.values()):
         raise UninstallError("foreign service still depends on scoped guard; refuse stop")
+    scoped_verify_effective_reviews(plan)
     command(["systemctl", "stop", SCOPED_GUARD_UNIT.name], timeout=90)
     scoped_inactive(SCOPED_GUARD_UNIT.name)
     if scoped_incus_active() != before:
@@ -1695,6 +1835,7 @@ def scoped_postcheck(plan, archive):
 def scoped_cleanup(record):
     plan = record["scoped_plan"]
     archive, cleanup = scoped_archive_proof(record)
+    scoped_verify_effective_reviews(plan, allow_removed=True)
     for unit in (UNIT.name, SCOPED_LIFECYCLE_UNIT.name, SCOPED_GUARD_UNIT.name):
         scoped_inactive(unit)
     if os.path.lexists(SCOPED_SOCKET) or os.path.lexists(SCOPED_INCUS_DROPIN):
@@ -1797,6 +1938,7 @@ def scoped_resume_plan(project, archive_hint=None):
         scoped_verify_original(plan)
     else:
         archive, _ = scoped_archive_proof(record)
+        scoped_verify_effective_reviews(plan, allow_removed=record["phase"]=="CLEANUP_STARTED")
         if record["phase"] == "CLEANUP_STARTED":
             scoped_postcheck(plan, archive)
         else:
@@ -1816,6 +1958,7 @@ def scoped_continue(record):
     if record["phase"] == "APPROVED":
         record = scoped_archive(record)
     archive, cleanup = scoped_archive_proof(record)
+    scoped_verify_effective_reviews(plan, allow_removed=record["phase"]=="CLEANUP_STARTED")
     # Hold the original controller lock through native and file cleanup.
     # After a partial cleanup only the already removed final lock is absent.
     lockplan = {**plan, "state_files": cleanup["state_files"]}
@@ -2693,7 +2836,11 @@ def maintenance_preview(project, retention, host, report, local, planner_sha256=
         if item.get("evidence", {}).get("state") not in ("PRESENT", "ABSENT"):
             issue("ARTIFACT_UNSAFE_OR_UNVERIFIED", "HARD", item["id"], "Inspect fixed path metadata and ownership")
     for unit in i.get("units", []):
-        if unit.get("drop_ins") != "ABSENT":
+        if (mode == "SCOPED_V2" and unit.get("drop_ins") == "KNOWN_LXC255_SCOPED_RETIREMENT_REVIEW_REQUIRED"
+                and report.get("coverage") == "BOUNDED_SOURCES_OBSERVED"
+                and (report.get("database") or {}).get("state") == "OBSERVED"):
+            issue("LXC_SCOPED_RETIREMENT_REVIEW_REQUIRED", "REVIEW", unit["name"], "Use exact scoped uninstall plan; verify inherited policy and approved original scope; no runtime hardening approval")
+        elif unit.get("drop_ins") != "ABSENT":
             issue("EFFECTIVE_DROPIN_UNREVIEWED", "HARD", unit["name"], "Review effective systemd configuration; do not remove inherited policy")
         if unit.get("effective_file", {}).get("state") not in ("OBSERVED", "ABSENT"):
             issue("EFFECTIVE_UNIT_UNVERIFIED", "HARD", unit["name"], "Verify exact installed fragment")
@@ -2945,7 +3092,7 @@ def scoped_drain_capture(project, active, observer=None, observer_sha=None, allo
             continue
         if not active and issue["code"] == "CONTROLLER_RUNTIME_UNVERIFIED":
             continue
-        if issue["code"] == "EXEC_ARCHIVE_POST_FENCE_PROOF_REQUIRED":
+        if issue["code"] in ("EXEC_ARCHIVE_POST_FENCE_PROOF_REQUIRED", "LXC_SCOPED_RETIREMENT_REVIEW_REQUIRED"):
             continue  # independently verify below
         blockers.append(issue["code"] + ":" + issue["resource"])
     i = report.get("installation") or {}
@@ -2997,9 +3144,14 @@ def scoped_drain_capture(project, active, observer=None, observer_sha=None, allo
             if sql["version"] != 6 or sql["unresolved_operations"]:
                 blockers.append("DRAIN_UNSETTLED_ORIGINALS")
             exec_archive = inspect_exec_archive(uid)
-            if effective_unit() != str(UNIT):
-                blockers.append("DRAIN_EFFECTIVE_CONTROLLER_UNIT_UNVERIFIED")
-            units = scoped_units()
+            # Exact static installed contract and original scope are still
+            # required. Hint alone grants no authority.
+            reviewed = scoped_effective_reviews(allow_lxc=True)
+            if reviewed and (set(reviewed) != {UNIT.name, SCOPED_GUARD_UNIT.name, SCOPED_LIFECYCLE_UNIT.name} or
+                    any(u.get("drop_ins") != "KNOWN_LXC255_SCOPED_RETIREMENT_REVIEW_REQUIRED"
+                        for u in i.get("units", []) if u.get("name") in reviewed)):
+                raise UninstallError("DRAIN_INHERITED_POLICY_OBSERVER_MISMATCH")
+            units = scoped_units(allow_empty_lxc=bool(reviewed))
             incus_pid = scoped_incus_active()
             if i.get("adapter") == "EXACT_RUNNING_OBSERVER_BINARY":
                 command([str(BINARY), "install-status", "-project", project], timeout=90)
@@ -3008,6 +3160,8 @@ def scoped_drain_capture(project, active, observer=None, observer_sha=None, allo
                          "preimage": i.get("preimage", {}).get("sha256"), "units": units,
                          "state_ids": state_ids, "exec_archive": exec_archive,
                          "incus_pid": incus_pid, "audit": local.get("audit")}
+            if reviewed:
+                immutable["scoped_effective_reviews"] = reviewed
             witness = {"ledger": report.get("ledger_observation_sha256"),
                        "native": n.get("evidence", {}).get("sha256"),
                        "journal": local.get("scoped_journal", {}).get("tree"),
@@ -3243,6 +3397,8 @@ def scoped_drain_continue(record):
         plan = scoped_plan(project)
         if not plan["ready"]:
             raise UninstallError("SCOPED_DRAIN_EMPTY_RETIREMENT_BLOCKED")
+        if plan.get("scoped_effective_reviews", {}) != r["approved_plan"]["capture"]["immutable"].get("scoped_effective_reviews", {}):
+            raise UninstallError("SCOPED_DRAIN_HANDOFF_POLICY_DRIFT")
         plan["drain_receipt"] = scoped_private_file(SCOPED_DRAIN, 1024 * 1024)
         plan["drain_approved_review"] = r["review_sha256"]
         inputs = {k: v for k, v in plan.items() if k not in ("ready", "actions", "retained", "review_sha256")}

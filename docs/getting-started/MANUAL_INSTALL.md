@@ -179,15 +179,17 @@ purge separately. See [H5 delivery](../development/PR188_H5_DELIVERY.md).
 
 ### Nested lifecycle compatibility (candidate)
 
-A working nested Incus and healthy Scoped controller do not by themselves
-prove a complete uninstall/reinstall cycle. The installer now reports an
-advisory maintenance_preflight before a reviewed fresh install. Type-wide
-systemd service drop-ins may only become effective after a unit is
-installed; absence of a detected file is not proof of compatibility.
-In particular, Ubuntu LXC's inherited service.d policy has blocked both
-live and empty Scoped retirement, even after normal MCP cleanup. Preserve
-that policy and review the actual effective units with Doctor maintenance.
-Do not remove or mask inherited drop-ins or relax confinement to force
-retirement. The separate clean-VM roundtrip CI proves same-mode purge and
-fresh workload, not safe recursive confinement or nested retirement.
-See [roundtrip evidence](../development/PR188_NESTED_ROUNDTRIP.md).
+For the exact reviewed Ubuntu 24.04/systemd 255 unprivileged LXC generated
+service.d policy, Scoped full retirement supports empty and running owned
+Box sets. Doctor reports LXC_SCOPED_RETIREMENT_REVIEW_REQUIRED; the local
+uninstaller verifies the actual unit body, manager state, policy identity,
+exact scope and original claims, and rechecks them during approved
+retirement. Unknown or additional overrides remain blocked. No inherited
+policy is removed or masked. The profile is a retirement compatibility
+contract, NOT a runtime-hardening attestation or Legacy activation
+exception. The existing LXC policy overrides NoNewPrivileges; that
+remains a separate security observation.
+
+Use the normal reviewed Scoped full plan and terminal approval; purge
+remains separate. See [nested roundtrip evidence](../development/PR188_NESTED_ROUNDTRIP.md)
+and [live retirement follow-up](../development/PR188_LXC_LIVE_RETIREMENT.md).

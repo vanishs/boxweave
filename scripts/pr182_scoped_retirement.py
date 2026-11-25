@@ -63,6 +63,28 @@ def main(project, receipt, candidate=None, digest=None):
         assert {x["box"] for x in plan["steps"]} == {uuid, second}
         assert pid("boxweave.service") == before and not u.AUDIT.exists() and not u.SCOPED_FENCE.exists()
         print("PR182_SCOPED_LIVE_PLAN=PASS", flush=True)
+        # Test-only harmless unit-specific override, never inherited policy.
+        if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted":
+            from pr188_scoped_roundtrip import http_status
+            folder = Path("/etc/systemd/system/boxweave.service.d")
+            fixture = folder / "91-boxweave-ci-retirement-review.conf"
+            folder.mkdir(mode=0o755)
+            try:
+                with fixture.open("x") as out:
+                    out.write("[Service]\nEnvironment=BOXWEAVE_CI_REVIEW_FIXTURE=1\n")
+                run("systemctl", "daemon-reload")
+                denied, reviewed = check_plan(project)
+                assert denied.returncode != 0 and not reviewed["ready"]
+                assert any("EFFECTIVE_DROPIN_UNREVIEWED" in b for b in reviewed["blockers"])
+                assert pid("boxweave.service")==before and http_status(18082)==200
+                assert not u.SCOPED_DRAIN.exists() and not u.AUDIT.exists()
+                print("PR188_UNKNOWN_EFFECTIVE_DROPIN_NO_EFFECT=PASS",flush=True)
+            finally:
+                fixture.unlink(missing_ok=True)
+                folder.rmdir()
+                run("systemctl", "daemon-reload")
+            assert pid("boxweave.service")==before
+
     # Add unrelated native resources. Never remove them.
     run("incus", "project", "create", "pr182-foreign")
     run("incus", "network", "acl", "create", "pr182-foreign", "--project", "default")

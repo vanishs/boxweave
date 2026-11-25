@@ -20,3 +20,5 @@ Not-found units report empty DropInPaths before installation even though type-wi
 15 guided and 57 uninstall tests PASS (0c3a40eb30170af1560aa68c64bfaaa4); 4 fixture guard tests plus actual preflight advisory PASS (dd622f031e5aa07d7f1d62ffda1a2b9a). Format/YAML/syntax PASS.
 
 Clean-VM scoped-retirement lane previously ended after purge. Add actual HTTP before retirement, same-mode interactive reinstall, fresh empty ledger, denial of still-unexpired old credential, same names/keys with new UUIDs, real second workload. Preserve foreign sentinel proof, then remove only exact CI-created sentinels before second exclusive install. Incus PID unchanged. Positive reinstall remains independent CI gate, not claimed in nested C. No merge or release.
+
+Follow-up: [real nested empty and live automatic retirement compatibility](PR188_LXC_LIVE_RETIREMENT.md). This earlier report remains historical.

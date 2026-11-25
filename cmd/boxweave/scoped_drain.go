@@ -30,6 +30,13 @@ type scopedDrainRecord struct {
 	Actor          state.ScopedDrainActor    `json:"actor"`
 	ExpectedLedger string                    `json:"expected_ledger_sha256"`
 	ExpectedNative string                    `json:"expected_native_sha256"`
+	ApprovedPlan   struct {
+		Capture struct {
+			Immutable struct {
+				Policies map[string]install.ScopedRetirementPolicy `json:"scoped_effective_reviews"`
+			} `json:"immutable"`
+		} `json:"capture"`
+	} `json:"approved_plan"`
 }
 type scopedDrainRequest struct {
 	Project        string
@@ -135,10 +142,24 @@ func scopedDrainRoot(probe bool) error {
 	if report.Coverage != "BOUNDED_SOURCES_OBSERVED" || i.Adapter != "EXACT_RUNNING_OBSERVER_BINARY" || i.Mode != "SCOPED_V2" || i.InstalledSHA256 != r.Binary || i.Identity.StaticContract != "VERIFIED" || i.Identity.ServiceUnit != "INACTIVE" || i.Identity.GuardUnit != "ACTIVE" || i.Identity.LifecycleUnit != "ACTIVE" || i.RootPolicy.Kernel != "OBSERVED" || report.RootLedgerComparison != "MATCH" || l == nil || len(l.Originals) != 0 || l.ForeignRows != 0 || l.OrphanBindings != 0 || l.OrphanFences != 0 || n.OwnershipComparison != "OBSERVED" || n.Unowned != 0 || len(n.OwnedUnverified) != 0 || n.ActiveOperations != 0 || n.Evidence.SHA256 != r.ExpectedNative || report.LedgerSHA256 != r.ExpectedLedger || n.BoxACLReferences != "OBSERVED" || n.ForwardReferences != "OBSERVED" || n.BridgeConfig != "RECORDED_PREIMAGE_MATCH" || n.BaseACLConfig != "RECORDED_PREIMAGE_MATCH" || n.BridgeConsumers != "OWNED_REFERENCES_ONLY" || (n.BaseACLConsumers != "OWNED_REFERENCES_ONLY" && n.BaseACLConsumers != "NO_REFERENCES") {
 		return errors.New("SCOPED_DRAIN_CURRENT_PROOF_UNVERIFIED")
 	}
+	policies := r.ApprovedPlan.Capture.Immutable.Policies
+	matched := 0
 	for _, u := range i.Units {
-		if u.DropIns != "ABSENT" || (u.EffectiveFile.State != "OBSERVED" && u.EffectiveFile.State != "ABSENT") {
+		if u.EffectiveFile.State != "OBSERVED" && u.EffectiveFile.State != "ABSENT" {
 			return errors.New("SCOPED_DRAIN_EFFECTIVE_UNIT_UNVERIFIED")
 		}
+		p, approved := policies[u.Name]
+		if u.DropIns == "ABSENT" && !approved {
+			continue
+		}
+		if !approved || u.DropIns != "KNOWN_LXC255_SCOPED_RETIREMENT_REVIEW_REQUIRED" ||
+			u.EffectiveFile.State != "OBSERVED" || !install.VerifyScopedRetirementPolicy(ctx, u.Name, p) {
+			return errors.New("SCOPED_DRAIN_EFFECTIVE_UNIT_UNVERIFIED")
+		}
+		matched++
+	}
+	if matched != len(policies) || (matched != 0 && matched != 3) {
+		return errors.New("SCOPED_DRAIN_APPROVED_POLICY_DRIFT")
 	}
 	return spawnScopedDrain(ctx, q, uid, gid)
 }

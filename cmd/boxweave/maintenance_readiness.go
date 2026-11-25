@@ -111,7 +111,9 @@ func summarizeMaintenance(o maintenanceReport) maintenanceReadiness {
 		}
 	}
 	for _, u := range i.Units {
-		if u.DropIns != "ABSENT" {
+		if i.Mode == "SCOPED_V2" && u.DropIns == "KNOWN_LXC255_SCOPED_RETIREMENT_REVIEW_REQUIRED" && o.Coverage == "BOUNDED_SOURCES_OBSERVED" && o.Database.State == "OBSERVED" {
+			add("LXC_SCOPED_RETIREMENT_REVIEW_REQUIRED", "REVIEW", u.Name, "Use exact scoped uninstall plan; verify inherited policy and approved original scope; no runtime hardening approval")
+		} else if u.DropIns != "ABSENT" {
 			hard("EFFECTIVE_DROPIN_UNREVIEWED", u.Name, "Review effective systemd configuration; do not remove inherited policy")
 		}
 		if u.EffectiveFile.State != "OBSERVED" && u.EffectiveFile.State != "ABSENT" {

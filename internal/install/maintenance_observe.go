@@ -149,6 +149,19 @@ func maintenanceDirectory(id, path string, filter *regexp.Regexp) MaintenanceDir
 	return o
 }
 
+const knownLXC255PolicyPath = "/run/systemd/system/service.d/zzz-lxc-service.conf"
+const knownLXC255PolicySHA = "fcbd512cb8212c6f5720f28398f01e85ff96246aebb73e09cf449d2f3aa2c5b0"
+
+// This is an observation hint, not authorization. Never classify another
+// path or additional override as the reviewed candidate.
+func knownLXC255DropIn(paths string) bool {
+	if paths != knownLXC255PolicyPath {
+		return false
+	}
+	raw, st, e := diagnosticReadFile(paths, 0, false, 4096)
+	return e == nil && st.Mode().Perm() == 0644 && diagnosticHash(raw) == knownLXC255PolicySHA
+}
+
 func maintenanceUnit(ctx context.Context, name, path string) MaintenanceUnit {
 	p := diagnosticSystemd(ctx, name, "LoadState", "ActiveState", "FragmentPath", "DropInPaths")
 	o := MaintenanceUnit{Name: name, State: diagnosticUnitState(p), EffectiveFile: me("UNVERIFIED", "UNIT_NOT_OBSERVED"), DropIns: "UNVERIFIED"}
@@ -165,6 +178,11 @@ func maintenanceUnit(ctx context.Context, name, path string) MaintenanceUnit {
 			o.DropIns = "ABSENT"
 		} else {
 			o.DropIns = "PRESENT_UNREVIEWED"
+			// Hint only. The Python exact retirement coordinator
+			// independently checks the whole effective unit and policy.
+			if o.EffectiveFile.State == "OBSERVED" && (name == "boxweave.service" || name == scopedGuardUnitName || name == scopedLifecycleUnitName) && knownLXC255DropIn(v) {
+				o.DropIns = "KNOWN_LXC255_SCOPED_RETIREMENT_REVIEW_REQUIRED"
+			}
 		}
 	}
 	return o
