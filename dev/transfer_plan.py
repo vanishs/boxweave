@@ -6,6 +6,7 @@ The caller must preserve original MCP intent, receipts and readback evidence.
 """
 import argparse
 import base64
+import copy
 import hashlib
 import json
 import os
@@ -21,6 +22,8 @@ MAX_CHUNK = 40960  # Keep generated Base64 request JSON below a 64 KiB read.
 MAX_PARTS = 128
 MAX_MANIFEST = 65536
 MAX_JOURNAL = 16 * 1024 * 1024
+MAX_JOURNAL_TOTAL = 64 * 1024 * 1024
+MAX_EVENTS = 1024
 
 
 class TransferError(ValueError):
@@ -187,7 +190,9 @@ def actions(manifest):
 def plan(source, output, box, target, work_ref, transfer_ref, chunk_size=MAX_CHUNK):
     data = bounded_read(source, MAX_BYTES)
     manifest, chunks = make_manifest(data, box, target, work_ref, transfer_ref, chunk_size)
-    directory = Path(output)
+    directory = Path(output).absolute()
+    if directory.parent.resolve(strict=True) != directory.parent:
+        raise TransferError("Bundle parent must be a canonical directory")
     directory.mkdir(mode=0o700)  # Never regenerate or replace an existing intent.
     exclusive(directory / "manifest.json", encoded(manifest))
     rows = actions(manifest)
@@ -196,15 +201,17 @@ def plan(source, output, box, target, work_ref, transfer_ref, chunk_size=MAX_CHU
                 "content_base64": base64.b64encode(content).decode("ascii"),
                 "idempotency_key": row["idempotency_key"], "work_ref": work_ref}
         exclusive(directory / (row["action"] + "-request.json"), encoded(args))
-    journal = {"transfer_id": manifest["transfer_id"],
-               "records": {row["action"]: {"idempotency_key": row["idempotency_key"],
-                   "operation_id": None, "state": "NOT_SUBMITTED", "pages": [], "exit_code": None}
-                   for row in rows}}
-    exclusive(directory / "intent.json", encoded(journal))
+    journal = directory / "journal"
+    journal.mkdir(mode=0o700)
+    publish_event(journal, 0, {"kind": "init", "bundle": str(directory),
+                               "manifest_sha256": digest(encoded(manifest)),
+                               "transfer_id": manifest["transfer_id"]})
+    sync_directory(directory)
+    sync_directory(directory.parent)
     return {"status": "PREPARED", "transfer_id": manifest["transfer_id"],
             "parts": len(chunks), "size": len(data), "sha256": manifest["sha256"],
             "directory": str(directory), "actions": rows,
-            "note": "Persist intent before dispatch; payloads contain source bytes. No calls issued."}
+            "note": "Use begin on this canonical bundle before every dispatch; payloads contain source bytes. No calls issued."}
 
 
 def verify_pages(pages, row, box):
@@ -235,7 +242,7 @@ def verify_pages(pages, row, box):
     return whole.hexdigest()
 
 
-def assess(manifest, journal):
+def _assess_snapshot(manifest, journal):
     rows = actions(manifest)
     if (not isinstance(journal, dict) or set(journal) != {"transfer_id", "records"}
             or journal["transfer_id"] != manifest["transfer_id"]
@@ -299,6 +306,220 @@ def assess(manifest, journal):
         status, next_action = "RECONCILE", "assemble"
     return {"status": status, "next_action": next_action, "actions": results,
             "note": "Caller-supplied receipts checked for consistency only. No automatic calls, retry, or authority."}
+
+
+def initial_journal(manifest):
+    return {"transfer_id": manifest["transfer_id"],
+            "records": {row["action"]: {"idempotency_key": row["idempotency_key"],
+                "operation_id": None, "state": "NOT_SUBMITTED", "pages": [], "exit_code": None}
+                for row in actions(manifest)}}
+
+
+def sync_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def publish_event(directory, expected, event):
+    """Exclusive local CAS, fsync before returning a dispatch intent.
+
+    If publication/acknowledgement is uncertain, inspect the canonical
+    history; a published dispatch event is never a second permission.
+    """
+    if type(expected) is not int or not 0 <= expected < MAX_EVENTS:
+        raise TransferError("Invalid or exhausted journal revision")
+    raw = encoded(dict(event, revision=expected + 1))
+    if len(raw) > MAX_JOURNAL:
+        raise TransferError("Journal event exceeds bound")
+    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    temp = None
+    try:
+        name = ".pending-" + secrets.token_hex(16)
+        out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                      0o600, dir_fd=fd)
+        temp = name
+        with os.fdopen(out, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        destination = f"{expected+1:08d}.json"
+        os.link(temp, destination, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+        os.fsync(fd)
+    finally:
+        if temp is not None:
+            os.unlink(temp, dir_fd=fd)
+        os.close(fd)
+
+
+def request_for(bundle, manifest, action):
+    rows = {row["action"]: row for row in actions(manifest)}
+    if action not in rows:
+        raise TransferError("Unknown action")
+    row = rows[action]
+    if action == "assemble":
+        request = {"box_id": manifest["box_id"], "work_ref": manifest["work_ref"],
+                   "idempotency_key": row["idempotency_key"],
+                   "manifest_path": rows["manifest"]["path"], "target": row["path"]}
+        return request, digest(encoded(request))
+    path = bundle / (action + "-request.json")
+    raw = bounded_read(path, MAX_MANIFEST)
+    request = strict_load(raw)
+    if not isinstance(request, dict) or set(request) != {
+            "box_id", "path", "mode", "content_base64", "idempotency_key", "work_ref"}:
+        raise TransferError("Invalid prepared request")
+    expected = {"box_id": manifest["box_id"], "path": row["path"], "mode": "create",
+                "idempotency_key": row["idempotency_key"], "work_ref": manifest["work_ref"]}
+    if any(request.get(k) != v for k, v in expected.items()) or raw != encoded(request):
+        raise TransferError("Prepared request identity changed")
+    if not isinstance(request["content_base64"], str):
+        raise TransferError("Invalid prepared payload")
+    content = base64.b64decode(request["content_base64"], validate=True)
+    if len(content) != row["size"] or digest(content) != row["sha256"]:
+        raise TransferError("Prepared payload does not match manifest")
+    return request, digest(raw)
+
+
+def apply_journal_event(bundle, manifest, current, event):
+    if not isinstance(event, dict):
+        raise TransferError("Invalid journal event")
+    action = event.get("action")
+    if action not in current["records"]:
+        raise TransferError("Unknown journal action")
+    record = current["records"][action]
+    kind = event.get("kind")
+    if kind == "dispatch":
+        if set(event) != {"kind", "action", "request_sha256", "revision"}:
+            raise TransferError("Invalid dispatch record")
+        status = _assess_snapshot(manifest, current)
+        if status["status"] != "READY" or status["next_action"] != action:
+            raise TransferError("Dispatch is not next READY action; reconcile original intent")
+        _, expected = request_for(bundle, manifest, action)
+        if event["request_sha256"] != expected:
+            raise TransferError("Dispatch request identity changed")
+        record["state"] = "DISPATCHING"
+    elif kind == "receipt":
+        if set(event) != {"kind", "action", "record", "revision"}:
+            raise TransferError("Invalid receipt event")
+        new = event["record"]
+        if not isinstance(new, dict) or set(new) != set(record):
+            raise TransferError("Invalid receipt record")
+        if new["idempotency_key"] != record["idempotency_key"]:
+            raise TransferError("Original idempotency key changed")
+        if record["state"] == "NOT_SUBMITTED":
+            raise TransferError("Receipt requires durable pre-dispatch intent")
+        state = new["state"]
+        if not isinstance(state, str) or not re.fullmatch(r"[A-Z][A-Z_]{0,31}", state) or state in ("NOT_SUBMITTED", "DISPATCHING"):
+            raise TransferError("Receipt cannot reset dispatch state")
+        op = new["operation_id"]
+        if op is None and (state != "UNKNOWN" or new["pages"] or new["exit_code"] is not None):
+            raise TransferError("Missing original receipt; retain UNKNOWN")
+        if record["operation_id"] is not None and op != record["operation_id"]:
+            raise TransferError("Original Operation ID cannot change")
+        if record["state"] in ("SUCCEEDED", "FAILED", "CANCELLED", "REJECTED", "TIMED_OUT") and state != record["state"]:
+            raise TransferError("Terminal Operation state cannot change")
+        if record["exit_code"] is not None and new["exit_code"] != record["exit_code"]:
+            raise TransferError("Original guest exit code cannot change")
+        if not isinstance(new["pages"], list) or (state != "SUCCEEDED" and
+                (new["pages"] or new["exit_code"] is not None)):
+            raise TransferError("Readback requires observed success")
+        if new["exit_code"] is not None and (action != "assemble" or type(new["exit_code"]) is not int):
+            raise TransferError("Invalid original assembly exit code")
+        prior = _assess_snapshot(manifest, current)
+        if next(row for row in prior["actions"] if row["action"] == action)["status"] == "VERIFIED":
+            raise TransferError("Verified original evidence is immutable")
+        current["records"][action] = copy.deepcopy(new)
+    else:
+        raise TransferError("Unknown journal event kind")
+    # Strict consistency checks, even for a recorded refusal or unknown.
+    _assess_snapshot(manifest, current)
+    return current
+
+
+def load_bundle(bundle):
+    bundle = Path(bundle).absolute()
+    if bundle.resolve(strict=True) != bundle or not bundle.is_dir():
+        raise TransferError("Expected canonical original bundle directory")
+    raw = bounded_read(bundle / "manifest.json", MAX_MANIFEST)
+    manifest = validate_manifest(strict_load(raw))
+    if raw != encoded(manifest):
+        raise TransferError("Manifest canonical bytes changed")
+    directory = bundle / "journal"
+    if directory.is_symlink() or not directory.is_dir():
+        raise TransferError("Canonical journal missing; legacy snapshots cannot establish READY")
+    paths = sorted(p for p in directory.iterdir() if re.fullmatch(r"[0-9]{8}\.json", p.name))
+    if not 1 <= len(paths) <= MAX_EVENTS:
+        raise TransferError("Missing or excessive journal history")
+    current = initial_journal(manifest)
+    total = 0
+    for number, path in enumerate(paths, 1):
+        if path.name != f"{number:08d}.json":
+            raise TransferError("Journal revision gap; preserve and reconcile")
+        data = bounded_read(path, MAX_JOURNAL)
+        total += len(data)
+        if total > MAX_JOURNAL_TOTAL:
+            raise TransferError("Journal history exceeds bound; preserve and reconcile")
+        event = strict_load(data)
+        if not isinstance(event, dict) or type(event.get("revision")) is not int or event["revision"] != number or encoded(event) != data:
+            raise TransferError("Invalid immutable journal revision")
+        if number == 1:
+            if event != {"kind": "init", "bundle": str(bundle),
+                         "manifest_sha256": digest(raw), "transfer_id": manifest["transfer_id"],
+                         "revision": 1}:
+                raise TransferError("Journal does not bind original bundle and manifest")
+        else:
+            apply_journal_event(bundle, manifest, current, event)
+    return bundle, manifest, directory, current, len(paths), total
+
+
+def assess(bundle):
+    _, manifest, _, current, revision, _ = load_bundle(bundle)
+    result = _assess_snapshot(manifest, current)
+    for row in result["actions"]:
+        if row["status"] == "READY" and (result["status"] != "READY" or row["action"] != result["next_action"]):
+            row.update(status="WAITING", reason="Not the next dispatchable action; use canonical begin")
+    return dict(result, journal_revision=revision)
+
+
+def append_event(bundle, expected, event):
+    bundle, manifest, directory, current, revision, total = load_bundle(bundle)
+    if type(expected) is not int or expected != revision:
+        raise TransferError("Journal revision conflict; inspect original history")
+    candidate = dict(event, revision=revision+1)
+    apply_journal_event(bundle, manifest, current, candidate)
+    if total + len(encoded(candidate)) > MAX_JOURNAL_TOTAL:
+        raise TransferError("Journal history exceeds bound; preserve and reconcile")
+    publish_event(directory, revision, event)
+    return bundle, manifest, revision+1
+
+
+def begin(bundle, expected, action):
+    original, manifest, _, _, revision, _ = load_bundle(bundle)
+    if revision != expected:
+        raise TransferError("Journal revision conflict; inspect original history")
+    request, request_sha = request_for(original, manifest, action)
+    _, _, revision = append_event(original, expected,
+                                  {"kind": "dispatch", "action": action, "request_sha256": request_sha})
+    # Only this newly published successful claim is the next dispatch intent;
+    # status/resume never returns a replacement permission.
+    result = {"status": "DISPATCH_INTENT_RECORDED", "action": action,
+              "journal_revision": revision, "request_sha256": request_sha,
+              "idempotency_key": request["idempotency_key"], "box_id": manifest["box_id"],
+              "work_ref": manifest["work_ref"],
+              "note": "Caller may send this exact request once only with existing authority. If interrupted or result uncertain, reconcile original intent; never begin again."}
+    if action == "assemble":
+        result["manifest_path"] = request["manifest_path"]
+        result["target"] = request["target"]
+    else:
+        result["request_file"] = str(original / (action + "-request.json"))
+    return result
+
+
+def record_receipt(bundle, expected, action, receipt):
+    original, _, revision = append_event(bundle, expected, {"kind": "receipt", "action": action, "record": receipt})
+    return dict(assess(original), recorded_revision=revision)
 
 
 def assemble(manifest_path):
@@ -370,9 +591,17 @@ def main(argv=None):
     for name in ("source","output","box","target","work-ref","transfer-ref"):
         prepare.add_argument("--"+name, required=True)
     prepare.add_argument("--chunk-size", type=int, default=MAX_CHUNK)
-    status = sub.add_parser("assess")
-    status.add_argument("manifest")
-    status.add_argument("journal")
+    status = sub.add_parser("assess", help="Read only the latest canonical bundle history")
+    status.add_argument("bundle")
+    start = sub.add_parser("begin", help="Durably record exact pre-dispatch intent, never dispatch")
+    start.add_argument("bundle")
+    start.add_argument("--expect", type=int, required=True)
+    start.add_argument("--action", dest="target_action", required=True)
+    receipt = sub.add_parser("record", help="Append original receipt and independent readback")
+    receipt.add_argument("bundle")
+    receipt.add_argument("--expect", type=int, required=True)
+    receipt.add_argument("--action", dest="target_action", required=True)
+    receipt.add_argument("--receipt", required=True)
     join = sub.add_parser("assemble")
     join.add_argument("manifest")
     args = parser.parse_args(argv)
@@ -381,8 +610,12 @@ def main(argv=None):
             result = plan(args.source,args.output,args.box,args.target,args.work_ref,
                           args.transfer_ref,args.chunk_size)
         elif args.action == "assess":
-            result = assess(strict_load(bounded_read(args.manifest,MAX_MANIFEST)),
-                            strict_load(bounded_read(args.journal,MAX_JOURNAL)))
+            result = assess(args.bundle)
+        elif args.action == "begin":
+            result = begin(args.bundle, args.expect, args.target_action)
+        elif args.action == "record":
+            result = record_receipt(args.bundle, args.expect, args.target_action,
+                                    strict_load(bounded_read(args.receipt, MAX_JOURNAL)))
         else:
             result = assemble(args.manifest)
     except (OSError, ValueError, TypeError, KeyError) as exc:
