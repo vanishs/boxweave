@@ -1,0 +1,94 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-close",
+      "candidate": "BDH-L012",
+      "decision": "linked",
+      "evidence": "PR191 eb2cddf CI runs 45582511436,45582511508,45582511623; quality job 139095809783 PASS, native jobs 139095813678 and 139095814097 SKIPPED; Box Exec 80aa43b9f95b46f394c67fcf4d77eac4 exit 0",
+      "observation": "Exact-head connector CI and runtime diff separated merged harness/source checks from unchanged installed candidate and skipped native gates; full raw run association fields are unavailable in connector snapshot, so no fabricated bwdev CI result",
+      "outcome": "helped",
+      "reason": "Reused exact-source CI evidence distinction; not a new implementation or promotion"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-close",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Exec 80aa43b9f95b46f394c67fcf4d77eac4 and be0119e4bbfd64a7b938f7b8f2f17b45 exit 0; original c3122bcb96e6d12959d4383e1b14c042 exit 1",
+      "observation": "Reconciled merged BDH changes and exact earlier partial state without repeating or deleting the original.",
+      "outcome": "helped",
+      "reason": "Existing resume procedure adequate; no new helper justified"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-close",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "Fresh diagnostic Create 34d6844cbb5ba4305b212092f937814c; Exec 5b816e1ede06db13fc47f18915719bb6 exit 1 and f39517d5ebc32a71ffcb3a45595d12bf exit 0",
+      "observation": "Distinct owned fresh fixture exposed native AppArmor profile-load refusal; original and parent preserved.",
+      "outcome": "helped",
+      "reason": "L014 bounded source transfer is not implicated: native file transfer and short Exec were successful; no transfer-admission fault"
+    },
+    {
+      "asset": "knowledge.nesting",
+      "attempt_ref": "20261125-close",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Native init 5b816e1ede06db13fc47f18915719bb6 exit 1; readback f39517d5ebc32a71ffcb3a45595d12bf exit 0",
+      "observation": "Nesting-enabled enforced AppArmor guest could run independent Incus but not create its managed bridge; conditional compatibility boundary confirmed for this fixture.",
+      "outcome": "helped",
+      "reason": "Existing nesting contract correctly requires observed capabilities and prohibits weakening confinement"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-close",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "BDH-L012 revision 3 recorded by fd191f42e78c3c2230bcf13b1b2f5a00 exit 0",
+      "observation": "Linked actual exact-source CI review with expected learning revision, preserved candidate state; native error-detail gap is assigned to existing P2/P3 diagnostic work.",
+      "outcome": "helped",
+      "reason": "No new BDH asset or promotion justified"
+    }
+  ],
+  "attempt_ref": "20261125-close",
+  "authority": "Owner authorized P0 closeout in isolated retained labs; no physical host changes, merge, publication or safety bypass",
+  "boundary": "progress",
+  "evidence": [
+    "PR191 eb2cddf CI runs 45582511436,45582511508,45582511623; quality job 139095809783 PASS, native jobs 139095813678 and 139095814097 SKIPPED; Box Exec 80aa43b9f95b46f394c67fcf4d77eac4 exit 0",
+    "Exec 80aa43b9f95b46f394c67fcf4d77eac4 and be0119e4bbfd64a7b938f7b8f2f17b45 exit 0; original c3122bcb96e6d12959d4383e1b14c042 exit 1",
+    "Fresh diagnostic Create 34d6844cbb5ba4305b212092f937814c; Exec 5b816e1ede06db13fc47f18915719bb6 exit 1 and f39517d5ebc32a71ffcb3a45595d12bf exit 0",
+    "Native init 5b816e1ede06db13fc47f18915719bb6 exit 1; readback f39517d5ebc32a71ffcb3a45595d12bf exit 0",
+    "BDH-L012 revision 3 recorded by fd191f42e78c3c2230bcf13b1b2f5a00 exit 0"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "Exact-source CI and resume/verification guidance reused; no new implementation claim"
+  },
+  "learning_links": [
+    "BDH-L012"
+  ],
+  "next_safe_action": "P0 preflight closeout; preserve partial fixtures and require independent full native/ACK witness at P1/P2/P5; P1a neutral extraction only when owner directs",
+  "objective": "Close P0 preflight with precise native initialization evidence and explicit residual gates",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "eb2cddf74e2f5129bebb4dda9cef3a0acd7bfe17",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.verification",
+    "skill.task-resume",
+    "skill.box-development",
+    "knowledge.nesting",
+    "skill.continuous-learning"
+  ],
+  "work_ref": "pr191/p0-close"
+}
