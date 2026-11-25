@@ -185,11 +185,18 @@ def machine_sha():
     return sha(mid.encode())
 
 
-def inspect_sqlite(dbpath, guided=False):
+def inspect_sqlite(dbpath, guided=False, cold=False):
     """A read-only snapshot; never import a v4/v5 DB into a new controller."""
     if checked_file(dbpath, "file") is None:
         raise UninstallError("no readable controller SQLite evidence")
-    conn = sqlite3.connect("file:" + str(dbpath) + "?mode=ro", uri=True, timeout=5)
+    # A quiescent offline plan requires a complete checkpointed database.
+    # SQLite mode=ro alone can create WAL-index sidecars on the source.
+    # Never use immutable=1 on a live/WAL-bearing database.
+    if cold:
+        if any(os.path.lexists(str(dbpath) + suffix) for suffix in ("-wal", "-shm", "-journal")):
+            raise UninstallError("OFFLINE_SQLITE_SIDECARS_REQUIRE_REVIEW")
+        before = file_fingerprint(dbpath)
+    conn = sqlite3.connect("file:" + str(dbpath) + "?mode=ro" + ("&immutable=1" if cold else ""), uri=True, timeout=5)
     try:
         conn.execute("PRAGMA query_only=ON")
         conn.execute("BEGIN")
@@ -268,6 +275,9 @@ def inspect_sqlite(dbpath, guided=False):
         raise UninstallError("SQLite snapshot cannot be verified: " + str(exc)) from exc
     finally:
         conn.close()
+        if cold and (file_fingerprint(dbpath) != before or
+                     any(os.path.lexists(str(dbpath) + suffix) for suffix in ("-wal", "-shm", "-journal"))):
+            raise UninstallError("OFFLINE_SQLITE_EPOCH_CHANGED")
 
 
 def native_instances(project, guided=False):
@@ -353,16 +363,27 @@ def prepare_record():
             "review_sha256": approval}
 
 
-def native_retirement_precheck(project, native, binary):
+def native_retirement_precheck(project, native, binary, observer=None):
     """Use the exact installed Go reader; no independent rollback engine."""
     if native["status"] == "ABSENT":
         return None
     if not binary or file_fingerprint(BINARY) != binary:
         raise UninstallError("NATIVE_RETIREMENT_CHECK_UNVERIFIED: exact installed binary required")
     require_root_owned(BINARY)
-    output, code = command([str(BINARY), "native-prepare-retirement-check",
-                            "-project", project, "-native-prepare-sha256",
-                            native["review_sha256"]], acceptable=(0, 1), timeout=90)
+    args = ["native-prepare-retirement-check", "-project", project,
+            "-native-prepare-sha256", native["review_sha256"]]
+    if observer:
+        # Historical RC13 has no retirement-check CLI. A separately pinned,
+        # root-trusted current reader is used ONLY for this observation.
+        with maintenance_observer_fd(observer["path"], observer["sha256"]) as (fd, _):
+            run = subprocess.run(["/proc/self/fd/" + str(fd), *args], pass_fds=(fd,),
+                                 env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/root", "LANG": "C"},
+                                 capture_output=True, text=True, timeout=90, check=False)
+            output, code = run.stdout, run.returncode
+            if code not in (0, 1) or len(output) > 65536:
+                raise UninstallError("OFFLINE_NATIVE_READER_UNAVAILABLE")
+    else:
+        output, code = command([str(BINARY), *args], acceptable=(0, 1), timeout=90)
     try:
         report = json.loads(output)
     except ValueError as exc:
@@ -387,7 +408,7 @@ def check_original_native_precondition(plan):
     native = plan["native_prepare"]
     if prepare_record() != native:
         raise UninstallError("native journal changed after approval")
-    observed = native_retirement_precheck(plan["project"], native, plan["binary"])
+    observed = native_retirement_precheck(plan["project"], native, plan["binary"], plan.get("offline_observer")) if plan.get("offline_observer") else native_retirement_precheck(plan["project"], native, plan["binary"])
     if "native_retirement_precheck" in plan and observed != plan["native_retirement_precheck"]:
         raise UninstallError("NATIVE_CONFIG_DRIFT: native retirement observation changed after approval")
 
@@ -570,7 +591,7 @@ def inspect_exec_archive(uid):
     return {"device": info.st_dev, "inode": info.st_ino, "files": records}
 
 
-def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False):
+def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False, offline_observer=None, offline=False):
     if not scoped:
         refuse_scoped_retirement()
     if not VALID_NAME.fullmatch(project):
@@ -632,7 +653,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False):
         if stat.S_IMODE(info.st_mode) & 0o077:
             raise UninstallError("controller state file has unsafe permissions: " + entry.name)
         files.append({"name": entry.name, "info": file_fingerprint(entry)})
-    snapshot = inspect_sqlite(STATE / "ledger.sqlite", guided=guided)
+    snapshot = inspect_sqlite(STATE / "ledger.sqlite", guided=guided, cold=True) if offline else inspect_sqlite(STATE / "ledger.sqlite", guided=guided)
     if any(x["project"] != project for x in snapshot["boxes"]):
         raise UninstallError("foreign Layer in owned Box inventory")
     native = prepare_record()
@@ -678,7 +699,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False):
     # Upgrade backups are separate and may contain credential/database copies.
     if scope != "service" and BACKUP.exists() and installer_backup is None:
         blockers.append("INSTALLER_BACKUP_REQUIRES_SEPARATE_RETENTION_REVIEW")
-    native_precheck = native_retirement_precheck(project, native, binary) if scope == "full" else None
+    native_precheck = (native_retirement_precheck(project, native, binary, offline_observer) if offline_observer else native_retirement_precheck(project, native, binary)) if scope == "full" else None
     inputs = {
         "format": 1, "scope": scope, "guided": guided, "project": project, "host_machine_id_sha256": host,
         "service_user_uid": owner.pw_uid, "service_state": service,
@@ -889,18 +910,28 @@ def archive_controller(plan, reviewed_plan=None):
     return str(dest)
 
 
-def apply_with_serve_lock(plan, preserved_archive=None):
+def apply_with_serve_lock(plan, preserved_archive=None, offline=False):
     refuse_scoped_retirement()
     check_original_native_precondition(plan)
     # Stopping may legitimately checkpoint WAL; recheck native and SQLite
     # semantic blockers, not a fabricated claim that WAL bytes are immutable.
-    after = inspect_sqlite(STATE / "ledger.sqlite", guided=plan.get("guided", False))
-    if after["operations_sha256"] != plan["sqlite"]["operations_sha256"] or \
+    after = (inspect_sqlite(STATE / "ledger.sqlite", guided=True, cold=True) if offline else
+             inspect_sqlite(STATE / "ledger.sqlite", guided=plan.get("guided", False)))
+    if offline:
+        # The separately approved offline branch preserves the original
+        # blocked SQLite snapshot verbatim. It never settles/releases it.
+        if plan.get("mode") != OFFLINE_MODE or after != plan["sqlite"] or not offline_ledger_unchanged(plan):
+            raise UninstallError("OFFLINE_ORIGINAL_LEDGER_CHANGED")
+        offline_inactive(plan["project"], plan, require_disabled=True)
+    elif after["operations_sha256"] != plan["sqlite"]["operations_sha256"] or \
             after["boxes"] != plan["sqlite"]["boxes"] or after["blockers"]:
         raise UninstallError("SQLite ledger changed during stop; preserve evidence")
     if plan.get("guided") and inspect_exec_archive(plan["service_user_uid"]) != plan.get("exec_archive"):
         raise UninstallError("exec archive changed after approval")
     archive = preserved_archive or (archive_controller(plan) if plan.get("guided") else None)
+    if offline:
+        offline_archive_checkpoint(plan, archive)
+        remaining = list(plan["incus_instances"])
     if plan["scope"] == "full":
         guided = plan.get("guided", False)
         if guided:
@@ -908,7 +939,17 @@ def apply_with_serve_lock(plan, preserved_archive=None):
         if native_instances(plan["project"], guided=guided) != plan["incus_instances"]:
             raise UninstallError("native inventory changed after approval")
         for box in plan["incus_instances"]:
+            if offline:
+                offline_inactive(plan["project"], plan, require_disabled=True)
+                require_quiescent_native(plan["project"])
+                check_original_native_precondition(plan)
+                if not offline_ledger_unchanged(plan):
+                    raise UninstallError("OFFLINE_ORIGINAL_LEDGER_CHANGED")
             current = native_instances(plan["project"], guided=guided)
+            if offline and current != remaining:
+                raise UninstallError("OFFLINE_APPROVED_NATIVE_PREFIX_CHANGED")
+            if offline:
+                offline_native_consumers(plan, remaining)
             exact = [x for x in current if x["uuid"] == box["uuid"]]
             if len(exact) != 1 or exact[0] != box:
                 raise UninstallError("Incus target changed before deletion")
@@ -918,13 +959,34 @@ def apply_with_serve_lock(plan, preserved_archive=None):
                 stopped = [x for x in native_instances(plan["project"], guided=guided) if x["uuid"] == box["uuid"]]
                 if stopped != [{**box, "state": "Stopped"}]:
                     raise UninstallError("graceful stop not independently verified")
+            if offline:
+                require_quiescent_native(plan["project"])
+                expected = [{**x, "state": "Stopped"} if x["uuid"] == box["uuid"] else x for x in remaining]
+                if native_instances(plan["project"], guided=True) != expected:
+                    raise UninstallError("OFFLINE_APPROVED_NATIVE_STOP_PREFIX_CHANGED")
+                offline_inactive(plan["project"], plan, require_disabled=True)
+                offline_native_consumers(plan, expected)
+                offline_checkpoint(plan, "BOX_STOPPED", current_box=box["uuid"])
             command(["incus", "delete", "local:" + box["name"], "--project", plan["project"]], timeout=90)
             if any(x["uuid"] == box["uuid"] for x in native_instances(plan["project"], guided=guided)):
                 raise UninstallError("native deletion not verified")
+            if offline:
+                remaining = [x for x in remaining if x["uuid"] != box["uuid"]]
+                require_quiescent_native(plan["project"])
+                if native_instances(plan["project"], guided=True) != remaining:
+                    raise UninstallError("OFFLINE_APPROVED_NATIVE_DELETE_PREFIX_CHANGED")
+                offline_checkpoint(plan, "BOX_DELETED", deleted=box["uuid"])
         if guided:
             require_quiescent_native(plan["project"])
             if native_instances(plan["project"], guided=True):
                 raise UninstallError("native Project no longer empty; preserve controller")
+        if offline:
+            offline_inactive(plan["project"], plan, require_disabled=True)
+            check_original_native_precondition(plan)
+            if not offline_ledger_unchanged(plan):
+                raise UninstallError("OFFLINE_ORIGINAL_LEDGER_CHANGED")
+            offline_native_consumers(plan, [])
+            offline_checkpoint(plan, "NATIVE_EMPTY")
         native = plan["native_prepare"]
         if native["status"] == "APPLIED":
             if prepare_record() != native:
@@ -939,6 +1001,12 @@ def apply_with_serve_lock(plan, preserved_archive=None):
                      native["review_sha256"], "-approve-local"], timeout=90)
             if NATIVE.exists():
                 raise UninstallError("native journal archive unverified")
+    if offline:
+        offline_checkpoint(plan, "NATIVE_RESTORED")
+        offline_inactive(plan["project"], plan, require_disabled=True)
+        if not offline_ledger_unchanged(plan):
+            raise UninstallError("OFFLINE_ORIGINAL_LEDGER_CHANGED")
+        offline_checkpoint(plan, "CLEANUP_STARTED")
     # Do not remove helper binary until all native rollback/archives succeeded.
     command(["systemctl", "disable", "boxweave.service"])
     if systemd_status() == "active":
@@ -1019,6 +1087,8 @@ def inspect_interrupted_retirement(project, archive_path):
     audit = read_json(AUDIT)
     if audit_status()["status"] != "STARTED" or not isinstance(audit, dict):
         raise UninstallError("no original STARTED retirement audit")
+    if audit.get("mode") == OFFLINE_MODE:
+        raise UninstallError("OFFLINE_RETIREMENT_INTERRUPTED: preserve original archive and checkpoint; no ordinary retirement replay")
     review_path = archive / "review.json"
     plan = read_json(review_path)
     if not isinstance(plan, dict):
@@ -1773,6 +1843,8 @@ def scoped_main(args):
 # installation appear clean.
 def purge_absent():
     refuse_scoped_retirement()
+    if os.path.lexists(OFFLINE_FENCE):
+        raise UninstallError("OFFLINE_RETIREMENT_IN_PROGRESS: preserve exact original")
     for path in (STATE, UNIT, BINARY, NATIVE, SCRIPTLET, ROOT_UNIT, BACKUP,
                  RETIREMENT_UNIT, RETIREMENT_SOCKET, SCOPED_FENCE, SCOPED_JOURNAL,
                  SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_INCUS_DROPIN, SCOPED_SOCKET,
@@ -1829,6 +1901,8 @@ def purge_inventory(project):
     info = scoped_private_file(AUDIT, 1024 * 1024)
     audit = read_json(AUDIT)
     records = audit.get("history", []) + [audit]
+    if any(record.get("mode") == OFFLINE_MODE for record in records):
+        raise UninstallError("OFFLINE_ARCHIVE_PURGE_REVIEW_REQUIRED: preserve original offline retirement evidence")
     if len(records) > 102 or audit.get("scope") != "full" or audit.get("status") != "COMPLETE":
         raise UninstallError("purge requires a verified COMPLETE full retirement")
     files = {str(AUDIT): info}
@@ -2163,7 +2237,7 @@ def maintenance_local_inventory(project, uid):
     roots = {"state": STATE, "scoped_journal": SCOPED_JOURNAL, "backup": BACKUP,
              "retired": RETIRED, "audit": AUDIT, "legacy_journal": NATIVE,
              "scriptlet": SCRIPTLET, "scoped_fence": SCOPED_FENCE,
-             "purge_fence": PURGE_FENCE, "drain_fence": SCOPED_DRAIN, "controller_binary": BINARY, "controller_unit": UNIT,
+             "purge_fence": PURGE_FENCE, "drain_fence": SCOPED_DRAIN, "offline_fence": OFFLINE_FENCE, "controller_binary": BINARY, "controller_unit": UNIT,
              "legacy_root_unit": ROOT_UNIT, "legacy_retirement_unit": RETIREMENT_UNIT,
              "scoped_guard_unit": SCOPED_GUARD_UNIT, "scoped_lifecycle_unit": SCOPED_LIFECYCLE_UNIT,
              "scoped_incus_dropin": SCOPED_INCUS_DROPIN,
@@ -2203,7 +2277,7 @@ def maintenance_local_inventory(project, uid):
         except FileNotFoundError:
             return {"state": "ABSENT"}
         return {"state": "PRESENT_UNVERIFIED", "identity": maintenance_stat(st)}
-    for key in ("retired", "scriptlet", "scoped_fence", "purge_fence", "drain_fence", "legacy_root_operations"):
+    for key in ("retired", "scriptlet", "scoped_fence", "purge_fence", "drain_fence", "offline_fence", "legacy_root_operations"):
         observe(key, lambda key=key: presence(roots[key]))
     # Count even malformed historical names, without disclosing any names.
     try:
@@ -2367,7 +2441,7 @@ def maintenance_preview(project, retention, host, report, local, planner_sha256=
     if state.get("unknown_entries") or any(not x["safe"] for x in state.get("files", [])):
         issue("STATE_INVENTORY_UNSAFE", "HARD", "state", "Preserve unknown or unsafe entries")
     if local.get("audit", {}).get("state") == "STARTED" or any(
-            local.get(k, {"state": "ABSENT"}).get("state") != "ABSENT" for k in ("scoped_fence", "purge_fence", "drain_fence")):
+            local.get(k, {"state": "ABSENT"}).get("state") != "ABSENT" for k in ("scoped_fence", "purge_fence", "drain_fence", "offline_fence")):
         issue("INTERRUPTED_RETIREMENT", "HARD", "receipt", "Inspect original resume/purge plan; never start a second retirement")
     if local.get("scriptlet", {}).get("state") != "ABSENT":
         issue("SCRIPTLET_PROVENANCE_REQUIRED", "HARD", "scriptlet", "Preserve original global routing evidence")
@@ -2556,7 +2630,9 @@ def scoped_drain_capture(project, active, observer=None, observer_sha=None, allo
             # Existing uninstaller ledger reader adds the Exec GC blocker.
             # Confirmed Peer/Forward/address dependencies are intentionally
             # handled by the exact normal drain, not ignored by retirement.
-            sql = inspect_sqlite(STATE / "ledger.sqlite", guided=True)
+            db = STATE / "ledger.sqlite"
+            cold = not active and not any(os.path.lexists(str(db) + x) for x in ("-wal", "-shm", "-journal"))
+            sql = inspect_sqlite(db, guided=True, cold=True) if cold else inspect_sqlite(db, guided=True)
             allowed = ("peer_grants_NOT_RELEASED:", "forward_claims_NOT_RELEASED:",
                        "network_address_fences_NOT_RELEASED:")
             blockers.extend("DRAIN_" + b for b in sql["blockers"] if not b.startswith(allowed))
@@ -2734,7 +2810,14 @@ def scoped_drain_call(record, probe):
             rec.get("action") != step["action"] or rec.get("box_uuid") != step["box"] or
             rec.get("incarnation") != step["box"] or rec.get("work_ref") != "scoped-drain-" + record["actor"]["id"] or
             not re.fullmatch(r"[a-f0-9]{32}", rec.get("operation_id") or "")):
-        raise UninstallError("SCOPED_DRAIN_ORIGINAL_UNSETTLED: preserve exact original; never retry uncertain effect")
+        state_value = rec.get("state", "UNVERIFIED")
+        error_class = rec.get("error_class", "UNVERIFIED")
+        if not isinstance(state_value, str) or not re.fullmatch(r"[A-Z_]{1,64}", state_value):
+            state_value = "UNVERIFIED"
+        if not isinstance(error_class, str) or not re.fullmatch(r"[A-Z_0-9]{1,96}", error_class):
+            error_class = "UNVERIFIED"
+        raise UninstallError("SCOPED_DRAIN_ORIGINAL_UNSETTLED: state=" + state_value +
+                             "; class=" + error_class + "; preserve exact original; never retry uncertain effect")
     return {"id": rec["operation_id"]}
 
 
@@ -2834,9 +2917,337 @@ def scoped_drain_approve(project, snapshot, resume=False):
 
 
 
+# Offline retirement is a distinct authorization, not normal recovery.
+# The initial bounded executable leaf is Legacy with its exact baseline ACL,
+# no uncertain network effects and a stopped controller. Other modes and
+# network originals retain typed blockers and cannot use the normal drain.
+OFFLINE_MODE = "LEGACY_OFFLINE_RETIREMENT_V1"
+OFFLINE_FENCE = Path("/var/lib/boxweave-offline-retirement-v1.json")
+
+
+def offline_scope_blockers(report, preview):
+    i = report.get("installation") or {}
+    n = report.get("native") or {}
+    l = report.get("ledger") or {}
+    identity = i.get("identity") or {}
+    originals = l.get("nonterminal_or_unknown_originals", [])
+    blockers = []
+    if i.get("mode") != "LEGACY":
+        blockers.append("OFFLINE_SCOPED_GUARD_OR_MODE_REQUIRES_SEPARATE_PROOF")
+    if i.get("adapter") not in ("PINNED_RC13", "EXACT_RUNNING_OBSERVER_BINARY"):
+        blockers.append("OFFLINE_INSTALLED_IDENTITY_UNSUPPORTED")
+    if identity.get("installed_identity") != "VERIFIED":
+        blockers.append("OFFLINE_INSTALLED_IDENTITY_UNVERIFIED")
+    if identity.get("service_unit") not in ("INACTIVE", "FAILED"):
+        blockers.append("OFFLINE_CONTROLLER_MUST_BE_STOPPED")
+    if n.get("legacy_lease_proof") != "VERIFIED":
+        blockers.append("OFFLINE_EXACT_LEASE_PROOF_UNVERIFIED")
+    if n.get("base_acl_config") != "RECORDED_PREIMAGE_MATCH":
+        blockers.append("OFFLINE_LEGACY_ACL_DELTA_REQUIRES_PROOF")
+    if any(p["state"] != "REVOKED" for p in l.get("peers", [])):
+        blockers.append("OFFLINE_PEER_POLICY_REQUIRES_PROOF")
+    if any(f["state"] != "REVOKED" for f in l.get("forwards", [])):
+        blockers.append("OFFLINE_FORWARD_POLICY_REQUIRES_PROOF")
+    if l.get("legacy_pending_retirements") or l.get("legacy_compactions"):
+        blockers.append("OFFLINE_LEGACY_RETIREMENT_JOURNAL_REQUIRES_PROOF")
+    owners = {b["uuid"]: b for b in l.get("boxes", [])}
+    matched = set(n.get("owned_matched") or [])
+    power = n.get("owned_power") or {}
+    exact = (set(owners) == matched == set(power) and
+             all(b["uuid"] == b["incarnation"] and b.get("create_proof") and
+                 b.get("binding_state") == "PINNED" and power[b["uuid"]] in ("Running", "Stopped")
+                 for b in owners.values()))
+    if not exact:
+        blockers.append("OFFLINE_EXACT_OWNED_INVENTORY_UNVERIFIED")
+    eligible = []
+    for original in originals:
+        # Bounded power-only leaf. A receipt is not proof of success. The
+        # stopped controller, independent native quiescence and exact owner
+        # scope constrain retirement without resolving the original outcome.
+        b = owners.get(original.get("box_uuid"))
+        if (original.get("state") == "UNKNOWN" and original.get("action") == "box_stop" and
+                original.get("retirement_scope") == "EXACT_OWNED_POWER_ORIGINAL" and
+                original.get("claim_protection") == "RETAINED" and original.get("recorded_claims") == 1 and
+                original.get("native_receipt") is True and b is not None and
+                b["incarnation"] == original.get("incarnation") and power.get(b["uuid"]) == "Stopped"):
+            eligible.append(original)
+        else:
+            blockers.append("OFFLINE_ORIGINAL_SCOPE_UNPROVEN:" + original["id"])
+    eligible_ids = {x["id"] for x in eligible}
+    for issue in preview["blockers"]:
+        if issue["severity"] == "INFO":
+            continue
+        if issue["code"] == "CONTROLLER_RUNTIME_UNVERIFIED" and identity.get("service_unit") in ("INACTIVE", "FAILED"):
+            continue
+        if issue["code"] == "ORIGINAL_UNKNOWN" and issue["resource"] in eligible_ids:
+            continue
+        if issue["code"] == "EXEC_ARCHIVE_POST_FENCE_PROOF_REQUIRED":
+            continue  # exact file/archive proof below
+        blockers.append(issue["code"] + ":" + issue["resource"])
+    return sorted(set(blockers)), eligible
+
+
+def offline_native_consumers(plan, instances):
+    # Never treat a same-Project but unowned profile as an owned consumer.
+    # Read the exact original targets; the native rollback reader binds
+    # their configuration separately.
+    if prepare_record() != plan["native_prepare"]:
+        raise UninstallError("OFFLINE_ORIGINAL_NATIVE_CHANGED")
+    journal = read_json(NATIVE)
+    jplan = journal.get("plan", journal.get("Plan", {}))
+    target = jplan.get("target", jplan.get("Target", {}))
+    project = plan["project"]
+    if target.get("project") != project:
+        raise UninstallError("OFFLINE_NATIVE_PROJECT_CHANGED")
+    allowed = {"/1.0/profiles/default?project=" + project}
+    allowed.update("/1.0/instances/" + b["name"] + "?project=" + project for b in instances)
+    for kind, field in (("networks", "network"), ("network-acls", "acl")):
+        name = target.get(field)
+        if not isinstance(name, str) or not VALID_NAME.fullmatch(name):
+            raise UninstallError("OFFLINE_NATIVE_TARGET_UNVERIFIED")
+        raw, _ = command(["incus", "query", "local:/1.0/" + kind + "/" + name + "?project=default"], timeout=25)
+        refs = json.loads(raw).get("used_by")
+        if not isinstance(refs, list) or any(not isinstance(x, str) or x not in allowed for x in refs):
+            raise UninstallError("OFFLINE_FOREIGN_NATIVE_CONSUMER")
+
+
+def offline_ledger_unchanged(plan):
+    expected = next((f["info"] for f in plan["state_files"] if f["name"] == "ledger.sqlite"), None)
+    return (expected is not None and file_fingerprint(STATE / "ledger.sqlite") == expected and
+            inspect_sqlite(STATE / "ledger.sqlite", guided=True, cold=True) == plan["sqlite"])
+
+
+def offline_inactive(project, plan, require_disabled=False):
+    if systemd_status() not in ("inactive", "failed") or effective_unit() != str(UNIT):
+        raise UninstallError("OFFLINE_CONTROLLER_INACTIVE_UNVERIFIED")
+    props = scoped_properties(UNIT.name, "ActiveState", "MainPID", "UnitFileState")
+    if props["ActiveState"] not in ("inactive", "failed") or props["MainPID"] != "0":
+        raise UninstallError("OFFLINE_CONTROLLER_PID_UNVERIFIED")
+    if require_disabled and props["UnitFileState"] != "disabled":
+        raise UninstallError("OFFLINE_CONTROLLER_AUTOSTART_NOT_FENCED")
+    require_retirement_stopped(plan)
+    if plan.get("retirement_verifier"):
+        props = scoped_properties(RETIREMENT_UNIT.name, "ActiveState", "MainPID", "UnitFileState")
+        if props["ActiveState"] not in ("inactive", "failed") or props["MainPID"] != "0":
+            raise UninstallError("OFFLINE_HELPER_PID_UNVERIFIED")
+        if require_disabled and props["UnitFileState"] != "disabled":
+            raise UninstallError("OFFLINE_HELPER_AUTOSTART_NOT_FENCED")
+    for path in (ROOT_UNIT, Path("/run/boxweave-native-peer-root.sock"),
+                 Path("/var/lib/boxweave-native-peer-conntrack-v1"),
+                 Path("/var/lib/boxweave-native-peer-conntrack-v1.json"),
+                 Path("/var/lib/boxweave-native-peer-conntrack-v1.lock"),
+                 Path("/var/lib/boxweave-native-peer-guard-v1")):
+        if os.path.lexists(path):
+            raise UninstallError("OFFLINE_LEGACY_ROOT_ORIGINAL_REQUIRES_PROOF")
+    root = scoped_properties(ROOT_UNIT.name, "LoadState", "ActiveState", "MainPID")
+    if root != {"LoadState": "not-found", "ActiveState": "inactive", "MainPID": "0"}:
+        raise UninstallError("OFFLINE_ROOT_UNIT_EFFECTIVE_STATE_UNVERIFIED")
+    if scoped_incus_active() != plan["offline_incus_pid"]:
+        raise UninstallError("OFFLINE_INCUS_RUNTIME_CHANGED")
+
+
+def offline_plan(project, observer=None):
+    uid = pwd.getpwnam("boxweave").pw_uid
+    host = machine_sha()
+    if uid == 0 or project != "user-" + str(uid):
+        raise UninstallError("exact dedicated offline retirement Project required")
+    before = maintenance_local_inventory(project, uid)
+    report = {}
+    failure = None
+    try:
+        if before.get("mounted_artifacts") or before.get("capture"):
+            raise UninstallError("unsafe or unavailable mount inventory")
+        report = maintenance_observe(observer["path"] if observer else BINARY,
+                                     observer["sha256"] if observer else None, project)
+    except (UninstallError, OSError, ValueError, TypeError, subprocess.TimeoutExpired) as exc:
+        failure = type(exc).__name__
+    local = maintenance_local_inventory(project, uid)
+    if before != local or host != machine_sha():
+        report = {}
+        failure = "LOCAL_EVIDENCE_CHANGED"
+    preview = maintenance_preview(project, "retain", host, report, local,
+                                  sha(Path(__file__).read_bytes()))
+    blockers, originals = offline_scope_blockers(report, preview)
+    if failure:
+        blockers.append("OFFLINE_OBSERVER_UNAVAILABLE:" + failure)
+    if os.path.lexists(OFFLINE_FENCE) or local.get("audit", {}).get("state") == "STARTED":
+        blockers.append("OFFLINE_ORIGINAL_RETIREMENT_REQUIRES_REVIEW")
+    if not any(x["name"] == SERVE_LOCK_NAME and x["safe"]
+               for x in (local.get("state") or {}).get("files", [])):
+        blockers.append("OFFLINE_ORIGINAL_SERVE_LOCK_UNVERIFIED")
+    if not observer and (report.get("installation") or {}).get("adapter") == "PINNED_RC13":
+        blockers.append("OFFLINE_PINNED_CURRENT_READ_ONLY_ADAPTER_REQUIRED")
+    if any(local.get(k, {}).get("state") != "ABSENT" for k in
+           ("backup", "scriptlet", "legacy_root_operations", "scoped_fence", "purge_fence")):
+        blockers.append("OFFLINE_MIXED_OR_INTERRUPTED_INSTALLATION")
+    plan = None
+    if not blockers:
+        try:
+            plan = inspect("full", project, [], None, guided=True,
+                           offline_observer=observer, offline=True)
+            plan["offline_incus_pid"] = scoped_incus_active()
+            offline_inactive(project, plan)
+            if plan["native_prepare"]["status"] != "APPLIED" or not plan["native_retirement_precheck"]:
+                blockers.append("OFFLINE_EXACT_APPLIED_PREIMAGE_REQUIRED")
+            if plan.get("installer_backup") or plan.get("scriptlet_present"):
+                blockers.append("OFFLINE_MIXED_OR_INTERRUPTED_INSTALLATION")
+            if plan["service_state"] not in ("inactive", "failed"):
+                blockers.append("OFFLINE_CONTROLLER_MUST_BE_STOPPED")
+            if plan["sqlite"]["version"] != 6:
+                blockers.append("OFFLINE_SCHEMA_UNSUPPORTED")
+            if plan["sqlite"]["unresolved_operations"] != len(originals):
+                blockers.append("OFFLINE_ORIGINAL_INVENTORY_CHANGED")
+            ids = {x["id"] for x in originals}
+            remaining = []
+            for b in plan["blockers"]:
+                if b.startswith("OPERATION_UNKNOWN:") and b.split(":")[1] in ids:
+                    continue
+                if b == "network_address_fences_NOT_RELEASED:" + str(2 * len(plan["incus_instances"])):
+                    continue  # complete exact live lease proof above
+                remaining.append(b)
+            blockers.extend(remaining)
+            native = report["native"]
+            expected = sorted((b["uuid"], b["name"], native["owned_power"][b["uuid"]])
+                              for b in report["ledger"]["boxes"])
+            actual = sorted((b["uuid"], b["name"], b["state"]) for b in plan["incus_instances"])
+            if expected != actual:
+                blockers.append("OFFLINE_NATIVE_SCOPE_CHANGED")
+            offline_native_consumers(plan, plan["incus_instances"])
+            if maintenance_local_inventory(project, uid) != local:
+                blockers.append("OFFLINE_LOCAL_EVIDENCE_CHANGED")
+        except (UninstallError, OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
+            blockers.append("OFFLINE_STATIC_PROOF_UNVERIFIED:" + type(exc).__name__)
+    result = {"schema": 1, "mode": OFFLINE_MODE, "scope": "full", "project": project,
+              "host_machine_id_sha256": host, "retention": "retain",
+              "ready": not blockers and plan is not None,
+              "blockers": sorted(set(blockers)), "observation": preview,
+              "unresolved_originals": originals,
+              "business_operations_replayed": False,
+              "operation_outcome_changed": False}
+    if result["ready"]:
+        # Bind the actual complete retirement plan, not a presentation-only
+        # H1 preview digest. Original SQLite blocker facts remain intact.
+        plan["mode"] = OFFLINE_MODE
+        plan["offline_observer"] = observer
+        plan["offline_originals"] = originals
+        plan["offline_ledger_sha256"] = report["ledger_observation_sha256"]
+        plan["offline_native_sha256"] = report["native"]["evidence"]["sha256"]
+        plan["blockers"] = []
+        plan["ready"] = True
+        plan["actions"] = ["fence and disable only original inactive controller/helper",
+                           "archive unchanged ledger and original UNKNOWN facts",
+                           "stop/delete only exact approved owned Boxes",
+                           "restore baseline native preparation and retire exact files",
+                           "retain all original business outcomes; no recovery replay"]
+        plan["review_sha256"] = sha(canonical({k: v for k, v in plan.items()
+                                               if k not in ("review_sha256", "ready", "actions", "retained")}))
+        result["review_sha256"] = plan["review_sha256"]
+        result["plan"] = plan
+        if len(canonical(result)) > 768 * 1024:
+            raise UninstallError("offline review exceeds durable receipt bound")
+    return result
+
+
+def offline_checkpoint(plan, phase, **updates):
+    record = read_json(AUDIT)
+    if (record is None or record.get("status") != "STARTED" or
+            record.get("mode") != OFFLINE_MODE or record.get("review_sha256") != plan["review_sha256"]):
+        raise UninstallError("OFFLINE_ORIGINAL_AUDIT_CHANGED")
+    if read_json(OFFLINE_FENCE) != {"schema": 1, "project": plan["project"],
+                                    "review_sha256": plan["review_sha256"]}:
+        raise UninstallError("OFFLINE_ORIGINAL_FENCE_CHANGED")
+    if "deleted" in updates:
+        deleted = updates.pop("deleted")
+        prefix = record.get("verified_deleted", [])
+        expected = [x["uuid"] for x in plan["incus_instances"]]
+        if prefix != expected[:len(prefix)] or len(prefix) >= len(expected) or deleted != expected[len(prefix)]:
+            raise UninstallError("OFFLINE_DELETE_CHECKPOINT_MISMATCH")
+        record["verified_deleted"] = prefix + [deleted]
+    record.update(updates, phase=phase)
+    _replace_audit(record)
+
+
+def offline_archive_checkpoint(plan, archive):
+    path = Path(archive)
+    if path.parent != RETIRED or not re.fullmatch(r"retired-[a-z0-9_]{8}", path.name):
+        raise UninstallError("OFFLINE_ARCHIVE_PATH_UNVERIFIED")
+    scoped_private_dir(RETIRED)
+    scoped_private_dir(path)
+    if read_json(path / "review.json") != plan:
+        raise UninstallError("OFFLINE_ARCHIVE_REVIEW_CHANGED")
+    for f in plan["state_files"]:
+        proof = scoped_private_file(path / ("state-" + f["name"]))
+        if proof["sha256"] != f["info"]["sha256"]:
+            raise UninstallError("OFFLINE_ARCHIVED_ORIGINAL_CHANGED")
+    offline_checkpoint(plan, "ARCHIVED", archive=str(path))
+
+
+def offline_main(args):
+    if os.geteuid() != 0 or sys.platform != "linux":
+        raise UninstallError("offline retirement requires local Linux root")
+    project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
+    observer = ({"path": str(Path(args.observer_binary).absolute()), "sha256": args.observer_sha256}
+                if args.observer_binary else None)
+    snapshot = offline_plan(project, observer)
+    print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
+    if args.offline_plan:
+        return 0 if snapshot["ready"] else 2
+    if not snapshot["ready"]:
+        raise UninstallError("OFFLINE_RETIREMENT_BLOCKED: preserve originals and review exact blockers")
+    prompt = "RETIRE OFFLINE " + project
+    with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+        out.write("Type " + prompt + " to approve permanent deletion of the exact listed owned Boxes and retain original evidence: ")
+        out.flush()
+        if inp.readline().strip() != prompt:
+            raise UninstallError("OPERATOR_APPROVAL_REQUIRED: offline retirement not approved")
+    with scoped_lock(SCOPED_LOCK):
+        plan = snapshot["plan"]
+        with hold_stopped_serve_lock(plan):
+            if offline_plan(project, observer) != snapshot:
+                raise UninstallError("OFFLINE_REVIEW_CHANGED_AFTER_APPROVAL")
+            audited_write({"status": "STARTED", "mode": OFFLINE_MODE, "scope": "full",
+                           "host_sha256": plan["host_machine_id_sha256"], "review_sha256": plan["review_sha256"],
+                           "actions": plan["actions"], "phase": "APPROVED", "verified_deleted": [],
+                           "unresolved_originals": plan["offline_originals"], "offline_plan": plan,
+                           "historical_released_exec": plan["sqlite"]["historical_released_exec"],
+                           "historical_released_other": plan["sqlite"]["historical_released_other"]})
+            scoped_write_json(OFFLINE_FENCE, {"schema": 1, "project": project,
+                                             "review_sha256": plan["review_sha256"]})
+            # Historical binaries do not recognize new fences. Hold their
+            # exact original serve flock and disable their exact units before
+            # native effects, including across a crash/reboot.
+            offline_inactive(project, plan)
+            command(["systemctl", "disable", UNIT.name])
+            if plan.get("retirement_verifier"):
+                command(["systemctl", "disable", RETIREMENT_UNIT.name])
+            offline_inactive(project, plan, require_disabled=True)
+            offline_checkpoint(plan, "ADMISSION_FENCED")
+            result = apply_with_serve_lock(plan, offline=True)
+            if scoped_incus_active() != plan["offline_incus_pid"] or native_instances(project, guided=True):
+                raise UninstallError("OFFLINE_POSTFLIGHT_NATIVE_UNVERIFIED")
+            require_quiescent_native(project)
+            for path in (STATE, UNIT, BINARY, NATIVE, RETIREMENT_UNIT, RETIREMENT_SOCKET, ROOT_UNIT):
+                if os.path.lexists(path):
+                    raise UninstallError("OFFLINE_POSTFLIGHT_ARTIFACT_REMAINS")
+            result.update(mode=OFFLINE_MODE, unresolved_originals=plan["offline_originals"],
+                          business_operations_replayed=False, operation_outcome_changed=False)
+            audited_complete(plan["review_sha256"], result)
+            proof = scoped_private_file(OFFLINE_FENCE, 8192)
+            if read_json(OFFLINE_FENCE) != {"schema": 1, "project": project,
+                                           "review_sha256": plan["review_sha256"]}:
+                raise UninstallError("OFFLINE_COMPLETED_FENCE_CHANGED")
+            exact_unlink(OFFLINE_FENCE, proof)
+            scoped_sync_dir(OFFLINE_FENCE.parent)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned uninstall; explicit full-only Scoped Peer v2 retirement")
     action = parser.add_mutually_exclusive_group()
+    action.add_argument("--offline-plan", action="store_true", help="H2B explicit offline retirement review; no effects")
+    action.add_argument("--offline-full", action="store_true", help="terminal-approved bounded offline Legacy full retirement; retain originals")
     action.add_argument("--maintenance-plan", action="store_true", help="H1B read-only full retirement preview; no apply authority")
     action.add_argument("--maintenance-recheck", action="store_true", help="read-only preview freshness comparison, not approval")
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
@@ -2861,6 +3272,15 @@ def main(argv=None):
     parser.add_argument("--observer-sha256", help="exact SHA256 of alternate observer")
     parser.add_argument("--confirm-preview-sha256", help="maintenance recheck only; never an apply digest")
     args = parser.parse_args(argv)
+    if args.offline_plan or args.offline_full:
+        if (args.scope not in (None, "full") or args.scoped or args.guided_full_plan or
+                args.retirement_archive or args.box_uuid or args.native_prepare_sha256 or
+                args.confirm_host_sha256 or args.confirm_review_sha256 or args.confirm_preview_sha256 or
+                args.retention not in (None, "retain") or
+                bool(args.observer_binary) != bool(args.observer_sha256) or
+                (args.observer_sha256 and not VALID_SHA.fullmatch(args.observer_sha256))):
+            parser.error("offline retirement requires exact dedicated scope and retention; no apply/force options")
+        return offline_main(args)
     if args.maintenance_plan or args.maintenance_recheck:
         if (args.scope not in (None, "full") or args.scoped or args.guided_full_plan or
                 args.retirement_archive or args.box_uuid or args.native_prepare_sha256 or
@@ -2876,6 +3296,8 @@ def main(argv=None):
         return maintenance_main(args)
     if any((args.retention, args.observer_binary, args.observer_sha256, args.confirm_preview_sha256)):
         parser.error("maintenance options cannot be used by existing apply/retirement/purge commands")
+    if os.path.lexists(OFFLINE_FENCE):
+        raise UninstallError("OFFLINE_RETIREMENT_IN_PROGRESS: review --offline-plan; preserve exact original")
     if args.purge or args.purge_plan:
         return purge_main(args)
     if os.path.lexists(PURGE_FENCE):

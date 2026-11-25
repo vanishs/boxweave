@@ -321,6 +321,7 @@ func ObserveMaintenanceInstallation(ctx context.Context, p Plan, db, selfSHA, co
 }
 
 type MaintenanceNative struct {
+	LegacyLeaseProof    string            `json:"legacy_lease_proof,omitempty"`
 	OwnedPower          map[string]string `json:"owned_power,omitempty"`
 	NativeCount         int               `json:"native_count"`
 	OwnershipComparison string            `json:"ownership_comparison"`
@@ -496,7 +497,16 @@ func ObserveMaintenanceNative(ctx context.Context, p Plan, i MaintenanceInstalla
 				o.BaseACLConsumers = "NOT_APPLICABLE"
 			}
 			o.BoxACLReferences = "OBSERVED"
+			if i.Mode == "LEGACY" {
+				o.LegacyLeaseProof = "VERIFIED"
+			}
 			for _, b := range l.Network.Boxes {
+				if i.Mode == "LEGACY" {
+					if b.FenceCount != 2 || b.FenceIPv4 != 1 || b.FenceIPv6 != 1 ||
+						native.ValidatePeerACLBox(func() *api.Instance { v := found[b.Name]; return &v }(), p.Project, i.bridge, i.acl, native.PeerACLBox{Name: b.Name, UUID: b.UUID, MAC: b.MAC, IPv4: b.IPv4, IPv6: b.IPv6}, false) != nil {
+						o.LegacyLeaseProof = "UNVERIFIED"
+					}
+				}
 				v := found[b.Name]
 				if owners[b.Name] != b.UUID || b.BindingCount != 1 || b.BindingState != "PINNED" || b.Bridge != i.bridge || b.ACL == "" || v.ExpandedDevices["eth0"]["security.acls"] != b.ACL {
 					o.BoxACLReferences = "UNVERIFIED"
@@ -547,6 +557,7 @@ func ObserveMaintenanceNative(ctx context.Context, p Plan, i MaintenanceInstalla
 			}
 		}
 		if !compare {
+			o.LegacyLeaseProof = "UNVERIFIED"
 			o.BridgeConsumers = "UNVERIFIED"
 			o.BaseACLConsumers = "UNVERIFIED"
 			o.BoxACLReferences = "UNVERIFIED"

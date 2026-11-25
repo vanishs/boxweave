@@ -507,6 +507,8 @@ def main():
     parser.add_argument("--incus-socket", default="/var/lib/incus/unix.socket.user")
     parser.add_argument("--confirm-host-sha256", help="exact SHA256 of /etc/machine-id printed by --plan")
     args = parser.parse_args()
+    if os.path.lexists("/var/lib/boxweave-offline-retirement-v1.json"):
+        raise InstallError("OFFLINE_RETIREMENT_IN_PROGRESS: preserve original local retirement receipt")
     refuse_scoped_existing()
     if args.guided_fresh_plan and (not args.plan or args.upgrade or args.scoped_peer_fresh or args.public_origin):
         raise InstallError("--guided-fresh-plan requires --plan, Legacy fresh mode and no OAuth options")

@@ -214,6 +214,12 @@ sudo systemctl is-active --quiet boxweave.service
 
 
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
+if test "${PR188_OFFLINE_RETIREMENT:-0}" = 1; then
+  CGO_ENABLED=1 go test -c -o "$work/h2b-original.test" ./internal/install
+  chmod 0755 "$work/h2b-original.test"
+  sudo env RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr188_h2b_offline.py "$project" "$work/actor.receipt" "$work/h2b-original.test"
+  exit 0
+fi
 if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS

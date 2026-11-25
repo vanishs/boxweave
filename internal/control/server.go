@@ -218,6 +218,10 @@ func (s *Service) Handler() http.Handler {
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: false})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if install.CheckOfflineRetirementFence() != nil {
+			http.Error(w, "OFFLINE_RETIREMENT_IN_PROGRESS", http.StatusServiceUnavailable)
+			return
+		}
 		if s.ScopedPeerFresh && install.CheckScopedDrainFence() != nil {
 			http.Error(w, "SCOPED_DRAIN_IN_PROGRESS", http.StatusServiceUnavailable)
 			return

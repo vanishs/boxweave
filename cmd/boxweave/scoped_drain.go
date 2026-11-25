@@ -98,7 +98,7 @@ func scopedDrainRoot(probe bool) error {
 	defer cancel()
 	q := scopedDrainRequest{r.Project, r.Actor, r.Steps[r.Index], r.ExpectedLedger}
 	// No new effect when the original exists, including lost local ACK.
-	db, e := state.OpenNetworkAuditReadOnly(a.DB)
+	db, e := state.OpenDiagnosticSnapshot(ctx, a.DB)
 	if e != nil {
 		return e
 	}

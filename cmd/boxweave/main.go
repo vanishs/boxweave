@@ -36,6 +36,9 @@ func run() error {
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if e := install.CheckOfflineRetirementCommand(command); e != nil {
+		return e
+	}
 	if e := install.CheckScopedDrainCommand(command); e != nil {
 		return e
 	}

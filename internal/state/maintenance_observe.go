@@ -47,6 +47,9 @@ type MaintenanceRetiredBox struct {
 	DeleteOriginal string `json:"delete_original"`
 }
 type MaintenanceOriginal struct {
+	RetirementScope string `json:"retirement_scope,omitempty"`
+	BoxUUID         string `json:"box_uuid,omitempty"`
+	Incarnation     string `json:"incarnation,omitempty"`
 	ClaimProtection string `json:"claim_protection"`
 
 	ID            string `json:"id"`
@@ -174,14 +177,14 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 		}
 		o.ForeignRows += n
 	}
-	rows, e = tx.QueryContext(ctx, `SELECT o.id,o.action,o.state,o.native_operation_id!='',(SELECT count(*) FROM operation_resource_claims c WHERE c.layer=o.layer AND c.operation_id=o.id)
+	rows, e = tx.QueryContext(ctx, `SELECT o.id,o.action,o.state,o.box_uuid,o.incarnation,o.native_operation_id!='',(SELECT count(*) FROM operation_resource_claims c WHERE c.layer=o.layer AND c.operation_id=o.id)
  FROM operations o WHERE o.layer=? AND (o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING') ) ORDER BY o.id LIMIT ?`, project, maintenanceRowLimit+1)
 	if e != nil {
 		return zero, e
 	}
 	for rows.Next() {
 		var v MaintenanceOriginal
-		if e = rows.Scan(&v.ID, &v.Action, &v.State, &v.NativeReceipt, &v.Claims); e != nil {
+		if e = rows.Scan(&v.ID, &v.Action, &v.State, &v.BoxUUID, &v.Incarnation, &v.NativeReceipt, &v.Claims); e != nil {
 			break
 		}
 		if len(o.Originals) == maintenanceRowLimit || !validHexID(v.ID) {
@@ -189,6 +192,18 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 			break
 		}
 		v.Action = diagnosticAction(v.Action)
+		// Report Box identity only when it belongs to this exact owned scope.
+		// Unknown or incomplete Create targets are not adopted by observation.
+		owned := false
+		for _, b := range o.Boxes {
+			if b.UUID == v.BoxUUID && b.Incarnation == v.Incarnation {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			v.BoxUUID, v.Incarnation = "", ""
+		}
 		o.Originals = append(o.Originals, v)
 	}
 	if e == nil {
@@ -207,6 +222,9 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 			return zero, err
 		}
 		v.ClaimProtection = nav.ClaimProtection
+		if e = maintenanceRetirementScope(ctx, tx, project, o.Boxes, v); e != nil {
+			return zero, e
+		}
 		o.NonterminalRecordedClaims += v.Claims
 	}
 	cap, err := readDiagnosticPeerCapacity(ctx, tx, project)

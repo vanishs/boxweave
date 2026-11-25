@@ -41,3 +41,20 @@ func ReadScopedDrainFence() ([]byte, error) {
 func CheckScopedDrainControllerInactive(ctx context.Context) error {
 	return scopedRetirementInactive(ctx, "boxweave.service")
 }
+
+const OfflineRetirementFence = "/var/lib/boxweave-offline-retirement-v1.json"
+
+func CheckOfflineRetirementFence() error {
+	if _, e := os.Lstat(OfflineRetirementFence); !errors.Is(e, os.ErrNotExist) {
+		return errors.New("OFFLINE_RETIREMENT_IN_PROGRESS: preserve original local retirement receipt")
+	}
+	return nil
+}
+func CheckOfflineRetirementCommand(command string) error {
+	switch command {
+	case "doctor", "doctor-native-worker", "build-info", "install-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive":
+		return nil
+	default:
+		return CheckOfflineRetirementFence()
+	}
+}
