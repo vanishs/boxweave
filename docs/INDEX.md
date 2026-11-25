@@ -11,7 +11,7 @@ Start with [README](../README.md), [installation](getting-started/MANUAL_INSTALL
 | Durable work | [Operations](design/OPERATIONS.md), [tracking](design/TRACKING_CONTEXT.md), [continuity](design/AGENT_OPERATION_CONTINUITY.md), [development loop](product/DEVELOPMENT_LOOP.md) |
 | Host maintenance | [Install/uninstall/reinstall](getting-started/MANUAL_INSTALL.md), [Doctor/Recover](process/DOCTOR_RECOVER.md), [UNKNOWN](process/UNKNOWN_MANUAL_RECOVERY.md), [dependencies](process/DEPENDENCY_LIFECYCLE.md) |
 | Development | [Agent rules](../AGENTS.md), [contributing](../CONTRIBUTING.md), [workflow](development/AGENT_WORKFLOW.md), [phase protocol](development/PHASE_EXECUTION_PROTOCOL.md), [active plan](process/IMPLEMENTATION_PLAN.md), [execution log](development/EXECUTION_LOG.md) |
-| Development Harness | [Start here](../dev/README.md), [design](development/DEVELOPMENT_HARNESS.md), [asset index](../dev/INDEX.md), [bwdev design](development/BWDEV_DESIGN.md), [v0.5 acceptance](development/BWDEV_V05_ACCEPTANCE.md) |
+| Development Harness | [Start here](../dev/README.md), [design](development/DEVELOPMENT_HARNESS.md), [asset index](../dev/INDEX.md), [bwdev design](development/BWDEV_DESIGN.md), [v0.5 acceptance](development/BWDEV_V05_ACCEPTANCE.md), [universal activation delivery plan](development/BDH_DUAL_LOOP_DELIVERY_PLAN.md) |
 | Verification | [Quality](process/QUALITY_GATES.md), [acceptance](verification/ACCEPTANCE.md), [continuity](verification/CONTINUITY_ACCEPTANCE.md), [risks](verification/OPEN_RISKS.md), [versioning](process/VERSIONING.md) |
 | History | [Chronological archive](history/README.md), [upstream references](research/REFERENCES.md) |
 

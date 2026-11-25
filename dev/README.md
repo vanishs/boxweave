@@ -2,6 +2,8 @@
 
 **Status: bootstrap plus bwdev v0.5.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
 
+Next planned increment (not yet implemented): [universal activation and dual-loop delivery plan](../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md).
+
 ## Quick start (optional Python CLI)
 
 Run directly from the source tree; no installation or compilation.
