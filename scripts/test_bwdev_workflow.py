@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dev"))
-from harness import ci, evaluation, profiles, tasks, workflow, verification
+from harness import ci, evaluation, profiles, records, tasks, workflow, verification
 from harness.common import HarnessError
 
 SHA = "a" * 40
@@ -107,8 +107,22 @@ class WorkflowTests(unittest.TestCase):
             args = argparse.Namespace(history=history, checkpoint=cp, evidence=[str(evidence)],
                        inbox=None, repo=REPO, ci_snapshot=snap, pr=1, base_sha="c"*40,
                        learning_disposition="no-new-asset: fixture only", export=None)
+            work_history = parent / "work"
+            envelope = {"kind": "work", "schema_version": 1, "feedback_protocol": 1,
+                        "work_ref": "fixture/handoff", "attempt_ref": "one",
+                        "task_kind": "development", "objective": "test", "risk": "standard",
+                        "authority": "fixture only", "state": "RECORDED", "boundary": "completion",
+                        "target": {"kind": "repository", "ref": REPO, "version": None, "source_sha": sha},
+                        "next_safe_action": "review", "evidence": ["fixture"], "used_assets": [],
+                        "learning": {"kind": "none", "ref": "fixture has no reusable feedback"}}
+            records.publish(work_history, 0, envelope)
             with patch.dict(verification.CHECKS, {"fixture": ("python", "-c", "pass")}):
                 verification.execute(root, "fixture", evidence, 10)
+                missing, missing_code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(missing_code, 1)
+                self.assertIn("No structured work feedback history supplied", missing["issues"])
+                args.work_history = work_history
+                args.learning_disposition = None
                 result, code = workflow.summary(args, root, finishing=True)
                 self.assertEqual(code, 0, result)
                 self.assertEqual(result["status"], "HANDOFF_SUMMARY")

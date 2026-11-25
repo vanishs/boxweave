@@ -36,6 +36,10 @@ def _evaluate(root):
             except HarnessError:
                 ids = ["INVALID"]
             ok = ids == case["expected_states"]
+        elif kind == "feedback":
+            actual, _ = work.feedback.review(work.validate(case["envelope"]), root)
+            ids = [actual["status"]]
+            ok = ids == case["expected_states"]
         elif kind == "task":
             ids = tasks.ready(case["spec"])
             ok = ids == case["expected_ready"]

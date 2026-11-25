@@ -1,0 +1,45 @@
+{
+  "kind": "work",
+  "schema_version": 1,
+  "feedback_protocol": 1,
+  "work_ref": "pr191",
+  "attempt_ref": "p0-retrospective",
+  "task_kind": "development",
+  "objective": "Retrospective reconciliation of P0 material L014 reuse only",
+  "risk": "standard",
+  "authority": "Read existing P0 evidence; append learning on child branch only",
+  "target": {
+    "kind": "repository",
+    "ref": "PR #191",
+    "version": null,
+    "source_sha": "33df91cd451187feffc59a436316b168aba9e561"
+  },
+  "state": "HANDOFF",
+  "boundary": "progress",
+  "next_safe_action": "Review existing candidate; no new transfer tool justified by this one successful reuse",
+  "evidence": [
+    "PR #191 P0 source audit: 150144e21aa562490c155df17b3b30b18c556598; file 349f208b9bc026fda9e2a278c96087ee; exec e21a1b75e580e6781cd2d8f773ab8b5b exit 0"
+  ],
+  "used_assets": [
+    "skill.box-development"
+  ],
+  "learning": {
+    "kind": "reuse",
+    "ref": "Existing L014 procedure worked; preserve candidate review state"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "evidence": "PR #191 P0 source audit: 150144e21aa562490c155df17b3b30b18c556598; file 349f208b9bc026fda9e2a278c96087ee; exec e21a1b75e580e6781cd2d8f773ab8b5b exit 0",
+      "outcome": "helped",
+      "attempt_ref": "p0-retrospective",
+      "observation": "P0 recorded an oversized Exec admission refusal and reused L014 exclusive file creation plus short generator Exec; original file and Exec receipts independently read, Exec exit 0",
+      "decision": "linked",
+      "candidate": "BDH-L014",
+      "reason": "Reconcile documented actual reuse retrospectively, not a new independent recurrence claim"
+    }
+  ]
+}

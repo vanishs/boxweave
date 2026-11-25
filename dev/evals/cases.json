@@ -243,6 +243,76 @@
       "expected_states": [
         "HANDOFF"
       ]
+    },
+    {
+      "id": "feedback-reuse-unsubstantiated",
+      "kind": "feedback",
+      "envelope": {
+        "kind": "work",
+        "schema_version": 1,
+        "feedback_protocol": 1,
+        "work_ref": "eval/feedback",
+        "attempt_ref": "fixture",
+        "task_kind": "development",
+        "objective": "fixture",
+        "risk": "standard",
+        "authority": "fixture only",
+        "target": {
+          "kind": "repository",
+          "ref": "fixture",
+          "version": null,
+          "source_sha": null
+        },
+        "state": "HANDOFF",
+        "boundary": "handoff",
+        "next_safe_action": "review",
+        "evidence": [],
+        "used_assets": [],
+        "asset_feedback": [],
+        "learning_links": [],
+        "learning": {
+          "kind": "reuse",
+          "ref": "fixture"
+        }
+      },
+      "expected_states": [
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "id": "feedback-no-new-asset",
+      "kind": "feedback",
+      "envelope": {
+        "kind": "work",
+        "schema_version": 1,
+        "feedback_protocol": 1,
+        "work_ref": "eval/feedback",
+        "attempt_ref": "fixture",
+        "task_kind": "development",
+        "objective": "fixture",
+        "risk": "standard",
+        "authority": "fixture only",
+        "target": {
+          "kind": "repository",
+          "ref": "fixture",
+          "version": null,
+          "source_sha": null
+        },
+        "state": "HANDOFF",
+        "boundary": "handoff",
+        "next_safe_action": "review",
+        "evidence": [],
+        "used_assets": [],
+        "asset_feedback": [],
+        "learning_links": [],
+        "learning": {
+          "kind": "none",
+          "ref": "fixture"
+        }
+      },
+      "expected_states": [
+        "FEEDBACK_RECORDED"
+      ]
     }
   ]
 }

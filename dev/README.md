@@ -1,6 +1,6 @@
 # BoxWeave Development Harness (BDH) — toolbox and workflow
 
-**Status: bootstrap plus bwdev v0.5.1.** This is a task-side development and operational learning layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
+**Status: bootstrap plus bwdev v0.6.0-dev.1 (stacked candidate).** This is a task-side development and operational learning layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
 
 Universal activation and dual-loop design and rollout gates: [universal activation and dual-loop delivery plan](../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md).
 
@@ -23,6 +23,35 @@ The target does not need a checkout. Follow [GitHub-only entry](examples/REMOTE_
 for remote tasks. UNKNOWN remains UNKNOWN; use linked reconciled work only
 after independent review. Version changes on the same target need new evidence.
 A material outcome record is a caller assertion, not independent PASS.
+
+## Material feedback protocol (v0.6 candidate)
+
+For material tasks use the current task checkout's envelope template with
+feedback_protocol 1. Preserve actual feedback facts at each boundary;
+selected assets are not evidence of use. Each material asset_feedback item
+records asset (registry ID or canonical path), evidence, outcome, attempt_ref,
+observation, decision, candidate (ID or null), and reason. Decisions: linked,
+no-change, not-applicable (explain why related candidates do not apply),
+pending. Link known relevant candidates with learn observe and the expected
+revision; include their IDs in learning_links. Never invent an observation
+or force a new asset. Use the same sanitized evidence reference and fact in
+the work record and learning revision.
+
+Run bwdev work feedback FILE to review exact local links; work boundary and
+resume also surface review. Pending feedback can be durably handed off
+without blocking independent product work; a final RECORDED/ANSWERED
+boundary cannot assert closure with unresolved protocol-1 feedback.
+Use bwdev finish with --work-history DIRECTORY for structured delivery review,
+rather than legacy reason-only learning flags. Legacy records remain readable
+but require explicit review; no automatic migration. This is an advisory
+record check, not proof of remote persistence, completeness of observations,
+native acceptance, or independent learning efficacy.
+
+For GitHub-only tasks, record the same fields in an authorized PR/issue or
+a portable pending record and reconcile in a control checkout when available.
+Tiny read-only questions need no record. If the current task ref implements
+a newer authorized harness, use that checkout's instructions and tools while
+retaining the canonical v1 safety and acceptance requirements.
 
 ## Quick start (optional Python CLI)
 
