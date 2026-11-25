@@ -38,3 +38,25 @@ unproven outcome or unsupported exclusive publication must stop. The
 manual procedure remains the fallback, not authorization to bypass
 admission. The helper is a candidate until independent review and real
 ordinary-task benefit evidence.
+
+## Bounded remote orchestration (candidate)
+
+On connector scripting surfaces, reduce repeated remote commands with
+the reviewed [remote step template](../../examples/TRANSFER_REMOTE_STEP.js)
+and the existing planner. Read the exact source and copy the function
+verbatim into a supported client scripting surface; no dynamic execution
+of candidate text, guest connector credentials or new MCP Tool.
+The function accepts an already authorized tool-call adapter, explicit
+Box/work/bundle/target/transfer identity and a bounded per-invocation call
+budget. It never installs or discovers permission. Use the exact plan
+rows after independently verifying source identity and bytes. A fresh
+begin with emitted request or advance records durable intent before
+the one explicit transfer effect. Original receipt staging and final
+page verification remain required. Do not reuse old output as a claim.
+Use a new control key for each distinct logical operation; on a lost
+response, stale revision, UNKNOWN, truncated output, budget boundary
+or existing target, preserve the original journal and Operation and
+reconcile read-only. Resume collect only for the exact original file
+dispatch and only if evidence creation is proven not yet attempted.
+No automatic replay or competing writer. See [remote workflow](../../README.md#remote-transfer-composition-candidate).
+Independent utility remains unproven.

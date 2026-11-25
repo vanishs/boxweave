@@ -1,7 +1,7 @@
 # BDH v0.7 — proactive improvement execution
 
 Status: V0/V1a CI PASS; V1b and V2a/V2b implemented and Box-tested.
-V2c CI PASS; V3c independent rereview PASS at 5a98abb, V3d authorized delivery recorded (episode rev15). See [V3c repair](BDH_V07_V3C_REPAIR.md) and [V3d/V4 trial](BDH_V07_V3D_V4_TRIAL.md). V4 real paired functional PASS but utility gate NOT MET; witness outcomes recorded, [V4c start](BDH_V07_V4C_START.md) feasibility probe complete; independent terminal reopen review required. V5 pending. See [V3 progress](BDH_V07_V3_PROGRESS.md). See [V2c progress](BDH_V07_V2C_PROGRESS.md), [V2 progress](BDH_V07_V2_PROGRESS.md) and
+V2c CI PASS; V3c independent rereview PASS at 5a98abb, V3d authorized delivery recorded (episode rev15). See [V3c repair](BDH_V07_V3C_REPAIR.md) and [V3d/V4 trial](BDH_V07_V3D_V4_TRIAL.md). V4 real paired functional PASS but utility gate NOT MET; witness outcomes recorded, [V4c start](BDH_V07_V4C_START.md) feasibility probe complete; independent REOPEN imported, second selected episode implemented and validated, [V4c implementation](BDH_V07_V4C_IMPLEMENTATION.md) independent review pending. V5 pending. See [V3 progress](BDH_V07_V3_PROGRESS.md). See [V2c progress](BDH_V07_V2C_PROGRESS.md), [V2 progress](BDH_V07_V2_PROGRESS.md) and
 [first real selected episode](BDH_V07_FIRST_EPISODE.md).
 See [V0 evidence and checkpoint](BDH_V07_V0_BASELINE.md).
 Stacked PR based on paused #191 at 3494ae8a35c50c386686c9d9d675c1ae37e1b1b7.
@@ -257,7 +257,7 @@ or promotion to satisfy a metric.
 | V1 | V1a CI PASS; V1b durable decisions Box PASS, child CI pending |
 | V2 | V2a bounded selection/ready DAG and V2b guarded lifecycle Box PASS; V2c terminal review, durable handoff and local contention CI PASS |
 | V3 | Independent rereview and exact reviewed-head CI PASS; original FAIL preserved; actual delivery rev15, L014 rev24; ready benefit |
-| V4 | Both ordinary-task lanes functional PASS; utility uncertain, cost regression; episode rev17 and L014 rev26 actual outcomes recorded; V4c feasibility verified; terminal reopen review pending |
+| V4 | Paired functional PASS, utility uncertain; actual independent REOPEN recorded rev27, second selection rev28, attachment rev29 and observation rev30; new episode rev5 review READY; V4c validation 114 tests and actual CLI transfer PASS, live template/independent utility pending |
 | V5 | Not started |
 
 Continue from the current PR checkpoint. Follow canonical BDH; reconcile

@@ -22,6 +22,8 @@ class FeedbackTests(unittest.TestCase):
         self.inbox = self.base / "inbox"
         self.inbox.mkdir()
         shutil.copytree(ROOT / "dev/learning/BDH-L014", self.inbox / "BDH-L014")
+        # A resolved learning history requires its paired canonical episode records.
+        shutil.copytree(ROOT / "docs/development/BDH_V07_EPISODES", self.base / "episodes")
         self.item = {"asset": "skill.box-development", "outcome": "helped",
                      "evidence": "fixture operation 123", "attempt_ref": "second",
                      "observation": "Verified short command transfer",

@@ -1,0 +1,105 @@
+{
+  "attempts": [],
+  "events": [],
+  "improvement": {
+    "candidate_id": "BDH-L014",
+    "selection": {
+      "asset_sha256": "896ce1fcbff04749d6868d76c6f36694723d45af7f83eaf8df39817ce239f6da",
+      "basis": "48b6e13da7a5d53de3e7793352122e2151894f34f299f1e3214b7ef750cf0793",
+      "covered_observation_count": 10,
+      "decision": "select",
+      "episode_id": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33",
+      "evidence": [
+        "Three manually prepared source payloads f4a0c38706367f5cc2973185154d9d6a, decb4bb2a546358cdd74c086eeb0f103, 55fb64e1fc5fcb6dc12ff0a46313e252; V2c targeted and full regression bdef17233c901802dacbc5ece9cb75a2 exit 0",
+        "Actual RC14 transfer 7a94e21c7336b9839dbbc2ab24b00782 and exact-source validation 41da67515388ccb2cd8ae5c19f70523a exit 0; evidence file operations f6fe011ba4a0caa0f1887bdbe6d54fca, eb673f33a29c036f7af9d2aa79c214ad, 3bbd9bd0b122881878bb4b66e94e5f12, de3e08208c6e9d9c784ca579b06f2f95, 11cbc508f62478eed963fd87fb84a69b",
+        "https://github.com/vanishs/boxweave/pull/193#pullrequestreview-6056418511",
+        "Actual RC14 journal recovery ab54a131f90fcfba715a11813f56e966, exact-source recheck 5a1daa18d52ab66085d30532b2d0e3ae, integrated regression 229e4bc879e7776daec05a8433bd145c exit 0; receipt preservation 946e25a5e81a8cb1acb8581aad53cf49, 42fa472b78d00b30bf6dad80c5344c0b, 9d13a8b5f153775b03569de816475e2c",
+        "https://github.com/vanishs/boxweave/pull/193#issuecomment-7171335596",
+        "https://github.com/vanishs/boxweave/pull/193#issuecomment-7171771903"
+      ],
+      "observation_count": 19,
+      "proposal": {
+        "acceptance": {
+          "benefit": "Separate ordinary-task witness, equal chunk sizes and comparable oracle/metrics; fewer manual constructions and total calls vs B, assess A tradeoff; reopen if uncertain or residual.",
+          "deliver": "Persist exact scoped implementation and evidence in child PR; no parent or product changes, merge/release/promotion.",
+          "implement": "Reuse canonical journal; explicit receipt and next action; separate immutable revisions, exact output, no auto dispatch/replay; bounded reusable caller template, relevant discovery metadata and tests.",
+          "review": "Separate Agent reviews exact source, safe partial commit windows, caller output/receipt checks and measured evidence.",
+          "validate": "Targeted receipt/claim crash windows, wrong action/key/page/digest, stale/concurrent claims, output pagination, original UNKNOWN and no-clobber; full BDH regression/Eval; real RC14 controlled transfer."
+        },
+        "assets": [
+          "dev/skills/box-development/SKILL.md",
+          "dev/transfer_plan.py",
+          "scripts/test_bwdev_transfer_plan.py",
+          "dev/README.md",
+          "dev/INDEX.md",
+          "dev/examples/TRANSFER_REMOTE_STEP.js",
+          "scripts/test_bwdev_transfer_remote.py"
+        ],
+        "authority_ref": "Owner PR193 V4c continuation: bounded harness-only development in owned isolated Box; no parent, product/runtime, host, merge or release",
+        "baseline": "V4 A 32/49 case calls with 16KiB parts; B 89-90/109 with 32KiB parts and 8/10 manual evidence objects. Functional PASS; nonblind and incomparable primary metric; overall benefit uncertain.",
+        "expected_outcome": "Fewer remote Exec and request retrieval round trips, reusable caller orchestration, unchanged durable intent/receipt and readback safety; no utility claim until matched independent witness.",
+        "max_attempts": 12,
+        "next_safe_action": "Claim implement on exact source and implement bounded record-to-next-claim composition, verified output and caller template; preserve manual fallback.",
+        "objective": "Reduce remote transfer journal orchestration while preserving exact durable dispatch and full byte verification",
+        "risk": "standard",
+        "source_sha": "7ba38035da2823122a717b801d319de60cdea7b3"
+      },
+      "reason": "Actual B residual and independent reopen warrant bounded composition and caller reuse, not a new product tool or duplicate candidate.",
+      "review_ref": "PR193 V4c selection following independent terminal review 6063576130 and actual feasibility 679e57eb1910e97a2d043f8dbe574aed",
+      "reviewed_revision": 27,
+      "trigger_ref": null,
+      "when": "After exact implementation review and matched ordinary task; reopen on absent or uncertain benefit"
+    }
+  },
+  "kind": "task",
+  "objective": "Reduce remote transfer journal orchestration while preserving exact durable dispatch and full byte verification",
+  "revision": 1,
+  "schema_version": 1,
+  "source": {
+    "base_commit": "9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d",
+    "branch": null,
+    "commit": "7ba38035da2823122a717b801d319de60cdea7b3",
+    "worktree": "clean"
+  },
+  "tasks": [
+    {
+      "acceptance": "Reuse canonical journal; explicit receipt and next action; separate immutable revisions, exact output, no auto dispatch/replay; bounded reusable caller template, relevant discovery metadata and tests.",
+      "depends_on": [],
+      "id": "implement",
+      "state": "PENDING"
+    },
+    {
+      "acceptance": "Targeted receipt/claim crash windows, wrong action/key/page/digest, stale/concurrent claims, output pagination, original UNKNOWN and no-clobber; full BDH regression/Eval; real RC14 controlled transfer.",
+      "depends_on": [
+        "implement"
+      ],
+      "id": "validate",
+      "state": "PENDING"
+    },
+    {
+      "acceptance": "Separate Agent reviews exact source, safe partial commit windows, caller output/receipt checks and measured evidence.",
+      "depends_on": [
+        "validate"
+      ],
+      "id": "review",
+      "state": "PENDING"
+    },
+    {
+      "acceptance": "Persist exact scoped implementation and evidence in child PR; no parent or product changes, merge/release/promotion.",
+      "depends_on": [
+        "review"
+      ],
+      "id": "deliver",
+      "state": "PENDING"
+    },
+    {
+      "acceptance": "Separate ordinary-task witness, equal chunk sizes and comparable oracle/metrics; fewer manual constructions and total calls vs B, assess A tradeoff; reopen if uncertain or residual.",
+      "depends_on": [
+        "deliver"
+      ],
+      "id": "benefit",
+      "state": "PENDING"
+    }
+  ],
+  "work_ref": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33"
+}

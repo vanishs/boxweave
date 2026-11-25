@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "pr193-v4c-implement-20261125",
+  "authority": "Owner PR193 V4c continuation: bounded harness-only development in owned isolated Box; no parent, product/runtime, host, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Implement selected bounded source and retain original evidence",
+  "objective": "Reduce actual remote transfer orchestration in the next selected episode",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "8e8195350f667cfbb02579e197abaae3f958bbab",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [],
+  "work_ref": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33"
+}
