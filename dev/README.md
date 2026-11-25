@@ -326,6 +326,96 @@ not authenticated remote evidence or native crash/power-loss proof.
 The helper cannot establish authority, remote persistence or independent
 utility. Manual fallback: [Box skill](skills/box-development/SKILL.md).
 
+
+### Remote transfer composition (candidate)
+
+The original offline commands remain valid. On remote connector surfaces
+with expensive guest Exec round trips, a fresh claim can emit the exact
+canonical request bytes in its original JSON output:
+
+    python3 dev/transfer_plan.py begin BUNDLE --expect N --action ACTION --emit-request
+
+After an actual original successful effect and full independent MCP
+readback, stage the receipt JSON via exclusive create. If that receipt
+creation is verified and the adjacent next action is authorized, use:
+
+    python3 dev/transfer_plan.py advance BUNDLE --expect N --action PREVIOUS --receipt RECEIPT_JSON --next-action NEXT
+
+This appends a verified receipt at N+1 and then attempts a distinct,
+fsynced claim at N+2. It is not an atomic multi-action transaction.
+An interruption between the two leaves READY for the next action;
+after the claim it leaves RECONCILE. A nonverified receipt returns
+ADVANCE_NOT_READY and no claim. A stale revision or competing writer
+fails closed. Do not retry advance against a guessed revision.
+Only a freshly admitted, successful original control Exec with both
+complete streams and a matching claim/request digest can authorize the
+explicit next call. A duplicate control response is never permission.
+Preserve original control and effect IDs and keys. The planner does not
+call MCP, authenticate supplied receipts, or confer authority.
+
+A small reviewed client template is available at
+[TRANSFER_REMOTE_STEP.js](examples/TRANSFER_REMOTE_STEP.js).
+It has no environment dependency beyond standard JavaScript. On an
+ephemeral connector scripting surface copy the reviewed function
+verbatim, rather than evaluate downloaded strings or assume module
+imports/storage. The caller supplies a direct adapter for the existing
+box_exec, operation_get, operation_output_get, box_file_read and
+box_file_apply tools; no extra product capability. The template accepts
+only explicit ASCII canonical paths and bounded work/transfer identity.
+Use the exact plan action rows and independently establish the source
+bytes. It provides SHA256/page validation and counts attempted calls,
+including failures. For example (pseudocode, adapt tool names only):
+
+    const client = createTransferRemote(callExistingTool, {
+        box_id: BOX, work_ref: WORK, cwd: REVIEWED_CHECKOUT,
+        bundle: CANONICAL_BUNDLE, target: FINAL_TARGET,
+        transfer_id: PLAN.transfer_id, budget: 16
+    }, emitSanitizedTrace);
+    const result = await client.run("step", {
+        row: PLAN.actions[0], expect: 1, command_key: UNIQUE_CONTROL_KEY,
+        source: {path: VERIFIED_REMOTE_STAGING, size: PLAN.size, offset: 0}
+    });
+
+The optional source is a same-Box staged test source, read through MCP,
+not a client filesystem or permission grant. For other sources omit it
+only after independently checking planned bytes. Use each new client
+instance for one bounded invocation. Retain the returned result/trace
+and all original Operations, including attempted key and uncertain
+responses. Do not expose raw payloads in logs. A fresh ADMITTED response
+is required; other/duplicate receipts stop conservatively. The template
+does not poll indefinitely. If a call cap, missing original response
+or incomplete stream occurs, use the original durable journal and
+Operation evidence; do not reissue a mutation based on the trace alone.
+
+For an ordinary file step, EVIDENCE_STAGED returns original effect
+and evidence-create references. Supply that result as previous with
+the explicit current journal revision and next exact plan row; the
+template checks the evidence-create Operation and uses advance.
+For a controlled pause, step with pause:true stops after fresh
+admission, before terminal polling/readback. Recover using collect
+with the exact original row, original response/key reference, and
+stageNotSubmitted:true only when no previous evidence write was
+attempted. Otherwise reconcile original evidence read-only/manual;
+never infer not-submitted from an absent file or list. Do not execute
+an old step twice. Assembly returns ASSEMBLED_READBACK_REQUIRED with
+original guest exit checked. Stage one final page per invocation with
+stageAssemblyPage(row,index,source optional); each actual MCP page
+uses 32768 bytes so its JSON fits exclusive create. Readback pages
+are staged in the canonical bundle as assembly-page-0000.json etc.
+Use finish with exact assembly row, current revision and original
+Operation/key to reread original streams and run:
+
+    python3 dev/transfer_plan.py record-assembly-pages BUNDLE --expect N --operation-id ORIGINAL --exit-code 0 --count PAGE_COUNT
+
+All original pages are revalidated for exact ordered complete bytes,
+page digests, target identity and whole manifest digest before receipt
+publication. A missing/extra/bad page fails closed. The helper does
+not read final guest bytes as a substitute for independent MCP pages.
+Existing destination, wrong source, conflicting key, lost output,
+failed guest exit and UNKNOWN never authorize another transfer. The
+manual original protocol remains the fallback. Actual independent
+utility and crash/power-loss guarantees are not established.
+
 ## Integrated workflow (v0.5)
 
 For a nontrivial task with a checkout, use the compositional commands rather

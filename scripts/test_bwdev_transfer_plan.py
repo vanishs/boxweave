@@ -309,5 +309,123 @@ class TransferPlanTests(unittest.TestCase):
             tr.begin(self.bundle,2,"part-0000")
 
 
+    def test_emit_request_and_advance_exact_bytes(self):
+        claim=tr.begin(self.bundle,1,"part-0000",emit_request=True)
+        raw=claim["request_json"].encode("ascii")
+        self.assertEqual(raw,Path(claim["request_file"]).read_bytes())
+        self.assertEqual(tr.digest(raw),claim["request_sha256"])
+        self.stage(1)
+        receipt=self.receipt(0,Path(self.rows[0]["path"]).read_bytes())
+        r=tr.advance(self.bundle,2,"part-0000",receipt,"part-0001")
+        self.assertEqual((r["status"],r["recorded_revision"],r["claim"]["journal_revision"]),
+                         ("NEXT_INTENT_RECORDED",3,4))
+        self.assertEqual(r["claim"]["request_json"].encode("ascii"),
+                         Path(r["claim"]["request_file"]).read_bytes())
+        self.assertEqual(tr.assess(self.bundle)["status"],"RECONCILE")
+        for expect in (2,4):
+            with self.assertRaises(tr.TransferError):
+                tr.advance(self.bundle,expect,"part-0000",receipt,"part-0001")
+
+    def test_advance_wrong_next_no_effect_and_unknown_stops(self):
+        tr.begin(self.bundle,1,"part-0000")
+        unknown=self.receipt(0,state="UNKNOWN")
+        unknown["operation_id"]=None
+        with self.assertRaises(tr.TransferError):
+            tr.advance(self.bundle,2,"part-0000",unknown,"assemble")
+        self.assertEqual(tr.assess(self.bundle)["journal_revision"],2)
+        got=tr.advance(self.bundle,2,"part-0000",unknown,"part-0001")
+        self.assertEqual(got["status"],"ADVANCE_NOT_READY")
+        self.assertIsNone(got["claim"])
+        self.assertEqual(tr.assess(self.bundle)["status"],"RECONCILE")
+        self.assertEqual(tr.assess(self.bundle)["journal_revision"],3)
+
+    def test_advance_receipt_claim_gap_safe_ready(self):
+        tr.begin(self.bundle,1,"part-0000")
+        self.stage(1)
+        receipt=self.receipt(0,Path(self.rows[0]["path"]).read_bytes())
+        with patch("transfer_plan.begin",side_effect=OSError("interrupted after receipt")):
+            with self.assertRaises(OSError):
+                tr.advance(self.bundle,2,"part-0000",receipt,"part-0001")
+        status=tr.assess(self.bundle)
+        self.assertEqual((status["status"],status["next_action"],status["journal_revision"]),
+                         ("READY","part-0001",3))
+        with self.assertRaises(tr.TransferError):
+            tr.advance(self.bundle,3,"part-0000",receipt,"part-0001")
+        self.assertEqual(tr.begin(self.bundle,3,"part-0001",emit_request=True)["journal_revision"],4)
+
+    def test_advance_claim_ack_gap_never_replays(self):
+        tr.begin(self.bundle,1,"part-0000")
+        self.stage(1)
+        receipt=self.receipt(0,Path(self.rows[0]["path"]).read_bytes())
+        begin=tr.begin
+        def interrupted(*args,**kwargs):
+            begin(*args,**kwargs)
+            raise OSError("claim output lost")
+        with patch("transfer_plan.begin",side_effect=interrupted):
+            with self.assertRaises(OSError):
+                tr.advance(self.bundle,2,"part-0000",receipt,"part-0001")
+        self.assertEqual(tr.assess(self.bundle)["journal_revision"],4)
+        self.assertEqual(tr.assess(self.bundle)["status"],"RECONCILE")
+        with self.assertRaises(tr.TransferError):
+            tr.begin(self.bundle,4,"part-0001",emit_request=True)
+
+    def test_advance_bad_readback_refuses_next_claim(self):
+        tr.begin(self.bundle,1,"part-0000")
+        wrong=self.receipt(0,b"wrong")
+        r=tr.advance(self.bundle,2,"part-0000",wrong,"part-0001")
+        self.assertEqual(r["status"],"ADVANCE_NOT_READY")
+        self.assertIsNone(r["claim"])
+        self.assertEqual(tr.assess(self.bundle)["status"],"RECONCILE")
+
+    def test_advance_concurrent_receipt_and_claim(self):
+        tr.begin(self.bundle,1,"part-0000")
+        self.stage(1)
+        receipt=self.root/"receipt.json"
+        receipt.write_bytes(tr.encoded(self.receipt(0,Path(self.rows[0]["path"]).read_bytes())))
+        argv=[sys.executable,str(ROOT/"dev/transfer_plan.py"),"advance",str(self.bundle),
+              "--expect","2","--action","part-0000","--receipt",str(receipt),"--next-action","part-0001"]
+        processes=[subprocess.Popen(argv,stdout=subprocess.PIPE,stderr=subprocess.PIPE) for _ in range(2)]
+        results=[p.communicate(timeout=15) for p in processes]
+        self.assertEqual(sorted(p.returncode for p in processes),[0,2],results)
+        self.assertEqual(tr.assess(self.bundle)["journal_revision"],4)
+        self.assertEqual(tr.assess(self.bundle)["status"],"RECONCILE")
+
+    def test_record_assembly_pages_strict_and_no_overwrite(self):
+        self.stage()
+        revision=1
+        for i,row in enumerate(self.rows[:-1]):
+            tr.begin(self.bundle,revision,row["action"])
+            tr.record_receipt(self.bundle,revision+1,row["action"],
+                              self.receipt(i,Path(row["path"]).read_bytes()))
+            revision+=2
+        claim=tr.begin(self.bundle,revision,"assemble",emit_request=True)
+        self.assertEqual(tr.digest(claim["request_json"].encode("ascii")),claim["request_sha256"])
+        revision+=1
+        tr.assemble(self.rows[-2]["path"])
+        with self.assertRaises(tr.TransferError):
+            tr.assemble(self.rows[-2]["path"])
+        pages=[]
+        for offset in range(0,len(self.data),32768):
+            data=self.data[offset:offset+32768]
+            pages.append({"box_id":BOX,"path":str(self.target),"size":len(self.data),"offset":offset,
+                          "data_base64":base64.b64encode(data).decode(),"page_sha256":tr.digest(data),
+                          "ended":offset+len(data)==len(self.data),"whole_file":False})
+        for i,page in enumerate(pages):
+            (self.bundle/f"assembly-page-{i:04d}.json").write_bytes(tr.encoded(page))
+        for count,exit_code in ((2,0),(3,1)):
+            with self.assertRaises(tr.TransferError):
+                tr.record_assembly_pages(self.bundle,revision,"e"*32,exit_code,count)
+        self.assertEqual(tr.assess(self.bundle)["journal_revision"],revision)
+        first=self.bundle/"assembly-page-0000.json"
+        original=first.read_bytes()
+        first.write_bytes(tr.encoded(dict(pages[0],page_sha256="0"*64)))
+        with self.assertRaises(tr.TransferError):
+            tr.record_assembly_pages(self.bundle,revision,"e"*32,0,3)
+        first.write_bytes(original)
+        result=tr.record_assembly_pages(self.bundle,revision,"e"*32,0,3)
+        self.assertEqual(result["status"],"VERIFIED_READBACK")
+        self.assertEqual(self.target.read_bytes(),self.data)
+
+
 if __name__=="__main__":
     unittest.main()

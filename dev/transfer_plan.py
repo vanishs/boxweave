@@ -495,7 +495,7 @@ def append_event(bundle, expected, event):
     return bundle, manifest, revision+1
 
 
-def begin(bundle, expected, action):
+def begin(bundle, expected, action, *, emit_request=False):
     original, manifest, _, _, revision, _ = load_bundle(bundle)
     if revision != expected:
         raise TransferError("Journal revision conflict; inspect original history")
@@ -514,12 +514,68 @@ def begin(bundle, expected, action):
         result["target"] = request["target"]
     else:
         result["request_file"] = str(original / (action + "-request.json"))
+    if emit_request:
+        # Return the exact canonical ASCII bytes, not a second payload
+        # representation or another dispatch authorization. The caller
+        # checks the digest and uses only this fresh successful response.
+        raw = encoded(request)
+        if digest(raw) != request_sha:
+            raise TransferError("Prepared request changed; reconcile original claim")
+        result["request_json"] = raw.decode("ascii")
     return result
 
 
 def record_receipt(bundle, expected, action, receipt):
     original, _, revision = append_event(bundle, expected, {"kind": "receipt", "action": action, "record": receipt})
     return dict(assess(original), recorded_revision=revision)
+
+
+
+def advance(bundle, expected, action, receipt, next_action):
+    """Append one actual receipt, then explicitly claim the adjacent action.
+
+    Two independent durable CAS events, not a transaction or dispatcher.
+    Failure between them leaves READY; failure after the next claim leaves
+    RECONCILE. Never return a previously published claim on resume.
+    """
+    original, manifest, _, _, revision, _ = load_bundle(bundle)
+    names = [row["action"] for row in actions(manifest)]
+    if revision != expected or action not in names[:-1] or names[names.index(action)+1] != next_action:
+        raise TransferError("Expected current revision and exact adjacent next action")
+    recorded = record_receipt(original, expected, action, receipt)
+    if recorded["status"] != "READY" or recorded["next_action"] != next_action:
+        return {"status": "ADVANCE_NOT_READY", "recorded": recorded, "claim": None,
+                "note": "Receipt preserved; no next dispatch intent. Reconcile original evidence."}
+    claim = begin(original, expected+1, next_action, emit_request=True)
+    return {"status": "NEXT_INTENT_RECORDED", "recorded_revision": expected+1,
+            "claim": claim,
+            "note": "Two separate durable revisions. Only this fresh claim may be sent once; no automatic dispatch."}
+
+
+def record_assembly_pages(bundle, expected, operation_id, exit_code, count):
+    """Compose the assembly receipt from bounded original MCP page files.
+
+    Staging page JSON is a caller-controlled evidence transfer. Do not
+    substitute guest-local target reads for independent MCP readback.
+    """
+    original, manifest, _, _, revision, _ = load_bundle(bundle)
+    if (type(expected) is not int or revision != expected
+            or type(count) is not int or not 1 <= count <= 256
+            or type(exit_code) is not int or exit_code != 0
+            or not isinstance(operation_id, str) or not re.fullmatch(r"[0-9a-f]{32}", operation_id)):
+        raise TransferError("Expected exact revision, original successful assembly and bounded page count")
+    names = [f"assembly-page-{i:04d}.json" for i in range(count)]
+    present = sorted(p.name for p in original.iterdir()
+                     if re.fullmatch(r"assembly-page-[0-9]{4}\.json", p.name))
+    if present != names:
+        raise TransferError("Assembly evidence page set differs; preserve and reconcile")
+    pages = [strict_load(bounded_read(original / name, MAX_MANIFEST)) for name in names]
+    row = actions(manifest)[-1]
+    # Validate all independent bytes before publishing any final receipt.
+    verify_pages(pages, row, manifest["box_id"])
+    receipt = {"idempotency_key": row["idempotency_key"], "operation_id": operation_id,
+               "state": "SUCCEEDED", "pages": pages, "exit_code": exit_code}
+    return record_receipt(original, expected, "assemble", receipt)
 
 
 def assemble(manifest_path):
@@ -597,11 +653,24 @@ def main(argv=None):
     start.add_argument("bundle")
     start.add_argument("--expect", type=int, required=True)
     start.add_argument("--action", dest="target_action", required=True)
+    start.add_argument("--emit-request", action="store_true", help="Return exact canonical request JSON with the fresh claim")
     receipt = sub.add_parser("record", help="Append original receipt and independent readback")
     receipt.add_argument("bundle")
     receipt.add_argument("--expect", type=int, required=True)
     receipt.add_argument("--action", dest="target_action", required=True)
     receipt.add_argument("--receipt", required=True)
+    step = sub.add_parser("advance", help="Record previous receipt and claim explicit next action; no dispatch")
+    step.add_argument("bundle")
+    step.add_argument("--expect", type=int, required=True)
+    step.add_argument("--action", dest="target_action", required=True)
+    step.add_argument("--receipt", required=True)
+    step.add_argument("--next-action", required=True)
+    pages = sub.add_parser("record-assembly-pages", help="Record original assembly receipt from staged MCP page JSON")
+    pages.add_argument("bundle")
+    pages.add_argument("--expect", type=int, required=True)
+    pages.add_argument("--operation-id", required=True)
+    pages.add_argument("--exit-code", type=int, required=True)
+    pages.add_argument("--count", type=int, required=True)
     join = sub.add_parser("assemble")
     join.add_argument("manifest")
     args = parser.parse_args(argv)
@@ -612,10 +681,16 @@ def main(argv=None):
         elif args.action == "assess":
             result = assess(args.bundle)
         elif args.action == "begin":
-            result = begin(args.bundle, args.expect, args.target_action)
+            result = begin(args.bundle, args.expect, args.target_action, emit_request=args.emit_request)
         elif args.action == "record":
             result = record_receipt(args.bundle, args.expect, args.target_action,
                                     strict_load(bounded_read(args.receipt, MAX_JOURNAL)))
+        elif args.action == "advance":
+            result = advance(args.bundle, args.expect, args.target_action,
+                             strict_load(bounded_read(args.receipt, MAX_JOURNAL)), args.next_action)
+        elif args.action == "record-assembly-pages":
+            result = record_assembly_pages(args.bundle, args.expect, args.operation_id,
+                                           args.exit_code, args.count)
         else:
             result = assemble(args.manifest)
     except (OSError, ValueError, TypeError, KeyError) as exc:
