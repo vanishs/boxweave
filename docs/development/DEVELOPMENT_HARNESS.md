@@ -1,6 +1,6 @@
 # BoxWeave Development Harness (BDH)
 
-**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [developer entry](../../dev/README.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.5.1](BWDEV_DESIGN.md) capabilities in that entry are implemented. No change to product runtime or its tool catalog.
+**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [canonical bootstrap](../../dev/BOOTSTRAP.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.5.1](BWDEV_DESIGN.md) capabilities in the [developer toolbox](../../dev/README.md) are implemented. No change to product runtime or its tool catalog.
 
 ## Universal activation and dual loops
 

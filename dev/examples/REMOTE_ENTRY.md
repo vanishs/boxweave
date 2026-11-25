@@ -1,14 +1,14 @@
 # GitHub-only entry
 
-One-time configuration for an Agent/project entry, not the product Host:
+One-time configuration for an Agent/project entry, not the product Host.
+Use this minimal startup instruction (English is a portable default):
 
-> For every BoxWeave task, first load dev/BOOTSTRAP.md, AGENTS.md and
-> dev/INDEX.md at the actual authorized vanishs/boxweave ref (normally v1
-> after merge). Apply relevant task contracts and Solve/Evolve loops.
-> Reconcile original work/operations; progress within scope and make a
-> learning judgment at material boundaries. If source or persistence is
-> inaccessible, report it and use a sanitized portable envelope. Never
-> infer authority, native state or acceptance from BDH metadata.
+> For every BoxWeave-related task, first read and follow https://github.com/vanishs/boxweave/blob/v1/dev/BOOTSTRAP.md.
+
+This instruction is a locator, not a second policy. The canonical entry
+loads the current rules, index and relevant workflows, including the
+requester's preferred language through AGENTS.md. Do not duplicate them
+in platform configuration. Use authorized GitHub access to resolve v1.
 
 Read the exact ref through GitHub; follow only relevant links. A remote
 support task does not require a local Git SHA or PR. Record actual target

@@ -1,5 +1,7 @@
 # BoxWeave v1 — Agent instructions
 
+**Task entry:** [dev/BOOTSTRAP.md](dev/BOOTSTRAP.md) is the canonical BDH startup for every BoxWeave task. This file owns stable authority, safety and engineering rules.
+
 **Stable rules, not a status snapshot.** Read only what the task needs. Verify current branch/HEAD, relevant PR, actual running version and original Box/Operation IDs; do not infer today's state from old reports. Start with the [active plan](docs/process/IMPLEMENTATION_PLAN.md), [phase protocol](docs/development/PHASE_EXECUTION_PROTOCOL.md) and [current status](docs/STATUS.md) as relevant.
 
 **Authority order:** latest explicit owner decision + [permanent product boundary](docs/decisions/PRODUCT_BOUNDARY.md) / [operational policy](docs/decisions/P0_OPERATIONAL_POLICIES.md) → [MCP catalog](docs/design/MCP_TOOLS.md) and [contracts](docs/design/MCP_TOOL_CONTRACTS.md) → active phase design → dated research. Confirm implemented capabilities from source and actual MCP discovery. **Current v1 source registers 23 Tools; verify actual installed discovery.**
@@ -13,9 +15,15 @@
 - **Small product.** Do not exceed the approved 23-tool catalog or add speculative subsystems, a guest-resident Agent scheduler, generic ACL/RBAC, Caddy, a Web/REST console, snapshots/backups, host automation or a second Incus transport without owner approval. Nested Incus depth and isolation depend on verified host/kernel/AppArmor/BPF capabilities.
 - **Explicit real-host authority.** Tools and past pilot approval are not blanket permission. Obtain exact-target owner approval for physical/shared-host installation, public exposure, shared Incus upgrades, privileged changes or destructive actions; preserve foreign resources and existing `UNKNOWN`. Never force-push or co-install v1 with legacy `main` on its dedicated host.
 
-## Development Harness (start here)
+## Development Harness
 
-For every BoxWeave task (including guidance, operations, research and development), load the [portable BDH bootstrap](dev/BOOTSTRAP.md) and use [the BDH entry](dev/README.md) and its [asset index](dev/INDEX.md) to select relevant knowledge, skills, tools and risk profile. Recover the original task/workspace before provisioning; preserve progress with the existing checkpoint contract. At material failures, user corrections, handoff and completion, record a learning disposition using the [learning skill](dev/skills/continuous-learning/SKILL.md): reuse/update a verified asset, capture a candidate, or explicitly note no reusable asset. For nontrivial work with a Python checkout, prefer `bwdev start` or `bwdev resume`, then `task next`, `verify`, `learn next/attach` and `finish` as applicable; use `python3 dev/bwdev --help`. Record any manual fallback. A learning candidate with implementation evidence must still be reviewed; use `bwdev eval` and targeted regressions when improving the harness. Preserve actual owner, CI and native gates. Script First for development tools; existing tools remain usable and automation is incremental. No new permission, product boundary or CI exemption is granted by BDH.
+For every BoxWeave task, follow the [canonical BDH startup entry](dev/BOOTSTRAP.md).
+It defines task activation, proportional Solve/Evolve Loops, continuity and
+learning; the [toolbox](dev/README.md) and [asset index](dev/INDEX.md) provide
+the applicable capabilities. If this file was loaded via BOOTSTRAP, continue
+that entry without restarting it. Script First for development tools;
+existing tools remain usable and automation is incremental. No new
+permission, product boundary or CI exemption is granted by BDH.
 
 ## Work, checks and handoff
 

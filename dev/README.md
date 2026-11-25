@@ -1,4 +1,4 @@
-# BoxWeave Development Harness (BDH) — start here
+# BoxWeave Development Harness (BDH) — toolbox and workflow
 
 **Status: bootstrap plus bwdev v0.5.1.** This is a task-side development and operational learning layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
 
@@ -6,7 +6,7 @@ Universal activation and dual-loop design and rollout gates: [universal activati
 
 ## Universal entry
 
-Use the short [bootstrap](BOOTSTRAP.md) for every BoxWeave task. A tiny question can use only relevant knowledge and a learning judgment. For material work without a target checkout, use the portable [work envelope](examples/WORK_ENVELOPE.json) via GitHub or an independent control checkout. Unknown target fields stay null; the control repository SHA is not the installed version. A local record is not remote persistence. Use existing start/resume/finish for source development.
+Start every BoxWeave task with the canonical [bootstrap](BOOTSTRAP.md). External Agent/project configuration needs only the [minimal startup instruction](examples/REMOTE_ENTRY.md); the repository owns evolving rules. A tiny question can use only relevant knowledge and a learning judgment. For material work without a target checkout, use the portable [work envelope](examples/WORK_ENVELOPE.json) via GitHub or an independent control checkout. Unknown target fields stay null; the control repository SHA is not the installed version. A local record is not remote persistence. Use existing start/resume/finish for source development.
 
 ```sh
 python3 dev/bwdev --json work plan --kind operations --query 'install migration'

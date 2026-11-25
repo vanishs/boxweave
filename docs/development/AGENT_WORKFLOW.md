@@ -4,7 +4,7 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 
 ## Development Harness
 
-Use [BDH start/continue/finish](../../dev/README.md) for every task; it wraps this existing workflow without replacing product phase contracts. Discover only relevant assets, capture learning at meaningful boundaries, and save a canonical checkpoint for handoff. For small documentation tasks the lightweight profile is sufficient under the existing quality policy. Future automation is not a prerequisite to use these rules.
+Start every BoxWeave task with the [canonical BDH bootstrap](../../dev/BOOTSTRAP.md). Use the [toolbox](../../dev/README.md) proportionately; BDH wraps this existing workflow without replacing product phase contracts. Discover only relevant assets, capture learning at meaningful boundaries, and save a canonical checkpoint for handoff. For small documentation tasks the lightweight profile is sufficient under the existing quality policy. Future automation is not a prerequisite to use these rules.
 
 ## One-pass development phases and durable Agent handoff
 
