@@ -142,6 +142,9 @@ limitation from V4 research remains recorded, not solved.
 
 ## Next gates
 
+Historical initial gate; see [V4c-01 repair](BDH_V07_V4C_REPAIR.md) for
+independent rejection and originating corrected validation.
+
 Independent review of exact scoped seven assets and integration-only
 fixture correction, recheck actual old resolution rev27/new selection
 rev28/attachment rev29/observation rev30, new episode rev5. Review

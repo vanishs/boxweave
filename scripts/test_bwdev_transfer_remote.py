@@ -52,26 +52,40 @@ function create(tool,args) {
     } else {
         assert.equal(tool,"box_file_apply");
         assert.equal(args.mode,"create");
-        try {fs.writeFileSync(args.path,Buffer.from(args.content_base64,"base64"),{flag:"wx"});}
-        catch(err) {state="FAILED";}
+        if(fault==="binding-unrelated"&&args.path===rows[0].path) {
+            // The intended operation does not execute. A separate fixture
+            // write leaves matching bytes; a wrong admission/lookup pair
+            // represents another successful same-work Operation.
+            fs.writeFileSync(args.path,Buffer.from(args.content_base64,"base64"),{flag:"wx"});
+        } else {
+            try {fs.writeFileSync(args.path,Buffer.from(args.content_base64,"base64"),{flag:"wx"});}
+            catch(err) {state="FAILED";}
+        }
         if(fault==="unknown")state="UNKNOWN";
     }
-    const o={operation_id:id,tracking_id:id,box_uuid:cfg.box_id,incarnation:cfg.box_id,
+    const tracking=(seq+10000).toString(16).padStart(32,"0");
+    const o={operation_id:id,tracking_id:tracking,box_uuid:cfg.box_id,incarnation:cfg.box_id,
         action:tool,work_ref:cfg.work_ref,state};
     operations.set(id,{o,stdout,stderr,exit});keys.set(args.idempotency_key,id);
     if(tool==="box_file_apply" && fault==="lost-response")throw Error("simulated lost acknowledgement");
-    return {...o,state:"ADMITTED",duplicate:fault==="duplicate"&&tool==="box_exec"};
+    return {...o,tracking_id:fault==="binding-unrelated"&&args.path===rows[0].path?"d".repeat(32):tracking,
+        state:"ADMITTED",duplicate:fault==="duplicate"&&tool==="box_exec"};
 }
 async function call(tool,args) {
     events.push({tool,key:args.idempotency_key,path:args.path});
     if(tool==="box_exec"||tool==="box_file_apply")return create(tool,args);
-    if(tool==="operation_get")return {operation:operations.get(args.operation_id).o};
+    if(tool==="operation_get")return {tracking_id:"e".repeat(32),operation:operations.get(args.operation_id).o};
     if(tool==="operation_output_get") {
         const o=operations.get(args.operation_id), b=o[args.stream], off=args.offset;
         const data=b.subarray(off,off+args.limit);
         return {operation_id:args.operation_id,tracking_id:args.operation_id,stream:args.stream,
             availability:"available",offset:off,next_offset:off+data.length,ended:off+data.length===b.length,
             truncated:fault==="truncated",exit_code:o.exit,content_base64:data.toString("base64")};
+    }
+    if(tool==="box_file_list") {
+        const entries=fs.readdirSync(args.path).sort().filter(name=>name>args.cursor)
+            .slice(0,args.limit).map(name=>({name,type:"file"}));
+        return {box_id:cfg.box_id,path:args.path,entries,consistent_snapshot:false};
     }
     if(tool==="box_file_read") {
         const b=fs.readFileSync(args.path),off=args.offset||0,data=b.subarray(off,off+args.length);
@@ -98,6 +112,78 @@ async function main() {
         assert.equal(c.sha256Base64(b.toString("base64")),digest(b));
     }
     assert.throws(()=>c.sha256Base64("YQ="));
+    if(fault&&fault.startsWith("binding-")) {
+        const row=rows[0];
+        const paused=await run("step",{row,expect:1,command_key:"control-1",pause:true,
+            source:{path:fixture.source,size:plan.size,offset:0}});
+        assert.equal(paused.status,"PAUSED_ORIGINAL",JSON.stringify(paused));
+        assert.equal(expectState().journal_revision,2);
+        const original=JSON.parse(JSON.stringify(paused.original));
+        const before=events.filter(e=>e.tool==="box_file_apply").length;
+        const canonical=v=>Array.isArray(v)?"["+v.map(canonical).join(",")+"]":
+            v!==null&&typeof v==="object"?"{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+canonical(v[k])).join(",")+"}":JSON.stringify(v);
+        const reseal=a=>{
+            delete a.association_sha256;
+            a.association_sha256=digest(Buffer.from(canonical(a)+"\n"));
+        };
+        let expect=2;
+        if(fault==="binding-missing")delete original.tracking_id;
+        if(fault==="binding-stale")expect=3;
+        if(fault==="binding-advanced") {
+            const receipt={idempotency_key:row.idempotency_key,operation_id:original.operation_id,
+                state:"UNKNOWN",pages:[],exit_code:null};
+            const path=cfg.bundle+"/test-unknown.json";
+            fs.writeFileSync(path,JSON.stringify(receipt),{flag:"wx"});
+            readJson([cfg.cwd+"/dev/transfer_plan.py","record",cfg.bundle,"--expect","2",
+                "--action",row.action,"--receipt",path]);
+            assert.equal(expectState().journal_revision,3);
+        }
+        if(fault==="binding-request") {original.request_sha256="0".repeat(64);reseal(original);}
+        if(fault==="binding-claim") {original.context.claim_sha256="0".repeat(64);reseal(original);}
+        if(fault==="binding-key") {original.idempotency_key="other-key";reseal(original);}
+        if(fault==="binding-receipt") {
+            const collected=await run("collect",{row,original,expect:2,stageNotSubmitted:true});
+            assert.equal(collected.status,"EVIDENCE_STAGED",JSON.stringify(collected));
+            operations.get(collected.receipt.operation_id).o.tracking_id="f".repeat(32);
+            const count=events.length;
+            const r=await run("step",{row:rows[1],expect:2,command_key:"control-next",previous:collected});
+            assert.equal(r.status,"RECONCILE",JSON.stringify(r));
+            assert.equal(events.slice(count).filter(e=>e.tool==="box_exec"||e.tool==="box_file_apply").length,0);
+        } else if(fault==="binding-finish"||fault==="binding-page") {
+            let previous=await run("collect",{row,original,expect:2,stageNotSubmitted:true});
+            assert.equal(previous.status,"EVIDENCE_STAGED",JSON.stringify(previous));
+            let revision=2,assembly;
+            for(const next of rows.slice(1)) {
+                const r=await run("step",{row:next,expect:revision,command_key:"control-"+next.action,previous});
+                revision=r.journal_revision;
+                assert.equal(r.status,next.action==="assemble"?"ASSEMBLED_READBACK_REQUIRED":"EVIDENCE_STAGED",JSON.stringify(r));
+                if(next.action==="assemble")assembly=r;else previous=r;
+            }
+            const finalRow=rows.at(-1);
+            if(fault==="binding-finish") {
+                for(let index=0;index*32768<plan.size;index++) {
+                    const p=await run("stageAssemblyPage",{row:finalRow,index,source:fixture.source,original:assembly.original,expect:revision});
+                    assert.equal(p.status,"PAGE_STAGED",JSON.stringify(p));
+                }
+            }
+            operations.get(assembly.original.operation_id).o.tracking_id="f".repeat(32);
+            const count=events.length;
+            const r=fault==="binding-finish"?await run("finish",{row:finalRow,expect:revision,original:assembly.original,command_key:"control-final"}):
+                await run("stageAssemblyPage",{row:finalRow,index:0,source:fixture.source,original:assembly.original,expect:revision});
+            assert.equal(r.status,"RECONCILE",JSON.stringify(r));
+            assert.equal(events.slice(count).filter(e=>e.tool==="box_exec"||e.tool==="box_file_apply").length,0);
+            assert.equal(expectState().journal_revision,revision);
+            assert.equal(expectState().status,"RECONCILE");
+            return;
+        } else {
+            const r=await run("collect",{row,original,expect,stageNotSubmitted:true});
+            assert.equal(r.status,"RECONCILE",JSON.stringify(r));
+            assert.equal(events.filter(e=>e.tool==="box_file_apply").length,before);
+        }
+        assert.equal(expectState().journal_revision,fault==="binding-advanced"?3:2);
+        assert.equal(expectState().status,"RECONCILE");
+        return;
+    }
     if(fault) {
         const r=await run("step",{row:rows[0],expect:1,command_key:"control-1",
             source:{path:fixture.source,size:plan.size,offset:0}},fault==="budget"?2:16);
@@ -123,7 +209,7 @@ async function main() {
             assert.equal(expectState().status,"RECONCILE");
             expect=r.journal_revision;
             const before=events.filter(e=>e.tool==="box_file_apply"&&e.path===row.path).length;
-            r=await run("collect",{row,original:r.original,stageNotSubmitted:true});
+            r=await run("collect",{row,original:JSON.parse(JSON.stringify(r.original)),expect,stageNotSubmitted:true});
             assert.equal(events.filter(e=>e.tool==="box_file_apply"&&e.path===row.path).length,before);
         } else expect=r.journal_revision;
         if(row.action==="assemble") {
@@ -133,7 +219,7 @@ async function main() {
         }
     }
     for(let index=0;index*32768<plan.size;index++) {
-        const p=await run("stageAssemblyPage",{row:rows.at(-1),index,source:fixture.source});
+        const p=await run("stageAssemblyPage",{row:rows.at(-1),index,source:fixture.source,original:assembly.original,expect});
         assert.equal(p.status,"PAGE_STAGED",JSON.stringify(p));
     }
     const final=await run("finish",{row:rows.at(-1),expect,original:assembly.original,command_key:"control-final"});
@@ -175,6 +261,13 @@ class RemoteTemplateTests(unittest.TestCase):
 
     def test_real_planner_simulated_connector_pause(self):
         self.fixture(pause=True)
+
+    def test_original_admission_association(self):
+        for fault in ("binding-unrelated", "binding-missing", "binding-stale",
+                      "binding-request", "binding-claim", "binding-key", "binding-advanced",
+                      "binding-receipt", "binding-page", "binding-finish"):
+            with self.subTest(fault=fault):
+                self.fixture(fault=fault)
 
     def test_fail_closed_boundaries(self):
         for fault in ("budget", "duplicate", "wrong-claim", "truncated", "unknown",
