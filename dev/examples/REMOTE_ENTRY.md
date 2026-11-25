@@ -18,6 +18,12 @@ boundary, learning kind/ref, related_work and original_operations as needed.
 Use used_assets for actual material use, not selected assets; record each
 asset_feedback fact, decision, candidate or null, and reason. Link exact
 candidate observations through learning_links and expected revisions.
+Never replace an exact recorded association with not-applicable; retain
+pending review if history conflicts. Correct an erroneous proposed link
+with a new correction_ref and review evidence. An improved claim needs
+the work-bound attachment and implementation_claim described in
+[the feedback protocol](../README.md#material-feedback-protocol-v06-candidate);
+otherwise record reuse or pending, not a new improvement.
 A missing or invalid inbox, unreviewed legacy record or unresolved feedback
 requires explicit pending review, not a completed claim.
 Persist sanitized material records via authorized

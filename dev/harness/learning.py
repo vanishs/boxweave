@@ -67,6 +67,25 @@ def validate(data, root):
             raise HarnessError("L4 needs an independent review reference")
         if data["change_class"] == "L5" and not nonempty(data.get("owner_ref")):
             raise HarnessError("L5 needs an explicit owner authorization reference")
+    implementation = data.get("implementation")
+    if isinstance(implementation, dict) and "binding" in implementation:
+        binding = implementation["binding"]
+        if not isinstance(binding, dict) or set(binding) != {"work_ref", "attempt_ref", "revision"}:
+            raise HarnessError("Invalid implementation binding")
+        for field in ("work_ref", "attempt_ref"):
+            evolution.bounded(binding[field], "implementation " + field)
+        if (type(binding["revision"]) is not int or binding["revision"] < 2
+                or binding["revision"] > data.get("revision", binding["revision"])):
+            raise HarnessError("Invalid implementation event revision")
+        source = implementation.get("source")
+        if (not isinstance(source, dict) or source.get("worktree") != "clean"
+                or not isinstance(source.get("commit"), str)
+                or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", source["commit"])):
+            raise HarnessError("Bound implementation requires a clean observed source")
+        for field in ("ref", "evidence_ref"):
+            evolution.bounded(implementation.get(field), "implementation " + field)
+        if not isinstance(implementation.get("asset_sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", implementation["asset_sha256"]):
+            raise HarnessError("Invalid implementation asset digest")
     return evolution.validate(data)
 
 
@@ -93,6 +112,16 @@ def read_history(directory, root):
                 raise HarnessError("Closed learning history has a further revision")
             if current["state"] != prior["state"] and current["state"] not in TRANSITIONS[prior["state"]]:
                 raise HarnessError("Invalid historical learning lifecycle transition")
+        impl = current.get("implementation")
+        previous_impl = (prior or {}).get("implementation")
+        if impl != previous_impl and isinstance(impl, dict) and "binding" in impl:
+            if prior is None or impl["binding"]["revision"] != number:
+                raise HarnessError("Implementation binding does not identify its attachment event")
+            if isinstance(previous_impl, dict):
+                if previous_impl.get("asset_sha256") == impl["asset_sha256"]:
+                    raise HarnessError("Unchanged asset is revalidation, not a new bound improvement")
+                if previous_impl.get("evidence_ref") == impl["evidence_ref"]:
+                    raise HarnessError("New bound improvement requires distinct validation evidence")
         prior = current
     if prior != last:
         raise HarnessError("Learning history changed while reading")
@@ -178,6 +207,8 @@ def register(parser):
     attach.add_argument("--expect", type=int, required=True)
     attach.add_argument("--implementation-ref", required=True)
     attach.add_argument("--validation-evidence", required=True)
+    attach.add_argument("--work-ref", help="Bind a new implementation to the originating work")
+    attach.add_argument("--attempt-ref", help="Bind a new implementation to the originating attempt")
     for action in ("list", "audit"):
         sub.add_parser(action).add_argument("inbox")
     nxt = sub.add_parser("next")
@@ -255,9 +286,23 @@ def run(args, root):
             digest = asset_digest(root, data["asset"])
             if digest is None:
                 raise HarnessError("Implemented asset not present")
-            data["implementation"] = {"ref": args.implementation_ref,
-                                      "evidence_ref": args.validation_evidence,
-                                      "asset_sha256": digest, "source": observe(root)}
+            prior_impl = data.get("implementation")
+            work_ref = getattr(args, "work_ref", None)
+            attempt_ref = getattr(args, "attempt_ref", None)
+            if (work_ref is None) != (attempt_ref is None):
+                raise HarnessError("Implementation binding requires both work and attempt references")
+            impl = {"ref": args.implementation_ref, "evidence_ref": args.validation_evidence,
+                    "asset_sha256": digest, "source": observe(root)}
+            if work_ref is not None:
+                if isinstance(prior_impl, dict):
+                    if prior_impl.get("asset_sha256") == digest:
+                        raise HarnessError("Unchanged asset is revalidation, not a new bound improvement")
+                    if prior_impl.get("evidence_ref") == args.validation_evidence:
+                        raise HarnessError("New bound improvement requires distinct validation evidence")
+                impl["binding"] = {"work_ref": work_ref, "attempt_ref": attempt_ref,
+                                   "revision": args.expect + 1}
+            data["implementation"] = impl
+            validate(dict(data, revision=args.expect + 1), root)
             result = publish(directory, args.expect, data)
             return {"status": "RECORDED", "record": result,
                     "note": "Implementation linked; candidate state unchanged, independent review still required."}, 0

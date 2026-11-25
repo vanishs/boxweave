@@ -11,10 +11,12 @@ DECISIONS = ("linked", "no-change", "not-applicable", "pending")
 
 
 def validate_item(item):
-    if not isinstance(item, dict) or set(item) != ITEM_FIELDS:
+    if not isinstance(item, dict) or not ITEM_FIELDS.issubset(item) or set(item) - ITEM_FIELDS - {"correction_ref"}:
         raise HarnessError("Invalid feedback protocol item")
     for key in ("asset", "evidence", "attempt_ref", "observation", "reason"):
         evolution.bounded(item[key], "feedback " + key)
+    if "correction_ref" in item:
+        evolution.bounded(item["correction_ref"], "feedback correction reference")
     if item["outcome"] not in evolution.OUTCOMES or item["decision"] not in DECISIONS:
         raise HarnessError("Invalid feedback outcome or decision")
     if item["decision"] == "linked":
@@ -38,6 +40,11 @@ def preserve(old, new):
         found = current.get(identity(item))
         if found is None or any(found.get(key) != item[key] for key in FACTS if key in item):
             raise HarnessError("Cannot remove or rewrite original asset feedback")
+        if old.get("feedback_protocol") == PROTOCOL and item.get("decision") == "linked" and (
+                found.get("decision"), found.get("candidate")) != (item.get("decision"), item.get("candidate")):
+            ref = found.get("correction_ref")
+            if not ref or ref not in new["evidence"] or ref in old["evidence"]:
+                raise HarnessError("Changing linked feedback requires new explicit correction review evidence")
 
 
 def asset_paths(root, asset, registry):
@@ -104,6 +111,18 @@ def _review(row, root, inbox=None):
     if inbox.is_symlink():
         issues.append("Unsafe learning inbox")
     seen_paths = {}
+    # Check the current and represented attempts, not future attempts of
+    # the same work_ref (which must not invalidate an earlier snapshot).
+    represented_attempts = {row["attempt_ref"], *(item["attempt_ref"] for item in items)}
+    for candidate in candidates:
+        for observation in candidate.get("observations", []):
+            if observation["work_ref"] != row["work_ref"] or observation["attempt_ref"] not in represented_attempts:
+                continue
+            if not any(candidate["asset"] in asset_paths(root, item["asset"], registry)
+                       and matching_observation(candidate, row, item) == "OBSERVATION"
+                       and all(item[key] == observation[key] for key in ("attempt_ref", "evidence", "observation", "outcome"))
+                       for item in items):
+                issues.append("Recorded work observation missing from feedback: " + candidate["id"] + " / " + observation["evidence"])
     for item in items:
         validate_item(item)
         paths = asset_paths(root, item["asset"], registry)
@@ -125,6 +144,12 @@ def _review(row, root, inbox=None):
             problems.append("Feedback evidence absent from work record")
         if item["asset"] not in row["used_assets"] and item["outcome"] != "missing":
             problems.append("Feedback asset absent from used assets")
+        exact = [candidate["id"] for candidate in candidates
+                 if candidate["asset"] in paths and matching_observation(candidate, row, item)]
+        if exact and (item["decision"] != "linked" or exact != [item["candidate"]]):
+            problems.append("Exact recorded observation must remain linked; reconcile conflicting history explicitly: " + ", ".join(exact))
+        if item.get("correction_ref") and item["correction_ref"] not in row["evidence"]:
+            problems.append("Correction review evidence absent from work record")
         if item["decision"] == "pending":
             problems.append("Feedback review pending")
         elif item["decision"] == "no-change" and suggestions:
@@ -158,6 +183,30 @@ def _review(row, root, inbox=None):
                         elif any(f["id"] == candidate["id"] and f["issue"] == "IMPLEMENTATION_CHANGED_OR_MISSING"
                                  for f in findings):
                             problems.append("Attached implementation drifted; revalidate before claiming improvement")
+                        else:
+                            impl = candidate["implementation"]
+                            binding = impl.get("binding")
+                            claim = row.get("implementation_claim")
+                            if not isinstance(binding, dict) or not isinstance(claim, dict):
+                                problems.append("Historical attachment is not a work-bound improvement; record a bound implementation claim")
+                            else:
+                                attempts = {other["attempt_ref"] for other in items
+                                            if other["decision"] == "linked" and other["candidate"] == candidate["id"]
+                                            and candidate["asset"] in asset_paths(root, other["asset"], registry)
+                                            and matching_observation(candidate, row, other) == "OBSERVATION"}
+                                if (binding["work_ref"] != row["work_ref"]
+                                        or binding["attempt_ref"] not in attempts
+                                        or binding["revision"] != claim["candidate_revision"]
+                                        or impl["ref"] != claim["implementation_ref"]
+                                        or impl["evidence_ref"] != claim["validation_evidence"]
+                                        or impl["source"]["commit"] != row["target"]["source_sha"]):
+                                    problems.append("Implementation claim does not match originating work, attempt, attachment revision, evidence and source")
+                                if any(claim[key] not in row["evidence"] for key in ("implementation_ref", "validation_evidence")):
+                                    problems.append("Implementation and validation references must be in work evidence")
+                                if row["attempt_ref"] != binding["attempt_ref"] and (
+                                        not claim.get("handoff_ref") or claim["handoff_ref"] not in row["evidence"]
+                                        or claim["handoff_ref"] in (impl["ref"], impl["evidence_ref"], item["evidence"])):
+                                    problems.append("Later attempt requires explicit handoff reconciliation evidence")
         result["issues"] = problems
         result["status"] = "REVIEW_REQUIRED" if problems else "RECORDED"
         results.append(result)

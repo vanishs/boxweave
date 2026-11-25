@@ -169,3 +169,42 @@ follow-up requires applicable exact-head checks. Independent ordinary
 task activation/use has actual evidence and structured reconciliation;
 independent L4 review must assess this witness and the full implementation.
 No independent L4 review is claimed or waived. No merge or release.
+
+## E4 L4 review corrections (2026-11-25)
+
+[Independent review 6054342555](https://github.com/vanishs/boxweave/pull/192#pullrequestreview-6054342555)
+on 7141bb2 returned NO-GO: L4-01 historical attachment falsely supports
+a new improvement, L4-02 exact linked observation could be unlinked.
+Original probe dfaea142db6d4a7d5cbb06bbd24d9f4f exit 0 reread; both
+false positives and the unchanged real witness confirmed. Prior code-head
+quality 45578556602 and candidate 45578556543 completed successfully
+for applicable jobs; native/release jobs skipped. CI does not waive review.
+
+L4-01: new bound attachment records the originating work/attempt and
+attachment revision, clean source and changed asset digest, distinct
+validation evidence; improved envelope names the precise event and
+implementation/validation references and source. Later same-work attempt
+requires explicit handoff evidence. Legacy attachment can support reuse,
+not new improvement. Local references are not authenticated claims.
+
+L4-02: inspect exact matches regardless of proposed disposition and
+reverse-check observations for current/represented attempts. Exact
+recorded associations cannot be silently unlinked even with a caller
+correction reference. Incorrect proposed links can change only with
+new correction review evidence and preserved earlier revisions. Conflicts
+in actual recorded history remain pending explicit review, not deletion.
+Future distinct attempts do not invalidate prior standalone snapshots.
+
+Initial run c57a958439b54c171b94a28609ab5fe6 exit 1 exposed incomplete
+test fixture registry, corrected with a separate local clone.
+8a5e0bbbe4386a2f2254e6585fe87867 exit 0: 72 regressions and 14 Eval.
+dae9d017e37c355dbcec4400bf737c7d exit 0: both original probes,
+boundary and imported-history finish refusal, omission guard.
+1366e1a29c5970e213cfce3e251b9454 exit 0: 72 tests, 14 Eval, audit
+OBSERVED without findings, three actual envelopes reconcile to rev8.
+1664fda8c2120aea88c8f582f5b74b99 exit 0: 73 tests, 14 Eval, including
+later-attempt snapshot preservation. No synthetic records in actual inbox.
+Changes are bounded corrections to the existing L4 feedback protocol,
+not a duplicate learning candidate. No new transfer helper.
+Independent re-review, fresh ordinary-task own persistence witness, and
+exact new-head CI remain open. Parent unchanged; no merge/release.

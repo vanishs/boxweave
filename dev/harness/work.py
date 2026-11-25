@@ -22,7 +22,7 @@ STATES = ("ACTIVE", "BLOCKED", "UNKNOWN", "HANDOFF", "ANSWERED", "RECORDED")
 DISPOSITIONS = ("none", "reuse", "candidate", "deferred", "improved", "pending")
 FIELDS = {"kind", "schema_version", "revision", "work_ref", "attempt_ref", "task_kind",
           "objective", "risk", "authority", "target", "state", "next_safe_action",
-          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links", "feedback_protocol"}
+          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links", "feedback_protocol", "implementation_claim"}
 
 
 def string(value, field, limit=512):
@@ -95,6 +95,16 @@ def validate(data):
                 or disposition.get("kind") not in DISPOSITIONS):
             raise HarnessError("Invalid learning disposition")
         string(disposition.get("ref"), "learning ref")
+    claim = data.get("implementation_claim")
+    if claim is not None:
+        if (not isinstance(claim, dict) or set(claim) != {"candidate_revision", "implementation_ref", "validation_evidence", "handoff_ref"}
+                or type(claim["candidate_revision"]) is not int or claim["candidate_revision"] < 2
+                or not disposition or disposition["kind"] != "improved"):
+            raise HarnessError("Invalid work implementation claim")
+        for key in ("implementation_ref", "validation_evidence"):
+            string(claim[key], key)
+        if claim["handoff_ref"] is not None:
+            string(claim["handoff_ref"], "handoff_ref")
     if data["state"] != "ACTIVE" and disposition is None:
         raise HarnessError("Boundary requires learning disposition")
     if data["state"] == "ANSWERED" and data["task_kind"] not in ("guidance", "research"):

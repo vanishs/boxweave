@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dev"))
-from harness import feedback, learning, records, work
+from harness import feedback, learning, records, tasks, work, workflow
 from harness.common import HarnessError
 
 
@@ -85,7 +85,8 @@ class FeedbackTests(unittest.TestCase):
                       {"feedback_protocol": 0}, {"asset_feedback": [self.item, self.item]}):
             with self.assertRaises(HarnessError):
                 work.advance(old, dict(self.row, **patch), 1)
-        updated = dict(self.row, asset_feedback=[dict(self.item, decision="pending", candidate=None)])
+        updated = dict(self.row, asset_feedback=[dict(self.item, decision="pending", candidate=None,
+                       correction_ref="fixture:review")], evidence=self.row["evidence"]+["fixture:review"])
         self.assertEqual(work.advance(old, updated, 1)["state"], "HANDOFF")
 
     def test_boundary_keeps_pending_but_refuses_false_completion(self):
@@ -154,6 +155,10 @@ class FeedbackTests(unittest.TestCase):
         revised = dict(self.row, asset_feedback=[dict(self.item, decision="not-applicable",
                        candidate=None, reason="Original candidate association was mistaken")],
                        learning_links=[])
+        with self.assertRaises(HarnessError):
+            work.advance(records.latest(history), revised, 1)
+        revised["asset_feedback"][0]["correction_ref"] = "fixture:reviewed incorrect proposal"
+        revised["evidence"] = [*self.row["evidence"], "fixture:reviewed incorrect proposal"]
         records.publish(history, 1, work.advance(records.latest(history), revised, 1))
         self.assertEqual(work.read_history(history)["learning_links"], [])
         self.assertEqual(records.read_json(history / "00000001.json")["learning_links"], ["BDH-L014"])
@@ -197,6 +202,116 @@ class FeedbackTests(unittest.TestCase):
         self.assertIn("Attached implementation drifted", " ".join(result["issues"]))
         # A historic observation remains a fact even if the implementation later changes.
         self.assertEqual(self.review()[1], 0)
+
+    def test_real_witness_cannot_be_relabelled_or_unlinked(self):
+        original = json.loads((ROOT / "docs/development/BDH_V06_INDEPENDENT_TRANSFER_FEEDBACK.json").read_text())
+        self.assertEqual(self.review(original)[1], 0)
+        improved = dict(original, learning={"kind": "improved", "ref": "BDH-L014"})
+        self.assertEqual(self.review(improved)[1], 1)
+        unlinked = dict(original, state="RECORDED", boundary="completion",
+                        learning={"kind":"none","ref":"no-new-asset"}, learning_links=[],
+                        asset_feedback=[dict(original["asset_feedback"][0], decision="not-applicable",
+                                             candidate=None, reason="unrelated"),
+                                        original["asset_feedback"][1]])
+        self.assertEqual(self.review(unlinked)[1], 1)
+        # An invented correction reference cannot erase an exact recorded observation.
+        unlinked["asset_feedback"][0]["correction_ref"] = "fixture:review"
+        unlinked["evidence"] = [*original["evidence"], "fixture:review"]
+        self.assertEqual(self.review(unlinked)[1], 1)
+        omitted = dict(unlinked, asset_feedback=[], used_assets=[])
+        self.assertEqual(self.review(omitted)[1], 1)
+        self.assertIn("Recorded work observation missing", " ".join(self.review(omitted)[0]["issues"]))
+        # A directly imported terminal history must fail finish too, not only
+        # the guarded work boundary. Other delivery checks are deliberately absent.
+        spec = self.base / "spec.json"
+        spec.write_text(json.dumps({"work_ref":original["work_ref"],"objective":original["objective"],
+                                    "tasks":[{"id":"a","acceptance":"fixture","depends_on":[]}]}))
+        task_history = self.base / "tasks"
+        tasks.run(argparse.Namespace(action="init",directory=task_history,spec=spec),ROOT)
+        for bad in (improved, unlinked):
+            bad = dict(bad, state="RECORDED", boundary="completion")
+            history = self.base / ("bad-" + bad["learning"]["kind"])
+            initial = dict(original, state="ACTIVE", learning=None, asset_feedback=[],
+                           learning_links=[])
+            initial.pop("boundary")
+            records.publish(history, 0, initial)
+            f = self.base / "boundary.json"
+            f.write_text(json.dumps(bad))
+            result, code = work.run(argparse.Namespace(action="boundary", directory=history,
+                            file=f, expect=1, inbox=self.inbox), ROOT)
+            self.assertEqual(code, 1)
+            self.assertFalse(result["published"])
+            self.assertEqual(records.latest(history)["revision"], 1)
+            # Import the bad boundary to exercise finish's independent reconciliation.
+            records.publish(history, 1, bad)
+            args = argparse.Namespace(history=task_history,checkpoint=None,evidence=[],
+                      inbox=str(self.inbox),repo=None,ci_snapshot=None,pr=None,base_sha=None,
+                      learning_disposition=None,related_candidate=[],export=None,work_history=history)
+            summary, finish_code = workflow.summary(args,ROOT,finishing=True)
+            self.assertEqual(finish_code,1)
+            self.assertEqual(summary["feedback"]["status"],"REVIEW_REQUIRED")
+            self.assertIn("Material learning feedback needs review",summary["issues"])
+
+    def test_later_attempt_does_not_invalidate_prior_snapshot(self):
+        self.observe()
+        self.assertEqual(self.review()[1], 0)
+        directory = self.inbox / "BDH-L014"
+        r = records.latest(directory)
+        args = argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
+                    expect=r["revision"], work_ref=self.row["work_ref"], attempt_ref="future",
+                    evidence="fixture:future", observation="New attempt", outcome="helped")
+        learning.run(args, ROOT)
+        self.assertEqual(self.review()[1], 0)
+        omitted = dict(self.row, attempt_ref="future")
+        self.assertEqual(self.review(omitted)[1], 1)
+
+    def test_bound_improvement_and_explicit_later_attempt(self):
+        self.observe()
+        root = self.base / "repo"
+        subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(root)],
+                       check=True, capture_output=True)
+        def git(*args):
+            return subprocess.check_output(["git","-C",str(root),*args],text=True).strip()
+        directory = self.inbox / "BDH-L014"
+        revision = records.latest(directory)["revision"]
+        args = argparse.Namespace(action="attach", inbox=self.inbox, id="BDH-L014",
+                  expect=revision, implementation_ref="fixture:new patch",
+                  validation_evidence="fixture:new test result", work_ref=self.row["work_ref"],
+                  attempt_ref=self.item["attempt_ref"])
+        with self.assertRaises(HarnessError):
+            learning.run(args, root)
+        asset = root / "dev/skills/box-development/SKILL.md"
+        asset.write_text(asset.read_text()+"\nNew bounded fixture improvement.\n")
+        with self.assertRaises(HarnessError):
+            learning.run(args, root)
+        git("add",".")
+        git("-c","user.name=Fixture","-c","user.email=fixture@example.invalid","commit","-qm","improve")
+        sha = git("rev-parse","HEAD")
+        new_evidence = args.validation_evidence
+        args.validation_evidence = records.latest(directory)["implementation"]["evidence_ref"]
+        with self.assertRaises(HarnessError):
+            learning.run(args, root)
+        args.validation_evidence = new_evidence
+        attached = learning.run(args, root)[0]["record"]
+        claim = {"candidate_revision": attached["revision"], "implementation_ref": args.implementation_ref,
+                 "validation_evidence": args.validation_evidence, "handoff_ref": None}
+        row = dict(self.row, target=dict(self.row["target"], source_sha=sha),
+                   learning={"kind":"improved","ref":"BDH-L014"}, implementation_claim=claim,
+                   evidence=[*self.row["evidence"], args.implementation_ref, args.validation_evidence])
+        def review(r):
+            return feedback.review(work.validate(r),root,self.inbox)
+        self.assertEqual(review(row)[1],0,review(row))
+        for key,value in (("candidate_revision",revision),("implementation_ref","wrong"),("validation_evidence","wrong")):
+            self.assertEqual(review(dict(row,implementation_claim=dict(claim,**{key:value})))[1],1)
+        self.assertEqual(review(dict(row,target=dict(row["target"],source_sha="a"*40)))[1],1)
+        later = dict(row,attempt_ref="later")
+        self.assertEqual(review(later)[1],1)
+        later["evidence"] = [*row["evidence"], "fixture:handoff review"]
+        later["implementation_claim"] = dict(claim,handoff_ref="fixture:handoff review")
+        self.assertEqual(review(later)[1],0)
+        args.expect = attached["revision"]
+        with self.assertRaises(HarnessError):
+            learning.run(args,root)
 
     def test_duplicate_linked_capture_requires_review(self):
         self.observe()

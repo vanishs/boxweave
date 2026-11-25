@@ -164,3 +164,18 @@ transitions. Linked duplicate captures require review. An implementation
 digest mismatch blocks a current improvement claim but does not erase an
 earlier observed reuse. These are caller-record consistency checks, not an
 authenticated or distributed append-only ledger.
+
+L4 review follow-up: work-bound implementation claims record the candidate
+attachment event revision, originating work and attempt, exact clean source
+commit and changed asset digest, implementation and distinct validation
+references. Historical unbound attachment/reuse remains readable without
+being a new improvement. A later same-work attempt needs explicit
+handoff evidence. Read-time history checks bind the event revision and
+reject relabeling of an unchanged attachment. Use separate local record
+storage when verifying a clean source; commit sanitized evidence later,
+with applicable exact-head CI/review. Exact recorded observations are
+checked independently of the proposed disposition; current/represented-attempt
+observations may not be omitted. Proposed link corrections require new
+review evidence and preserve the earlier revision. Conflicting exact
+recorded associations remain pending review; no deletion/rewrite mechanism
+or proof of external evidence is introduced.

@@ -402,6 +402,24 @@
       "expected_states": [
         "REVIEW_REQUIRED"
       ]
+    },
+    {
+      "id": "feedback-historical-improvement",
+      "kind": "feedback-witness",
+      "envelope_path": "docs/development/BDH_V06_INDEPENDENT_TRANSFER_FEEDBACK.json",
+      "variant": "historical-improvement",
+      "expected_states": [
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "id": "feedback-exact-unlink",
+      "kind": "feedback-witness",
+      "envelope_path": "docs/development/BDH_V06_INDEPENDENT_TRANSFER_FEEDBACK.json",
+      "variant": "exact-unlink",
+      "expected_states": [
+        "REVIEW_REQUIRED"
+      ]
     }
   ]
 }

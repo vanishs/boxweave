@@ -48,7 +48,33 @@ requires protocol 1. Legacy histories remain readable and may be handed off,
 but completion requires explicit reconciliation to protocol 1; no automatic
 migration. Reconcile known assets, evidence, candidate observations, current
 learning links and inbox availability. Corrected candidate decisions may
-change current links; earlier links and facts remain in prior revisions.
+change current links only with a new correction_ref in the item and new
+review evidence in the envelope; earlier links and facts remain in prior
+revisions. An exact recorded observation must remain linked, even when
+the proposal is declared not-applicable; missing observations from current/represented attempts
+also require review. Conflicting recorded associations require explicit
+review/handoff, not an automatic unlink or rewritten observation.
+
+A historical implementation attachment substantiates reuse, not a new
+improvement. For an improved disposition, attach a changed asset on a
+clean source with learn attach --work-ref WORK --attempt-ref ATTEMPT
+(in addition to expected revision, implementation-ref and validation-evidence).
+Record an exact linked observation for that originating attempt. Add
+implementation_claim to the work envelope with candidate_revision
+(the attachment event revision, not necessarily latest observation
+revision), implementation_ref, validation_evidence and handoff_ref
+(null for the originating attempt). Include the two evidence references
+in evidence; target.source_sha must equal the attachment's observed clean
+commit. A later attempt of the same work requires an additional explicit
+handoff review reference in evidence. Unchanged asset/digest or old
+validation evidence is not a new bound improvement. Legacy unbound
+attachments remain readable and support reuse only. Use an authorized
+separate inbox/control record location while validating clean source;
+persist the reviewed records through Git/PR afterwards, distinguish
+tested code SHA from a later evidence-only commit, and run applicable
+exact-head checks for delivery. These are consistency checks of supplied
+references, not authentication of external evidence or automatic promotion.
+
 Use bwdev finish with --work-history DIRECTORY for structured delivery review,
 rather than legacy reason-only learning flags. The complete work history,
 objective, checkpoint attempt and exact repository/source must agree. This is an advisory
