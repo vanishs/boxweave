@@ -14,8 +14,12 @@ import (
 // PINNED NIC, incomplete global audit ledger or an unresolved resource claim.
 // Exposing one cause would leak inventory or invite unsafe retry/bypass.
 func peerScopeRefusal(err error) error {
+	var block state.AdmissionBlock
+	if errors.As(err, &block) {
+		return err
+	}
 	if errors.Is(err, state.ErrResourceLocked) {
-		return fmt.Errorf("PEER_SCOPE_UNVERIFIED_OR_LOCKED: verify both owned UUIDs with box_list, inspect operation_list/activity issues, then obtain host-local review if needed; no peer operation was admitted: %w", err)
+		return fmt.Errorf("PEER_SCOPE_UNVERIFIED_OR_LOCKED: verify both owned UUIDs with box_list, inspect operation_list/activity issues, then inspect exact original before considering local review; no peer operation was admitted: %w", err)
 	}
 	return err
 }
@@ -34,7 +38,7 @@ type peerSetInput struct {
 func (s *Service) registerPeerTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "box_peer_set",
-		Description: "Admit a directional private-network grant/revoke for two exact UUID-owned Boxes in one operator-pinned Project/ACL. UUIDs must come from box_list. Missing/foreign IDs, unpinned native bindings, incomplete network audit or unresolved claims deliberately give the same PEER_SCOPE_UNVERIFIED_OR_LOCKED refusal; inspect operation_list and activity issues, never bypass or blindly retry. Fresh scoped installations automatically execute the exact admitted original through the authenticated local Root service; poll the original Operation. Legacy installations require host-local approval. No retry of uncertain effects.",
+		Description: "Admit a directional private-network grant/revoke for two exact UUID-owned Boxes in one operator-pinned Project/ACL. UUIDs must come from box_list. Missing/foreign IDs remain non-enumerating. Unverified scope/bindings/audit may refuse as PEER_SCOPE_UNVERIFIED_OR_LOCKED; an exact admitted blocker may identify an authorized original to poll or inspect. Never bypass or blindly retry. Fresh scoped installations automatically execute the exact admitted original through the authenticated local Root service; poll the original Operation. Legacy installations require host-local approval. No retry of uncertain effects.",
 		Annotations: mutationAnnotations(true),
 	}, s.operatePeerSet)
 }

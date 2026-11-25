@@ -18,6 +18,7 @@ from pathlib import Path
 
 from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import op, token, wait_status
+from pr188_h4a_installed import busy, unknown
 from pr178_n4_native import guest, SERVER, UDP
 from pr178_n2_scoped_lifecycle import binding
 
@@ -132,6 +133,8 @@ def main(project, receipt, testbin, mode):
         for name in [x for x in names if x!="d4-a"]:
             guest(project,name,"python3","-c","import subprocess,sys;subprocess.Popen(['python3','-u','-c',sys.argv[1]],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)",SERVER)
         time.sleep(1)
+        if mode=="LEGACY":
+            busy(c,ids["d4-sibling"],mode)
         fwd=op(c,"port_forward_create",{"box_id":ids["d4-sibling"],"protocol":"tcp","host_bind":"127.0.0.1","host_port":28284,"guest_port":18182},"d4-sibling-forward")["operation_id"]
     sock=socket.create_connection(("127.0.0.1",28284),timeout=5)
     sock.settimeout(2)
@@ -174,6 +177,9 @@ def main(project, receipt, testbin, mode):
         assert before[0][0]=="UNKNOWN" and int(controller)>1,before
         if mode=="SCOPED_V2":
             assert len(before[1])==5 and len(oldjournal)>1
+        with LoopbackMCP(token=token(receipt),allow_mutations=True,timeout=60) as reader:
+            unknown(reader,ids["d4-a"],original,mode)
+        assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
         report=json.loads(run([BIN,"doctor","-project",project],capture_output=True,text=True).stdout)["diagnostic"]
         issue=next(i["id"] for i in report["issues"] if i["code"] in ("PROJECT_PEER_BARRIER","UNRESOLVED_OPERATION") and i.get("original_id")==original)
         planned=run([BIN,"recover","--plan","--issue",issue,"-project",project],capture_output=True,text=True)

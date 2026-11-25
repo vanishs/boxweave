@@ -72,6 +72,18 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			return nil, operationOutputResult{}, state.ErrNotFound
 		}
 		out, err := s.Store.ExecOutput(ctx, original.ID)
+		if errors.Is(err, state.ErrNotFound) {
+			next := state.NextAction{Kind: "READ_OPERATION", Tool: "operation_get", OperationID: original.ID}
+			code, category, msg := "OUTPUT_NOT_RECORDED", "OUTPUT", "Original output metadata is not recorded; inspect the original receipt."
+			if !operationTerminal(original.State) {
+				code, category, msg = "OUTPUT_PENDING", "NORMAL_WAIT", "Original is in progress; poll before reading output."
+			}
+			if original.State == "UNKNOWN" {
+				code, category, msg = "OUTPUT_EFFECT_UNVERIFIED", "EFFECT_UNVERIFIED", "Original outcome is unknown; inspect recovery without replay."
+				next = state.NextAction{Kind: "INSPECT_RECOVERY", Tool: "operation_recover", OperationID: original.ID, Mode: "inspect"}
+			}
+			return nil, operationOutputResult{}, failure(code, category, "NOT_APPLICABLE", msg, next)
+		}
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}

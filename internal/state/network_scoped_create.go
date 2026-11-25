@@ -206,12 +206,8 @@ func scopedCreateAdmissionBarrier(ctx context.Context, tx *sql.Tx, a Admission) 
 	if a.Action != "box_create" && a.Action != "box_delete" && a.Action != "box_update" && a.Action != "box_peer_set" {
 		return nil
 	}
-	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE layer=? AND action='box_create' AND json_valid(safe_intent) AND json_extract(safe_intent,'$.schema')=2 AND state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer).Scan(&n); err != nil {
-		return err
-	}
-	if n != 0 {
-		return ErrResourceLocked
+	if e := admissionBlock(ctx, tx, `SELECT o.id,o.state FROM operations o WHERE o.layer=? AND o.action='box_create' AND json_valid(o.safe_intent) AND json_extract(o.safe_intent,'$.schema')=2 AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer); e != nil {
+		return e
 	}
 	if a.Action != "box_create" {
 		return nil
@@ -222,11 +218,5 @@ func scopedCreateAdmissionBarrier(ctx context.Context, tx *sql.Tx, a Admission) 
 	if json.Unmarshal(a.SafeIntent, &h) != nil || h.Schema != 2 {
 		return nil
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE layer=? AND action IN ('box_create','box_delete','box_update','box_peer_set') AND state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer).Scan(&n); err != nil {
-		return err
-	}
-	if n != 0 {
-		return ErrResourceLocked
-	}
-	return nil
+	return admissionBlock(ctx, tx, `SELECT o.id,o.state FROM operations o WHERE o.layer=? AND o.action IN ('box_create','box_delete','box_update','box_peer_set') AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer)
 }

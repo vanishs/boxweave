@@ -90,6 +90,9 @@ type HostStatus struct {
 	AddressRetirement       *state.IPv4RetirementStatus   `json:"address_retirement,omitempty"`
 	AddressCapacityStatus   string                        `json:"address_capacity_status,omitempty"`
 	ScopedPeerCapacity      *state.DiagnosticPeerCapacity `json:"scoped_peer_capacity,omitempty"`
+	ReadinessClass          string                        `json:"readiness_class"`
+	PeerMode                string                        `json:"peer_mode"`
+	Navigation              state.NextAction              `json:"next_action"`
 	AddressRetirementPolicy string                        `json:"address_retirement_policy,omitempty"`
 }
 
@@ -124,6 +127,22 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.ProjectCapacity = &cap
 	}
 	out.Ready = out.MCPReady && out.Native.Ready
+	out.PeerMode = "LEGACY"
+	if s.ScopedPeerFresh {
+		out.PeerMode = "SCOPED_V2"
+	}
+	out.ReadinessClass = "READY_OBSERVED"
+	out.Navigation = state.NextAction{Kind: "NONE"}
+	if !out.MCPReady {
+		out.ReadinessClass = "CONTROLLER_LEDGER_UNVERIFIED"
+		out.Navigation = state.NextAction{Kind: "LOCAL_DOCTOR_REVIEW"}
+	} else if !out.Native.ServiceReady {
+		out.ReadinessClass = "NATIVE_SERVICE_UNVERIFIED"
+		out.Navigation = state.NextAction{Kind: "LOCAL_DOCTOR_REVIEW"}
+	} else if !out.Ready {
+		out.ReadinessClass = "NATIVE_PREREQUISITE_UNVERIFIED"
+		out.Navigation = issuesNext()
+	}
 	if out.MCPReady && !s.ScopedPeerFresh {
 		if retirement, e := s.Store.ReadIPv4RetirementStatus(ctx, s.Native.Project); e == nil {
 			if retirement.Pending > 0 && !install.NativeRetirementSocketPresent() {
@@ -172,6 +191,9 @@ func (s *Service) Handler() http.Handler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			start := time.Now()
 			result, err := next(ctx, method, req)
+			if method == "tools/call" {
+				s.redactToolError(ctx, req, result)
+			}
 			actor := "unauthenticated"
 			if extra := req.GetExtra(); extra != nil && extra.TokenInfo != nil {
 				// Redacted immutable credential reference, NOT token, params,
@@ -182,6 +204,8 @@ func (s *Service) Handler() http.Handler {
 			outcome := "ok"
 			if err != nil {
 				outcome = "error"
+			} else if r, ok := result.(*mcp.CallToolResult); ok && r.IsError {
+				outcome = "tool_error"
 			}
 			slog.InfoContext(ctx, "mcp_request", "method", method,
 				"actor", actor, "duration_ms", time.Since(start).Milliseconds(),
@@ -205,6 +229,12 @@ func (s *Service) Handler() http.Handler {
 			result.BinarySHA256 = binaryDigest()
 			attention := s.readAttention(ctx, principal, "")
 			result.Attention = &attention
+			if result.Ready && (len(attention.Items) > 0 || attention.Coverage == "UNAVAILABLE") {
+				result.Navigation = attention.NextAction
+			}
+			if result.AddressCapacityStatus == "EXHAUSTED" && result.Navigation.Kind == "NONE" {
+				result.Navigation = state.NextAction{Kind: "REVIEW_CAPACITY"}
+			}
 			return privateReadReply(ctx, s, principal.TokenID, result)
 		})
 	s.registerOperationReadTools(server)

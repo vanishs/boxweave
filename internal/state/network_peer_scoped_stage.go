@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -64,6 +65,7 @@ func (s *Store) StageAndClaimScopedPeerOriginal(ctx context.Context, id string) 
 }
 
 var ErrScopedPeerHistoryFull = errors.New("scoped Peer policy history capacity reached")
+var ErrScopedPeerDirectionFull = fmt.Errorf("scoped Peer retained direction capacity reached: %w", ErrResourceLocked)
 
 func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error {
 	var err error
@@ -220,7 +222,7 @@ func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error
 		return e
 	}
 	if i.Allow && !found && total >= 32 {
-		return ErrResourceLocked
+		return ErrScopedPeerDirectionFull
 	}
 	var affected int64
 	if i.Allow {

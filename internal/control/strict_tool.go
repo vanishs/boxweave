@@ -1,7 +1,10 @@
 package control
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/vanishs/boxweave/internal/state"
 	"reflect"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -12,11 +15,11 @@ import (
 // Keep the first paragraph independently useful if a client truncates hints.
 const serverContinuityInstructions = "BoxWeave manages only registered Boxes in its configured Incus Project. " +
 	"Mutations are durable asynchronous Operations; a receipt is not completion. " +
-	"Use a distinct idempotency_key per logical mutation, and reuse the same key for exact retries. " +
+	"Use a distinct idempotency_key (16..128 UTF-8 bytes) per logical mutation, and reuse the same key for exact retries. " +
 	"After interruption, use operation_list and operation_get to check originals before any new effect. " +
 	"UNKNOWN or missing records do not justify new-key retries. " +
-	"Operation records track admitted actions and observed outcomes, not Agent task completion.\n" +
-	"Follow operation_get.recovery_navigation and Activity evidence for linked originals and recovery receipts. Use operation_recover inspect for bounded diagnosis; reconcile never replays native work or releases an unproved UNKNOWN. " +
+	"Operations record effects, not Agent task completion.\n" +
+	"RESOURCE_BUSY is normal: poll its exact original; UNKNOWN_BLOCKER requires inspect, never a new-key retry. Follow operation_get.recovery_navigation and Activity evidence for linked originals and recovery receipts. Use operation_recover inspect for bounded diagnosis; reconcile never replays native work or releases an unproved UNKNOWN. " +
 	"work_ref and agent_ref are untrusted correlation labels, not authorization or reliable Agent identities. " +
 	"Separate authenticated Actors may inspect authorized same-Layer originals but cannot borrow another Actor's idempotency identity. " +
 	"Use operation_output_get for guest Exec output and exit_code; Operation SUCCEEDED does not guarantee a zero guest exit. " +
@@ -26,7 +29,7 @@ const serverContinuityInstructions = "BoxWeave manages only registered Boxes in 
 
 // Each mutating tool still includes a short reminder for clients that omit
 // initialize instructions; the server enforces original-key/UNKNOWN safety.
-const mutationContinuityHint = " One key per logical mutation; reuse only for exact retries. After an uncertain response, inspect the original Operation first."
+const mutationContinuityHint = " One key (16..128 UTF-8 bytes) per logical mutation; reuse only for exact retries. After an uncertain response, inspect the original Operation first."
 
 // addStrictTool derives the public schema from the same typed Go input used by
 // the official MCP SDK. Its default object schema otherwise permits extra
@@ -93,9 +96,42 @@ func addStrictTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 		one := 1
 		argv.Type, argv.Types, argv.MinItems = "array", nil, &one
 	}
+	if key := schema.Properties["idempotency_key"]; key != nil {
+		min, max := 16, 128
+		key.MinLength, key.MaxLength = &min, &max
+		if tool.Name == "operation_recover" {
+			key.MinLength = nil
+		}
+		key.Description = "Distinct key per logical mutation, 16..128 UTF-8 bytes; reuse only for identical intent. Omit (or empty for compatibility) for read-only recovery inspect."
+	}
 	tool.InputSchema = schema
 	if tool.Annotations != nil && !tool.Annotations.ReadOnlyHint {
 		tool.Description += mutationContinuityHint
 	}
-	mcp.AddTool(server, tool, handler)
+	mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		// Schema uses character counts; the durable ledger limits UTF-8 bytes.
+		// Check byte length before any handler or native read.
+		if schema.Properties["idempotency_key"] != nil {
+			var args struct {
+				Key  *string `json:"idempotency_key"`
+				Mode string  `json:"mode"`
+			}
+			if json.Unmarshal(req.Params.Arguments, &args) != nil {
+				var z Out
+				return nil, z, newToolFailure(tool.Name, state.ErrInvalid)
+			}
+			if (args.Key != nil && !(tool.Name == "operation_recover" && args.Mode == "inspect" && *args.Key == "") && (len(*args.Key) < 16 || len(*args.Key) > 128)) || (args.Key == nil && (tool.Name != "operation_recover" || args.Mode == "reconcile")) {
+				var z Out
+				return nil, z, keyToolFailure()
+			}
+		}
+		res, out, e := handler(ctx, req, in)
+		if e != nil {
+			if receipt, ok := any(out).(state.Receipt); ok && validPrincipalID(receipt.ID) {
+				return nil, out, admittedToolFailure(receipt.ID)
+			}
+			return nil, out, newToolFailure(tool.Name, e)
+		}
+		return res, out, nil
+	})
 }

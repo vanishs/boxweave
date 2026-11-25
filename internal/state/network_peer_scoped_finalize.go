@@ -101,6 +101,8 @@ func (w Worker) ExecuteScopedPeerOriginal(id string, call ScopedPeerRootCall) er
 		detail := "SCOPED_PEER_V2_PRE_DISPATCH_REFUSED"
 		if errors.Is(e, ErrScopedPeerHistoryFull) {
 			detail = "SCOPED_PEER_V2_HISTORY_CAPACITY"
+		} else if errors.Is(e, ErrScopedPeerDirectionFull) {
+			detail = "SCOPED_PEER_V2_DIRECTION_CAPACITY"
 		}
 		_ = w.Store.transition(context.Background(), id, "ADMITTED", "FAILED", "", detail)
 		return e

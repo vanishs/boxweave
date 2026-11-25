@@ -665,7 +665,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_delete",
-		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Peer requires existing host-local PRS review/approval. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
+		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Scoped V2 cleans confirmed Peer directions automatically; Legacy Peer requires host-local PRS review/approval. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true)},
 		s.operateBoxDelete)
 

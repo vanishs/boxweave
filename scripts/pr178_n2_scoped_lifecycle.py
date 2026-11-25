@@ -7,6 +7,7 @@ import sys
 
 from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import op, token
+from pr188_h4a_installed import busy
 
 DB = "file:/var/lib/boxweave/ledger.sqlite?mode=ro"
 
@@ -60,6 +61,7 @@ def main(project, receipt):
         ba = verify(project, "scoped-beta", b, "false")
         assert aa != ba and {aa, ba, "bw-peer-quarantine"} == acls()
         print("PR178_N2_MCP_SCOPED_CREATE=PASS", flush=True)
+        busy(c, a, "SCOPED_V2")
         op(c, "box_stop", {"box_id": a}, "scoped-a-stop")
         op(c, "box_delete", {"box_id": a}, "scoped-a-delete")
         assert aa not in acls()

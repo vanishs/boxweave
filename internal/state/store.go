@@ -604,12 +604,8 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	// A dependency-aware delete owns the whole Project for the duration of
 	// its exact child cleanup. Only private, linked children can bypass this
 	// admission barrier; a caller-supplied idempotency key never can.
-	var deleteBusy int
-	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims c JOIN operations o ON o.id=c.operation_id WHERE c.layer=? AND c.resource_key=? AND o.action='box_delete' AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') AND NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED')", a.Layer, "delete-project:"+a.Layer).Scan(&deleteBusy); err != nil {
-		return Receipt{}, err
-	}
-	if deleteBusy != 0 {
-		return Receipt{}, ErrResourceLocked
+	if e := admissionBlock(ctx, tx, "SELECT CASE WHEN o.layer=c.layer THEN o.id ELSE '' END,o.state FROM operation_resource_claims c JOIN operations o ON o.id=c.operation_id WHERE c.layer=? AND c.resource_key=? AND o.action='box_delete' AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') AND NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED')", a.Layer, "delete-project:"+a.Layer); e != nil {
+		return Receipt{}, e
 	}
 	cascade := false
 	if a.CleanupDependencies {
@@ -625,57 +621,38 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	// Project, including siblings not present in the original two-Box claim.
 	// The SQLite admission writer provides a Project-wide exclusive barrier.
 	// A root UNKNOWN may NEVER be bypassed by generic recovery RELEASED.
-	var projectBusy int
 	if a.Action == "box_peer_set" || cascade {
-		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
-			WHERE o.layer=? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
-			AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
-			  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`, a.Layer).Scan(&projectBusy)
+		err = admissionBlock(ctx, tx, `SELECT o.id,o.state FROM operations o
+            WHERE o.layer=? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+            AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
+              WHERE r.operation_id=o.id AND r.decision='RELEASED'))`, a.Layer)
 	} else {
-		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
-			WHERE o.layer=? AND o.action='box_peer_set'
-			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer).Scan(&projectBusy)
+		err = admissionBlock(ctx, tx, `SELECT o.id,o.state FROM operations o
+            WHERE o.layer=? AND o.action='box_peer_set'
+            AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer)
 	}
 	if err != nil {
 		return Receipt{}, err
-	}
-	if projectBusy != 0 {
-		return Receipt{}, ErrResourceLocked
 	}
 	// Reserve the native Box name across any potentially in-flight effect,
 	// including a create that cannot know the native UUID until postread.
 	// This is transactional with admission, not a process-local mutex.
 	if a.ResourceKey != "" {
-		var busy int
-		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
-			WHERE o.layer=? AND o.resource_key=?
-			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
-			AND NOT EXISTS (SELECT 1 FROM recovery_audit ra WHERE ra.operation_id=o.id AND ra.decision='RELEASED')`,
-			a.Layer, a.ResourceKey).Scan(&busy)
-		if err != nil {
-			return Receipt{}, err
-		}
-		if busy != 0 {
-			return Receipt{}, ErrResourceLocked
+		if e := admissionBlock(ctx, tx, `SELECT o.id,o.state FROM operations o
+            WHERE o.layer=? AND o.resource_key=?
+            AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+            AND NOT EXISTS (SELECT 1 FROM recovery_audit ra WHERE ra.operation_id=o.id AND ra.decision='RELEASED')`, a.Layer, a.ResourceKey); e != nil {
+			return Receipt{}, e
 		}
 	}
 	// Multi-resource locks are checked in the SAME SQLite admission
 	// transaction. UNKNOWN claims remain latched until reviewed release.
 	for _, key := range claims {
-		var busy int
-		err = tx.QueryRowContext(ctx,
-			"SELECT COUNT(*) FROM operation_resource_claims c "+
-				"JOIN operations o ON o.id=c.operation_id "+
-				"WHERE c.layer=? AND c.resource_key=? "+
-				"AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') "+
-				"AND NOT EXISTS (SELECT 1 FROM recovery_audit ra "+
-				"WHERE ra.operation_id=o.id AND ra.decision='RELEASED')",
-			a.Layer, key).Scan(&busy)
-		if err != nil {
-			return Receipt{}, err
-		}
-		if busy != 0 {
-			return Receipt{}, ErrResourceLocked
+		if e := admissionBlock(ctx, tx, `SELECT CASE WHEN o.layer=c.layer THEN o.id ELSE '' END,o.state FROM operation_resource_claims c
+            JOIN operations o ON o.id=c.operation_id WHERE c.layer=? AND c.resource_key=?
+            AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+            AND NOT EXISTS (SELECT 1 FROM recovery_audit ra WHERE ra.operation_id=o.id AND ra.decision='RELEASED')`, a.Layer, key); e != nil {
+			return Receipt{}, e
 		}
 	}
 	// An active peer grant, unknown network address fence or exposed proxy
@@ -703,7 +680,7 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 				return Receipt{}, ErrResourceLocked
 			}
 			if dependent != 0 {
-				return Receipt{}, ErrResourceLocked
+				return Receipt{}, ErrDependencyReview
 			}
 		}
 	}
@@ -729,7 +706,7 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			return Receipt{}, err
 		}
 		if owned != 0 {
-			return Receipt{}, ErrResourceLocked
+			return Receipt{}, ErrOwnedName
 		}
 	}
 	// An original retained-output deletion currently in progress or requiring
@@ -753,18 +730,21 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		// A different idempotency key cannot bypass an original UNKNOWN
 		// native-resource claim. A local reviewed RELEASED audit may allow
 		// a future NEW operation, but NEVER redispatches the original.
-		var outstanding int
-		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
-			WHERE o.box_uuid=? AND o.incarnation=?
-			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
-			AND NOT EXISTS (SELECT 1 FROM recovery_audit a
-			                WHERE a.operation_id=o.id AND a.decision='RELEASED')`,
-			a.BoxUUID, a.Incarnation).Scan(&outstanding)
-		if err != nil {
-			return Receipt{}, err
-		}
-		if outstanding > 0 {
+		// Preserve global UUID protection; only reveal a same-layer original.
+		var id, status, layer string
+		e := tx.QueryRowContext(ctx, `SELECT o.id,o.state,o.layer FROM operations o
+            WHERE o.box_uuid=? AND o.incarnation=?
+            AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+            AND NOT EXISTS (SELECT 1 FROM recovery_audit a WHERE a.operation_id=o.id AND a.decision='RELEASED')
+            ORDER BY (o.state='UNKNOWN') DESC,o.created_at,o.id LIMIT 1`, a.BoxUUID, a.Incarnation).Scan(&id, &status, &layer)
+		if e == nil {
+			if layer == a.Layer {
+				return Receipt{}, newAdmissionBlock(id, status)
+			}
 			return Receipt{}, ErrResourceLocked
+		}
+		if !errors.Is(e, sql.ErrNoRows) {
+			return Receipt{}, e
 		}
 	}
 	id, err := newID()
