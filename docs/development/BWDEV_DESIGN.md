@@ -1,6 +1,6 @@
 # bwdev: script-first development toolbox
 
-Status: v0.2 candidate in PR #189; source-tree CLI, no runtime or service change.
+Status: v0.3 candidate in PR #189; source-tree CLI, no runtime or service change.
 Read [BDH design](DEVELOPMENT_HARNESS.md) for the approved full framework and
 [developer entry](../../dev/README.md) for the currently usable subset.
 
@@ -101,7 +101,7 @@ the equivalent focused test. No runtime/native test result is inferred.
 | --- | --- |
 | v0.1 (this PR) | Dispatcher, doctor, deterministic context, initial checkpoint capture/check; offline regressions, Box command demo, separate-process handoff simulation |
 | v0.2 (implemented local subset) | Task DAG, ready work, immutable local revisions and checkpoint references; remote reconciliation and distributed claims remain manual |
-| v0.3 | Verification registry/plan and exact-source evidence, focused reruns; never weaken full CI/native gates |
+| v0.3 (implemented local subset) | Change-scope plan, fixed source-only registry, local evidence capture and identity comparison |
 | v0.4 | Structured learning candidates and asset lifecycle validation, reuse existing Markdown/manual records |
 | v0.5+ | Environment recipes, external adapters, controlled Agent evals based on demonstrated need |
 
@@ -115,3 +115,7 @@ entire roadmap or claim an Agent productivity gain without comparative evals.
 ## v0.2 task continuity
 
 Use the optional task subcommands with explicit JSON spec and local history directory. IDs and dependencies must form a bounded acyclic graph. A dependent task becomes ready only after its prerequisites are RECORDED. This state means a caller recorded a result, not that evidence has been independently verified. Reopen dependencies only after downstream active/recorded states are reconciled. Each transition requires the expected revision and a note; optional checkpoint references use the existing checkpoint contract. New revisions use a flushed temporary file and exclusive hard-link publication on a supporting local filesystem. A conflict rejects without overwriting. Local revision protection is not a distributed lock, power-loss durability proof or authorization. If initialization is interrupted, inspect the incomplete directory rather than overwrite or retry blindly. Save histories outside the Box via authorized Git/PR; compare divergent copies manually.
+
+## v0.3 verification toolbox
+
+Use verify plan to inspect local origin/v1 merge base and actual change paths including index and untracked files; reuse the CI docs-only classifier where available. Missing/unknown context means FULL_OR_UNKNOWN. This is planning only; the authoritative CI check is unchanged. verify run CHECK DIRECTORY explicitly executes one registered offline source check with a bounded timeout, no shell interpolation and no native mutations. Output is hashed, not persisted or exposed by default; execute the underlying registered script directly for diagnostic output. Capture observed HEAD/worktree before and after. Only two clean observations of the same SHA qualify for CLEAN_HEAD_OBSERVED; this is not a guarantee against intermediate concurrent edits or ignored file changes. Dirty or unknown state is UNBOUND. verify inspect compares the record to current clean HEAD, without authenticating the record or proving independent CI/native acceptance. Each evidence directory is immutable and locally published; reruns require a fresh directory. Full CI/release and applicable installed/native gates remain mandatory.

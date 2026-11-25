@@ -17,3 +17,19 @@ The walkthrough uses the example task specification, not an independently
 executed multi-Agent workflow. Separate-process revision contention is
 covered by the final focused regression. A task RECORDED state is only
 a caller assertion. No automatic acceptance, cross-host lock or replay.
+
+Final v0.2 focused regression and staged format: d6961083db13fc668a9a3269da1526f5,
+13 tests and 10 changed files, exit 0. Exact submitted v0.2 commit
+39e4c49329170e088ad7b3c405463eda8e8caf0e, tree
+95964590ff7af55791070e929f077680d5d3e9dc. All CI runs started;
+v0.1 installed lifecycle still pending when v0.3 development began.
+
+## v0.3
+
+Fast-forwarded only after exact tree equality and clean unstaged state.
+Operation e7db528044c0ccd3c5f0dc75226635e9.
+Initial regression, actual verify plan/run/inspect and missing-gofmt
+negative check: efc3d3a720706260d9a48ee95f9e3957, exit 0, 18 tests.
+The real PR required full scope; local dirty-tree PASS was UNBOUND,
+and the format gate was BLOCKED. A local output digest is not independent
+CI evidence. Full Go and native tests remain assigned to CI.

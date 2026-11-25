@@ -1,12 +1,13 @@
 """Thin CLI dispatcher."""
 import argparse
 
-from . import checkpoint, context, environment, tasks
+from . import checkpoint, context, environment, tasks, verification
 from .common import HarnessError, ROOT, emit
 
 COMMANDS = {
     "doctor": (environment, "Observe development prerequisites"),
     "context": (context, "Discover repository assets"),
+    "verify": (verification, "Plan and record registered source checks"),
     "task": (tasks, "Track a task DAG with local revision checks"),
     "checkpoint": (checkpoint, "Capture or review a client-owned checkpoint"),
 }
@@ -15,7 +16,7 @@ COMMANDS = {
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="bwdev", description="BoxWeave development toolbox")
     parser.add_argument("--json", action="store_true", help="Machine-readable output")
-    parser.add_argument("--version", action="version", version="bwdev 0.2.0")
+    parser.add_argument("--version", action="version", version="bwdev 0.3.0")
     sub = parser.add_subparsers(dest="command", required=True)
     for name, (module, help_text) in COMMANDS.items():
         module.register(sub.add_parser(name, help=help_text))

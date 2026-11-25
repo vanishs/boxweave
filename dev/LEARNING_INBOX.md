@@ -32,3 +32,13 @@ The original historical report owns actual commands, IDs and results. These obse
 - BDH-L009: task history uses an immutable local revision rather than
   overwriting shared state. Local concurrency regression is not distributed
   coordination proof. Use Git/PR for explicit cross-environment reconciliation.
+
+## v0.3 dogfooding
+
+- BDH-L010: staged and unstaged change sets must be considered separately;
+  comparing only the working tree against HEAD can conceal staged changes
+  that have been undone in the worktree. Regression in test_bwdev_verification.
+- BDH-L011: actual verify run records PASS on the dirty development tree
+  as UNBOUND, and missing gofmt as BLOCKED. Evidence operation
+  efc3d3a720706260d9a48ee95f9e3957. Preserve this distinction in future
+  acceptance automation; independent clean-source results remain separate.
