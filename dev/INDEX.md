@@ -21,6 +21,7 @@ Bootstrap registry, read directly by bwdev context. These paths are canonical re
 | skill.harness-improver | Evolve Loop, deferred candidate, feedback and bounded improvement | [improver](skills/harness-improver/SKILL.md) | Initial |
 | skill.continuous-learning | Failure, correction, stage end, reusable improvement | [continuous-learning](skills/continuous-learning/SKILL.md) | Initial |
 | module.install | Edit installer internals | [local guide](../internal/install/AGENTS.md) | Initial |
+| tool.transfer-plan | Repeated bounded source transfer, payload/assembly preparation | [offline planner](transfer_plan.py), [Box skill](skills/box-development/SKILL.md) | Candidate; independent utility pending |
 | tool.bwdev | Universal work entry, start/resume/status/finish, context, task, verify, learn, CI | [CLI](bwdev), [contract](../docs/development/BWDEV_DESIGN.md) | Initial |
 | knowledge.profiles | Task-specific environment prerequisites | [profiles](profiles.json), [box skill](skills/box-development/SKILL.md) | Initial |
 | tool.context-domains | Deterministic path associations | [domains](context_domains.json) | Initial |

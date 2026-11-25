@@ -19,3 +19,19 @@ Optional v0.5: use bwdev profile or start --profile to observe task-specific pre
 ## Bounded guest source transfer
 
 If large inline argv is refused at admission, distinguish an explicit refusal with no receipt from a lost acknowledgement. Read any original Operation before further effects; never replay uncertain work or bypass admission. For a new patch or source file in the owned isolated guest, use exclusive box_file_apply create, confirm terminal success and verified file readback, then execute a short explicit argv referencing the reviewed file in the correct checkout. Check actual guest exit and output, and inspect the changed files. Do not infer an exact size limit, overwrite a pre-existing file, or apply this as authorization on a Host. See [BDH-L014](../../learning/BDH-L014/00000003.json).
+
+For repeated or multi-part source transfers, prefer the candidate
+[offline transfer planner](../../transfer_plan.py) when a reviewed Python
+checkout is available. It prepares explicit exclusive-create request JSON,
+a stable bounded manifest and initial intent; it never dispatches MCP.
+Keep the original intent and per-call receipt/readback journal outside Git
+if source bytes are sensitive. Use assess to reconcile; missing/unknown
+or conflicting evidence stops retries. Submit only authorized exact
+requests, inspect original Operations and verify readback. Assemble with
+the reviewed helper in the owned guest only after all part and manifest
+receipts/readbacks are verified; confirm guest exit zero and independently
+hash all final readback pages. Existing target, missing/corrupt chunks,
+unproven outcome or unsupported exclusive publication must stop. The
+manual procedure remains the fallback, not authorization to bypass
+admission. The helper is a candidate until independent review and real
+ordinary-task benefit evidence.
