@@ -201,14 +201,25 @@ class FeedbackTests(unittest.TestCase):
         self.observe()
         directory = self.inbox / "BDH-L014"
         original = records.latest(directory)
-        records.publish(directory, original["revision"],
-                        dict(original, implementation=dict(original["implementation"], asset_sha256="0"*64)))
+        # Exercise actual asset drift without forging a new attachment event.
+        # A current bound implementation has immutable event identity.
+        root = self.base / "drift-repo"
+        subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(root)],
+                       check=True, capture_output=True)
+        asset = root / original["asset"]
+        asset.write_bytes((ROOT / original["asset"]).read_bytes() + b"\nFixture asset drift.\n")
         row = dict(self.row, learning={"kind": "improved", "ref": "BDH-L014"})
-        result, code = self.review(row)
+        result, code = feedback.review(work.validate(row), root, self.inbox)
         self.assertEqual(code, 1)
         self.assertIn("Attached implementation drifted", " ".join(result["issues"]))
         # A historic observation remains a fact even if the implementation later changes.
-        self.assertEqual(self.review()[1], 0)
+        self.assertEqual(feedback.review(work.validate(self.row), root, self.inbox)[1], 0)
+        if "binding" in original["implementation"]:
+            records.publish(directory, original["revision"],
+                            dict(original, implementation=dict(original["implementation"], asset_sha256="0"*64)))
+            result, code = self.review(row)
+            self.assertEqual(code, 1)
+            self.assertIn("Implementation binding does not identify its attachment event", " ".join(result["issues"]))
 
     def test_real_witness_cannot_be_relabelled_or_unlinked(self):
         original = json.loads((ROOT / "docs/development/BDH_V06_INDEPENDENT_TRANSFER_FEEDBACK.json").read_text())
@@ -281,6 +292,15 @@ class FeedbackTests(unittest.TestCase):
             return subprocess.check_output(["git","-C",str(root),*args],text=True).strip()
         directory = self.inbox / "BDH-L014"
         revision = records.latest(directory)["revision"]
+        # The fixture starts at the same asset bytes as the copied learning
+        # history, even when the source under test is an edited worktree.
+        asset = root / "dev/skills/box-development/SKILL.md"
+        asset.write_bytes((ROOT / "dev/skills/box-development/SKILL.md").read_bytes())
+        if git("status", "--porcelain"):
+            git("add", "dev/skills/box-development/SKILL.md")
+            git("-c","user.name=Fixture","-c","user.email=fixture@example.invalid","commit","-qm","fixture baseline")
+        self.assertEqual(learning.asset_digest(root, "dev/skills/box-development/SKILL.md"),
+                         records.latest(directory)["implementation"]["asset_sha256"])
         args = argparse.Namespace(action="attach", inbox=self.inbox, id="BDH-L014",
                   expect=revision, implementation_ref="fixture:new patch",
                   validation_evidence="fixture:new test result", work_ref=self.row["work_ref"],

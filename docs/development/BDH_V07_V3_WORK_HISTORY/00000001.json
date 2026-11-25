@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "pr193-v3-implement-20261125",
+  "authority": "Owner PR193 continuation: bounded harness-only development in owned isolated Box; no parent, runtime, host, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Record exact selected implementation and validation",
+  "objective": "Implement and validate selected offline transfer helper on exact scoped source",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "a464e6d6501d3757e3fd7af4b936547f23a97a1b",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [],
+  "work_ref": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0"
+}

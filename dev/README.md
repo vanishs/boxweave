@@ -248,6 +248,40 @@ Separate local histories must be reconciled in Git; no distributed lock.
 See [V2 progress](../docs/development/BDH_V07_V2_PROGRESS.md) and
 [V2c progress](../docs/development/BDH_V07_V2C_PROGRESS.md).
 
+### Offline transfer preparation (candidate)
+
+With a reviewed Python checkout, prepare a bounded manifest and exact
+exclusive-create requests without network dispatch:
+
+    python3 dev/transfer_plan.py plan --source SOURCE --output NEW_LOCAL_DIR --box BOX_UUID --target /tmp/NEW_FILE --work-ref WORK --transfer-ref UNIQUE_TRANSFER
+
+Source is nonempty, up to 4 MiB, with 1..40960-byte parts (at most 128).
+The output directory must not exist. Persist manifest and intent before
+dispatch; request JSON and readback pages contain source bytes, not safe
+to commit indiscriminately. Each action has a stable key and exact path.
+Use one authorized connector call per prepared request and preserve the
+original receipt. Maintain the intent journal with the original Operation
+ID, observed state, actual readback pages, and (for assembly only) exit
+code; never change an uncertain/attempted action back to NOT_SUBMITTED.
+Missing receipt/state, failure or digest mismatch means reconcile,
+not replay. No API credentials, network client or new MCP Tool.
+
+    python3 dev/transfer_plan.py assess MANIFEST JOURNAL
+
+Only after all part and manifest receipts and bytes match, invoke the
+same reviewed helper in the owned guest via a short explicit argv:
+
+    python3 /REVIEWED/CHECKOUT/dev/transfer_plan.py assemble EXACT_GUEST_MANIFEST
+
+The assembly uses verified ordered parts and exclusive same-directory
+hard-link publication; it never replaces or removes the final target or
+original parts. Existing files and unsupported publication fail closed.
+Observe actual guest exit zero, independently read every final page, and
+assess again. VERIFIED_READBACK means supplied bytes and receipts match,
+not authenticated remote evidence or native crash/power-loss proof.
+The helper cannot establish authority, remote persistence or independent
+utility. Manual fallback: [Box skill](skills/box-development/SKILL.md).
+
 ## Integrated workflow (v0.5)
 
 For a nontrivial task with a checkout, use the compositional commands rather
