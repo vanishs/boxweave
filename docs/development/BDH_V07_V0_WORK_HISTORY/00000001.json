@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-baseline",
+  "authority": "Owner authorized child PR development in an isolated owned Box; no parent change, host change, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Record observed baseline and residual gap; preserve exact receipts",
+  "objective": "Reconcile exact child source, reproduce v0.6 improvement gap and measure manual transfer baseline",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "4e75b78b8451574d1faeabb17673c5e03021b5ee",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [],
+  "work_ref": "pr193/v0"
+}

@@ -1,6 +1,7 @@
 # BDH v0.7 — proactive improvement execution
 
-Status: proposed implementation plan; no v0.7 implementation or validation yet.
+Status: V0 local baseline and defect reproduction completed; V1-V5 pending.
+See [V0 evidence and checkpoint](BDH_V07_V0_BASELINE.md).
 Stacked PR based on paused #191 at 3494ae8a35c50c386686c9d9d675c1ae37e1b1b7.
 Owner authorized this branch to prepare and develop BDH v0.7 before later
 integration back into #191. Parent P1b source checkpoint and its unresolved
@@ -248,10 +249,10 @@ or promotion to satisfy a metric.
 
 ## Initial progress and reusable instruction
 
-| Stage | State at planning commit |
+| Stage | Current checkpoint |
 | --- | --- |
-| V0 | Not started; source diagnosis and prior read-only evidence available |
-| V1 | Not started |
+| V0 | Box baseline and gap reproduction complete; evidence commit CI pending |
+| V1 | Next: typed residual evidence and review readiness |
 | V2 | Not started |
 | V3 | Not started |
 | V4 | Not started |
