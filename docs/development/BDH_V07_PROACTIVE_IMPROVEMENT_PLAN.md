@@ -230,6 +230,41 @@ feedback, actual implementation, and later beneficial discovery/reuse
 and next action on no-benefit/blocked cases. No unsupported universal
 efficacy or unattended execution claim.
 
+## V4e — runtime adaptation checkpoint (2026-11-25)
+
+See [investigation](BDH_V07_V4E_REUSE_INVESTIGATION.md) and
+[actual adaptation evidence](BDH_V07_V4E_ADAPTATION.md).
+The independent second REOPEN remains binding; no utility PASS.
+
+| Slice | Current disposition |
+| --- | --- |
+| Feedback CI regression | Fixture drift fixed at 52cd4c2; pinned rev33 and new rev38 cases; Box 20/20 and Eval14 PASS, changed-file format PASS; exact-head CI required |
+| V4e-01 | Actual authorized read-only MCP adapter works; repeated callable loading across fresh invocations BLOCKED on current surface |
+| V4e-02 | Immutable Git evidence reread and original identity PASS; automatic private caller-state binding to real MCP and safe interruption remain BLOCKED |
+| V4e-03 | Not selected; defer selection until supported runner, legitimate authorization and trusted state integration proven |
+| V4e-04 | Not started; independent actual use and matched net benefit required |
+| V5 | Not ready; exact-head CI and independent utility/review gates open |
+
+L014 [revision 39](../../dev/learning/BDH-L014/00000039.json)
+records the actual adapter/state evidence and blocker; candidate remains
+CANDIDATE/REVIEW_DUE, second episode rev17 unchanged. Observation
+publication and repeat feedback suite 20/20 PASS, audit clear, original
+Box Operation d32cbb30a3edcf9cb8fc945cb88b8338 exit 0.
+No third selection or promotion. Full Box Python run had one unrelated
+clean-installer fixture failure in the populated lab and four skips;
+gofmt unavailable, no Go changes. CI commit submitted; confirm actual
+new head run and clean source gates, do not count prior success.
+
+Next: on a supported caller surface, configure an independently
+authorized revocable MCP client and persistent reviewed runner through
+the normal platform authorization flow. Test the same pinned callable
+twice with short arguments and real harmless MCP reads, then validate
+caller-private CAS intent/receipt persistence, interruption, stale
+writer, tampering and UNKNOWN refusal. If unavailable, preserve manual
+fallback and immutable sanitized evidence; do not build a new transfer
+tool or use Git as a dispatch lock. Reconsider V4e-03 only on that
+demonstrated integration and a credible benefit hypothesis.
+
 ## V5 — integration readiness and independent L4 review
 
 Run all preexisting regression/Eval, new targeted and adversarial tests,
@@ -257,8 +292,8 @@ or promotion to satisfy a metric.
 | V1 | V1a CI PASS; V1b durable decisions Box PASS, child CI pending |
 | V2 | V2a bounded selection/ready DAG and V2b guarded lifecycle Box PASS; V2c terminal review, durable handoff and local contention CI PASS |
 | V3 | Independent rereview and exact reviewed-head CI PASS; original FAIL preserved; actual delivery rev15, L014 rev24; ready benefit |
-| V4 | Paired functional PASS, utility uncertain; actual independent REOPEN recorded rev27, second selection rev28, attachment rev29 and observation rev30; new episode rev5 review READY; V4c validation 114 tests and actual CLI transfer PASS, live template/independent utility pending |
-| V5 | Not started |
+| V4 | Two real REOPEN decisions; V4d functional PASS but utility not proven. L014 rev39, second episode rev17; V4e-01/02 partial evidence PASS, executable loading and trusted state binding BLOCKED; V4e-03/04 not started |
+| V5 | Not ready: independent utility and exact-head CI open |
 
 Continue from the current PR checkpoint. Follow canonical BDH; reconcile
 head/base, prior work, original Box receipts and CI. Work Box-first,
