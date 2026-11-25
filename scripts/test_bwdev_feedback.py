@@ -42,14 +42,31 @@ class FeedbackTests(unittest.TestCase):
     def review(self, row=None):
         return feedback.review(work.validate(row or self.row), ROOT, self.inbox)
 
-    def observe(self):
+    def use_history_prefix(self, revision):
+        # Pin lifecycle-sensitive cases to immutable learning revisions, not
+        # the moving current candidate. The canonical histories are untouched.
+        source = ROOT / "dev/learning/BDH-L014"
+        self.inbox = self.base / f"inbox-{revision}"
+        target = self.inbox / "BDH-L014"
+        target.mkdir(parents=True)
+        for number in range(1, revision + 1):
+            name = f"{number:08d}.json"
+            shutil.copyfile(source / name, target / name)
+
+    def observe(self, residual=None):
         args = argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
                 expect=records.latest(self.inbox / "BDH-L014")["revision"], work_ref=self.row["work_ref"],
                 attempt_ref=self.item["attempt_ref"], evidence=self.item["evidence"],
                 observation=self.item["observation"], outcome=self.item["outcome"])
+        if residual is not None:
+            file = self.base / "residual.json"
+            file.write_text(json.dumps(residual))
+            args.residual_file = file
         learning.run(args, ROOT)
 
     def test_actual_link_required_and_exact_match(self):
+        # Revision 33 has an outstanding second selection.
+        self.use_history_prefix(33)
         result, code = self.review()
         self.assertEqual(code, 1)
         self.assertEqual(result["items"][0]["related"][0]["id"], "BDH-L014")
@@ -95,6 +112,7 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(work.advance(old, updated, 1)["state"], "HANDOFF")
 
     def test_boundary_keeps_pending_but_refuses_false_completion(self):
+        self.use_history_prefix(33)
         history = self.base / "history"
         initial = dict(self.row, state="ACTIVE", asset_feedback=[], learning=None)
         initial.pop("boundary")
@@ -122,6 +140,29 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(handoff["status"], "PENDING")
         self.assertEqual(handoff["items"][0]["status"], "SELECTION_RECORDED")
         self.assertEqual(work.read_history(history)["state"], "RECORDED")
+
+    def test_reopened_history_unrelated_helped_is_not_pending(self):
+        # Revision 38 includes the second independent REOPEN.
+        self.use_history_prefix(38)
+        self.observe()
+        result, code = self.review()
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["status"], "FEEDBACK_RECORDED")
+        self.assertEqual(result["items"][0]["related"][0]["opportunity"]["status"],
+                         "REVIEW_DUE")
+        self.assertEqual(result["evolve"]["status"], "NO_MATCHED_PENDING")
+        self.assertEqual(result["evolve"]["items"], [])
+
+    def test_reopened_history_matching_residual_is_pending(self):
+        self.use_history_prefix(38)
+        self.observe({"signature": "fixture-residual", "impact": "friction",
+                      "environment": None, "cost": None, "uncertainty": "fixture"})
+        result, code = self.review()
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["status"], "FEEDBACK_RECORDED")
+        self.assertEqual(result["evolve"]["status"], "PENDING")
+        self.assertEqual(result["evolve"]["items"][0]["status"], "REVIEW_DUE")
+        self.assertEqual(result["evolve"]["items"][0]["id"], "BDH-L014")
 
     def test_unaccounted_unknown_and_alias_feedback(self):
         self.observe()
