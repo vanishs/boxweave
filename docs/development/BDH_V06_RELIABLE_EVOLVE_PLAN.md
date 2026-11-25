@@ -208,3 +208,48 @@ Changes are bounded corrections to the existing L4 feedback protocol,
 not a duplicate learning candidate. No new transfer helper.
 Independent re-review, fresh ordinary-task own persistence witness, and
 exact new-head CI remain open. Parent unchanged; no merge/release.
+
+## E4 second ordinary-task witness: autonomous local recording (2026-11-25)
+
+[Original resume investigation](https://github.com/vanishs/boxweave/pull/192#issuecomment-7157664834)
+on exact corrected source abaa9726dd90048375337ea83f1be7260319db42
+followed an ordinary task prompt with the existing bootstrap locator,
+without per-task BDH reminders. Agent observed plan/discovery
+0771cf8cc67ed12e9a0da2e05d06ccc9, began real protocol-1 history
+5d3a9e53e0789b8ee41aaea4326e8b08, performed the bounded Box probe,
+then itself appended L014 revision 9 at expected revision 8 in a separate
+inbox (a839e197132f6a2299c087f83ffc43e0 exit 0) and published a HANDOFF
+boundary. Original 6d163556490d4534be2119408ad64a6a exit 1 deliberately
+reflects resume REVIEW_REQUIRED for HANDOFF, while feedback remained
+FEEDBACK_RECORDED with all three material assets accounted for. The
+investigating Agent chose a durable PR comment rather than advancing
+the branch during concurrent CI/review. No autonomous Git commit or
+unattended background execution claimed.
+
+Original assembly bbc96accba782c7b86bcad9043a5a15b and hash recheck
+151099bc179d284e20cb9344eea7cb59 exit 0: 102402 bytes, SHA256
+f4e2b547b966f8cab41e45cb0d514112a392c23479c8b8262528156d831df31b.
+Between-call interruption, deliberately truncated fixture, and child
+exit around exclusive publication are bounded simulations, not actual
+SFTP interruption, controller restart, or power-loss recovery.
+
+Reconciliation preflight 3554312f419a7b7754844eddb15df84d exit 0 reread
+the original local files: revisions 1-8 match canonical bytes, rev9
+adds exactly one observation with no implementation/state changes,
+original two-revision work history validates, and original retained
+file hash matches. Feedback against canonical rev8 was REVIEW_REQUIRED;
+against isolated rev9 it was FEEDBACK_RECORDED. This follow-up imports
+the original [revision 9](../../dev/learning/BDH-L014/00000009.json)
+and [begin](BDH_V06_RESUME_WORK_HISTORY/00000001.json) /
+[handoff](BDH_V06_RESUME_WORK_HISTORY/00000002.json) byte-for-byte, not
+a new learn observe or fabricated historical workflow. Preserve HANDOFF
+as the Agent's actual disposition. Local autonomy is now evidenced;
+Git persistence is completed by this explicit authorized reconciliation,
+not by the originating Agent. This satisfies the local-recording and
+durable handoff witness; reviewer must decide scoped E4 acceptance.
+The manifest/resume helper remains a separate deferred improvement.
+
+Corrected code-head quality 45580002448 and candidate 45580002456
+completed all applicable jobs including dual architecture and manifest;
+native/release skipped per existing policy. Evidence-only follow-up
+requires exact-head checks and independent L4 re-review. No merge/release.
