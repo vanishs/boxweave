@@ -1,6 +1,27 @@
 # BoxWeave Development Harness (BDH) — start here
 
-**Status: bootstrap / usable manually.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for the future CLI or registry generator. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
+**Status: bootstrap plus bwdev v0.1.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
+
+## Quick start (optional Python CLI)
+
+Run directly from the source tree; no installation or compilation.
+
+```sh
+python3 dev/bwdev --help
+python3 dev/bwdev --json doctor
+python3 dev/bwdev --json context --path internal/install
+python3 dev/bwdev --json context --query "CI failure"
+```
+
+Use `doctor --require go --require base` when a task needs the Go toolchain
+and origin/v1. A missing optional dependency is not a global blocker.
+Use `checkpoint capture` and `checkpoint check` with the
+[template and example](templates/CHECKPOINT.md); persist the local checkpoint
+through an authorized remote branch or PR. The commands do not claim native
+readiness, automatically resume work, or replace existing gates.
+
+Run focused tests with `python3 -m unittest discover -s scripts -p 'test_bwdev.py' -v`.
+Full applicable tests and CI remain mandatory.
 
 ## Start, continue, finish
 
@@ -25,4 +46,4 @@ Risk, not diff size, determines profile. All profiles retain the existing safety
 
 ## First use and next improvement
 
-The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. First priority: automate the repeated, demonstrated steps in checkpoint validation and context discovery; then add environment preflight/test selection. See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.
+The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. The first CLI now covers environment observation, context discovery and basic checkpoint capture/check. Next priority: task continuity and validation based on actual friction; see the [bwdev roadmap](../docs/development/BWDEV_DESIGN.md). See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.

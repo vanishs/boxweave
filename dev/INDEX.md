@@ -1,6 +1,6 @@
 # Development asset index
 
-Manual bootstrap registry. These paths are canonical references, not copies. Start with only the matching row; follow links when needed. Asset lifecycle and future metadata generation: [design](../docs/development/DEVELOPMENT_HARNESS.md). Status "initial" means usable guidance derived from current contracts, not experimentally proven Agent efficacy.
+Bootstrap registry, read directly by bwdev context. These paths are canonical references, not copies. Start with only the matching row; follow links when needed. Asset lifecycle and future metadata generation: [design](../docs/development/DEVELOPMENT_HARNESS.md). Status "initial" means usable guidance derived from current contracts, not experimentally proven Agent efficacy.
 
 | Stable ID | Scope / trigger | Canonical asset | Status |
 | --- | --- | --- | --- |
@@ -17,6 +17,7 @@ Manual bootstrap registry. These paths are canonical references, not copies. Sta
 | skill.verification | Testing, CI failure, native evidence | [verification](skills/verification/SKILL.md) | Initial |
 | skill.continuous-learning | Failure, correction, stage end, reusable improvement | [continuous-learning](skills/continuous-learning/SKILL.md) | Initial |
 | module.install | Edit installer internals | [local guide](../internal/install/AGENTS.md) | Initial |
+| tool.bwdev | Context discovery, prerequisites, checkpoint | [CLI](bwdev), [contract](../docs/development/BWDEV_DESIGN.md) | Initial |
 | tool.make | Format, Go/source checks | [Makefile](../Makefile) | Existing |
 | tool.mcp-testkit | Candidate HTTP MCP tests | [test kit](../scripts/mcp_testkit.py) | Existing |
 | tool.installed-lifecycle | Native lifecycle, only authorized clean test fixture | [script](../scripts/n2_installed_lifecycle.sh), [test scenarios](../scripts/n2_installed_lifecycle.py) | Existing |
@@ -27,4 +28,4 @@ Manual bootstrap registry. These paths are canonical references, not copies. Sta
 | template.checkpoint | Durable handoff | [checkpoint](templates/CHECKPOINT.md) | Initial |
 | learning.inbox | Candidate improvements, disposition | [inbox](LEARNING_INBOX.md) | Initial |
 
-For original GitHub CI checks, use the actual PR head and associated run/job metadata, not copied historical links. For BoxWeave MCP use actual tools/list and the [catalog](../docs/design/MCP_TOOLS.md); installed versions may differ. Registered script references do not authorize execution; inspect applicable prerequisites and effects. For unknown tasks, use the source and ordinary search. Extend the index only for assets with a useful discovery path; later generate it from distributed metadata.
+For original GitHub CI checks, use the actual PR head and associated run/job metadata, not copied historical links. For BoxWeave MCP use actual tools/list and the [catalog](../docs/design/MCP_TOOLS.md); installed versions may differ. Registered script references do not authorize execution; inspect applicable prerequisites and effects. For unknown tasks, use the source and ordinary search. Extend the index only for assets with a useful discovery path. The CLI discovers additional local skill headers as Candidate; later generate the full registry from distributed metadata.

@@ -1,6 +1,6 @@
 # BoxWeave Development Harness (BDH)
 
-**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [developer entry](../../dev/README.md). This document records the target design; only the bootstrap assets in that entry are implemented. No change to product runtime or its tool catalog.
+**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [developer entry](../../dev/README.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.1](BWDEV_DESIGN.md) capabilities in that entry are implemented. No change to product runtime or its tool catalog.
 
 ## 1. Objectives and boundaries
 
@@ -21,7 +21,7 @@ Retain [product boundary](../decisions/PRODUCT_BOUNDARY.md), [operational policy
 | Evaluation | Measure Agent effectiveness independently from product correctness | Baseline protocol below; controlled experiments later |
 | Continuous Learning | Capture, verify, integrate, measure and retire all asset types | Learning inbox + PR disposition now; incremental automation later |
 
-Principles: single source of truth; progressive disclosure; deterministic first; evidence first; continuous learning; modular adapters. Keep source, existing docs and scripts in place; avoid copying facts. The developer entry is not a competing implementation roadmap. Future optional `dev/harness/`, `dev/tools/`, `dev/workflows/`, `dev/fixtures/`, `dev/registry/`, `dev/schemas/`, `dev/evals/` grow only when justified by actual work; do not create empty scaffolding.
+Principles: Script First (Python standard library for development tooling; justify any compiled tool by demonstrated need); small batches; single source of truth; progressive disclosure; deterministic first; evidence first; continuous learning; modular adapters. Keep source, existing docs and scripts in place; avoid copying facts. The developer entry is not a competing implementation roadmap. Future optional `dev/harness/`, `dev/tools/`, `dev/workflows/`, `dev/fixtures/`, `dev/registry/`, `dev/schemas/`, `dev/evals/` grow only when justified by actual work; do not create empty scaffolding.
 
 ## 3. Knowledge and capabilities
 
@@ -106,4 +106,4 @@ Do not wait for all stages; every increment is used on normal product work. This
 
 Start with current product needs; reorder or split later increments based on observed friction. Larger improvements are separately scoped PRs. Avoid large migrations, new central DB or agent orchestration until evidence shows need. No need to finish BDH to release BoxWeave.
 
-Bootstrap acceptance: cross-linked entry/index/template/skills, original policies intact, a real historical learning example with scope/limits and one populated task/checkpoint walkthrough, docs checks and normal PR review. Future automatic discovery, state machine, CLI, cross-writer locks and efficacy have not yet been implemented/tested.
+Bootstrap acceptance: cross-linked entry/index/template/skills, original policies intact, a real historical learning example with scope/limits and one populated task/checkpoint walkthrough, docs checks and normal PR review. Initial deterministic discovery, doctor and checkpoint commands are implemented separately in [bwdev v0.1](BWDEV_DESIGN.md); full automatic discovery, state machine, cross-writer locks and Agent efficacy remain future work.

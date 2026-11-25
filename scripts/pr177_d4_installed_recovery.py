@@ -38,6 +38,20 @@ def run(args, **kw):
 def pid():
     return subprocess.check_output(["systemctl","show",CTL,"-p","MainPID","--value"],text=True).strip()
 
+def wait_mcp_listener(timeout=15):
+    """Wait for the restarted fixture listener; never retry a tool mutation."""
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("restarted fixture MCP listener unavailable")
+        try:
+            with socket.create_connection(("127.0.0.1", 18650), timeout=min(1, remaining)):
+                return
+        except ConnectionRefusedError:
+            time.sleep(min(.25, max(0, deadline - time.monotonic())))
+
+
 def db_state(original):
     with sqlite3.connect(DB,uri=True) as db:
         row=db.execute("SELECT state,native_operation_id,box_uuid FROM operations WHERE id=?",(original,)).fetchone()
@@ -177,6 +191,8 @@ def main(project, receipt, testbin, mode):
         assert before[0][0]=="UNKNOWN" and int(controller)>1,before
         if mode=="SCOPED_V2":
             assert len(before[1])==5 and len(oldjournal)>1
+        wait_mcp_listener()
+        assert pid()==controller and db_state(original)==before and journal(original,mode)==oldjournal
         with LoopbackMCP(token=token(receipt),allow_mutations=True,timeout=60) as reader:
             unknown(reader,ids["d4-a"],original,mode)
         assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
