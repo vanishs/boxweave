@@ -13,6 +13,16 @@
 - [ ] Unknown tasks, old identities, backup/rollback/clean-up documented
 - [ ] Relevant specs and append-only execution log updated
 
+## Development Harness (all tasks; lightweight answers allowed)
+
+- Work ref / workflow profile / environment (Box-first or reason for fallback):
+- Task or checkpoint link (or N/A for a trivial task):
+- Relevant acceptance, exact candidate and remaining independent gates:
+- Learning disposition (no-new-asset with reason / candidate link / verified improvement with evidence):
+- Next safe action and unresolved blocker, if any:
+
+See [BDH entry](../dev/README.md). Existing quality policy determines applicable checks for docs-only vs source/native work; mark N/A with a reason rather than claiming an unrun test. Do not use this checklist to lower mandatory gates.
+
 ## Merge decision
 
 - Stage exit: **PASS / PARTIAL / BLOCKED / UNKNOWN**

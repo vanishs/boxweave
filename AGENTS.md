@@ -13,6 +13,10 @@
 - **Small product.** Do not exceed the approved 23-tool catalog or add speculative subsystems, a guest-resident Agent scheduler, generic ACL/RBAC, Caddy, a Web/REST console, snapshots/backups, host automation or a second Incus transport without owner approval. Nested Incus depth and isolation depend on verified host/kernel/AppArmor/BPF capabilities.
 - **Explicit real-host authority.** Tools and past pilot approval are not blanket permission. Obtain exact-target owner approval for physical/shared-host installation, public exposure, shared Incus upgrades, privileged changes or destructive actions; preserve foreign resources and existing `UNKNOWN`. Never force-push or co-install v1 with legacy `main` on its dedicated host.
 
+## Development Harness (start here)
+
+For every development task use [the BDH entry](dev/README.md) and its [asset index](dev/INDEX.md) to select relevant knowledge, skills, tools and risk profile. Recover the original task/workspace before provisioning; preserve progress with the existing checkpoint contract. At material failures, user corrections, handoff and completion, record a learning disposition using the [learning skill](dev/skills/continuous-learning/SKILL.md): reuse/update a verified asset, capture a candidate, or explicitly note no reusable asset. Use the existing tools today; automation is incremental. No new permission, product boundary or CI exemption is granted by BDH.
+
 ## Work, checks and handoff
 
 1. Perform the bounded task: inspect → implement → test → authorized native/independent verification → fix and retest → evidence/handoff. A blocked safety case stays `BLOCKED`/`UNKNOWN`; unrelated safe work may continue. Mock/source CI, earlier-version PASS and a green check alone are **not** installed-native or release acceptance.
