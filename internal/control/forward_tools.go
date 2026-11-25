@@ -183,85 +183,86 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 		Name:        "port_forward_delete",
 		Description: "Remove only a previously verified same-Project instance-owned proxy by forward_id. A durable original Operation, exact native device check, ETag mutation and post-read are required. Native ambiguity remains UNKNOWN; no arbitrary network/foreign device deletion.",
 		Annotations: mutationAnnotations(true),
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in forwardDeleteInput) (*mcp.CallToolResult, state.Receipt, error) {
-		principal, err := s.requestPrincipal(req)
-		if err != nil {
-			return nil, state.Receipt{}, err
+	}, s.operateForwardDelete)
+}
+func (s *Service) operateForwardDelete(ctx context.Context, req *mcp.CallToolRequest, in forwardDeleteInput) (*mcp.CallToolResult, state.Receipt, error) {
+	principal, err := s.requestPrincipal(req)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	if in.IdempotencyKey == "" || len(in.ForwardID) != 32 {
+		return nil, state.Receipt{}, state.ErrInvalid
+	}
+	work, agent, err := boundedWorkLabels(req, in.WorkRef, in.AgentRef)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	claim, err := s.Store.GetForward(ctx, principal.Layer, in.ForwardID)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	box, err := s.Store.ForwardReplayBox(ctx, principal.Layer, claim.BoxID)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	if box.Incarnation != claim.Incarnation {
+		return nil, state.Receipt{}, state.ErrResourceLocked
+	}
+	safe, err := safeJSON(struct {
+		ForwardID string `json:"forward_id"`
+	}{in.ForwardID})
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	a := state.Admission{Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID,
+		Key: in.IdempotencyKey, Action: "port_forward_delete", BoxUUID: box.UUID, Incarnation: box.Incarnation,
+		ResourceKey:  "box:" + box.Name,
+		ResourceKeys: []string{"box:" + box.UUID, forwardListenerKey(claim.Protocol, claim.HostBind, claim.HostPort)},
+		SafeIntent:   safe, WorkRef: work, AgentRef: agent, ForwardDeleteID: in.ForwardID}
+	previous, err := s.Store.Replay(ctx, a)
+	if err == nil {
+		return &mcp.CallToolResult{}, previous, nil
+	}
+	if !errors.Is(err, state.ErrNotFound) {
+		return nil, state.Receipt{}, err
+	}
+	if claim.State != "CONFIRMED" {
+		return nil, state.Receipt{}, state.ErrResourceLocked
+	}
+	if _, err = s.readOwned(ctx, req, box.UUID); err != nil {
+		return nil, state.Receipt{}, err
+	}
+	spec := specForClaim(claim)
+	if err = s.Native.ObserveOwnedForward(ctx, box.Name, box.UUID, spec, true); err != nil {
+		return nil, state.Receipt{}, err
+	}
+	reqID, err := newTrackingID()
+	if err != nil {
+		return nil, state.Receipt{}, errors.New("TRACKING_UNAVAILABLE")
+	}
+	a.RequestID = reqID
+	r, err := s.Store.Admit(ctx, a)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	var nativeID string
+	effect := func(ctx context.Context) (string, error) {
+		id, e := s.Native.UpdateOwnedForward(ctx, box.Name, box.UUID, spec, false)
+		nativeID = id
+		return id, preflightNative(e)
+	}
+	verify := func(ctx context.Context) error {
+		if err := nativeDone(ctx, s.Native, nativeID); err != nil {
+			return err
 		}
-		if in.IdempotencyKey == "" || len(in.ForwardID) != 32 {
-			return nil, state.Receipt{}, state.ErrInvalid
+		if err := s.Native.ObserveOwnedForward(ctx, box.Name, box.UUID, spec, false); err != nil {
+			return err
 		}
-		work, agent, err := boundedWorkLabels(req, in.WorkRef, in.AgentRef)
-		if err != nil {
-			return nil, state.Receipt{}, err
+		if err := s.Store.FinalizeVerifiedForward(ctx, r.ID, false); err != nil {
+			return state.VerificationUncertain{Class: "FORWARD_DELETE_FINAL_DURABILITY_UNVERIFIED"}
 		}
-		claim, err := s.Store.GetForward(ctx, principal.Layer, in.ForwardID)
-		if err != nil {
-			return nil, state.Receipt{}, err
-		}
-		box, err := s.Store.ForwardReplayBox(ctx, principal.Layer, claim.BoxID)
-		if err != nil {
-			return nil, state.Receipt{}, err
-		}
-		if box.Incarnation != claim.Incarnation {
-			return nil, state.Receipt{}, state.ErrResourceLocked
-		}
-		safe, err := safeJSON(struct {
-			ForwardID string `json:"forward_id"`
-		}{in.ForwardID})
-		if err != nil {
-			return nil, state.Receipt{}, err
-		}
-		a := state.Admission{Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID,
-			Key: in.IdempotencyKey, Action: "port_forward_delete", BoxUUID: box.UUID, Incarnation: box.Incarnation,
-			ResourceKey:  "box:" + box.Name,
-			ResourceKeys: []string{"box:" + box.UUID, forwardListenerKey(claim.Protocol, claim.HostBind, claim.HostPort)},
-			SafeIntent:   safe, WorkRef: work, AgentRef: agent, ForwardDeleteID: in.ForwardID}
-		previous, err := s.Store.Replay(ctx, a)
-		if err == nil {
-			return &mcp.CallToolResult{}, previous, nil
-		}
-		if !errors.Is(err, state.ErrNotFound) {
-			return nil, state.Receipt{}, err
-		}
-		if claim.State != "CONFIRMED" {
-			return nil, state.Receipt{}, state.ErrResourceLocked
-		}
-		if _, err = s.readOwned(ctx, req, box.UUID); err != nil {
-			return nil, state.Receipt{}, err
-		}
-		spec := specForClaim(claim)
-		if err = s.Native.ObserveOwnedForward(ctx, box.Name, box.UUID, spec, true); err != nil {
-			return nil, state.Receipt{}, err
-		}
-		reqID, err := newTrackingID()
-		if err != nil {
-			return nil, state.Receipt{}, errors.New("TRACKING_UNAVAILABLE")
-		}
-		a.RequestID = reqID
-		r, err := s.Store.Admit(ctx, a)
-		if err != nil {
-			return nil, state.Receipt{}, err
-		}
-		var nativeID string
-		effect := func(ctx context.Context) (string, error) {
-			id, e := s.Native.UpdateOwnedForward(ctx, box.Name, box.UUID, spec, false)
-			nativeID = id
-			return id, preflightNative(e)
-		}
-		verify := func(ctx context.Context) error {
-			if err := nativeDone(ctx, s.Native, nativeID); err != nil {
-				return err
-			}
-			if err := s.Native.ObserveOwnedForward(ctx, box.Name, box.UUID, spec, false); err != nil {
-				return err
-			}
-			if err := s.Store.FinalizeVerifiedForward(ctx, r.ID, false); err != nil {
-				return state.VerificationUncertain{Class: "FORWARD_DELETE_FINAL_DURABILITY_UNVERIFIED"}
-			}
-			return state.ErrVerifiedForwardCommitted
-		}
-		r, err = s.submitNative(r, effect, verify)
-		return &mcp.CallToolResult{}, r, err
-	})
+		return state.ErrVerifiedForwardCommitted
+	}
+	r, err = s.submitNative(r, effect, verify)
+	return &mcp.CallToolResult{}, r, err
 }

@@ -15,3 +15,14 @@ An admission, terminal operation, actual guest exit, native readback, packet pro
 Exact merged feature evidence is in [status](../STATUS.md). #184 passed full legacy retirement, purge, fresh Scoped ledger, and scoped retirement/purge preserving unrelated resources. #177/#178 proved original recovery, live directional flows and partial-native fault acceptance. No physical signoff follows from this.
 
 The complete original A-/BH-/TC- case matrices, bounded owner substitutions, signoffs and failures remain in the [history archive](../history/README.md) and [pre-refresh acceptance matrix](https://github.com/vanishs/boxweave/blob/06d27434b11997e9254822c122483c9dacba12a3/docs/verification/ACCEPTANCE.md). Reconcile all mandatory IDs against the current exact candidate before stable approval. See [continuity](CONTINUITY_ACCEPTANCE.md), [risks](OPEN_RISKS.md), [versioning](../process/VERSIONING.md).
+
+## #188 H5 integrated candidate
+
+[H5 delivery and exact-source evidence](../development/PR188_H5_DELIVERY.md)
+records H1-H4 and H5 Box results, four independent installed lifecycle
+lanes and remaining proof boundaries. Quality CI exercises the complete
+offline Python suite, full Go race regression and bounded capacity
+fixtures. Candidate artifacts stamp the exact checked-out source on both
+architectures. An earlier successful run is evidence for its own source
+only; the final candidate must pass its independent CI again. No merge,
+physical Host acceptance or release is implied.

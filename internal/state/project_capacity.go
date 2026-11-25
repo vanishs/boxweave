@@ -15,10 +15,11 @@ var ErrProjectCapacity = errors.New("PROJECT_BOX_CAPACITY_REACHED: owned and unr
 // addresses, storage, CPU or RAM. Unknown Creates occupy a slot even after
 // a manual claim release, unless their exact identity is already counted.
 type ProjectBoxCapacity struct {
-	Limit          int `json:"limit"`
-	Owned          int `json:"owned"`
-	PendingCreates int `json:"pending_creates"`
-	Remaining      int `json:"remaining"`
+	Limit          int    `json:"limit"`
+	Owned          int    `json:"owned"`
+	PendingCreates int    `json:"pending_creates"`
+	Remaining      int    `json:"remaining"`
+	Level          string `json:"level"`
 }
 
 type capacityQuerier interface {
@@ -41,6 +42,7 @@ func readProjectBoxCapacity(ctx context.Context, q capacityQuerier, project stri
 		return ProjectBoxCapacity{}, err
 	}
 	out.Remaining = max(0, out.Limit-out.Owned-out.PendingCreates)
+	out.Level = networklimits.CapacityLevel(out.Limit, out.Remaining)
 	return out, nil
 }
 

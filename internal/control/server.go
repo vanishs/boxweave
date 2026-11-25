@@ -71,6 +71,7 @@ type Service struct {
 	BuildVersion    string
 	BuildCommit     string
 	Listener        string
+	retirementLog   retirementLogLimiter
 }
 
 type HostStatus struct {
@@ -88,7 +89,11 @@ type HostStatus struct {
 	AddressCapacity         *native.AddressCapacity       `json:"address_capacity,omitempty"`
 	AddressRetirement       *state.IPv4RetirementStatus   `json:"address_retirement,omitempty"`
 	AddressCapacityStatus   string                        `json:"address_capacity_status,omitempty"`
+	ScopedIdentityCapacity  *state.ScopedIdentityCapacity `json:"scoped_identity_capacity,omitempty"`
 	ScopedPeerCapacity      *state.DiagnosticPeerCapacity `json:"scoped_peer_capacity,omitempty"`
+	ReadinessClass          string                        `json:"readiness_class"`
+	PeerMode                string                        `json:"peer_mode"`
+	Navigation              state.NextAction              `json:"next_action"`
 	AddressRetirementPolicy string                        `json:"address_retirement_policy,omitempty"`
 }
 
@@ -123,6 +128,22 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.ProjectCapacity = &cap
 	}
 	out.Ready = out.MCPReady && out.Native.Ready
+	out.PeerMode = "LEGACY"
+	if s.ScopedPeerFresh {
+		out.PeerMode = "SCOPED_V2"
+	}
+	out.ReadinessClass = "READY_OBSERVED"
+	out.Navigation = state.NextAction{Kind: "NONE"}
+	if !out.MCPReady {
+		out.ReadinessClass = "CONTROLLER_LEDGER_UNVERIFIED"
+		out.Navigation = state.NextAction{Kind: "LOCAL_DOCTOR_REVIEW"}
+	} else if !out.Native.ServiceReady {
+		out.ReadinessClass = "NATIVE_SERVICE_UNVERIFIED"
+		out.Navigation = state.NextAction{Kind: "LOCAL_DOCTOR_REVIEW"}
+	} else if !out.Ready {
+		out.ReadinessClass = "NATIVE_PREREQUISITE_UNVERIFIED"
+		out.Navigation = issuesNext()
+	}
 	if out.MCPReady && !s.ScopedPeerFresh {
 		if retirement, e := s.Store.ReadIPv4RetirementStatus(ctx, s.Native.Project); e == nil {
 			if retirement.Pending > 0 && !install.NativeRetirementSocketPresent() {
@@ -133,6 +154,9 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 	}
 	if s.ScopedPeerFresh {
 		out.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
+		if cap, e := s.Store.ReadScopedIdentityCapacity(ctx, s.Native.Project); e == nil {
+			out.ScopedIdentityCapacity = &cap
+		}
 		if cap, e := s.Store.ReadDiagnosticPeerCapacity(ctx, s.Native.Project); e == nil {
 			out.ScopedPeerCapacity = &cap
 		}
@@ -171,6 +195,9 @@ func (s *Service) Handler() http.Handler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			start := time.Now()
 			result, err := next(ctx, method, req)
+			if method == "tools/call" {
+				s.redactToolError(ctx, req, result)
+			}
 			actor := "unauthenticated"
 			if extra := req.GetExtra(); extra != nil && extra.TokenInfo != nil {
 				// Redacted immutable credential reference, NOT token, params,
@@ -181,6 +208,8 @@ func (s *Service) Handler() http.Handler {
 			outcome := "ok"
 			if err != nil {
 				outcome = "error"
+			} else if r, ok := result.(*mcp.CallToolResult); ok && r.IsError {
+				outcome = "tool_error"
 			}
 			slog.InfoContext(ctx, "mcp_request", "method", method,
 				"actor", actor, "duration_ms", time.Since(start).Milliseconds(),
@@ -188,7 +217,7 @@ func (s *Service) Handler() http.Handler {
 			return result, err
 		}
 	})
-	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies; project_capacity counts owned and unresolved Create slots, not native address/storage availability or permission to dispatch; address_capacity reports scoped IPv4 snapshot upper bound, never an allocation guarantee; no foreign inventory.", Annotations: readToolAnnotations()},
+	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies; project_capacity counts owned and unresolved Create slots, not native address/storage availability or permission to dispatch; address_capacity reports IPv4 snapshot upper bound and durable/native-only holds; scoped identity, direction and grant-history budgets warn before exhaustion; no allocation guarantee; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			principal, err := s.requestPrincipal(req)
 			if err != nil {
@@ -204,6 +233,12 @@ func (s *Service) Handler() http.Handler {
 			result.BinarySHA256 = binaryDigest()
 			attention := s.readAttention(ctx, principal, "")
 			result.Attention = &attention
+			if result.Ready && (len(attention.Items) > 0 || attention.Coverage == "UNAVAILABLE") {
+				result.Navigation = attention.NextAction
+			}
+			if result.CapacityNeedsReview() && result.Navigation.Kind == "NONE" {
+				result.Navigation = state.NextAction{Kind: "REVIEW_CAPACITY"}
+			}
 			return privateReadReply(ctx, s, principal.TokenID, result)
 		})
 	s.registerOperationReadTools(server)
@@ -218,6 +253,15 @@ func (s *Service) Handler() http.Handler {
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: false})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if install.CheckOfflineRetirementFence() != nil {
+			http.Error(w, "OFFLINE_RETIREMENT_IN_PROGRESS", http.StatusServiceUnavailable)
+			return
+		}
+		if s.ScopedPeerFresh && install.CheckScopedDrainFence() != nil {
+			http.Error(w, "SCOPED_DRAIN_IN_PROGRESS", http.StatusServiceUnavailable)
+			return
+		}
+
 		w = &privateMCPWriter{ResponseWriter: w}
 		cfg := state.OAuthSettings{}
 		if s.Store != nil {
@@ -283,4 +327,10 @@ func (s *Service) ListenAndServe() error {
 		go s.ipv4RetirementLoop(gcCtx)
 	}
 	return server.ListenAndServe()
+}
+
+// Advisory capacity navigation never grants allocation or recovery authority.
+func (s HostStatus) CapacityNeedsReview() bool {
+	low := func(v string) bool { return v == "LOW" || v == "EXHAUSTED" || v == "OVER_LIMIT" || v == "UNVERIFIED" }
+	return s.AddressCapacityStatus == "EXHAUSTED" || s.AddressCapacity != nil && low(s.AddressCapacity.Level) || s.ProjectCapacity != nil && low(s.ProjectCapacity.Level) || s.ScopedIdentityCapacity != nil && low(s.ScopedIdentityCapacity.Level) || s.ScopedPeerCapacity != nil && (low(s.ScopedPeerCapacity.DirectionLevel) || low(s.ScopedPeerCapacity.GrantHistoryLevel))
 }

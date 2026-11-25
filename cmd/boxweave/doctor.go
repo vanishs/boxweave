@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -22,6 +23,29 @@ import (
 )
 
 type doctorArgs struct{ DB, Socket, Project, ServiceUser string }
+
+// Derive only the fixed installed restricted account. No project discovery
+// from arbitrary DB/socket or use of root's own user-0 namespace.
+func resolveDoctorScope(a doctorArgs) (doctorArgs, error) {
+	if a.Project != "" {
+		return a, nil
+	}
+	if a.DB != "/var/lib/boxweave/ledger.sqlite" || a.Socket != "/var/lib/incus/unix.socket.user" || a.ServiceUser != "boxweave" {
+		return a, errors.New("explicit -project required for nonstandard diagnostic inputs")
+	}
+	u, e := user.Lookup("boxweave")
+	if e != nil {
+		return a, errors.New("installed service account unavailable; specify exact -project for partial inspection")
+	}
+	uid, e := strconv.Atoi(u.Uid)
+	if e != nil || uid <= 0 || os.Geteuid() != 0 && os.Geteuid() != uid {
+		return a, errors.New("exact restricted service account required for implicit project")
+	}
+	a.Project = "user-" + strconv.Itoa(uid)
+	// This only selects a candidate. The existing manifest and runtime
+	// observation independently verify actual installation identity.
+	return a, nil
+}
 
 func doctorInstallPlan(a doctorArgs) install.Plan {
 	return install.Plan{User: a.ServiceUser, StateDir: "/var/lib/boxweave", BinaryPath: "/usr/local/bin/boxweave", UnitPath: "/etc/systemd/system/boxweave.service", Project: a.Project, Socket: a.Socket, Version: version}
@@ -131,7 +155,11 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 		if reason == "" {
 			reason = "ARCHITECTURE_UNVERIFIED"
 		}
-		report.AddIssue("installation", reason, "installation", "UNVERIFIED")
+		if os.Geteuid() != 0 && report.Installation.RootProof == "ROOT_AUTHORITY_REQUIRED" && report.Installation.InstalledIdentity == "VERIFIED" && report.Installation.Runtime == "VERIFIED" {
+			report.AddRoutedIssue("installation", reason, "installation", "COVERAGE_LIMIT", "LOCAL_ROOT_OBSERVATION")
+		} else {
+			report.AddIssue("installation", reason, "installation", "UNVERIFIED")
+		}
 	}
 	// Independent source budgets ensure a missing/busy database never hides
 	// available native or installation observations.
@@ -163,6 +191,7 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 				if l.PeerCapacity != nil {
 					legacy.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
 					legacy.ScopedPeerCapacity = l.PeerCapacity
+					legacy.ScopedIdentityCapacity = l.ScopedIdentityCapacity
 				}
 			} else {
 				report.AddRoutedIssue("database", "LEDGER_OBSERVATION_UNVERIFIED", "ledger", "UNVERIFIED", "INSPECT_EVIDENCE")
@@ -234,7 +263,7 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 	rootctx, rootcancel := context.WithTimeout(ctx, 4*time.Second)
 	report.RootPolicy = install.ObserveDiagnosticRootPolicy(rootctx, a.Project, report.Installation)
 	rootcancel()
-	if ledger != nil && ledger.PeerCapacity != nil && report.RootPolicy.Sequence != nil && (*report.RootPolicy.Sequence != ledger.PeerCapacity.CompletedLedgerEvents || *report.RootPolicy.ActiveDirections != ledger.PeerCapacity.ActiveDirections) {
+	if ledger != nil && ledger.PeerCapacity != nil && report.RootPolicy.Sequence != nil && report.RootPolicy.ActiveDirections != nil && (*report.RootPolicy.Sequence != ledger.PeerCapacity.CompletedLedgerEvents || *report.RootPolicy.ActiveDirections != ledger.PeerCapacity.ActiveDirections) {
 		report.AddRoutedIssue("root", "ROOT_SQLITE_POLICY_EPOCH_OR_OUTCOME_UNVERIFIED", "root-policy", "UNVERIFIED", "MCP_INSPECT_OR_ROOT_EVIDENCE_REQUIRED")
 	}
 	if report.RootPolicy.Conntrack == "MISSING" {
@@ -285,10 +314,38 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 	return legacy, report
 }
 
-func runDoctor(a doctorArgs) error {
+func runDoctor(a doctorArgs, summary bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	legacy, report := collectDoctor(ctx, a)
+	report.Operator = diagnostic.Summarize(report, os.Geteuid())
+	if legacy.CapacityNeedsReview() {
+		report.Operator.Next = append(report.Operator.Next, "Review capacity budgets before new allocations; do not clear history or recycle addresses manually.")
+	}
+	if summary {
+		fmt.Fprintf(os.Stderr, "Doctor %s: %s; installation=%s; runtime=%s; evidence=%s\n", report.Scope, report.Operator.Status, report.Installation.Mode, report.Installation.Runtime, report.Coverage)
+		if report.ScopedLedger != nil {
+			fmt.Fprintf(os.Stderr, "Owned Boxes=%d; retained identities=%d\n", report.ScopedLedger.Owned, report.ScopedLedger.Retired)
+		}
+		if legacy.AddressCapacity != nil {
+			fmt.Fprintf(os.Stderr, "IPv4 %s: held=%d; remaining upper bound=%d; %s\n", legacy.AddressCapacity.IPv4Prefix, legacy.AddressCapacity.BlockedIPv4, legacy.AddressCapacity.RemainingIPv4UpperBound, legacy.AddressCapacity.Level)
+			if legacy.AddressCapacity.DurableHeldIPv4 != nil && legacy.AddressCapacity.NativeOnlyBlockedIPv4 != nil {
+				fmt.Fprintf(os.Stderr, "IPv4 durable held=%d; native-only blocked=%d\n", *legacy.AddressCapacity.DurableHeldIPv4, *legacy.AddressCapacity.NativeOnlyBlockedIPv4)
+			}
+		}
+		if p := legacy.ProjectCapacity; p != nil {
+			fmt.Fprintf(os.Stderr, "Live Box slots: owned=%d pending=%d remaining=%d; %s\n", p.Owned, p.PendingCreates, p.Remaining, p.Level)
+		}
+		if p := legacy.ScopedIdentityCapacity; p != nil {
+			fmt.Fprintf(os.Stderr, "Scoped identities: retired=%d owned=%d pending=%d new remaining=%d; %s\n", p.Retired, p.Owned, p.PendingCreates, p.RemainingNewIdentities, p.Level)
+		}
+		if p := legacy.ScopedPeerCapacity; p != nil {
+			fmt.Fprintf(os.Stderr, "Peer directions: active=%d revoked=%d pending/unknown=%d remaining=%d; %s; grant-history upper bound=%d reserved revokes=%d; %s\n", p.ActiveDirections, p.RevokedDirections, p.PendingOrUnknown, p.RemainingDirections, p.DirectionLevel, p.RemainingGrantEventsUpperBound, p.ReservedRevokeEvents, p.GrantHistoryLevel)
+		}
+		for _, next := range report.Operator.Next {
+			fmt.Fprintln(os.Stderr, next)
+		}
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if e := enc.Encode(struct {

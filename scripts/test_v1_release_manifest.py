@@ -161,8 +161,16 @@ class ReleaseTests(unittest.TestCase):
                 return json.dumps({"status": "APPLIED"})
             if action == "native-prereq-plan":
                 return json.dumps({"config_ready": native_ready, "review_sha256": approval})
+            if action == "install-status":
+                return json.dumps({"binary_sha256": hashlib.sha256(candidate).hexdigest(),
+                                   "native_project": target["project"], "service_user": "boxweave",
+                                   "service_active": True, "restart_required": False,
+                                   "version": "1.0.0-rc.8", "build_commit": source})
             if action == "oauth-status":
-                return json.dumps({"Enabled": bool(oauth_origin), "Origin": oauth_origin})
+                password = "oauth-setup" in calls
+                origin = oauth_origin if "oauth-set-origin" in calls and not oauth_error else ""
+                return json.dumps({"Enabled": bool(origin) and password, "Origin": origin,
+                                   "PasswordConfigured": password})
             if action == "doctor":
                 return json.dumps({"ready": True, "mcp_ready": True, "native": {"ready": True},
                                    "version": "1.0.0-rc.8", "commit": source})
@@ -180,6 +188,9 @@ class ReleaseTests(unittest.TestCase):
             checks.append(True)
             if missing_reader or (reader_drift and len(checks) > 1):
                 raise ns["InstallError"]("INSTALL_MISSING_PREREQUISITE: /usr/sbin/conntrack")
+        ns["SCOPED_PATHS"] = tuple(self.dir / ("scope-" + str(i))
+                                   for i, _ in enumerate(ns["SCOPED_PATHS"]))
+        ns["STATE_DIR"] = self.dir / "isolated-state"
         ns["retirement_reader_preflight"] = reader_preflight
         ns["Path"] = fake_path
         ns["current_host_digest"] = lambda: "e" * 64
@@ -208,7 +219,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(calls, ["native-prepare-plan", "native-prepare-plan", "install-stage",
                                  "native-prepare-apply", "native-prereq-plan", "native-prereq-verify",
-                                 "install-activate", "install-status", "doctor"])
+                                 "install-activate", "install-status", "doctor", "oauth-status"])
 
     def test_guided_install_decline_and_changed_plan(self):
         calls, error = self.exercise_guided_install("NO")
@@ -238,18 +249,20 @@ class ReleaseTests(unittest.TestCase):
     def test_oauth_deferred_and_failed_after_installed_postflight(self):
         calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y")
         self.assertIsNone(error)
-        self.assertEqual(calls[-3:], ["doctor", "oauth-setup", "oauth-status"])
+        self.assertEqual(calls[-4:], ["doctor", "oauth-status", "oauth-setup", "oauth-status"])
         calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y", oauth_origin="https://example.test")
         self.assertIsNone(error)
-        self.assertEqual(calls[-4:], ["doctor", "oauth-setup", "oauth-set-origin", "oauth-status"])
+        self.assertEqual(calls[-6:], ["doctor", "oauth-status", "oauth-setup", "oauth-status", "oauth-set-origin", "oauth-status"])
         calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y", oauth_origin="https://example.test", oauth_error=True)
         self.assertEqual(error, "exit 2")
         self.assertEqual(calls.count("install-activate"), 1)
-        self.assertEqual(calls[-1], "oauth-set-origin")
+        self.assertEqual(calls[-2:], ["oauth-set-origin", "oauth-status"])
+        self.assertEqual(calls.count("oauth-setup"), 1)
+        self.assertEqual(calls.count("oauth-set-origin"), 1)
 
     def test_guided_install_incomplete_native_never_activates(self):
         calls, error = self.exercise_guided_install("INSTALL user-1001", native_ready=False)
-        self.assertIn("configuration not ready", error)
+        self.assertIn("INSTALL_PHASE_UNVERIFIED: NATIVE_READBACK", error)
         self.assertNotIn("install-activate", calls)
 
     def test_embedded_guided_installer_keeps_explicit_plan_and_approvals(self):

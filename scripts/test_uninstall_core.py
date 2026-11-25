@@ -35,7 +35,9 @@ class FakeHost(unittest.TestCase):
             "BACKUP": root / "installer-backup",
             "RETIRED": root / "retired",
             "SCOPED_FENCE": root / "scoped-fence",
+            "SCOPED_DRAIN": root / "scoped-drain",
             "PURGE_FENCE": root / "purge-fence",
+            "OFFLINE_FENCE": root / "offline-fence",
             "SCOPED_LOCK": root / "scoped-lock",
             "MAINTENANCE_LOCK": root / "maintenance-lock",
             "SCOPED_JOURNAL": root / "scoped-journal",
@@ -851,6 +853,8 @@ class FakeHost(unittest.TestCase):
         plan = {"ready": True, "mode": u.SCOPED_MODE, "project": "user-1001"}
         with mock.patch.object(u.os, "geteuid", return_value=0), \
                 mock.patch.object(u, "scoped_plan", return_value=plan), \
+                mock.patch.object(u, "scoped_incus_active", return_value="1234"), \
+                mock.patch.object(u, "native_instances", return_value=[]), \
                 mock.patch("builtins.open", side_effect=[io.StringIO("NO\n"), io.StringIO()]), \
                 contextlib.redirect_stdout(io.StringIO()):
             with self.assertRaisesRegex(u.UninstallError, "not approved"):
@@ -892,14 +896,14 @@ class FakeHost(unittest.TestCase):
 
     def test_purge_completed_archive_and_interrupted_prefix(self):
         archive = self.purge_fixture()
-        with mock.patch.object(u, "purge_absent"), mock.patch.object(u, "purge_native_empty"), \
+        with mock.patch.object(u, "purge_absent"), mock.patch.object(u, "purge_native_empty", return_value="e"*64), \
                 mock.patch.object(u, "scoped_private_dir"), \
                 mock.patch.object(u, "scoped_private_file", side_effect=lambda path, cap=None: u.file_fingerprint(path)):
             receipt = u.purge_review("user-1001")
             self.assertIn(str(archive / "state-ledger.sqlite"), receipt["plan"]["files"])
             self.assertTrue(u.AUDIT.exists())
             u.scoped_write_json(u.PURGE_FENCE, receipt)
-            (archive / "state-ledger.sqlite").unlink()
+            u.purge_order(receipt["plan"])[0].unlink()
             self.assertEqual(u.purge_review("user-1001"), receipt)
             # A new or changed file is not part of the approved prefix.
             stray = archive / "unreviewed"
@@ -921,9 +925,131 @@ class FakeHost(unittest.TestCase):
             self.assertFalse(u.RETIRED.exists())
             self.assertFalse(u.PURGE_FENCE.exists())
 
+    def test_h2c_purge_archive_drift_and_nonprefix(self):
+        archive = self.purge_fixture()
+        with mock.patch.object(u, "purge_absent"), mock.patch.object(u, "purge_native_empty", return_value="e"*64), \
+                mock.patch.object(u, "scoped_private_dir"), \
+                mock.patch.object(u, "scoped_private_file", side_effect=lambda path, cap=None: u.file_fingerprint(path)):
+            ledger = archive / "state-ledger.sqlite"
+            original = ledger.read_bytes()
+            ledger.write_bytes(original + b"drift")
+            with self.assertRaisesRegex(u.UninstallError, "content receipt mismatch"):
+                u.purge_review("user-1001")
+            ledger.write_bytes(original)
+            receipt = u.purge_review("user-1001")
+            self.assertEqual(receipt["schema"], 2)
+            u.scoped_write_json(u.PURGE_FENCE, receipt)
+            u.purge_order(receipt["plan"])[-1].unlink()
+            with self.assertRaisesRegex(u.UninstallError, "NON_PREFIX"):
+                u.purge_review("user-1001")
+            self.assertTrue(u.PURGE_FENCE.exists())
+            self.assertTrue(archive.exists())
+
+    def test_h2c_purge_repeat_resume_at_every_boundary(self):
+        archive = self.purge_fixture()
+        with mock.patch.object(u, "purge_absent"), mock.patch.object(u, "purge_native_empty", return_value="e"*64), \
+                mock.patch.object(u, "scoped_private_dir"), \
+                mock.patch.object(u, "scoped_private_file", side_effect=lambda path, cap=None: u.file_fingerprint(path)):
+            receipt = u.purge_review("user-1001")
+            u.scoped_write_json(u.PURGE_FENCE, receipt)
+            foreign = archive.parent.parent / "foreign"
+            foreign.write_text("retain")
+            order = u.purge_order(receipt["plan"])
+            for index, path in enumerate(order):
+                self.assertEqual(u.purge_review("user-1001"), receipt)
+                self.assertEqual(u.purge_review("user-1001"), receipt)
+                self.assertEqual(u.purge_prefix(receipt["plan"]), index)
+                if str(path) in receipt["plan"]["directories"]:
+                    path.rmdir()
+                else:
+                    u.exact_unlink(path, receipt["plan"]["files"][str(path)])
+                u.scoped_sync_dir(path.parent)
+                self.assertTrue(u.PURGE_FENCE.exists())
+            self.assertEqual(u.purge_review("user-1001"), receipt)
+            u.purge_execute(receipt)
+            self.assertFalse(u.PURGE_FENCE.exists())
+            self.assertEqual(foreign.read_text(), "retain")
+
+    def test_h2c_purge_mount_and_foreign_receipt_refused(self):
+        archive = self.purge_fixture()
+        with mock.patch.object(u, "purge_absent"), mock.patch.object(u, "purge_native_empty", return_value="e"*64), \
+                mock.patch.object(u, "scoped_private_dir"), \
+                mock.patch.object(u, "scoped_private_file", side_effect=lambda path, cap=None: u.file_fingerprint(path)):
+            with mock.patch.object(u, "maintenance_mounts", return_value=[str(archive / "state-ledger.sqlite")]):
+                with self.assertRaisesRegex(u.UninstallError, "PURGE_MOUNTED"):
+                    u.purge_review("user-1001")
+            receipt = u.purge_review("user-1001")
+            foreign = archive.parent.parent / "foreign"
+            foreign.write_text("retain")
+            receipt["plan"]["files"][str(foreign)] = u.file_fingerprint(foreign)
+            receipt["review_sha256"] = u.sha(u.canonical(receipt["plan"]))
+            u.scoped_write_json(u.PURGE_FENCE, receipt)
+            with self.assertRaisesRegex(u.UninstallError, "foreign path"):
+                u.purge_review("user-1001")
+            self.assertEqual(foreign.read_text(), "retain")
+
+    def test_h2c_offline_postnative_cleanup_repeated_interruption(self):
+        lock = u.STATE / u.SERVE_LOCK_NAME
+        lock.write_bytes(b"")
+        lock.chmod(0o600)
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"])
+        plan.update(mode=u.OFFLINE_MODE, offline_originals=[])
+        plan["review_sha256"] = u.sha(u.canonical({k:v for k,v in plan.items()
+                                                    if k not in ("review_sha256","ready","actions","retained")}))
+        archive = Path(u.archive_controller(plan))
+        content = u.legacy_archive_content(archive, plan, historical=True)
+        fence = {"schema":1,"project":"user-1001","review_sha256":plan["review_sha256"]}
+        u.audited_write({"status":"STARTED","mode":u.OFFLINE_MODE,"scope":"full",
+                         "phase":"NATIVE_RESTORED","host_sha256":plan["host_machine_id_sha256"],
+                         "review_sha256":plan["review_sha256"],"offline_plan":plan,
+                         "archive":str(archive),"archive_content_sha256":content,
+                         "verified_deleted":[],"unresolved_originals":[]})
+        u.scoped_write_json(u.OFFLINE_FENCE, fence)
+        def unit_props(name,*props):
+            path = next(x for x in (u.UNIT,u.RETIREMENT_UNIT,u.ROOT_UNIT) if x.name==name)
+            values = {"LoadState":"loaded" if path.exists() else "not-found",
+                      "FragmentPath":str(path) if path.exists() else "", "DropInPaths":"",
+                      "ActiveState":"inactive","MainPID":"0","UnitFileState":"disabled" if path.exists() else ""}
+            return {k:values[k] for k in props}
+        def absent(**kw):
+            self.assertFalse(any(x.exists() for x in (u.STATE,u.UNIT,u.BINARY,u.NATIVE)))
+        with mock.patch.object(u,"scoped_private_dir"), \
+                mock.patch.object(u,"scoped_private_file",side_effect=lambda path,cap=None:u.file_fingerprint(path)), \
+                mock.patch.object(u,"offline_restored_native",return_value="e"*64), \
+                mock.patch.object(u,"scoped_properties",side_effect=unit_props), \
+                mock.patch.object(u,"purge_absent",side_effect=absent):
+            record = u.read_json(u.AUDIT)
+            record["phase"]="BOX_DELETED"
+            u._replace_audit(record)
+            with self.assertRaisesRegex(u.UninstallError,"NATIVE_PREFIX_UNPROVEN"):
+                u.offline_resume_preview("user-1001")
+            record["phase"]="NATIVE_RESTORED"
+            u._replace_audit(record)
+            original_unlink = u.exact_unlink
+            for _ in range(5):
+                preview = u.offline_resume_preview("user-1001")
+                self.assertEqual(preview, u.offline_resume_preview("user-1001"))
+                if not preview["remaining_files"]:
+                    break
+                def interrupt(path,proof):
+                    original_unlink(path,proof)
+                    raise InterruptedError("fixture crash after exact unlink")
+                with mock.patch.object(u,"exact_unlink",side_effect=interrupt), self.assertRaises(InterruptedError):
+                    u.offline_cleanup_files(u.read_json(u.AUDIT))
+                self.assertTrue(u.OFFLINE_FENCE.exists())
+                self.assertEqual(u.read_json(u.AUDIT)["status"],"STARTED")
+            result=u.offline_cleanup_files(u.read_json(u.AUDIT))
+            self.assertEqual(result["archive_content_sha256"],content)
+            u.audited_complete(plan["review_sha256"],result)
+            self.assertEqual(u.offline_resume_preview("user-1001")["status"],"COMPLETE")
+            self.assertEqual(u.offline_resume_preview("user-1001")["remaining_files"],{})
+            self.assertEqual(u.read_json(u.OFFLINE_FENCE),fence)
+            self.assertTrue(archive.exists())
+
     def test_purge_refuses_incomplete_audit_and_unreferenced_archive(self):
         archive = self.purge_fixture()
-        with mock.patch.object(u, "purge_absent"), mock.patch.object(u, "purge_native_empty"), \
+        with mock.patch.object(u, "purge_absent"), mock.patch.object(u, "purge_native_empty", return_value="e"*64), \
                 mock.patch.object(u, "scoped_private_dir"), \
                 mock.patch.object(u, "scoped_private_file", side_effect=lambda path, cap=None: u.file_fingerprint(path)):
             stray = archive.parent / "retired-orphan00"

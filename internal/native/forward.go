@@ -78,6 +78,10 @@ func exactForwardDevice(d map[string]string, f ForwardSpec) bool {
 	return true
 }
 
+// MatchesDevice is the existing exact proxy predicate for read-only maintenance.
+func (f ForwardSpec) MatchesDevice(device map[string]string) bool {
+	return f.Validate() == nil && exactForwardDevice(device, f)
+}
 func copyInstanceDevices(in api.DevicesMap) api.DevicesMap {
 	result := api.DevicesMap{}
 	for k, v := range in {

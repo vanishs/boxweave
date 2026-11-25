@@ -80,6 +80,7 @@ type View struct {
 type Result struct {
 	View          View                  `json:"diagnosis"`
 	Recovery      *state.RecoveryRecord `json:"recovery,omitempty"`
+	NextAction    *state.NextAction     `json:"next_action,omitempty"`
 	NativeRetried bool                  `json:"native_retried"`
 }
 

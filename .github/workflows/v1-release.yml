@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Determine documentation-only vs full candidate
@@ -44,13 +45,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
       - name: Source validation and external distribution negative tests
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          echo "H5_DISTRIBUTION_SOURCE=$EXACT_HEAD"
           make verify
           # The S2 native verifier is build-tagged 'ignore', so go test ./...
           # does not compile it. Catch future verifier/API drift before RC.
@@ -92,6 +98,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
@@ -100,9 +107,11 @@ jobs:
       - name: Verify native target, source version, CGO and build exact candidate
         shell: bash
         env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           GOARCH_EXPECTED: ${{ matrix.goarch }}
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
           test "$(go env GOARCH)" = "$GOARCH_EXPECTED"
           test "$(go env CGO_ENABLED)" = 1
           base_version=$(cat VERSION)
@@ -120,9 +129,9 @@ jobs:
           mkdir -p release-assets
           name="boxweave-v$version-linux-$GOARCH_EXPECTED"
           CGO_ENABLED=1 go build -trimpath -buildvcs=false \
-            -ldflags "-X main.version=$version -X main.commit=$GITHUB_SHA -buildid=" \
+            -ldflags "-X main.version=$version -X main.commit=$EXACT_HEAD -buildid=" \
             -o "release-assets/$name" ./cmd/boxweave
-          python3 - "$version" "$GITHUB_SHA" "release-assets/$name" <<'PY'
+          python3 - "$version" "$EXACT_HEAD" "release-assets/$name" <<'PY'
           import json, subprocess, sys
           actual = json.loads(subprocess.check_output([sys.argv[3], 'build-info']))
           assert actual == {'version': sys.argv[1], 'commit': sys.argv[2]}, actual
@@ -231,6 +240,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
@@ -240,9 +250,11 @@ jobs:
       - name: Make and self-verify exact candidate manifest
         shell: bash
         env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           EVENT_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
           tag=""
           if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
             tag="${GITHUB_REF#refs/heads/release/}"
@@ -251,7 +263,7 @@ jobs:
           # A branch CI artifact is always a candidate, not a published release.
           # When publishing, exact tag must have been stamped in both binaries.
           python3 scripts/v1_release_manifest.py --directory release-assets \
-            --tag "$tag" --source "$GITHUB_SHA" --installer install.sh
+            --tag "$tag" --source "$EXACT_HEAD" --installer install.sh
           (cd release-assets && sha256sum -c SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:

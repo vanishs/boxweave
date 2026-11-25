@@ -35,7 +35,7 @@ func nativePeerFreshPathsAbsentExceptJournal(lstat func(string) (fs.FileInfo, er
 		"/etc/systemd/system/boxweave.service.d", nativePrepareJournalPath,
 		nativePeerRootUnitPath, nativeRetirementUnitPath, nativeRetirementSocketPath,
 		nativePeerGuardRootJournalDir, nativePeerFreshJournalDir,
-		scopedGuardUnitPath, scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket, scopedRetirementFence, retirementPurgeFence, nativePeerRootSocketPath, nativePeerConntrackJournalPath, nativePeerConntrackOperationsDir, nativePeerConntrackLockPath,
+		scopedGuardUnitPath, scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket, scopedRetirementFence, retirementPurgeFence, ScopedDrainFence, nativePeerRootSocketPath, nativePeerConntrackJournalPath, nativePeerConntrackOperationsDir, nativePeerConntrackLockPath,
 	} {
 		if ownJournal && path == nativePeerFreshJournalDir {
 			continue

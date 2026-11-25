@@ -118,6 +118,9 @@ func scopedWriteExclusive(path, body string) error {
 // CheckScopedServeMode prevents an installed scoped journal from silently
 // entering the legacy controller, including when an operator omits the flag.
 func CheckScopedServeMode(enabled bool) error {
+	if e := CheckScopedDrainFence(); e != nil {
+		return e
+	}
 	if err := refuseScopedRetirementInProgress(); err != nil {
 		return err
 	}
@@ -144,7 +147,7 @@ func refuseScopedLegacy() error {
 
 func refuseScopedLegacyPaths(lstat func(string) (fs.FileInfo, error)) error {
 	for _, path := range []string{nativePeerFreshJournalDir, scopedGuardUnitPath,
-		scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket, scopedRetirementFence, retirementPurgeFence} {
+		scopedLifecycleUnitPath, scopedIncusDropIn, scopedLifecycleSocket, scopedRetirementFence, retirementPurgeFence, ScopedDrainFence} {
 		if info, err := lstat(path); info != nil || !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("scoped fresh evidence exists or cannot be inspected: %s; legacy maintenance unsupported", path)
 		}

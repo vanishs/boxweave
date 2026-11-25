@@ -5,6 +5,7 @@ set -eu
 exec python3 - "$@" <<'PY_BOXWEAVE_INSTALL'
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -36,6 +37,7 @@ RESTRICTED_SOCKET = "/var/lib/incus/unix.socket.user"
 SCOPED_PATHS = (
     Path("/var/lib/boxweave-purge-v1.json"),
     Path("/var/lib/boxweave-scoped-retirement-v1.json"),
+    Path("/var/lib/boxweave-scoped-drain-v1.json"),
     Path("/var/lib/boxweave-scoped-peer-v2"),
     Path("/etc/systemd/system/boxweave-scoped-guard.service"),
     Path("/etc/systemd/system/boxweave-scoped-lifecycle.service"),
@@ -271,8 +273,84 @@ def scoped_review(candidate, project):
     return review
 
 
+# Type-wide systemd service drop-ins can apply only once the unit is
+# installed: systemctl show of a not-found unit can report no DropInPaths.
+# This is a conservative advisory, NOT ownership proof or a permission to
+# ignore an effective drop-in. Never modify inherited systemd policy.
+# Read-only advisory. A recognized byte sequence is not a verified effective
+# unit or approval. Keep the actual retirement contract in the installed
+# observer and exact uninstaller; never change the inherited policy here.
+KNOWN_LXC_POLICY_PATH = Path("/run/systemd/system/service.d/zzz-lxc-service.conf")
+KNOWN_LXC_POLICY_SHA = "fcbd512cb8212c6f5720f28398f01e85ff96246aebb73e09cf449d2f3aa2c5b0"
+
+
+def known_lxc_policy_bytes(path):
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_size > 4096:
+        return False
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or not os.path.samestat(before, opened):
+            return False
+        data = stream.read(4097)
+        after = os.fstat(stream.fileno())
+    def identity(st):
+        return (st.st_dev, st.st_ino, st.st_mode, st.st_uid, st.st_gid,
+                st.st_nlink, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+    return (identity(before) == identity(opened) == identity(after) == identity(path.lstat())
+            and len(data) <= 4096 and digest(data) == KNOWN_LXC_POLICY_SHA)
+
+
+def inherited_service_dropin_hint(paths=None):
+    if paths is None:
+        paths = ("/etc/systemd/system/service.d", "/run/systemd/system/service.d",
+                 "/usr/local/lib/systemd/system/service.d",
+                 "/usr/lib/systemd/system/service.d", "/lib/systemd/system/service.d")
+    try:
+        entries = set()
+        for folder in paths:
+            try:
+                with os.scandir(folder) as listing:
+                    entries.update(Path(entry.path) for entry in listing if entry.name.endswith(".conf"))
+            except FileNotFoundError:
+                continue
+        if not entries:
+            return "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF"
+        if entries == {KNOWN_LXC_POLICY_PATH} and known_lxc_policy_bytes(KNOWN_LXC_POLICY_PATH):
+            return "KNOWN_LXC255_POLICY_BYTES_REVIEW_REQUIRED"
+        return "POTENTIAL_INHERITED_SERVICE_DROPIN"
+    except OSError:
+        return "INHERITED_SERVICE_DROPIN_UNVERIFIED"
+
+
+def print_lifecycle_preflight(scoped=False):
+    hint = inherited_service_dropin_hint()
+    print("maintenance_preflight=" + hint, flush=True)
+    if hint == "KNOWN_LXC255_POLICY_BYTES_REVIEW_REQUIRED" and scoped:
+        print("Maintenance: recognized LXC service.d policy bytes. This Scoped retirement profile has a reviewed compatibility route; installed effective units, mapped container identity, original scope and policy still require verification. This is not a runtime-hardening or uninstall approval. Do not remove inherited policy.", flush=True)
+    elif hint != "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF":
+        print("Maintenance warning: inherited service drop-ins may block verified activation (Legacy) or full retirement. Review effective units before installation; do not delete inherited policy. A working Scoped controller is not proof of retirement readiness.", flush=True)
+    else:
+        print("Maintenance preflight is advisory; only the installed effective-unit review can prove retirement readiness.", flush=True)
+    return hint
+
+
 def print_scoped_review(review):
     print("Reviewed scoped native preparation:", json.dumps(review, sort_keys=True), flush=True)
+    # The displayed pool is derived from the exact reviewed CIDR, not an
+    # extra mutable input or another approval digest. Older/partial reports
+    # must never be represented as a verified capacity.
+    try:
+        prefix = ipaddress.IPv4Interface(review["IPv4CIDR"])
+        if not 16 <= prefix.network.prefixlen <= 30:
+            raise ValueError("unsupported prefix")
+        nominal = prefix.network.num_addresses - 3
+        print("Reviewed IPv4 capacity: " + str(prefix) + "; nominal identities=" +
+              str(nominal) + "; live Box ledger limit=1024; retired identities remain held.", flush=True)
+    except (KeyError, ValueError, TypeError):
+        print("Reviewed IPv4 capacity: UNVERIFIED; inspect native review before approval.", flush=True)
+    print("No implicit resize or address reuse. Larger exclusive sizing is fresh-bootstrap only.", flush=True)
     print("scoped_fresh_review_sha256=" + review["ReviewSHA256"], flush=True)
 
 
@@ -439,49 +517,121 @@ def legacy_fresh_review(candidate, args, native_args):
     return plan, review
 
 
+def phase_unverified(name):
+    return InstallError("INSTALL_PHASE_UNVERIFIED: " + name +
+                        "; retain original files and journals; inspect install-status and doctor locally; do not reinstall blindly")
+
+
 def install_phase(name, command, capture=False):
     print("INSTALL_PHASE=" + name, flush=True)
     try:
         if capture:
             return command_json(command)
         subprocess.run(command, check=True)
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        raise InstallError("INSTALL_PHASE_UNVERIFIED: " + name +
-                           "; retain original files and journals; inspect install-status and doctor locally; do not reinstall blindly") from exc
+    except (OSError, ValueError, InstallError, subprocess.SubprocessError) as exc:
+        raise phase_unverified(name) from exc
+
+
+def normalize_oauth_origin(raw):
+    # Only a single terminal slash is accepted as a convenience.
+    # The installed CLI remains the authoritative validator.
+    origin = raw[:-1] if raw.endswith("/") else raw
+    if not 12 <= len(origin) <= 255 or not origin.startswith("https://"):
+        raise InstallError("OAUTH_ORIGIN_INVALID")
+    host = origin[len("https://"):]
+    labels = host.split(".")
+    if (len(labels) < 2 or host.endswith(".localhost") or
+            not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                    for label in labels)):
+        raise InstallError("OAUTH_ORIGIN_INVALID")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return origin
+    raise InstallError("OAUTH_ORIGIN_INVALID")
+
+
+def oauth_next(args, code):
+    # No origin or credential is echoed on failure.
+    print(code + ": controller installation complete; no reinstall needed")
+    prefix = "sudo runuser -u " + args.service_user + " -- /usr/local/bin/boxweave "
+    print("Check: " + prefix + "oauth-status -project " + args.project)
+    print("If PasswordConfigured is false, use oauth-setup once; otherwise keep the existing password.")
+    print("Continue: " + prefix + "oauth-set-origin -project " + args.project +
+          " -public-origin HTTPS_ORIGIN")
+
+
+def configure_oauth(identity, args, inp, out):
+    status_cmd = identity + ["oauth-status", "-project", args.project]
+    current = command_json(status_cmd)
+    # Older candidates lack PasswordConfigured; use the fresh Doctor observation.
+    password = current.get("PasswordConfigured", getattr(args, "oauth_password_configured", None))
+    if not isinstance(password, bool):
+        oauth_next(args, "OAUTH_PASSWORD_STATE_UNVERIFIED")
+        return 2
+    if not password:
+        out.write("Configure a new OAuth approval password? [y/N] ")
+        out.flush()
+        if inp.readline().strip().lower() != "y":
+            oauth_next(args, "OAUTH_CONFIGURATION_DEFERRED")
+            return 0
+        try:
+            subprocess.run(identity + ["oauth-setup", "-project", args.project],
+                           stdin=inp, stdout=out, stderr=out, check=True)
+        except (OSError, subprocess.SubprocessError):
+            oauth_next(args, "OAUTH_PASSWORD_SETUP_UNVERIFIED")
+            return 2
+        current = command_json(status_cmd)
+        if current.get("PasswordConfigured", True) is not True:
+            oauth_next(args, "OAUTH_PASSWORD_SETUP_UNVERIFIED")
+            return 2
+    origin = args.public_origin
+    if current.get("Enabled") is True and not origin:
+        print("OAUTH_CONFIGURED: existing OAuth configuration retained; remote authorization not verified")
+        return 0
+    for _ in range(3):
+        if not origin:
+            out.write("Existing HTTPS tunnel origin (empty for later): ")
+            out.flush()
+            origin = inp.readline().rstrip("\r\n")
+        if not origin:
+            oauth_next(args, "OAUTH_ORIGIN_MISSING")
+            return 0
+        try:
+            normalized = normalize_oauth_origin(origin)
+        except InstallError:
+            print("OAUTH_ORIGIN_INVALID: use an HTTPS DNS origin without path, port, userinfo, query or fragment")
+            origin = None
+            continue
+        try:
+            subprocess.run(identity + ["oauth-set-origin", "-project", args.project,
+                                       "-public-origin", normalized],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        except (OSError, subprocess.SubprocessError):
+            # The command might have committed before the reply failed.
+            # Observe state instead of blindly repeating a write.
+            pass
+        current = command_json(status_cmd)
+        if current.get("Enabled") is True and current.get("Origin") == normalized:
+            print("OAUTH_CONFIGURED: remote reachability and actual client authorization not verified")
+            print("MCP URL:", normalized + "/mcp")
+            return 0
+        oauth_next(args, "OAUTH_ORIGIN_APPLY_UNVERIFIED")
+        return 2
+    oauth_next(args, "OAUTH_ORIGIN_RETRY_LIMIT")
+    return 2
 
 
 def optional_oauth(identity, args):
-    # The controller is already installed. OAuth is separate, optional
-    # configuration, never a reason to restart or reinstall the controller.
+    # Controller installation is independently complete.
     try:
         with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
-            out.write("Configure a new OAuth approval password? [y/N] ")
-            out.flush()
-            if inp.readline().strip().lower() != "y":
-                print("OAUTH_CONFIGURATION_DEFERRED: local MCP installation remains complete; use oauth-status and the operator guide")
-                return
-            subprocess.run(identity + ["oauth-setup", "-project", args.project],
-                           stdin=inp, stdout=out, stderr=out, check=True)
-            origin = args.public_origin
-            if not origin:
-                out.write("Existing HTTPS tunnel origin (empty for later): ")
-                out.flush()
-                origin = inp.readline().strip()
-            if origin:
-                subprocess.run(identity + ["oauth-set-origin", "-project", args.project,
-                                           "-public-origin", origin], check=True)
-            current = command_json(identity + ["oauth-status", "-project", args.project])
-            if current.get("Enabled") is True and current.get("Origin") == origin and origin:
-                print("OAUTH_CONFIGURED: remote reachability and actual client authorization not verified")
-                print("MCP URL:", origin + "/mcp")
-            elif not origin and current.get("Enabled") is False and current.get("Origin") == "":
-                print("OAUTH_ORIGIN_MISSING: password setup succeeded; configure the HTTPS origin later")
-            else:
-                raise InstallError("OAuth status differs from requested configuration")
-    except (OSError, ValueError, InstallError, subprocess.SubprocessError):
-        # Never print a command exception containing configuration inputs.
-        print("OAUTH_CONFIGURATION_UNVERIFIED: controller installation complete; inspect oauth-status and finish configuration separately", file=sys.stderr)
-        raise SystemExit(2)
+            result = configure_oauth(identity, args, inp, out)
+    except (OSError, ValueError, InstallError, subprocess.SubprocessError, KeyboardInterrupt):
+        oauth_next(args, "OAUTH_CONFIGURATION_UNVERIFIED")
+        result = 2
+    if result:
+        raise SystemExit(result)
 
 
 def main():
@@ -506,6 +656,8 @@ def main():
     parser.add_argument("--incus-socket", default="/var/lib/incus/unix.socket.user")
     parser.add_argument("--confirm-host-sha256", help="exact SHA256 of /etc/machine-id printed by --plan")
     args = parser.parse_args()
+    if os.path.lexists("/var/lib/boxweave-offline-retirement-v1.json"):
+        raise InstallError("OFFLINE_RETIREMENT_IN_PROGRESS: preserve original local retirement receipt")
     refuse_scoped_existing()
     if args.guided_fresh_plan and (not args.plan or args.upgrade or args.scoped_peer_fresh or args.public_origin):
         raise InstallError("--guided-fresh-plan requires --plan, Legacy fresh mode and no OAuth options")
@@ -545,8 +697,10 @@ def main():
         if not args.sha256 or not SHA_RE.fullmatch(args.sha256):
             raise InstallError("local candidate requires exact --sha256")
         binary_path = Path(args.local_binary)
-        if not binary_path.is_absolute() or not binary_path.is_file() or binary_path.is_symlink():
-            raise InstallError("--local-binary must be an absolute regular file")
+        if not binary_path.is_absolute():
+            raise InstallError("--local-binary must be an absolute regular file; pass the full path to the actual candidate binary, not a relative path")
+        if not binary_path.is_file() or binary_path.is_symlink():
+            raise InstallError("--local-binary must be an absolute regular file; the candidate must exist and must not be a symlink")
         if binary_path.stat().st_size > MAX_BINARY:
             raise InstallError("local binary too large")
         binary = binary_path.read_bytes()
@@ -622,6 +776,9 @@ def main():
     else:
         print("changes=only v1 Go installer-owned binary/unit/SQLite; no native preparation or tunnel")
     print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
+    if not args.upgrade and os.geteuid() == 0 and (args.scoped_peer_fresh or fresh_guided or legacy_preview):
+        print_lifecycle_preflight(scoped=args.scoped_peer_fresh)
+
     if args.upgrade:
         print("forward_policy=preserve existing systemd unit and operator overrides; native Project permissions remain unchanged")
         if upgrade_review:
@@ -731,31 +888,40 @@ def main():
             prepared = install_phase("NATIVE_PREPARE", [str(candidate), "native-prepare-apply", *native_args,
                  "-native-prepare-sha256", review["review_sha256"], "-approve-local"], capture=True)
             if prepared.get("status") != "APPLIED":
-                raise InstallError("native preparation incomplete; inspect original journal")
+                raise phase_unverified("NATIVE_PREPARE")
             prereq = install_phase("NATIVE_READBACK", [str(candidate), "native-prereq-plan", "-project", args.project], capture=True)
             if not prereq.get("config_ready") or not SHA_RE.fullmatch(prereq.get("review_sha256", "")):
-                raise InstallError("native configuration not ready; preserve staged installation")
+                raise phase_unverified("NATIVE_READBACK")
             print("Native prerequisite readback:", json.dumps(prereq), flush=True)
             install_phase("NATIVE_VERIFY", [str(candidate), "native-prereq-verify", "-project", args.project,
                             "-native-prereq-sha256", prereq["review_sha256"], "-approve-local"])
         if not args.upgrade:
             install_phase("ACTIVATE", [str(candidate), "install-activate", "-project", args.project,
                             "-service-user", args.service_user, "-incus-socket", str(sock), "-approve-local"])
-        install_phase("INSTALLED_STATUS", [str(candidate), "install-status", "-project", args.project,
-                        "-service-user", args.service_user, "-incus-socket", str(sock)])
+        installed_status = install_phase("INSTALLED_STATUS", [str(candidate), "install-status", "-project", args.project,
+                        "-service-user", args.service_user, "-incus-socket", str(sock)], capture=True)
+        print(json.dumps(installed_status), flush=True)
         if fresh_guided:
+            if (installed_status.get("binary_sha256") != sha or
+                    installed_status.get("native_project") != args.project or
+                    installed_status.get("service_user") != args.service_user or
+                    installed_status.get("service_active") is not True or
+                    installed_status.get("restart_required") is not False):
+                raise phase_unverified("INSTALLED_STATUS")
             installed = "/usr/local/bin/boxweave"
             identity = ["runuser", "-u", args.service_user, "--", installed]
-            doctor = json.loads(subprocess.check_output(identity + ["doctor", "-project", args.project], text=True))
+            doctor = install_phase("CONTROLLER_DOCTOR", identity + ["doctor", "-project", args.project], capture=True)
             print("Doctor:", json.dumps(doctor), flush=True)
-            if not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source):
-                raise InstallError("installed doctor build identity differs from reviewed release")
-            if not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready")):
-                raise InstallError("doctor not ready; inspect installed service")
+            if (doctor.get("version") != installed_status.get("version") or
+                    doctor.get("commit") != installed_status.get("build_commit") or
+                    (not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source)) or
+                    not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready"))):
+                raise phase_unverified("CONTROLLER_DOCTOR")
             policy = doctor.get("diagnostic", {}).get("forward_policy", {})
             effective = policy.get("reason") if policy.get("state") == "OBSERVED" else "unverified"
             print("RUNNING_SERVICE_FORWARD_POLICY=" + str(effective))
             print("GUIDED_INSTALL_COMPLETE: native config ready; packet/quota/PRS acceptance remains separate", flush=True)
+            args.oauth_password_configured = doctor.get("diagnostic", {}).get("ledger", {}).get("oauth", {}).get("password_configured")
             optional_oauth(identity, args)
     print("INSTALL_HELPER_APPLY_COMPLETE: inspect original installer manifest and native postflight; not HOST_GO PASS")
 

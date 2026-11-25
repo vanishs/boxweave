@@ -14,6 +14,17 @@ test ! -e /usr/local/bin/boxweave
 test ! -e /etc/systemd/system/boxweave.service
 test ! -e /etc/systemd/system/boxweave-ipv4-retirement.service
 ! id boxweave >/dev/null 2>&1
+# Disposable hosted VM only: the root observer requires a protected parent chain.
+sudo python3 - <<'PYCI'
+import os, stat
+for path in ("/", "/usr", "/usr/local", "/usr/local/bin"):
+    st = os.lstat(path)
+    assert stat.S_ISDIR(st.st_mode) and st.st_uid == 0, path
+    if path in ("/usr/local", "/usr/local/bin"):
+        os.chmod(path, stat.S_IMODE(st.st_mode) & ~0o022)
+    assert not os.lstat(path).st_mode & 0o022, path
+    print("N2_ROOT_PARENT_PROTECTED", path, oct(stat.S_IMODE(os.lstat(path).st_mode)), flush=True)
+PYCI
 work="$(mktemp -d -p /tmp bw-n2-installed.XXXXXX)"
 chmod 0755 "$work"
 commit="$(git rev-parse HEAD)"
@@ -134,6 +145,14 @@ assert x["service_active"] and not x["restart_required"] and len(x["retirement_u
 print("N2_INSTALLED_HELPER_ACTIVATION=PASS",flush=True)
 PY
 fi
+# H3A: real installed CLI with a private disposable DB, no live auth change.
+h3a_pid="$(sudo systemctl show boxweave.service -p MainPID --value)"
+sudo runuser -u boxweave -- "$installed" oauth-status -project "$project" > "$work/h3a-before.json"
+sudo python3 scripts/pr188_h3a_oauth.py --binary "$installed" --project "$project"
+sudo runuser -u boxweave -- "$installed" oauth-status -project "$project" > "$work/h3a-after.json"
+cmp "$work/h3a-before.json" "$work/h3a-after.json"
+test "$(sudo systemctl show boxweave.service -p MainPID --value)" = "$h3a_pid"
+echo PR188_H3A_INSTALLED_NO_EFFECT=PASS
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
 # D1 exact-head installed read-only observations before workload admission.
 d1_pid="$(sudo systemctl show boxweave.service -p MainPID --value)"
@@ -192,17 +211,35 @@ assert not p["can_repair"] and not p["apply_available"] and "review_sha256" not 
 print("PR177_D3_INSTALLED_ABSENT_ISSUE_NO_EFFECT=PASS",flush=True)
 D3ABSENT
 test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
+# H1A uses the installed exact-head observer, without requiring controller runtime.
+sudo python3 scripts/pr188_h1a_observe.py "$project" active-empty
+sudo python3 scripts/pr188_h1b_plan.py "$project" active-empty
+sudo systemctl stop boxweave.service
+sudo python3 scripts/pr188_h1a_observe.py "$project" offline-empty
+sudo python3 scripts/pr188_h1b_plan.py "$project" offline-empty --negative-fixtures
+sudo systemctl start boxweave.service
+sudo systemctl is-active --quiet boxweave.service
 
 
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
+sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test "${PR188_OFFLINE_RETIREMENT:-0}" = 1; then
+  CGO_ENABLED=1 go test -c -o "$work/h2b-original.test" ./internal/install
+  chmod 0755 "$work/h2b-original.test"
+  sudo env RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr188_h2b_offline.py "$project" "$work/actor.receipt" "$work/h2b-original.test"
+  exit 0
+fi
 if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
   if test "${PR182_SCOPED_RETIREMENT:-0}" = 1; then
-    sudo python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt"
+    sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt" "$work/candidate-a" "$first"
     exit 0
   fi
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
+  sudo python3 scripts/pr188_h1a_observe.py "$project" live
+  sudo python3 scripts/pr188_h1b_plan.py "$project" live --negative-fixtures
   sudo "$installed" doctor -project "$project" > "$work/d2-scoped-active.json"
   python3 - "$work/d2-scoped-active.json" <<'D2ACTIVE'
 import json,sys
@@ -343,14 +380,7 @@ PY
 rm -f "$work/actor.receipt"
 # Same Host, original Incus daemon and restricted Project retained. Erase
 # the reviewed completed Legacy archive, then install a fresh Scoped ledger.
-sudo sh uninstall.sh --purge-plan --project "$project" > "$work/purge-plan.json"
-sudo python3 - "$project" <<'PURGE'
-import sys
-sys.path.insert(0, "scripts")
-from n2_installed_lifecycle import tty_run
-p=sys.argv[1]
-tty_run(["sh", "uninstall.sh", "--purge", "--project", p], [(("Type PURGE "+p).encode(), "PURGE "+p)])
-PURGE
+sudo env RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr188_h2c_purge.py "$project"
 test ! -e /var/lib/boxweave-uninstall-v1-audit.json
 test ! -e /var/lib/boxweave-retired
 test ! -e /var/lib/boxweave-purge-v1.json

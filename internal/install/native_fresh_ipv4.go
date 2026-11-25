@@ -19,7 +19,7 @@ import (
 
 // This policy is part of the approved fresh bootstrap digest. Existing
 // daemons and existing BoxWeave networks never enter the resizing path.
-const freshIPv4Policy = "fresh daemon only: review and widen the newly created exclusive empty per-user bridge to /21, or retain a smaller verified pool if no nonoverlapping /21 exists"
+const freshIPv4Policy = "fresh daemon only: target /21 (2045 nominal IPv4 identities, not 2045 live Boxes); exact prefix and pool are unknown until native bootstrap and exclusive route/lease proof; retain the verified original pool if no nonoverlapping /21 exists; never resize an existing BoxWeave bridge"
 
 type freshIPv4Scope struct {
 	Before  api.NetworkPut

@@ -12,6 +12,15 @@ on:
       - internal/state/reviewed_*.go
       - internal/state/diagnostic_ledger.go
       - scripts/pr177_d4_installed_recovery.py
+      - scripts/pr188_h1a_observe.py
+      - scripts/pr188_h1b_plan.py
+      - scripts/pr188_h2b_offline.py
+      - scripts/pr188_h2c_purge.py
+      - scripts/test_offline_retirement.py
+      - internal/state/maintenance_offline*.go
+      - scripts/test_maintenance_preview.py
+      - internal/state/maintenance_observe*.go
+      - cmd/boxweave/maintenance_doctor.go
       - internal/state/diagnostic_recovery*.go
       - internal/recovery/**
       - internal/state/network_ipv4*.go
@@ -22,10 +31,30 @@ on:
       - internal/state/operation_recover.go
       - internal/recovery/service.go
       - install.sh
+      - scripts/pr188_h3a_oauth.py
+      - scripts/pr188_h3b_installed.py
+      - scripts/pr188_h4a_installed.py
+      - scripts/pr188_h4b_installed.py
+      - scripts/test_scoped_drain.py
+      - scripts/test_lxc_empty_retirement.py
+      - cmd/boxweave/scoped_drain.go
+      - cmd/boxweave/maintenance_readiness.go
+      - scripts/test_uninstall_core.py
+      - internal/control/server.go
+      - internal/control/tool_failure.go
+      - internal/control/operation_diagnostic.go
+      - internal/state/scoped_identity_capacity.go
+      - internal/state/project_capacity.go
+      - internal/state/network_scoped*.go
+      - internal/native/peer_static_binding*.go
+      - internal/networklimits/**
+      - internal/state/oauth.go
       - scripts/uninstall_core.py
       - scripts/n2_installed_lifecycle.*
       - scripts/pr178_n2_scoped_lifecycle.py
       - scripts/pr182_scoped_retirement.py
+      - scripts/pr188_scoped_roundtrip.py
+      - scripts/test_scoped_roundtrip.py
       - scripts/pr178_n3_scoped_peer.py
       - scripts/pr178_n4_*.py
       - .github/workflows/v1-n2-installed-lifecycle.yml
@@ -40,10 +69,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline]
     env:
       RUNNER_ENVIRONMENT: github-hosted
-      PR178_SCOPED_N2: ${{ matrix.mode != 'legacy' && '1' || '0' }}
+      PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
+      PR188_OFFLINE_RETIREMENT: ${{ matrix.mode == 'legacy-offline' && '1' || '0' }}
       PR182_SCOPED_RETIREMENT: ${{ matrix.mode == 'scoped-retirement' && '1' || '0' }}
       N2_EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -60,19 +90,50 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$N2_EXACT_HEAD"
+          echo "H5_INSTALLED_SOURCE=$N2_EXACT_HEAD mode=${{ matrix.mode }}"
           sh -n scripts/n2_installed_lifecycle.sh
           sh scripts/n2_installed_lifecycle.sh | tee "$RUNNER_TEMP/n2-installed.log"
+          for marker in WRAPPER REAL_OAUTH_RESUME INSTALLED_NO_EFFECT; do
+            grep -Fxq "PR188_H3A_${marker}=PASS" "$RUNNER_TEMP/n2-installed.log"
+          done
           grep -Fq 'N2_CLEAN_BOOTSTRAP_ADDRESS_POOL=PASS ' "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR177_D3_INSTALLED_ABSENT_ISSUE_NO_EFFECT=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR177_D2_INSTALLED_EMPTY_DIAGNOSTIC_COVERAGE=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H3B_INSTALLED_DIAGNOSTIC=PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H4A_INSTALLED_PREFLIGHT=PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H4B_INSTALLED_CAPACITY_PARITY=PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H1A_ACTIVE_EMPTY=PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H1A_OFFLINE_EMPTY=PASS "$RUNNER_TEMP/n2-installed.log"
+          for marker in ACTIVE_EMPTY OFFLINE_EMPTY UNTRUSTED_OBSERVER_NONROOT UNSAFE_STATE_STALE NEGATIVE_NO_EFFECT; do
+            grep -Fxq "PR188_H1B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+          done
+          if test "$PR188_OFFLINE_RETIREMENT" = 1; then
+            grep -Fxq PR188_H2C_OFFLINE_POSTNATIVE_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H2C_OFFLINE_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
+            for marker in EXACT_UNKNOWN_REVIEW ARCHIVED_UNKNOWN_UNCHANGED NATIVE_RETIRED FOREIGN_UNCHANGED; do
+              grep -Fxq "PR188_H2B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            exit 0
+          fi
           if test "$PR182_SCOPED_RETIREMENT" = 1; then
-            for marker in LIVE_REFUSED RETIRED_HISTORY INTERRUPTED_RESUMED NATIVE_RESTORED FOREIGN_UNCHANGED COMPLETE; do
+            grep -Fxq "PR188_H4A_INSTALLED_BUSY_AND_REPLAY=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H4B_INSTALLED_CHURN_RETENTION=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq "PR188_H2A_FOREIGN_ACL_PRE_DISPATCH_REFUSED=PASS" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq "PR188_H2A_DRAIN_COMPLETE=PASS" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_UNKNOWN_EFFECTIVE_DROPIN_NO_EFFECT=PASS "$RUNNER_TEMP/n2-installed.log"
+            for marker in LIVE_PLAN RETIRED_HISTORY INTERRUPTED_RESUMED NATIVE_RESTORED FOREIGN_UNCHANGED COMPLETE; do
               grep -Fxq "PR182_SCOPED_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             grep -Fxq PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq RC14_SCOPED_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq 'PR188_ROUNDTRIP_NETWORK=PASS roundtrip-first' "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_ROUNDTRIP_SCOPED_FRESH_LEDGER_OLD_TOKEN_DENIED=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq 'PR188_ROUNDTRIP_NETWORK=PASS roundtrip-second' "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_ROUNDTRIP_SCOPED_REINSTALL_WORKLOAD=PASS "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
           if test "$PR178_SCOPED_N2" = 1; then
@@ -80,9 +141,17 @@ jobs:
             grep -Fxq INSTALL_SCOPED_STALE_PLAN_REFUSED=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq INSTALL_SCOPED_WRAPPERS_REFUSE_LEGACY=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR177_D2_SCOPED_ACTIVE_RETIRED_DIAGNOSTIC=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H1A_LIVE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H1B_LIVE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H1B_FOREIGN_CONSUMER_STALE=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR177_D3_INSTALLED_PARTIAL_ORIGINAL_PLAN_BLOCKED=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fq 'PR177_D3_INSTALLED_POSITIVE_PLAN=PASS SCOPED_V2' "$RUNNER_TEMP/n2-installed.log"
             grep -Fq 'PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY=PASS SCOPED_V2 ' "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq "PR188_H3B_GUIDED_DECLINE_NO_EFFECT=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq "PR188_H3B_GUIDED_APPLY=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq "PR188_H4A_INSTALLED_BUSY_AND_REPLAY=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H4B_INSTALLED_CHURN_RETENTION=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq "PR188_H4A_INSTALLED_UNKNOWN_NAVIGATION=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq 'PR177_D5_AUTHENTICATED_POSTCHECK=PASS SCOPED_V2' "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR177_D4_INSTALLED_PARTIAL_APPLY_REFUSED=PASS "$RUNNER_TEMP/n2-installed.log"
 
@@ -106,12 +175,16 @@ jobs:
           grep -Fxq I3_LEGACY_DRIFT_REFUSED_BEFORE_RETIREMENT=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fq 'PR177_D3_INSTALLED_POSITIVE_PLAN=PASS LEGACY' "$RUNNER_TEMP/n2-installed.log"
           grep -Fq 'PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY=PASS LEGACY ' "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq "PR188_H3B_GUIDED_DECLINE_NO_EFFECT=PASS LEGACY" "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq "PR188_H4A_INSTALLED_BUSY_AND_REPLAY=PASS LEGACY" "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq "PR188_H4A_INSTALLED_UNKNOWN_NAVIGATION=PASS LEGACY" "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR177_D5_LEGACY_CLEANUP=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq 'PR177_D5_AUTHENTICATED_POSTCHECK=PASS LEGACY' "$RUNNER_TEMP/n2-installed.log"
           for marker in N2_INSTALLED_HELPER_ACTIVATION N2_INSTALLED_HELPER_OUTAGE_RECOVERY_NO_DELETE_REPLAY N2_SCHEMA6_UPGRADE_ROLLBACK N2_FULL_UNINSTALL_PRESERVES_ARCHIVE; do
             grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
           done
           grep -Fxq N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq RC14_LEGACY_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq RC14_FRESH_LEDGER=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq RC14_LEGACY_TO_SCOPED_REINSTALL=PASS "$RUNNER_TEMP/n2-installed.log"

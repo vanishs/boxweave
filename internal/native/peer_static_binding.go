@@ -168,9 +168,10 @@ type ReserveCreatePeerBinding func(VerifiedStaticPeerBinding) (bool, error)
 type ReadCreatePeerHolds func(context.Context, string, string) (networklimits.AddressHolds, error)
 
 type createPeerInventory struct {
-	bridge, acl string
-	p4, p6      netip.Prefix
-	holds       networklimits.AddressHolds
+	bridge, acl  string
+	p4, p6       netip.Prefix
+	holds        networklimits.AddressHolds
+	durableHolds *networklimits.AddressHolds
 }
 
 func readCreatePeerInventory(c incus.InstanceServer, project string, proj *api.Project, devices api.DevicesMap) (createPeerInventory, error) {
@@ -266,7 +267,7 @@ func readCreatePeerInventory(c incus.InstanceServer, project string, proj *api.P
 			}
 		}
 	}
-	return createPeerInventory{nw.Name, nic["security.acls"], p4, p6, networklimits.AddressHolds{IPs: usedIP, MACs: usedMAC}}, nil
+	return createPeerInventory{bridge: nw.Name, acl: nic["security.acls"], p4: p4, p6: p6, holds: networklimits.AddressHolds{IPs: usedIP, MACs: usedMAC}}, nil
 }
 
 func (i *createPeerInventory) mergeHolds(ctx context.Context, project string, read ReadCreatePeerHolds) error {
@@ -277,6 +278,7 @@ func (i *createPeerInventory) mergeHolds(ctx context.Context, project string, re
 	if e != nil {
 		return e
 	}
+	i.durableHolds = &h
 	for ip := range h.IPs {
 		i.holds.IPs[ip] = true
 	}
@@ -309,6 +311,9 @@ type AddressCapacity struct {
 	NominalIPv4             int    `json:"nominal_ipv4"`
 	BlockedIPv4             int    `json:"blocked_ipv4"`
 	RemainingIPv4UpperBound int    `json:"remaining_ipv4_upper_bound"`
+	DurableHeldIPv4         *int   `json:"durable_held_ipv4,omitempty"`
+	NativeOnlyBlockedIPv4   *int   `json:"native_only_blocked_ipv4,omitempty"`
+	Level                   string `json:"level"`
 }
 
 func (i createPeerInventory) capacity() AddressCapacity {
@@ -321,6 +326,18 @@ func (i createPeerInventory) capacity() AddressCapacity {
 		}
 	}
 	out.RemainingIPv4UpperBound = max(0, out.NominalIPv4-out.BlockedIPv4)
+	out.Level = networklimits.CapacityLevel(out.NominalIPv4, out.RemainingIPv4UpperBound)
+	if i.durableHolds != nil {
+		n := 0
+		for a := range i.durableHolds.IPs {
+			if a.Is4() && i.p4.Contains(a) && a != first && a != i.p4.Addr() && binary.BigEndian.Uint32(a.AsSlice()) != last {
+				n++
+			}
+		}
+		extra := out.BlockedIPv4 - n
+		out.DurableHeldIPv4 = &n
+		out.NativeOnlyBlockedIPv4 = &extra
+	}
 	return out
 }
 

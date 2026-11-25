@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -64,6 +65,7 @@ func (s *Store) StageAndClaimScopedPeerOriginal(ctx context.Context, id string) 
 }
 
 var ErrScopedPeerHistoryFull = errors.New("scoped Peer policy history capacity reached")
+var ErrScopedPeerDirectionFull = fmt.Errorf("scoped Peer retained direction capacity reached: %w", ErrResourceLocked)
 
 func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error {
 	var err error
@@ -189,7 +191,7 @@ func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error
 		a, okA := owners[p.SourceUUID]
 		b, okB := owners[p.TargetUUID]
 		total++
-		if total > 32 || !okA || !okB || p.SourceUUID == p.TargetUUID || (retiredOwners[p.SourceUUID] || retiredOwners[p.TargetUUID]) && (desired != 0 || state != "REVOKED") ||
+		if total > networklimits.ScopedDirectionLimit || !okA || !okB || p.SourceUUID == p.TargetUUID || (retiredOwners[p.SourceUUID] || retiredOwners[p.TargetUUID]) && (desired != 0 || state != "REVOKED") ||
 			p.SourceIncarnation != a.Incarnation || p.TargetIncarnation != b.Incarnation ||
 			p.SourceIPv4 != a.IPv4 || p.TargetIPv4 != b.IPv4 ||
 			p.SourceIPv6 != a.IPv6 || p.TargetIPv6 != b.IPv6 ||
@@ -219,8 +221,8 @@ func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error
 	if e != nil {
 		return e
 	}
-	if i.Allow && !found && total >= 32 {
-		return ErrResourceLocked
+	if i.Allow && !found && total >= networklimits.ScopedDirectionLimit {
+		return ErrScopedPeerDirectionFull
 	}
 	var affected int64
 	if i.Allow {
