@@ -30,3 +30,5 @@ See [status](../STATUS.md), [active plan](../process/IMPLEMENTATION_PLAN.md) and
 - 2026-11-25: #188 [nested roundtrip follow-up](PR188_NESTED_ROUNDTRIP.md): exact H5 real fresh /21 install and native workloads PASS; live and empty retirement blocked by inherited effective-unit policy. Added advisory, refusal navigation and independent same-mode reinstall/workload gate. No bypass. H5 parent all five CI workflows PASS.
 
 - 2026-11-25: #188 [LXC live retirement follow-up](PR188_LXC_LIVE_RETIREMENT.md): actual direct approved six-operation drain, full uninstall, purge, fresh ledger/old token refusal, reinstall and real second workload PASS; exact known policy retained, additional override refused. Full race/build/vet and 74 focused Python tests PASS. Final independent CI required.
+
+- 2026-11-25: #188 [repeat clean install](PR188_REPEAT_CLEAN_INSTALL.md): exact parent clean uninstall/purge/reinstall, real N2/N3, 12-operation direct live uninstall/purge, clean installer tests and optimized fresh install PASS; known LXC advisory and local-path diagnostic only. Fresh C retained.

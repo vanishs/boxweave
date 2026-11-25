@@ -48,6 +48,43 @@ class GuidedUpgradeTests(unittest.TestCase):
             self.assertEqual(policy.read_bytes(), before)
             self.assertEqual(hint([policy]), "INHERITED_SERVICE_DROPIN_UNVERIFIED")
 
+    def test_known_lxc_hint_is_exact_and_unknown_additions_are_not_recognized(self):
+        with tempfile.TemporaryDirectory() as folder:
+            policy = Path(folder) / "zzz-lxc-service.conf"
+            content = b"[Service]\nNoNewPrivileges=no\n"
+            policy.write_bytes(content)
+            hint = NS["inherited_service_dropin_hint"]
+            with patch.dict(NS, {"KNOWN_LXC_POLICY_PATH": policy,
+                                 "KNOWN_LXC_POLICY_SHA": NS["digest"](content)}):
+                self.assertEqual(hint([policy.parent]), "KNOWN_LXC255_POLICY_BYTES_REVIEW_REQUIRED")
+                extra = policy.with_name("extra.conf")
+                extra.write_text("[Service]\n")
+                self.assertEqual(hint([policy.parent]), "POTENTIAL_INHERITED_SERVICE_DROPIN")
+                extra.unlink()
+                policy.write_bytes(content+b"# changed\n")
+                self.assertEqual(hint([policy.parent]), "POTENTIAL_INHERITED_SERVICE_DROPIN")
+                policy.unlink()
+                other = policy.with_name("other")
+                other.write_bytes(content)
+                policy.symlink_to(other)
+                self.assertEqual(hint([policy.parent]), "POTENTIAL_INHERITED_SERVICE_DROPIN")
+                self.assertEqual(other.read_bytes(), content)
+
+    def test_known_lxc_preflight_distinguishes_scoped_and_legacy_without_approval(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        with patch.dict(NS, {"inherited_service_dropin_hint": lambda: "KNOWN_LXC255_POLICY_BYTES_REVIEW_REQUIRED"}):
+            out = StringIO()
+            with redirect_stdout(out):
+                NS["print_lifecycle_preflight"](scoped=True)
+            self.assertIn("reviewed compatibility route", out.getvalue())
+            self.assertIn("not a runtime-hardening or uninstall approval", out.getvalue())
+            out = StringIO()
+            with redirect_stdout(out):
+                NS["print_lifecycle_preflight"](scoped=False)
+            self.assertIn("may block verified activation (Legacy)", out.getvalue())
+            self.assertNotIn("reviewed compatibility route", out.getvalue())
+
     def test_scoped_residue_refuses_even_dangling_links(self):
         with tempfile.TemporaryDirectory() as folder:
             paths = tuple(Path(folder) / str(i) for i in range(5))

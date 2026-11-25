@@ -277,28 +277,59 @@ def scoped_review(candidate, project):
 # installed: systemctl show of a not-found unit can report no DropInPaths.
 # This is a conservative advisory, NOT ownership proof or a permission to
 # ignore an effective drop-in. Never modify inherited systemd policy.
+# Read-only advisory. A recognized byte sequence is not a verified effective
+# unit or approval. Keep the actual retirement contract in the installed
+# observer and exact uninstaller; never change the inherited policy here.
+KNOWN_LXC_POLICY_PATH = Path("/run/systemd/system/service.d/zzz-lxc-service.conf")
+KNOWN_LXC_POLICY_SHA = "fcbd512cb8212c6f5720f28398f01e85ff96246aebb73e09cf449d2f3aa2c5b0"
+
+
+def known_lxc_policy_bytes(path):
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_size > 4096:
+        return False
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or not os.path.samestat(before, opened):
+            return False
+        data = stream.read(4097)
+        after = os.fstat(stream.fileno())
+    def identity(st):
+        return (st.st_dev, st.st_ino, st.st_mode, st.st_uid, st.st_gid,
+                st.st_nlink, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+    return (identity(before) == identity(opened) == identity(after) == identity(path.lstat())
+            and len(data) <= 4096 and digest(data) == KNOWN_LXC_POLICY_SHA)
+
+
 def inherited_service_dropin_hint(paths=None):
     if paths is None:
         paths = ("/etc/systemd/system/service.d", "/run/systemd/system/service.d",
                  "/usr/local/lib/systemd/system/service.d",
                  "/usr/lib/systemd/system/service.d", "/lib/systemd/system/service.d")
     try:
+        entries = set()
         for folder in paths:
             try:
-                with os.scandir(folder) as entries:
-                    if any(entry.name.endswith(".conf") for entry in entries):
-                        return "POTENTIAL_INHERITED_SERVICE_DROPIN"
+                with os.scandir(folder) as listing:
+                    entries.update(Path(entry.path) for entry in listing if entry.name.endswith(".conf"))
             except FileNotFoundError:
                 continue
-        return "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF"
+        if not entries:
+            return "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF"
+        if entries == {KNOWN_LXC_POLICY_PATH} and known_lxc_policy_bytes(KNOWN_LXC_POLICY_PATH):
+            return "KNOWN_LXC255_POLICY_BYTES_REVIEW_REQUIRED"
+        return "POTENTIAL_INHERITED_SERVICE_DROPIN"
     except OSError:
         return "INHERITED_SERVICE_DROPIN_UNVERIFIED"
 
 
-def print_lifecycle_preflight():
+def print_lifecycle_preflight(scoped=False):
     hint = inherited_service_dropin_hint()
     print("maintenance_preflight=" + hint, flush=True)
-    if hint != "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF":
+    if hint == "KNOWN_LXC255_POLICY_BYTES_REVIEW_REQUIRED" and scoped:
+        print("Maintenance: recognized LXC service.d policy bytes. This Scoped retirement profile has a reviewed compatibility route; installed effective units, mapped container identity, original scope and policy still require verification. This is not a runtime-hardening or uninstall approval. Do not remove inherited policy.", flush=True)
+    elif hint != "NO_GLOBAL_HINT_NOT_EFFECTIVE_PROOF":
         print("Maintenance warning: inherited service drop-ins may block verified activation (Legacy) or full retirement. Review effective units before installation; do not delete inherited policy. A working Scoped controller is not proof of retirement readiness.", flush=True)
     else:
         print("Maintenance preflight is advisory; only the installed effective-unit review can prove retirement readiness.", flush=True)
@@ -666,8 +697,10 @@ def main():
         if not args.sha256 or not SHA_RE.fullmatch(args.sha256):
             raise InstallError("local candidate requires exact --sha256")
         binary_path = Path(args.local_binary)
-        if not binary_path.is_absolute() or not binary_path.is_file() or binary_path.is_symlink():
-            raise InstallError("--local-binary must be an absolute regular file")
+        if not binary_path.is_absolute():
+            raise InstallError("--local-binary must be an absolute regular file; pass the full path to the actual candidate binary, not a relative path")
+        if not binary_path.is_file() or binary_path.is_symlink():
+            raise InstallError("--local-binary must be an absolute regular file; the candidate must exist and must not be a symlink")
         if binary_path.stat().st_size > MAX_BINARY:
             raise InstallError("local binary too large")
         binary = binary_path.read_bytes()
@@ -744,7 +777,7 @@ def main():
         print("changes=only v1 Go installer-owned binary/unit/SQLite; no native preparation or tunnel")
     print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
     if not args.upgrade and os.geteuid() == 0 and (args.scoped_peer_fresh or fresh_guided or legacy_preview):
-        print_lifecycle_preflight()
+        print_lifecycle_preflight(scoped=args.scoped_peer_fresh)
 
     if args.upgrade:
         print("forward_policy=preserve existing systemd unit and operator overrides; native Project permissions remain unchanged")

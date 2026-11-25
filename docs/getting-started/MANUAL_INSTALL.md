@@ -190,6 +190,13 @@ contract, NOT a runtime-hardening attestation or Legacy activation
 exception. The existing LXC policy overrides NoNewPrivileges; that
 remains a separate security observation.
 
+Before installation, KNOWN_LXC255_POLICY_BYTES_REVIEW_REQUIRED means
+only that the single recognized global policy's bytes were observed.
+It is not proof of an effective unit, mapped container identity, runtime
+hardening, or retirement readiness. Unknown/additional global overrides
+receive the conservative warning. Local candidates must use the absolute
+path to the actual regular binary and its exact digest (not a symlink).
+
 Use the normal reviewed Scoped full plan and terminal approval; purge
 remains separate. See [nested roundtrip evidence](../development/PR188_NESTED_ROUNDTRIP.md)
 and [live retirement follow-up](../development/PR188_LXC_LIVE_RETIREMENT.md).
