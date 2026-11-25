@@ -23,3 +23,16 @@ Initial source audit at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. This is a se
 | [Docs index](../INDEX.md), boundary/defaults, scope, maintenance, network, MCP, status, acceptance | Current contracts must match final source. Move superseded guidance to history or reference exact old revisions; do not delete original evidence or edit published tags. |
 
 P0 must also search the entire checkout for alternative mode flags, old protocol/role/data fixtures, hard-coded RC tags, obsolete journal paths, old compatibility claims and disconnected CI-only code. A name match alone is not a deletion proof. No measured deletion count or fully verified dependency graph yet.
+
+## P0 exit baseline and implementation hold points
+
+Baseline `1cfcd3da43bc47dfc42edac58d0041c02aa16e56` was independently built twice with identical binary digest, then installed, exercised, retired, purged and reinstalled in the isolated L1 native lab. See [progress and operation evidence](CONSOLIDATION_PROGRESS.md).
+
+- [Workflow and runtime reference inventory](CONSOLIDATION_P0_WITNESSES.md): 47 workflows, mode/CLI/SQL/dependency anchors and conversion routes.
+- [Script witness inventory](CONSOLIDATION_P0_SCRIPT_WITNESSES.md): 87 selected script files, startup calls and literal acceptance markers.
+- [Go witness inventory](CONSOLIDATION_P0_GO_WITNESSES.md): 280 test files, 604 test/fuzz/benchmark declarations; retain build constraints and assertion behavior.
+- [Acceptance crosswalk](CONSOLIDATION_ACCEPTANCE.md): preservation rules; OPEN means no replacement or deletion approval yet.
+
+EXTRACT_SHARED first: installed ledger constant, guard proof and witness/batch, replacement, conntrack and preparation digest helpers. RETAIN exact proof, fencing, authorization, original recovery and address holds. Convert all SQL consumers before retiring old retirement/compaction tables. Actual CLI dispatch inventory is 56 leaves (54 listed and two hidden service entries); retain fixed Scoped service entry points. The 16 direct S2 starts and 10 alternate fault-shell scripts must be converted with their intended failure semantics, not blindly given a flag. Native normal/duplicate/restart Scoped startup has been rehearsed; alternate ledger/proxy fault seams and full S2/S2.5 conversion are implementation gates. The nested install rehearsal is L1-local, not recursive isolation certification or a complete two-layer release test.
+
+All generated, dynamic and indirect callers and per-assertion dispositions remain mandatory checks at the affected implementation slice before deletion. No bulk deletion or source change in P0; no product CI inferred from docs-only success.
