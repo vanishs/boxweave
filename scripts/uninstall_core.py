@@ -929,6 +929,7 @@ def apply_with_serve_lock(plan, preserved_archive=None, offline=False):
     if plan.get("guided") and inspect_exec_archive(plan["service_user_uid"]) != plan.get("exec_archive"):
         raise UninstallError("exec archive changed after approval")
     archive = preserved_archive or (archive_controller(plan) if plan.get("guided") else None)
+    archive_proof = legacy_archive_content(Path(archive), plan, historical=False) if archive else None
     if offline:
         offline_archive_checkpoint(plan, archive)
         remaining = list(plan["incus_instances"])
@@ -1007,6 +1008,7 @@ def apply_with_serve_lock(plan, preserved_archive=None, offline=False):
         if not offline_ledger_unchanged(plan):
             raise UninstallError("OFFLINE_ORIGINAL_LEDGER_CHANGED")
         offline_checkpoint(plan, "CLEANUP_STARTED")
+        return offline_cleanup_files(read_json(AUDIT))
     # Do not remove helper binary until all native rollback/archives succeeded.
     command(["systemctl", "disable", "boxweave.service"])
     if systemd_status() == "active":
@@ -1061,10 +1063,13 @@ def apply_with_serve_lock(plan, preserved_archive=None, offline=False):
             for item in backup["files"]:
                 exact_unlink(BACKUP / item["name"], item["info"])
             BACKUP.rmdir()
+    if archive and legacy_archive_content(Path(archive), plan, historical=False) != archive_proof:
+        raise UninstallError("retirement archive changed after original copy")
     return {"outcome": "COMPLETE", "scope": plan["scope"],
             "host_machine_id_sha256": plan["host_machine_id_sha256"],
             "approved_review_sha256": plan["review_sha256"],
-            "retirement_archive": archive, "retained": plan["retained"]}
+            "retirement_archive": archive, "archive_content_sha256": archive_proof,
+            "retained": plan["retained"]}
 
 
 def inspect_interrupted_retirement(project, archive_path):
@@ -1841,9 +1846,9 @@ def scoped_main(args):
 # SQLite and credentials. Erasure is a distinct local, reviewed transaction.
 # Never delete the audit or journals of a STARTED uninstall to make a new
 # installation appear clean.
-def purge_absent():
+def purge_absent(allow_completed_offline_fence=False):
     refuse_scoped_retirement()
-    if os.path.lexists(OFFLINE_FENCE):
+    if os.path.lexists(OFFLINE_FENCE) and not allow_completed_offline_fence:
         raise UninstallError("OFFLINE_RETIREMENT_IN_PROGRESS: preserve exact original")
     for path in (STATE, UNIT, BINARY, NATIVE, SCRIPTLET, ROOT_UNIT, BACKUP,
                  RETIREMENT_UNIT, RETIREMENT_SOCKET, SCOPED_FENCE, SCOPED_JOURNAL,
@@ -1887,6 +1892,16 @@ def purge_native_empty(project):
     if list((Path("/sys/class/net") / bridge / "brif").iterdir()):
         raise UninstallError("original bridge has live ports")
     scoped_incus_active()
+    posture = {"project": {k: pr.get(k) for k in ("name", "description", "config")}}
+    for key, uri, fields in (
+            ("profile", "/1.0/profiles/default?project=" + project, ("name", "config", "description", "devices")),
+            ("bridge", "/1.0/networks/" + bridge + "?project=default", ("name", "config", "description", "managed", "type"))):
+        raw, _ = command(["incus", "query", "local:" + uri])
+        actual = json.loads(raw)
+        if not isinstance(actual, dict) or not isinstance(actual.get("config"), dict):
+            raise UninstallError("purge native postflight observation unverified")
+        posture[key] = {k: actual.get(k) for k in fields}
+    return sha(canonical(posture))
 
 
 def purge_dir_info(path):
@@ -1895,19 +1910,82 @@ def purge_dir_info(path):
     return {"device": st.st_dev, "inode": st.st_ino}
 
 
+def purge_mount_boundary():
+    points = maintenance_mounts()
+    for root in (RETIRED, AUDIT, PURGE_FENCE, OFFLINE_FENCE):
+        if maintenance_under_mount(root, points):
+            raise UninstallError("PURGE_MOUNTED_ARTIFACT: " + str(root))
+    if any(x.startswith(str(NATIVE) + ".closed.") for x in points):
+        raise UninstallError("PURGE_MOUNTED_CLOSED_JOURNAL")
+
+
+def legacy_archive_content(archive, plan, historical=False):
+    """Bind exact archive bytes, names and identities before native effects.
+
+    Live normal retirement may checkpoint SQLite on stop. Older receipts
+    without a post-stop proof must match original hashes. Offline always
+    requires the exact approved cold database.
+    """
+    st = archive.lstat()
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) != 0o700:
+        raise UninstallError("untrusted legacy archive directory")
+    if read_json(archive / "review.json") != plan:
+        raise UninstallError("legacy archive review changed")
+    expected = {"review.json": None, "boxweave.bin": plan["binary"]["sha256"],
+                "boxweave.service": plan["unit"]["sha256"]}
+    native = plan["native_prepare"]
+    if native["status"] != "ABSENT":
+        expected["native-prepare.json"] = native["sha256"]
+    for f in plan["state_files"]:
+        name = f["name"]
+        transient = name in ("ledger.sqlite-wal", "ledger.sqlite-shm")
+        if transient and not os.path.lexists(archive / ("state-" + name)) and not historical and plan.get("mode") != OFFLINE_MODE:
+            continue
+        exact = historical or plan.get("mode") == OFFLINE_MODE or name not in ("ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm")
+        expected["state-" + name] = f["info"]["sha256"] if exact else None
+    for prefix, key in (("exec-", "exec_archive"), ("installer-backup-", "installer_backup")):
+        for item in (plan.get(key) or {}).get("files", []):
+            expected[prefix + item["name"]] = item["info"]["sha256"]
+    if plan.get("retirement_verifier"):
+        expected[RETIREMENT_UNIT.name] = plan["retirement_verifier"]["unit"]["sha256"]
+    if set(expected) != {x.name for x in archive.iterdir()}:
+        raise UninstallError("legacy archive exact entry set differs from review")
+    actual = {}
+    for name, digest in sorted(expected.items()):
+        path = archive / name
+        proof = file_fingerprint(path)
+        st = path.lstat()
+        if proof is None or st.st_uid != os.geteuid() or st.st_nlink != 1 or proof["mode"] != 0o600 or (digest is not None and proof["sha256"] != digest):
+            raise UninstallError("legacy archive content differs from original: " + name)
+        actual[name] = proof
+    return sha(canonical(actual))
+
+
+def offline_completed_archive(record, plan, archive):
+    if (record.get("offline_plan") != plan or record.get("phase") != "CLEANUP_STARTED" or
+            record.get("archive") != str(archive) or
+            record.get("verified_deleted") != [b["uuid"] for b in plan["incus_instances"]] or
+            record.get("unresolved_originals") != plan["offline_originals"] or
+            record.get("result", {}).get("unresolved_originals") != plan["offline_originals"] or
+            record.get("result", {}).get("operation_outcome_changed") is not False or
+            record.get("result", {}).get("business_operations_replayed") is not False):
+        raise UninstallError("offline retirement completion provenance unverified")
+    return legacy_archive_content(archive, plan, historical=True)
+
+
 def purge_inventory(project):
+    purge_mount_boundary()
     purge_absent()
-    purge_native_empty(project)
+    native_postflight = purge_native_empty(project)
     info = scoped_private_file(AUDIT, 1024 * 1024)
     audit = read_json(AUDIT)
     records = audit.get("history", []) + [audit]
-    if any(record.get("mode") == OFFLINE_MODE for record in records):
-        raise UninstallError("OFFLINE_ARCHIVE_PURGE_REVIEW_REQUIRED: preserve original offline retirement evidence")
     if len(records) > 102 or audit.get("scope") != "full" or audit.get("status") != "COMPLETE":
         raise UninstallError("purge requires a verified COMPLETE full retirement")
     files = {str(AUDIT): info}
     dirs = {}
     archives = set()
+    native_preimages = {}
     if os.path.lexists(RETIRED):
         dirs[str(RETIRED)] = purge_dir_info(RETIRED)
     for record in records:
@@ -1918,8 +1996,12 @@ def purge_inventory(project):
                 result.get("host_machine_id_sha256") != machine_sha() or
                 not VALID_SHA.fullmatch(str(review or ""))):
             raise UninstallError("unverified historical retirement; preserve original evidence")
+        if record.get("scope") != "full":
+            raise UninstallError("historical retirement scope is not full")
         raw = result.get("retirement_archive")
         if not raw:
+            if record.get("mode") in (OFFLINE_MODE, SCOPED_MODE):
+                raise UninstallError("verified retirement archive missing")
             continue
         archive = Path(raw)
         if (archive.parent != RETIRED or not re.fullmatch(r"retired-[a-z0-9_]{8}", archive.name)
@@ -1936,7 +2018,38 @@ def purge_inventory(project):
                 sha(canonical(inputs)) != review or not plan.get("ready")):
             raise UninstallError("historical archive review identity mismatch")
         if record.get("mode") == SCOPED_MODE:
-            scoped_archive_proof(record)
+            if record.get("scoped_plan") != plan or record.get("archive") != str(archive):
+                raise UninstallError("scoped archive/audit identity mismatch")
+            _, cleanup = scoped_archive_proof(record)
+            exact_names = {"review.json", "cleanup.json", "boxweave.bin", "boxweave.service",
+                           "scoped-journal", "scoped-original"}
+            exact_names.update("state-" + x["name"] for x in cleanup["state_files"])
+            exact_names.update("exec-" + x["name"] for x in (cleanup.get("exec_archive") or {}).get("files", []))
+            exact_names.update("scoped-" + Path(x).name for x in plan["scoped_units"])
+            if plan.get("drain_receipt"):
+                exact_names.add("drain-receipt.json")
+            if {x.name for x in archive.iterdir()} != exact_names:
+                raise UninstallError("scoped archive exact entry set differs from receipt")
+        elif record.get("mode") == OFFLINE_MODE:
+            observed = offline_completed_archive(record, plan, archive)
+            if result.get("archive_content_sha256", observed) != observed:
+                raise UninstallError("offline archive content receipt mismatch")
+        elif record.get("mode") not in (None, ""):
+            raise UninstallError("unknown retirement archive mode")
+        else:
+            content = result.get("archive_content_sha256")
+            observed = legacy_archive_content(archive, plan, historical=content is None)
+            if content is not None and content != observed:
+                raise UninstallError("legacy archive content receipt mismatch")
+        if record.get("mode") != SCOPED_MODE and plan.get("native_prepare", {}).get("status") != "ABSENT":
+            source = read_json(archive / "native-prepare.json")
+            if not source or source.get("status") not in ("APPLIED", "ROLLED_BACK"):
+                raise UninstallError("original native preparation archive unverified")
+            original = {**source, "status": "ROLLED_BACK"}
+            digest = source.get("plan", {}).get("review_sha256")
+            if digest != plan["native_prepare"]["review_sha256"] or not closed_native_review_valid(source["plan"]):
+                raise UninstallError("archived native preparation digest mismatch")
+            native_preimages.setdefault(digest, []).append(original)
         permitted = {"review.json", "boxweave.bin", "boxweave.service", "native-prepare.json",
                      RETIREMENT_UNIT.name}
         permitted.update("state-" + x for x in STATE_FILES)
@@ -1966,11 +2079,19 @@ def purge_inventory(project):
         for name, proof in (("boxweave.bin", plan.get("binary")), ("boxweave.service", plan.get("unit"))):
             if proof and files.get(str(archive / name), {}).get("sha256") != proof["sha256"]:
                 raise UninstallError("retirement archive binary/unit differs from review")
+    latest = audit.get("result", {}).get("retirement_archive")
+    if latest:
+        path = Path(latest)
+        if audit.get("mode") == SCOPED_MODE:
+            scoped_postcheck(audit["scoped_plan"], path)
+        elif os.path.lexists(path / "native-prepare.json"):
+            legacy_retired_native_postcheck(project, read_json(path / "native-prepare.json"))
     if os.path.lexists(RETIRED) and set(RETIRED.iterdir()) != archives:
         raise UninstallError("unreferenced retirement archive; review original before purge")
     # NativePrepareArchive creates only closed, exact root journals under
     # this fixed basename. Bind their reviewed host/Project/digest before
     # including them. No open or foreign native journals are erased.
+    matched_preimages = set()
     for path in sorted(NATIVE.parent.glob(NATIVE.name + ".closed.*")):
         if not re.fullmatch(re.escape(NATIVE.name) + r"\.closed\.[a-f0-9]{16}\.[0-9]{2}", path.name):
             raise UninstallError("unknown closed native journal filename")
@@ -1981,17 +2102,85 @@ def purge_inventory(project):
         if (rec.get("schema") != 1 or rec.get("status") != "ROLLED_BACK" or
                 plan.get("target", {}).get("project") != project or plan.get("host_sha256") != native_host or
                 not VALID_SHA.fullmatch(str(plan.get("review_sha256", ""))) or
-                path.name.split(".")[-2] != plan["review_sha256"][:16]):
+                path.name.split(".")[-2] != plan["review_sha256"][:16] or
+                not closed_native_review_valid(plan)):
             raise UninstallError("closed native journal provenance unverified")
+        if rec not in native_preimages.get(plan["review_sha256"], []):
+            raise UninstallError("closed native journal has no exact verified retirement archive")
         files[str(path)] = proof
+        matched_preimages.add(plan["review_sha256"])
+    if set(native_preimages) != matched_preimages:
+        raise UninstallError("verified retirement lacks its original closed native journal")
     if len(files) > 100000 or len(dirs) > 30000:
         raise UninstallError("purge inventory exceeds supported bound")
-    return {"schema": 1, "project": project, "host_sha256": machine_sha(), "files": files, "directories": dirs}
+    if purge_native_empty(project) != native_postflight:
+        raise UninstallError("purge native postflight changed during inventory")
+    return {"schema": 1, "project": project, "host_sha256": machine_sha(), "files": files, "directories": dirs,
+            "native_postflight_sha256": native_postflight}
+
+
+def legacy_retired_native_postcheck(project, record):
+    target = record["plan"]["target"]
+    if target["project"] != project:
+        raise UninstallError("retired native Project identity changed")
+    for uri, expected in (("/1.0/projects/" + project, record["before_project"]),
+                          ("/1.0/profiles/default?project=" + project, record["before_profile"])):
+        raw, _ = command(["incus", "query", "local:" + uri])
+        current = json.loads(raw)
+        if not isinstance(current, dict) or any(current.get(k) != v for k, v in expected.items()):
+            raise UninstallError("retired Legacy native preimage changed")
+
+
+def closed_native_review_valid(plan):
+    # Go NativePreparePlan/Target field order is fixed, not sorted JSON.
+    try:
+        keys = ("project", "pool", "network", "acl")
+        target = plan["target"]
+        if set(target) != set(keys) or any(not isinstance(target[k], str) for k in keys):
+            return False
+        if set(plan) - {"target", "host_sha256", "native_state_sha256", "review_sha256", "actions", "warnings"}:
+            return False
+        v = {"target": {k: target[k] for k in keys}, "host_sha256": plan["host_sha256"],
+             "native_state_sha256": plan["native_state_sha256"], "review_sha256": "",
+             "actions": plan["actions"]}
+        if plan.get("warnings"):
+            v["warnings"] = plan["warnings"]
+        if not isinstance(v["actions"], list) or any(not isinstance(x, str) for x in v["actions"] + v.get("warnings", [])):
+            return False
+        raw = json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+        raw = raw.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+        return sha(b"bw-native-prepare-1\n" + raw.encode()) == plan["review_sha256"]
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def purge_validate_paths(plan):
+    files, dirs = plan["files"], plan["directories"]
+    if (plan.get("schema") != 1 or str(AUDIT) not in files or set(files) & set(dirs) or
+            len(files) > 100000 or len(dirs) > 30000):
+        raise UninstallError("invalid original purge inventory")
+    for raw in set(files) | set(dirs):
+        path = Path(raw)
+        if not path.is_absolute() or str(path) != raw or ".." in path.parts:
+            raise UninstallError("invalid purge inventory path")
+        if path == AUDIT and raw in files or path == RETIRED and raw in dirs:
+            continue
+        if path.parent == NATIVE.parent and raw in files and re.fullmatch(re.escape(NATIVE.name) + r"\.closed\.[a-f0-9]{16}\.[0-9]{2}", path.name):
+            continue
+        if RETIRED not in path.parents:
+            raise UninstallError("foreign path in purge receipt")
+        relative = path.relative_to(RETIRED)
+        if not re.fullmatch(r"retired-[a-z0-9_]{8}", relative.parts[0]) or str(path.parent) not in dirs:
+            raise UninstallError("unverified purge receipt parent")
 
 
 def purge_remaining(plan):
+    purge_validate_paths(plan)
+    purge_mount_boundary()
     purge_absent()
-    purge_native_empty(plan["project"])
+    observed = purge_native_empty(plan["project"])
+    if "native_postflight_sha256" in plan and observed != plan["native_postflight_sha256"]:
+        raise UninstallError("PURGE_NATIVE_POSTFLIGHT_CHANGED")
     files = plan["files"]
     dirs = plan["directories"]
     if os.path.lexists(AUDIT) and scoped_private_file(AUDIT, 1024 * 1024) != files.get(str(AUDIT)):
@@ -2020,16 +2209,77 @@ def purge_review(project):
         scoped_private_file(PURGE_FENCE, 1024 * 1024)
         receipt = read_json(PURGE_FENCE)
         plan = receipt["plan"]
-        if (receipt.get("schema") != 1 or receipt.get("review_sha256") != sha(canonical(plan)) or
+        if (receipt.get("schema") not in (1, 2) or receipt.get("review_sha256") != sha(canonical(plan)) or
                 plan.get("host_sha256") != machine_sha() or plan.get("project") != project):
             raise UninstallError("original purge receipt identity mismatch")
         purge_remaining(plan)
+        if receipt["schema"] == 2:
+            if not VALID_SHA.fullmatch(str(plan.get("native_postflight_sha256", ""))):
+                raise UninstallError("original purge native witness missing")
+            purge_prefix(plan)
         return receipt
     plan = purge_inventory(project)
-    receipt = {"schema": 1, "plan": plan, "review_sha256": sha(canonical(plan))}
+    receipt = {"schema": 2, "plan": plan, "review_sha256": sha(canonical(plan))}
     if len(canonical(receipt)) + 1 > 1024 * 1024:
         raise UninstallError("purge receipt exceeds supported bound")
     return receipt
+
+
+def purge_order(plan):
+    files = [Path(x) for x in sorted(plan["files"]) if x != str(AUDIT)]
+    dirs = [Path(x) for x in sorted(plan["directories"], key=lambda x: (-len(Path(x).parts), x))]
+    return files + dirs + [AUDIT]
+
+
+def purge_prefix(plan):
+    missing = 0
+    present = False
+    for path in purge_order(plan):
+        if os.path.lexists(path):
+            present = True
+        elif present:
+            raise UninstallError("PURGE_NON_PREFIX_MISSING: preserve original receipt")
+        else:
+            missing += 1
+    return missing
+
+
+def purge_execute(receipt):
+    plan = receipt["plan"]
+    purge_remaining(plan)
+    if receipt["schema"] == 2:
+        purge_prefix(plan)
+    for path in purge_order(plan):
+        if not os.path.lexists(path):
+            parent = path.parent
+            while not os.path.lexists(parent):
+                parent = parent.parent
+            scoped_sync_dir(parent)
+            continue
+        purge_mount_boundary()
+        if read_json(PURGE_FENCE) != receipt:
+            raise UninstallError("original purge receipt changed")
+        parent_proof = plan["directories"].get(str(path.parent))
+        if parent_proof and purge_dir_info(path.parent) != parent_proof:
+            raise UninstallError("reviewed purge parent changed")
+        if str(path) in plan["directories"]:
+            if purge_dir_info(path) != plan["directories"][str(path)]:
+                raise UninstallError("reviewed purge directory changed")
+            path.rmdir()
+        else:
+            if path == AUDIT:
+                purge_remaining(plan)
+                if any(os.path.lexists(x) for x in purge_order(plan)[:-1]):
+                    raise UninstallError("retirement data remains before final audit erasure")
+            exact_unlink(path, plan["files"][str(path)])
+        scoped_sync_dir(path.parent)
+    purge_remaining(plan)
+    if any(os.path.lexists(x) for x in purge_order(plan)):
+        raise UninstallError("reviewed purge path remains")
+    if read_json(PURGE_FENCE) != receipt:
+        raise UninstallError("original purge receipt changed")
+    exact_unlink(PURGE_FENCE, scoped_private_file(PURGE_FENCE, 1024 * 1024))
+    scoped_sync_dir(PURGE_FENCE.parent)
 
 
 def purge_main(args):
@@ -2046,7 +2296,10 @@ def purge_main(args):
     print(json.dumps({"ready": True, "project": project, "review_sha256": receipt["review_sha256"],
                       "files": sorted(plan["files"]), "directories": sorted(plan["directories"]),
                       "retained": ["Incus, dedicated OS identity, original native Project/bridge, image cache, external tunnel"],
-                      "irreversible": True}, indent=2, sort_keys=True), flush=True)
+                      "irreversible": True, "retention": "erase",
+                      "remaining_files": sum(os.path.lexists(x) for x in plan["files"]),
+                      "remaining_directories": sum(os.path.lexists(x) for x in plan["directories"]),
+                      "erasure_kind": "EXACT_FILE_UNLINK_NOT_STORAGE_SANITIZATION"}, indent=2, sort_keys=True), flush=True)
     if args.purge_plan:
         return 0
     prompt = "PURGE " + project
@@ -2060,29 +2313,7 @@ def purge_main(args):
             raise UninstallError("purge review changed after approval")
         if not os.path.lexists(PURGE_FENCE):
             scoped_write_json(PURGE_FENCE, receipt)
-        purge_remaining(plan)
-        for raw, proof in sorted(plan["files"].items()):
-            path = Path(raw)
-            if path != AUDIT and os.path.lexists(path):
-                exact_unlink(path, proof)
-                scoped_sync_dir(path.parent)
-        for raw, proof in sorted(plan["directories"].items(), key=lambda item: -len(Path(item[0]).parts)):
-            path = Path(raw)
-            if os.path.lexists(path):
-                if purge_dir_info(path) != proof:
-                    raise UninstallError("reviewed purge directory changed")
-                path.rmdir()
-                scoped_sync_dir(path.parent)
-        purge_remaining(plan)
-        if os.path.lexists(AUDIT):
-            exact_unlink(AUDIT, plan["files"][str(AUDIT)])
-            scoped_sync_dir(AUDIT.parent)
-        if any(os.path.lexists(raw) for raw in list(plan["files"]) + list(plan["directories"])):
-            raise UninstallError("reviewed purge path remains")
-        if read_json(PURGE_FENCE) != receipt:
-            raise UninstallError("original purge receipt changed")
-        PURGE_FENCE.unlink()
-        scoped_sync_dir(PURGE_FENCE.parent)
+        purge_execute(receipt)
     print(json.dumps({"outcome": "PURGED", "project": project, "review_sha256": receipt["review_sha256"]}))
     return 0
 
@@ -3179,7 +3410,212 @@ def offline_archive_checkpoint(plan, archive):
         proof = scoped_private_file(path / ("state-" + f["name"]))
         if proof["sha256"] != f["info"]["sha256"]:
             raise UninstallError("OFFLINE_ARCHIVED_ORIGINAL_CHANGED")
-    offline_checkpoint(plan, "ARCHIVED", archive=str(path))
+    offline_checkpoint(plan, "ARCHIVED", archive=str(path), archive_content_sha256=legacy_archive_content(path, plan, historical=True))
+
+
+def offline_resume_record(project):
+    scoped_private_file(AUDIT, 1024 * 1024)
+    record = read_json(AUDIT)
+    plan = record.get("offline_plan")
+    if (record.get("mode") != OFFLINE_MODE or record.get("scope") != "full" or
+            record.get("status") not in ("STARTED", "COMPLETE") or not isinstance(plan, dict) or
+            plan.get("mode") != OFFLINE_MODE or not plan.get("ready") or plan.get("project") != project or
+            plan.get("host_machine_id_sha256") != machine_sha() or record.get("host_sha256") != machine_sha() or
+            record.get("review_sha256") != plan.get("review_sha256") or
+            sha(canonical({k: v for k, v in plan.items() if k not in ("review_sha256", "ready", "actions", "retained")})) != plan.get("review_sha256")):
+        raise UninstallError("OFFLINE_RESUME_ORIGINAL_IDENTITY_UNVERIFIED")
+    if record.get("phase") not in ("NATIVE_RESTORED", "CLEANUP_STARTED"):
+        raise UninstallError("OFFLINE_RESUME_NATIVE_PREFIX_UNPROVEN: preserve original; earlier native phase requires separate proof")
+    expected_fence = {"schema": 1, "project": project, "review_sha256": plan["review_sha256"]}
+    if os.path.lexists(OFFLINE_FENCE):
+        scoped_private_file(OFFLINE_FENCE, 8192)
+        if read_json(OFFLINE_FENCE) != expected_fence:
+            raise UninstallError("OFFLINE_RESUME_FENCE_MISMATCH")
+    elif record["status"] != "COMPLETE":
+        raise UninstallError("OFFLINE_RESUME_FENCE_MISSING")
+    if record.get("verified_deleted") != [b["uuid"] for b in plan["incus_instances"]] or record.get("unresolved_originals") != plan["offline_originals"]:
+        raise UninstallError("OFFLINE_RESUME_ORIGINAL_PREFIX_UNVERIFIED")
+    archive = Path(record.get("archive", ""))
+    if archive.parent != RETIRED or not re.fullmatch(r"retired-[a-z0-9_]{8}", archive.name):
+        raise UninstallError("OFFLINE_RESUME_ARCHIVE_UNVERIFIED")
+    purge_mount_boundary()
+    scoped_private_dir(RETIRED)
+    scoped_private_dir(archive)
+    content = legacy_archive_content(archive, plan, historical=True)
+    if record.get("archive_content_sha256", record.get("result", {}).get("archive_content_sha256")) != content:
+        raise UninstallError("OFFLINE_RESUME_ARCHIVE_CONTENT_CHANGED")
+    return record, content
+
+
+def offline_restored_native(record):
+    plan = record["offline_plan"]
+    archive = Path(record["archive"])
+    if os.path.lexists(NATIVE):
+        raise UninstallError("OFFLINE_RESUME_NATIVE_JOURNAL_NOT_ARCHIVED")
+    original = read_json(archive / "native-prepare.json")
+    if not original or not closed_native_review_valid(original.get("plan", {})):
+        raise UninstallError("OFFLINE_RESUME_NATIVE_PREIMAGE_UNVERIFIED")
+    closed = {**original, "status": "ROLLED_BACK"}
+    prefix = original["plan"]["review_sha256"][:16]
+    matching = []
+    for path in NATIVE.parent.glob(NATIVE.name + ".closed." + prefix + ".*"):
+        if not re.fullmatch(re.escape(NATIVE.name) + r"\.closed\.[a-f0-9]{16}\.[0-9]{2}", path.name):
+            raise UninstallError("OFFLINE_RESUME_CLOSED_JOURNAL_NAME_UNVERIFIED")
+        scoped_private_file(path, 1024 * 1024)
+        if read_json(path) != closed:
+            raise UninstallError("OFFLINE_RESUME_CLOSED_JOURNAL_CHANGED")
+        matching.append(path)
+    if not matching:
+        raise UninstallError("OFFLINE_RESUME_CLOSED_JOURNAL_MISSING")
+    legacy_retired_native_postcheck(plan["project"], original)
+    return purge_native_empty(plan["project"])
+
+
+def offline_cleanup_inventory(record):
+    plan = record["offline_plan"]
+    refuse_scoped_retirement()
+    if any(os.path.lexists(x) for x in (ROOT_UNIT, RETIREMENT_SOCKET, BACKUP, SCRIPTLET,
+                  Path("/run/boxweave-native-peer-root.sock"), Path("/var/lib/boxweave-native-peer-conntrack-v1"),
+                  Path("/var/lib/boxweave-native-peer-conntrack-v1.lock"))):
+        raise UninstallError("OFFLINE_RESUME_UNREVIEWED_ARTIFACT")
+    points = maintenance_mounts()
+    for path in (STATE, UNIT, BINARY, RETIREMENT_UNIT, NATIVE):
+        if maintenance_under_mount(path, points):
+            raise UninstallError("OFFLINE_RESUME_MOUNTED_ARTIFACT")
+    remaining = {}
+    for path, proof in ((UNIT, plan["unit"]), (BINARY, plan["binary"]),
+                       (RETIREMENT_UNIT, (plan.get("retirement_verifier") or {}).get("unit"))):
+        if os.path.lexists(path):
+            if proof is None or file_fingerprint(path) != proof or path.lstat().st_nlink != 1:
+                raise UninstallError("OFFLINE_RESUME_ARTIFACT_CHANGED")
+            remaining[str(path)] = proof
+    for unit in (UNIT, RETIREMENT_UNIT, ROOT_UNIT):
+        props = scoped_properties(unit.name, "LoadState", "FragmentPath", "DropInPaths", "ActiveState", "MainPID", "UnitFileState")
+        if props["ActiveState"] not in ("inactive", "failed") or props["MainPID"] != "0" or props["DropInPaths"]:
+            raise UninstallError("OFFLINE_RESUME_SERVICE_NOT_INACTIVE")
+        if props["LoadState"] != "not-found" and (props["FragmentPath"] != str(unit) or props["UnitFileState"] not in ("disabled", "")):
+            raise UninstallError("OFFLINE_RESUME_EFFECTIVE_UNIT_UNVERIFIED")
+        if unit == ROOT_UNIT and props["LoadState"] != "not-found":
+            raise UninstallError("OFFLINE_RESUME_ROOT_UNIT_UNREVIEWED")
+    if os.path.lexists(STATE):
+        validate_state_dir(STATE, plan["service_user_uid"])
+        expected = {x["name"]: x["info"] for x in plan["state_files"]}
+        if {x.name for x in STATE.iterdir()} - set(expected) - {EXEC_ARCHIVE_NAME}:
+            raise UninstallError("OFFLINE_RESUME_STATE_UNKNOWN_ENTRY")
+        for name, proof in expected.items():
+            path = STATE / name
+            if os.path.lexists(path):
+                if file_fingerprint(path) != proof or path.lstat().st_nlink != 1:
+                    raise UninstallError("OFFLINE_RESUME_STATE_CHANGED")
+                remaining[str(path)] = proof
+        if os.path.lexists(STATE / EXEC_ARCHIVE_NAME):
+            current = inspect_exec_archive(plan["service_user_uid"])
+            approved = plan.get("exec_archive")
+            if not approved or (current["device"], current["inode"]) != (approved["device"], approved["inode"]):
+                raise UninstallError("OFFLINE_RESUME_EXEC_ARCHIVE_CHANGED")
+            byname = {x["name"]: x["info"] for x in approved["files"]}
+            for item in current["files"]:
+                if byname.get(item["name"]) != item["info"]:
+                    raise UninstallError("OFFLINE_RESUME_EXEC_FILE_CHANGED")
+                remaining[str(STATE / EXEC_ARCHIVE_NAME / item["name"])] = item["info"]
+        if not os.path.lexists(STATE / SERVE_LOCK_NAME) and list(STATE.iterdir()):
+            raise UninstallError("OFFLINE_RESUME_SERVE_LOCK_MISSING")
+    return remaining
+
+
+def offline_cleanup_files(record):
+    plan = record["offline_plan"]
+    current, content = offline_resume_record(plan["project"])
+    if current != record:
+        raise UninstallError("OFFLINE_RESUME_ORIGINAL_CHANGED")
+    native = offline_restored_native(record)
+    remaining = offline_cleanup_inventory(record)
+    if record["phase"] == "NATIVE_RESTORED":
+        offline_checkpoint(plan, "CLEANUP_STARTED")
+    for unit in (UNIT, RETIREMENT_UNIT):
+        if str(unit) in remaining:
+            exact_unlink(unit, remaining[str(unit)])
+            scoped_sync_dir(unit.parent)
+    command(["systemctl", "daemon-reload"])
+    for raw, proof in remaining.items():
+        path = Path(raw)
+        if STATE in path.parents and path != STATE / SERVE_LOCK_NAME:
+            exact_unlink(path, proof)
+            scoped_sync_dir(path.parent)
+    if os.path.lexists(STATE / EXEC_ARCHIVE_NAME):
+        (STATE / EXEC_ARCHIVE_NAME).rmdir()
+        scoped_sync_dir(STATE)
+    if str(STATE / SERVE_LOCK_NAME) in remaining:
+        exact_unlink(STATE / SERVE_LOCK_NAME, remaining[str(STATE / SERVE_LOCK_NAME)])
+        scoped_sync_dir(STATE)
+    if os.path.lexists(STATE):
+        STATE.rmdir()
+        scoped_sync_dir(STATE.parent)
+    if str(BINARY) in remaining:
+        exact_unlink(BINARY, remaining[str(BINARY)])
+        scoped_sync_dir(BINARY.parent)
+    for parent in {STATE.parent, UNIT.parent, BINARY.parent}:
+        scoped_sync_dir(parent)
+    purge_absent(allow_completed_offline_fence=True)
+    if offline_restored_native(record) != native or legacy_archive_content(Path(record["archive"]), plan, historical=True) != content:
+        raise UninstallError("OFFLINE_RESUME_POSTFLIGHT_CHANGED")
+    return {"outcome": "COMPLETE", "scope": "full", "mode": OFFLINE_MODE,
+            "host_machine_id_sha256": plan["host_machine_id_sha256"],
+            "approved_review_sha256": plan["review_sha256"], "retirement_archive": record["archive"],
+            "archive_content_sha256": content, "retained": plan["retained"],
+            "unresolved_originals": plan["offline_originals"], "business_operations_replayed": False,
+            "operation_outcome_changed": False}
+
+
+def offline_resume_preview(project):
+    record, content = offline_resume_record(project)
+    native = offline_restored_native(record)
+    remaining = offline_cleanup_inventory(record)
+    if record["status"] == "COMPLETE":
+        offline_completed_archive(record, record["offline_plan"], Path(record["archive"]))
+        purge_absent(allow_completed_offline_fence=True)
+        if remaining:
+            raise UninstallError("OFFLINE_RESUME_COMPLETE_HAS_REMAINING_FILES")
+    return {"ready": True, "mode": OFFLINE_MODE, "status": record["status"], "phase": record["phase"],
+            "project": project, "review_sha256": record["review_sha256"], "archive_content_sha256": content,
+            "audit_sha256": scoped_private_file(AUDIT, 1024 * 1024)["sha256"], "native_postflight_sha256": native,
+            "remaining_files": remaining, "retention": "retain"}
+
+
+def offline_resume_main(args):
+    if os.geteuid() != 0 or sys.platform != "linux":
+        raise UninstallError("offline resume requires original local Linux root")
+    project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
+    if project != "user-" + str(pwd.getpwnam("boxweave").pw_uid):
+        raise UninstallError("exact original offline Project required")
+    preview = offline_resume_preview(project)
+    print(json.dumps(preview, sort_keys=True, indent=2), flush=True)
+    if args.offline_resume_plan:
+        return 0
+    prompt = "RESUME OFFLINE " + project
+    with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+        out.write("Type " + prompt + " to continue the original offline retirement: ")
+        out.flush()
+        if inp.readline().strip() != prompt:
+            raise UninstallError("OPERATOR_APPROVAL_REQUIRED")
+    with scoped_lock(SCOPED_LOCK), scoped_lock(MAINTENANCE_LOCK):
+        if offline_resume_preview(project) != preview:
+            raise UninstallError("OFFLINE_RESUME_REVIEW_CHANGED")
+        record, _ = offline_resume_record(project)
+        plan = record["offline_plan"]
+        if record["status"] == "STARTED":
+            lockplan = plan if os.path.lexists(STATE / SERVE_LOCK_NAME) else {**plan, "state_files": []}
+            with hold_stopped_serve_lock(lockplan):
+                result = offline_cleanup_files(record)
+                audited_complete(plan["review_sha256"], result)
+        else:
+            result = record["result"]
+        offline_resume_preview(project)
+        if os.path.lexists(OFFLINE_FENCE):
+            exact_unlink(OFFLINE_FENCE, scoped_private_file(OFFLINE_FENCE, 8192))
+            scoped_sync_dir(OFFLINE_FENCE.parent)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
 
 
 def offline_main(args):
@@ -3246,6 +3682,8 @@ def offline_main(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned uninstall; explicit full-only Scoped Peer v2 retirement")
     action = parser.add_mutually_exclusive_group()
+    action.add_argument("--offline-resume-plan", action="store_true", help="read-only review of original post-native offline retirement")
+    action.add_argument("--offline-resume", action="store_true", help="continue exact approved post-native offline retirement")
     action.add_argument("--offline-plan", action="store_true", help="H2B explicit offline retirement review; no effects")
     action.add_argument("--offline-full", action="store_true", help="terminal-approved bounded offline Legacy full retirement; retain originals")
     action.add_argument("--maintenance-plan", action="store_true", help="H1B read-only full retirement preview; no apply authority")
@@ -3272,6 +3710,12 @@ def main(argv=None):
     parser.add_argument("--observer-sha256", help="exact SHA256 of alternate observer")
     parser.add_argument("--confirm-preview-sha256", help="maintenance recheck only; never an apply digest")
     args = parser.parse_args(argv)
+    if args.offline_resume_plan or args.offline_resume:
+        if any((args.scope, args.scoped, args.guided_full_plan, args.retirement_archive, args.box_uuid,
+                args.native_prepare_sha256, args.confirm_host_sha256, args.confirm_review_sha256,
+                args.confirm_preview_sha256, args.observer_binary, args.observer_sha256, args.retention)):
+            parser.error("offline resume uses only the original Project and receipt")
+        return offline_resume_main(args)
     if args.offline_plan or args.offline_full:
         if (args.scope not in (None, "full") or args.scoped or args.guided_full_plan or
                 args.retirement_archive or args.box_uuid or args.native_prepare_sha256 or
@@ -3297,7 +3741,7 @@ def main(argv=None):
     if any((args.retention, args.observer_binary, args.observer_sha256, args.confirm_preview_sha256)):
         parser.error("maintenance options cannot be used by existing apply/retirement/purge commands")
     if os.path.lexists(OFFLINE_FENCE):
-        raise UninstallError("OFFLINE_RETIREMENT_IN_PROGRESS: review --offline-plan; preserve exact original")
+        raise UninstallError("OFFLINE_RETIREMENT_IN_PROGRESS: review --offline-resume-plan; preserve exact original")
     if args.purge or args.purge_plan:
         return purge_main(args)
     if os.path.lexists(PURGE_FENCE):

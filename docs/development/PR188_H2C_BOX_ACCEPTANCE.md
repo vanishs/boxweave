@@ -1,0 +1,11 @@
+# H2C archive provenance, erasure and bounded resume
+
+Base 2a02ee838aa02881c537d8a366efc655bf6aca98. Retained Box A 9d374e18-196a-493d-bf1f-2d582589f04d. No physical L0 or original RC13 changes.
+
+- Purge receipt schema 2 fixes reviewed file/directory order and native postflight digest; independent terminal approval, exact unlink (not media sanitization). Original receipt survives file, directory and final audit boundaries. Repeated resume accepts only the exact missing prefix, refuses drift, mounts, foreign paths and unexpected entries.
+- Legacy/offline archive content and scoped cleanup proof bind exact inventory. Closed native journals require matching verified archive preimage and reconstructed original Go digest. Unattributed historical archives remain blocked.
+- Offline post-native cleanup and explicit offline-resume support NATIVE_RESTORED, CLEANUP_STARTED and COMPLETE with leftover fence. Preserve original UNKNOWN facts and archive; earlier native phases remain blocked.
+- 6b18fe39898c1c3342d61d38553c27c9: 57 uninstall, 4 offline scope, 6 maintenance preview and 6 drain tests PASS (73 total). Temporary filesystem tests exercise each purge boundary and repeated offline cleanup interruption; native/systemd witnesses mocked.
+- Actual RC13 review digest 370bedc1fc8198b65f8ddfc602c19735 PASS. Actual RC13 purge/resume safely refused; original binary, manifest, DB and native journal hashes unchanged; no fence created (896b3c5d3719502b32663ceecf001353). Syntax/diff PASS.
+
+CI: actual legacy/scoped retirement followed by interruption at file, directory and final audit fsync, repeated approved resume and unchanged native posture/Incus PID. Legacy fresh scoped reinstall retained. Offline lane adds actual post-native interruption and purge following verified H2B. Prior 45522503299 Legacy normal PASS; Legacy offline WAL/SHM assertion failed (fixture now polls private Doctor snapshot, pending validation); Scoped retirement failed UNKNOWN/SCOPED_PEER_V2_ROOT_OUTCOME_UNVERIFIED. No fake COMPLETE audit or bypass of nested systemd drop-ins. Earlier native phases and historical Peer Root/partial Scoped offline cases remain blocked. Bounded H2C candidate, not full H2 sign-off.

@@ -370,14 +370,7 @@ PY
 rm -f "$work/actor.receipt"
 # Same Host, original Incus daemon and restricted Project retained. Erase
 # the reviewed completed Legacy archive, then install a fresh Scoped ledger.
-sudo sh uninstall.sh --purge-plan --project "$project" > "$work/purge-plan.json"
-sudo python3 - "$project" <<'PURGE'
-import sys
-sys.path.insert(0, "scripts")
-from n2_installed_lifecycle import tty_run
-p=sys.argv[1]
-tty_run(["sh", "uninstall.sh", "--purge", "--project", p], [(("Type PURGE "+p).encode(), "PURGE "+p)])
-PURGE
+sudo env RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr188_h2c_purge.py "$project"
 test ! -e /var/lib/boxweave-uninstall-v1-audit.json
 test ! -e /var/lib/boxweave-retired
 test ! -e /var/lib/boxweave-purge-v1.json

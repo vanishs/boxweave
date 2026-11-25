@@ -102,8 +102,8 @@ def main(project, receipt):
     preview = json.loads(run("sh", "uninstall.sh", "--purge-plan", "--project", project))
     assert preview["ready"] and preview["irreversible"] and str(archive / "state-ledger.sqlite") in preview["files"]
     assert archive.exists() and u.AUDIT.exists()
-    tty_run(["sh", "uninstall.sh", "--purge", "--project", project],
-            [(("Type PURGE " + project).encode(), "PURGE " + project)])
+    subprocess.run(["env", "RUNNER_ENVIRONMENT=github-hosted", sys.executable,
+                    str(Path(__file__).with_name("pr188_h2c_purge.py")), project], check=True)
     assert not any(os.path.lexists(p) for p in (u.RETIRED, u.AUDIT, u.PURGE_FENCE))
     assert pid("incus.service") == incus_pid
     assert foreign == [run("incus", "query", "/1.0/projects/pr182-foreign"),

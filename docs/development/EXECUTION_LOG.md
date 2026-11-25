@@ -12,3 +12,5 @@ See [status](../STATUS.md), [active plan](../process/IMPLEMENTATION_PLAN.md) and
 - 2026-11-25: #188 H2A candidate developed in Box. [Evidence and pending independent gates](PR188_H2A_BOX_ACCEPTANCE.md). Actual 12-effect preview/no-effect PASS, Forward HTTP 200, targeted regression and focused tests PASS. H1B hosted-runner parent safety preflight corrected for CI only. Full live retirement requires clean installed CI; no nested destructive acceptance claimed.
 
 - 2026-11-25: #188 bounded H2B Legacy offline retirement candidate Box-tested. [Evidence and pending gates](PR188_H2B_BOX_ACCEPTANCE.md). Actual pinned RC13 read-only refusal and unchanged ledger PASS; new scope/original proof tests and existing 65 Python regressions PASS. Separate installed CI lane added. Historical Peer Root/ACL and partial Scoped offline cases remain blocked; no full H2B sign-off.
+
+- 2026-11-25: #188 H2C candidate: [Box acceptance and CI gates](PR188_H2C_BOX_ACCEPTANCE.md). 73 tests and real RC13 no-effect negative PASS. Native interruption/purge/reinstall CI required. Earlier offline native phases not signed off.

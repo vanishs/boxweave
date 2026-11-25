@@ -15,6 +15,7 @@ on:
       - scripts/pr188_h1a_observe.py
       - scripts/pr188_h1b_plan.py
       - scripts/pr188_h2b_offline.py
+      - scripts/pr188_h2c_purge.py
       - scripts/test_offline_retirement.py
       - internal/state/maintenance_offline*.go
       - scripts/test_maintenance_preview.py
@@ -82,6 +83,9 @@ jobs:
             grep -Fxq "PR188_H1B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
           done
           if test "$PR188_OFFLINE_RETIREMENT" = 1; then
+            grep -Fxq PR188_H2C_OFFLINE_POSTNATIVE_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H2C_OFFLINE_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
             for marker in EXACT_UNKNOWN_REVIEW ARCHIVED_UNKNOWN_UNCHANGED NATIVE_RETIRED FOREIGN_UNCHANGED; do
               grep -Fxq "PR188_H2B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
@@ -93,6 +97,7 @@ jobs:
               grep -Fxq "PR182_SCOPED_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             grep -Fxq PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq RC14_SCOPED_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
@@ -136,6 +141,7 @@ jobs:
             grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
           done
           grep -Fxq N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq RC14_LEGACY_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq RC14_FRESH_LEDGER=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq RC14_LEGACY_TO_SCOPED_REINSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
