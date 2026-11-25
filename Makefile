@@ -31,7 +31,7 @@ test-stable-gate:
 	$(PYTHON) -m unittest discover -s scripts -p 'test_v1_stable_gate.py' -q
 
 test-bwdev:
-	$(PYTHON) -m unittest discover -s scripts -p 'test_bwdev.py' -q
+	$(PYTHON) -m unittest discover -s scripts -p 'test_bwdev*.py' -q
 
 verify: lint test-race test-mcp-python test-uninstall test-stable-gate test-bwdev
 	$(PYTHON) -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'

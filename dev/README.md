@@ -1,6 +1,6 @@
 # BoxWeave Development Harness (BDH) — start here
 
-**Status: bootstrap plus bwdev v0.1.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
+**Status: bootstrap plus bwdev v0.2.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
 
 ## Quick start (optional Python CLI)
 
@@ -20,8 +20,20 @@ Use `checkpoint capture` and `checkpoint check` with the
 through an authorized remote branch or PR. The commands do not claim native
 readiness, automatically resume work, or replace existing gates.
 
-Run focused tests with `python3 -m unittest discover -s scripts -p 'test_bwdev.py' -v`.
+Run focused tests with `python3 -m unittest discover -s scripts -p 'test_bwdev*.py' -v`.
 Full applicable tests and CI remain mandatory.
+
+## Task history (v0.2)
+
+Create a JSON specification with work_ref, objective and tasks (id, acceptance, depends_on). See the [example](examples/TASK_SPEC.json). Use a fresh history directory outside the worktree.
+
+```sh
+python3 dev/bwdev --json task init /tmp/my-task-history dev/examples/TASK_SPEC.json
+python3 dev/bwdev --json task next /tmp/my-task-history
+python3 dev/bwdev --json task transition /tmp/my-task-history inspect --expect 1 --to WORKING --note 'Read the original evidence'
+```
+
+Task states are PENDING, WORKING, BLOCKED and RECORDED. RECORDED only records a claimed result and reference, never product acceptance. Publish each revision exclusively; reconcile divergent copies through Git/PR. No distributed claims, automatic native replay, remote sync or proof of evidence authenticity.
 
 ## Start, continue, finish
 
@@ -46,4 +58,4 @@ Risk, not diff size, determines profile. All profiles retain the existing safety
 
 ## First use and next improvement
 
-The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. The first CLI now covers environment observation, context discovery and basic checkpoint capture/check. Next priority: task continuity and validation based on actual friction; see the [bwdev roadmap](../docs/development/BWDEV_DESIGN.md). See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.
+The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. The first CLI now covers environment observation, context discovery and basic checkpoint capture/check. Task continuity is now available via task init/next/status/transition. Next priority: verification planning and evidence based on actual friction; see the [bwdev roadmap](../docs/development/BWDEV_DESIGN.md). See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.
