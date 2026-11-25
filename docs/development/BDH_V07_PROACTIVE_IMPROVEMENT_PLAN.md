@@ -1,7 +1,7 @@
 # BDH v0.7 — proactive improvement execution
 
 Status: V0/V1a CI PASS; V1b and V2a/V2b implemented and Box-tested.
-V2c CI PASS; V3c independent FAIL at 0cdc497, both P1 corrections Box PASS and rereview/new CI pending. See [V3c repair](BDH_V07_V3C_REPAIR.md). Independent delivery and V4-V5 pending. See [V3 progress](BDH_V07_V3_PROGRESS.md). See [V2c progress](BDH_V07_V2C_PROGRESS.md), [V2 progress](BDH_V07_V2_PROGRESS.md) and
+V2c CI PASS; V3c independent rereview PASS at 5a98abb, V3d authorized delivery recorded (episode rev15). See [V3c repair](BDH_V07_V3C_REPAIR.md) and [V3d/V4 trial](BDH_V07_V3D_V4_TRIAL.md). V4 pre-registered; independent ordinary-task runs and V5 pending. See [V3 progress](BDH_V07_V3_PROGRESS.md). See [V2c progress](BDH_V07_V2C_PROGRESS.md), [V2 progress](BDH_V07_V2_PROGRESS.md) and
 [first real selected episode](BDH_V07_FIRST_EPISODE.md).
 See [V0 evidence and checkpoint](BDH_V07_V0_BASELINE.md).
 Stacked PR based on paused #191 at 3494ae8a35c50c386686c9d9d675c1ae37e1b1b7.
@@ -256,8 +256,8 @@ or promotion to satisfy a metric.
 | V0 | Box baseline complete; CI PASS |
 | V1 | V1a CI PASS; V1b durable decisions Box PASS, child CI pending |
 | V2 | V2a bounded selection/ready DAG and V2b guarded lifecycle Box PASS; V2c terminal review, durable handoff and local contention CI PASS |
-| V3 | Actual L014 rev15 selected; independent rejection rev6, rework and corrected implementation L014 rev21/23, episode rev11 review READY; 104 tests PASS, rereview and CI pending |
-| V4 | Not started |
+| V3 | Independent rereview and exact reviewed-head CI PASS; original FAIL preserved; actual delivery rev15, L014 rev24; ready benefit |
+| V4 | Matched task-only trials pre-registered, same real inputs and exact isolated checkouts prepared; independent Agents required |
 | V5 | Not started |
 
 Continue from the current PR checkpoint. Follow canonical BDH; reconcile
