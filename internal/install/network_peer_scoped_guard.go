@@ -23,16 +23,6 @@ type NativePeerGuardMember struct {
 	UUID, MAC, IPv4, IPv6 string
 }
 
-// NativePeerGuardPlan is a deterministic PURE nftables policy proposal.
-// Install/Replace must NOT be executed from MCP, a guest, or by any caller
-// that has not independently proven ownership and guarded boot/recovery.
-// An nftables accept in one bridge chain does not bypass another chain's
-// drop. The terminal drop is intentionally restricted to managed-to-managed
-// traffic so unrelated host/forward traffic is unaffected.
-type NativePeerGuardPlan struct {
-	Table, Install, Replace, ExpectedKernelJSON, DigestSHA256 string
-}
-
 func NativePeerGuardFromSnapshot(t NativePrepareTarget, network *api.Network,
 	members []NativePeerGuardMember, active, revoked []state.PeerGrantBinding) (NativePeerGuardPlan, error) {
 	return nativePeerGuardCompile(t, network, members, active, revoked, false)

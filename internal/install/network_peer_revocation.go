@@ -98,9 +98,6 @@ func nativeACLWithDeniedPeers(t NativePrepareTarget, network *api.Network, activ
 	}
 	return result, nil
 }
-func exactPeerRuleKey(source, target netip.Addr, bits int) string {
-	return fmt.Sprintf("%s/%d|%s/%d", source, bits, target, bits)
-}
 
 // nativeACLRevokeOneFromSnapshot keeps every separately confirmed direction
 // while replacing exactly the staged direction with host-exact DROP tombstones.

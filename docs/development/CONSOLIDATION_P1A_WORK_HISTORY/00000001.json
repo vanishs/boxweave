@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-first",
+  "authority": "Owner authorized P1 development in existing isolated Box, no merge, release or physical host changes",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Extract exact shared declarations and preserve original guard, conntrack and native preparation semantics",
+  "objective": "Extract shared native helpers without behavior change before legacy retirement",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "179b0efd45989add97c3a3038bf0f8c58893ff41",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [],
+  "work_ref": "pr191/p1a"
+}

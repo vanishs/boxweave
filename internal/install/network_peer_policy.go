@@ -10,15 +10,6 @@ import (
 	"github.com/lxc/incus/v7/shared/api"
 )
 
-// nativePeerBinding is a proposed exact-identity peer rule, NOT evidence that
-// addresses belong to the named Boxes. Native UUID/NIC/MAC/lease exclusivity
-// and all ACL consumers require independent checks before use.
-type nativePeerBinding struct {
-	SourceUUID, TargetUUID string
-	SourceIPv4, TargetIPv4 netip.Addr
-	SourceIPv6, TargetIPv6 netip.Addr
-}
-
 // Never carve a whole private bridge prefix to enable one directional peer.
 // An exception is one exact address; a deleted/reused address is unsafe until
 // dependent native rules are demonstrably revoked before lease release.
@@ -187,4 +178,8 @@ func nativeACLForVerifiedPeers(t NativePrepareTarget, network *api.Network, bind
 		}
 	}
 	return base, nil
+}
+
+func exactPeerRuleKey(source, target netip.Addr, bits int) string {
+	return fmt.Sprintf("%s/%d|%s/%d", source, bits, target, bits)
 }
