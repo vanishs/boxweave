@@ -53,6 +53,9 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["related"][0]["id"], "BDH-L014")
         self.observe()
         self.assertEqual(self.review()[0]["status"], "FEEDBACK_RECORDED")
+        evolve = self.review()[0]["evolve"]
+        self.assertEqual(evolve["status"], "PENDING")
+        self.assertEqual(evolve["items"][0]["id"], "BDH-L014")
         for key, value in (("attempt_ref", "other"), ("observation", "changed"), ("outcome", "misled")):
             changed = dict(self.row, asset_feedback=[dict(self.item, **{key: value})])
             self.assertEqual(self.review(changed)[1], 1)
@@ -113,6 +116,10 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(result["feedback"]["status"], "FEEDBACK_RECORDED")
         self.assertEqual(records.latest(history)["revision"], 3)
+        handoff = records.latest(history)["evolve_handoff"]
+        self.assertEqual(handoff["status"], "PENDING")
+        self.assertEqual(handoff["items"][0]["status"], "SELECTION_RECORDED")
+        self.assertEqual(work.read_history(history)["state"], "RECORDED")
 
     def test_unaccounted_unknown_and_alias_feedback(self):
         self.observe()

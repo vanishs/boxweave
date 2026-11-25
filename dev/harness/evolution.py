@@ -98,7 +98,46 @@ def validate(row):
         raise HarnessError("Invalid opportunity reviews")
     for event in reviews:
         validate_decision(event)
+    resolutions = row.get("opportunity_resolutions", [])
+    if not isinstance(resolutions, list) or len(resolutions) > len(reviews):
+        raise HarnessError("Invalid episode resolution history")
+    seen = set()
+    for resolution in resolutions:
+        validate_resolution(resolution)
+        if resolution["episode_id"] in seen:
+            raise HarnessError("Duplicate episode resolution")
+        seen.add(resolution["episode_id"])
     return row
+
+
+def validate_resolution(value):
+    fields = {"episode_id", "task_revision", "task_sha256", "outcome", "review_ref",
+              "actor_ref", "reason", "benefit_evidence", "resolved_revision"}
+    if not isinstance(value, dict) or set(value) != fields:
+        raise HarnessError("Invalid episode resolution fields")
+    if not isinstance(value["episode_id"], str) or not re.fullmatch(r"BDH-E-[0-9a-f]{32}", value["episode_id"]):
+        raise HarnessError("Invalid resolved episode ID")
+    if not isinstance(value["task_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", value["task_sha256"]):
+        raise HarnessError("Invalid resolution task digest")
+    for key in ("task_revision", "resolved_revision"):
+        if type(value[key]) is not int or value[key] < 1:
+            raise HarnessError("Invalid episode resolution revision")
+    if value["outcome"] not in ("benefit-confirmed", "reopen"):
+        raise HarnessError("Invalid episode resolution outcome")
+    for key in ("review_ref", "actor_ref", "reason", "benefit_evidence"):
+        bounded(value[key], "episode resolution " + key)
+    return value
+
+
+def outstanding_selection(row):
+    reviews = row.get("opportunity_reviews", [])
+    if not reviews or reviews[-1]["decision"] != "select":
+        return None
+    selected = reviews[-1]
+    if any(r["episode_id"] == selected["episode_id"]
+           for r in row.get("opportunity_resolutions", [])):
+        return None
+    return selected
 
 
 def proposal_path(path):
@@ -222,7 +261,7 @@ def make_decision(row, coverage, *, basis, decision, reason, review_ref, when,
         raise HarnessError("Review trigger must be distinct and new")
     if current["status"] != "REVIEW_DUE" and trigger_ref is None:
         raise HarnessError("No new review signal; explicit new trigger required")
-    if previous and previous[-1]["decision"] == "select":
+    if outstanding_selection(row) is not None:
         raise HarnessError("Selected opportunity needs episode reconciliation before another decision")
     if decision == "select":
         validate_proposal(proposal, row["asset"])
@@ -302,7 +341,15 @@ def opportunity(row, coverage=None):
     if decision_current and not reasons:
         status = "SELECTION_RECORDED" if decision["decision"] == "select" else "REVIEW_RECORDED"
     reviews = row.get("opportunity_reviews", [])
-    if reviews and reviews[-1]["decision"] == "select":
+    selected = outstanding_selection(row)
+    resolution = coverage.get("episode_resolution")
+    if resolution is not None:
+        if resolution["outcome"] == "reopen":
+            reasons.append("episode-reopened")
+            if resolution["benefit_evidence"] not in evidence:
+                evidence.append(resolution["benefit_evidence"])
+        status = "REVIEW_DUE" if reasons else "EPISODE_RESOLVED"
+    if selected is not None:
         status = "SELECTION_RECORDED"
     result = {"status": status, "reasons": reasons, "evidence": evidence,
               "covered_observation_count": count,
@@ -355,6 +402,8 @@ def select(rows, *, task_kind=None, query="", paths=(), domains=(), signals=(), 
             reasons.append("global-queue" if not filtered else "explicit-all")
         if review["status"] == "SELECTION_RECORDED":
             action = "reconcile selected improvement episode; no dispatch"
+        elif review["status"] == "EPISODE_RESOLVED":
+            action = "retain resolved episode evidence; reconsider on new evidence"
         elif review["status"] == "REVIEW_RECORDED":
             action = "preserve recorded decision; reconsider on new evidence or explicit trigger"
         elif row["state"] == "DEFERRED":

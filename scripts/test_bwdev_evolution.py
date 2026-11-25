@@ -19,7 +19,8 @@ class EvolutionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.inbox = Path(self.tmp.name)
+        self.inbox = Path(self.tmp.name) / "learning"
+        self.inbox.mkdir()
         self.parser = argparse.ArgumentParser()
         learning.register(self.parser)
 
@@ -293,7 +294,7 @@ class EvolutionTests(unittest.TestCase):
     def test_episode_materialization_and_binding(self):
         self.capture()
         selected = self.decide("select")
-        history = self.inbox.parent / (self.inbox.name + "-episodes")
+        history = self.inbox.parent / "episodes"
         history.mkdir()
         self.addCleanup(__import__("shutil").rmtree, history)
         args = ["L100", "--expect", "2", "--history-root", str(history)]
@@ -339,7 +340,7 @@ class EvolutionTests(unittest.TestCase):
     def episode_fixture(self, proposal=None):
         self.capture()
         selected = self.decide("select", proposal=proposal)
-        history = self.inbox.parent / (self.inbox.name + "-lifecycle")
+        history = self.inbox.parent / "episodes"
         history.mkdir()
         self.addCleanup(__import__("shutil").rmtree, history)
         source = {"commit": "a"*40, "worktree": "clean"}
@@ -449,6 +450,39 @@ class EvolutionTests(unittest.TestCase):
         self.assertEqual(ready["ready"], [])
         self.assertEqual(ready["attempts_used"], 5)
         self.assertEqual(self.invoke("opportunity", "L100")[0]["opportunity"]["status"], "SELECTION_RECORDED")
+        resolve = ["L100", "--expect", "3", "--task-expect", str(revision),
+                   "--outcome", "benefit-confirmed", "--review-ref", "terminal:review",
+                   "--actor-ref", "review-agent", "--reason", "Verified exact fixture witness"]
+        with self.assertRaises(HarnessError):
+            self.invoke("resolve-episode", *resolve)
+        # Separate later ordinary work, matching the recorded benefit attempt
+        # and evidence exactly. This fixture is not independent real evidence.
+        self.invoke("observe", "L100", "--expect", "3", "--work-ref", "fixture/ordinary",
+                    "--attempt-ref", "attempt:benefit", "--evidence", "evidence:result:benefit",
+                    "--observation", "Held-out ordinary fixture helped", "--outcome", "helped")
+        resolve[2] = "4"
+        invalid = list(resolve)
+        invalid[invalid.index("--actor-ref")+1] = "benefit-agent"
+        with self.assertRaises(HarnessError):
+            self.invoke("resolve-episode", *invalid)
+        with patch("harness.learning.asset_digest", return_value="c"*64):
+            resolved = self.invoke("resolve-episode", *resolve)[0]["record"]
+            self.assertEqual(resolved["state"], "CANDIDATE")
+            self.assertEqual(resolved["opportunity_resolutions"][0]["task_revision"], revision)
+            self.assertEqual(self.invoke("opportunity", "L100")[0]["opportunity"]["status"], "EPISODE_RESOLVED")
+            with self.assertRaises(HarnessError):
+                self.invoke("resolve-episode", *resolve)
+            self.observe(5, "fixture/later", "fixture:later-negative")
+            self.assertEqual(self.invoke("opportunity", "L100")[0]["opportunity"]["status"], "REVIEW_DUE")
+            self.decide("preserve", ref="fixture:post-resolution")
+            self.assertEqual(self.invoke("opportunity", "L100")[0]["opportunity"]["status"], "REVIEW_RECORDED")
+        terminal = Path(ready["history"]) / f"{revision:08d}.json"
+        raw = terminal.read_bytes()
+        terminal.write_bytes(raw + b" ")
+        with self.assertRaises(HarnessError):
+            learning.read_history(self.inbox / "L100", ROOT)
+        terminal.write_bytes(raw)
+        self.assertEqual(learning.read_history(self.inbox / "L100", ROOT)["revision"], 7)
 
     def test_episode_attempt_budget(self):
         selected, history, initial = self.episode_fixture(dict(self.proposal(), max_attempts=5))
@@ -494,6 +528,111 @@ class EvolutionTests(unittest.TestCase):
                 episodes.check_live_scope(root,proposal,{"commit":git("rev-parse","HEAD"),"worktree":"clean"}, {}, event)
             with self.assertRaises(HarnessError):
                 episodes.check_live_scope(root,proposal,{"commit":head,"worktree":"dirty"}, {}, event)
+
+
+    def test_episode_reopen_keeps_later_residual_and_allows_new_selection(self):
+        selected, history, initial = self.episode_fixture()
+        source = {"commit": "b"*40, "worktree": "clean"}
+        self.advance_episode(history, self.event("implement", "WORKING", "claim"), 1)
+        done = self.event("implement", "RECORDED", "impl")
+        with patch("harness.learning.observe", return_value=source), patch("harness.learning.asset_digest", return_value="c"*64):
+            self.invoke("attach", "L100", "--expect", "2", "--implementation-ref", "fixture:impl",
+                        "--validation-evidence", done["evidence_ref"], "--work-ref", initial["episode_id"],
+                        "--attempt-ref", "attempt-one")
+        self.advance_episode(history, done, 2, 3, source=source)
+        revision = 3
+        for step, actor in (("validate","fixture-agent"), ("review","review-agent"),
+                            ("deliver","fixture-agent"), ("benefit","benefit-agent")):
+            attempt = "attempt:"+step
+            self.advance_episode(history, self.event(step,"WORKING","claim:"+step,actor=actor,attempt=attempt),
+                                 revision, 3, source=source)
+            revision += 1
+            self.advance_episode(history, self.event(step,"RECORDED","result:"+step,actor=actor,attempt=attempt),
+                                 revision, 3, source=source)
+            revision += 1
+        self.invoke("observe", "L100", "--expect", "3", "--work-ref", "fixture/ordinary",
+                    "--attempt-ref", "attempt:benefit", "--evidence", "evidence:result:benefit",
+                    "--observation", "No material improvement in matched trial", "--outcome", "uncertain")
+        args = ["L100", "--expect", "4", "--task-expect", str(revision),
+                "--outcome", "reopen", "--review-ref", "terminal:no-benefit",
+                "--actor-ref", "review-agent", "--reason", "No measured benefit"]
+        with patch("harness.learning.asset_digest", return_value="c"*64):
+            wrong = list(args)
+            wrong[wrong.index("--outcome")+1] = "benefit-confirmed"
+            with self.assertRaises(HarnessError):
+                self.invoke("resolve-episode", *wrong)
+            self.invoke("resolve-episode", *args)
+            due = self.invoke("opportunity", "L100")[0]["opportunity"]
+            self.assertIn("episode-reopened", due["reasons"])
+            self.assertIn("evidence:result:benefit", due["evidence"])
+            new = self.decide("select", ref="fixture:follow-up")
+            self.assertNotEqual(new["opportunity_reviews"][-1]["episode_id"], initial["episode_id"])
+            self.assertEqual(new["opportunity_resolutions"][0]["episode_id"], initial["episode_id"])
+            self.assertEqual(self.invoke("opportunity", "L100")[0]["opportunity"]["status"], "SELECTION_RECORDED")
+
+    def test_episode_canonical_root_and_cross_process_claim(self):
+        # Real subprocesses race for one immutable revision in an isolated
+        # temporary Git repository, without dispatching any guest effects.
+        import os
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)/"repo"
+            root.mkdir()
+            def git(*args):
+                return subprocess.check_output(["git","-C",str(root),*args],text=True,stderr=subprocess.STDOUT).strip()
+            git("init","-q")
+            git("config","user.email","fixture@example.invalid")
+            git("config","user.name","Fixture")
+            asset = root/"dev/skills/box-development/SKILL.md"
+            asset.parent.mkdir(parents=True)
+            asset.write_text("fixture\n")
+            git("add",".")
+            git("commit","-qm","fixture")
+            inbox=Path(temp)/"learning"
+            inbox.mkdir()
+            history=Path(temp)/"episodes"
+            history.mkdir()
+            def call(*args):
+                return learning.run(self.parser.parse_args([args[0],str(inbox),*args[1:]]),root)[0]
+            call("capture","L100","--work-ref","fixture/a","--observation","Residual friction",
+                 "--evidence","fixture:initial","--asset","dev/skills/box-development/SKILL.md",
+                 "--validation","fixture validation","--change-class","L2")
+            o=call("opportunity","L100")["opportunity"]
+            proposal=Path(temp)/"proposal.json"
+            proposal.write_text(json.dumps(dict(self.proposal(),source_sha=git("rev-parse","HEAD"))))
+            call("decide","L100","--expect","1","--basis",o["basis"],"--decision","select",
+                 "--reason","fixture selection","--review-ref","fixture:review","--when","new evidence",
+                 "--proposal",str(proposal))
+            other=Path(temp)/"other"
+            other.mkdir()
+            with self.assertRaises(HarnessError):
+                call("episode","L100","--expect","2","--history-root",str(other),"--materialize")
+            args=["episode","L100","--expect","2","--history-root",str(history)]
+            call(*args,"--materialize")
+            program="""import argparse,json,sys
+from pathlib import Path
+from harness import learning
+from harness.common import HarnessError
+p=argparse.ArgumentParser();learning.register(p)
+try:
+ print(json.dumps(learning.run(p.parse_args(sys.argv[2:]),Path(sys.argv[1]))[0]))
+except HarnessError as e:
+ print(str(e));sys.exit(2)
+"""
+            env=dict(os.environ,PYTHONPATH=str(ROOT/"dev"))
+            procs=[]
+            for i in range(2):
+                ev=Path(temp)/f"event{i}.json"
+                ev.write_text(json.dumps(self.event("implement","WORKING",str(i),attempt=f"race:{i}")))
+                argv=[sys.executable,"-c",program,str(root),"episode",str(inbox),*args[1:],
+                      "--event",str(ev),"--task-expect","1"]
+                procs.append(subprocess.Popen(argv,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True))
+            outputs=[p.communicate(timeout=20) for p in procs]
+            self.assertEqual(sorted(p.returncode for p in procs),[0,2],outputs)
+            current=call(*args)
+            self.assertEqual(current["revision"],2)
+            self.assertEqual(current["status"],"ACTIVE")
+            self.assertEqual(current["attempts_used"],1)
+            self.assertEqual(len(list(Path(current["history"]).glob("*.json"))),2)
 
 
 if __name__ == "__main__":

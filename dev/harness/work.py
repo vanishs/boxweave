@@ -22,7 +22,7 @@ STATES = ("ACTIVE", "BLOCKED", "UNKNOWN", "HANDOFF", "ANSWERED", "RECORDED")
 DISPOSITIONS = ("none", "reuse", "candidate", "deferred", "improved", "pending")
 FIELDS = {"kind", "schema_version", "revision", "work_ref", "attempt_ref", "task_kind",
           "objective", "risk", "authority", "target", "state", "next_safe_action",
-          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links", "feedback_protocol", "implementation_claim"}
+          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links", "feedback_protocol", "implementation_claim", "evolve_handoff"}
 
 
 def string(value, field, limit=512):
@@ -117,6 +117,26 @@ def validate(data):
         if data["task_kind"] in ("operations", "diagnosis", "development", "release", "harness"):
             if target["kind"] in ("unknown", "none") or not target["ref"]:
                 raise HarnessError("Recorded material outcome requires observed target reference")
+    handoff = data.get("evolve_handoff")
+    if handoff is not None:
+        if (not data.get("boundary") or not isinstance(handoff, dict)
+                or set(handoff) != {"status", "items"}
+                or handoff["status"] not in ("PENDING", "UNRESOLVED", "NO_MATCHED_PENDING")
+                or not isinstance(handoff["items"], list) or len(handoff["items"]) > 200):
+            raise HarnessError("Invalid Evolve boundary snapshot")
+        ids = set()
+        for item in handoff["items"]:
+            if (not isinstance(item, dict) or set(item) != {"id", "revision", "status", "basis", "next_safe_action"}
+                    or item["status"] not in ("REVIEW_DUE", "SELECTION_RECORDED")
+                    or type(item["revision"]) is not int or item["revision"] < 1):
+                raise HarnessError("Invalid pending opportunity reference")
+            for key in ("id", "basis", "next_safe_action"):
+                string(item[key], "Evolve " + key)
+            if item["id"] in ids:
+                raise HarnessError("Duplicate pending opportunity")
+            ids.add(item["id"])
+        if (handoff["status"] == "PENDING") != bool(handoff["items"]):
+            raise HarnessError("Inconsistent Evolve boundary snapshot")
     if data.get("boundary") and disposition is None:
         raise HarnessError("Material boundary requires learning disposition")
     if "revision" in data and (type(data["revision"]) is not int or data["revision"] < 1):
@@ -275,12 +295,16 @@ def run(args, root):
         row = read_history(args.directory)
         if args.action == "boundary":
             updated = advance(row, read_json(args.file), args.expect)
+            reviewed, code = feedback.review(updated, root, inbox)
             if updated["state"] in ("RECORDED", "ANSWERED"):
-                reviewed, code = feedback.review(updated, root, inbox)
                 if code or reviewed["status"] != "FEEDBACK_RECORDED":
                     return {"status": "REVIEW_REQUIRED", "published": False, "feedback": reviewed,
                             "note": "Record an explicit active or handoff boundary and reconcile before closing."}, 1
-            row = publish(args.directory, args.expect, updated)
+            evolve = reviewed["evolve"]
+            # Snapshot computed by the boundary writer. This is not a
+            # caller-provided proof or a gate on ordinary task completion.
+            updated["evolve_handoff"] = {key: evolve[key] for key in ("status", "items")}
+            row = publish(args.directory, args.expect, validate(updated))
         elif args.action == "resume":
             result = summary(row)
             result["feedback"], _ = feedback.review(row, root, inbox)

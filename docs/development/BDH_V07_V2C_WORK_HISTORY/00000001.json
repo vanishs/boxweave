@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-v2c",
+  "authority": "Owner authorized child PR development in isolated owned Box; no parent, host, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Verify terminal review and boundary records",
+  "objective": "Implement terminal episode review, durable opportunity handoff and local contention checks",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "6f79c7cd62a200b5861c09b814aca384fe69ab24",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [],
+  "work_ref": "pr193/v2c"
+}

@@ -18,10 +18,10 @@ def check_scope(proposal, root):
 
 
 def selection(row):
-    events = row.get("opportunity_reviews", [])
-    if not events or events[-1]["decision"] != "select":
+    selected = evolution.outstanding_selection(row)
+    if selected is None:
         raise HarnessError("No outstanding selected improvement")
-    event = evolution.validate_decision(events[-1])
+    event = evolution.validate_decision(selected)
     evolution.validate_proposal(event["proposal"], row["asset"])
     if event["episode_id"] != evolution.episode_id(row["id"], event["basis"]):
         raise HarnessError("Selected episode identity mismatch")
@@ -232,10 +232,71 @@ def check_live_scope(root, proposal, source, candidate, event):
             raise HarnessError("Implemented asset digest differs from current source")
 
 
+def canonical_history_root(root, candidate_dir):
+    inbox = Path(candidate_dir).parent
+    if inbox.resolve() == (root / "dev/learning").resolve():
+        return root / "docs/development/BDH_V07_EPISODES"
+    return inbox.parent / "episodes"
+
+
+def resolution_record(candidate, candidate_dir, root, history_root, *, task_revision,
+                      outcome, review_ref, actor_ref, reason):
+    selected = selection(candidate)
+    expected = spec(candidate)
+    if history_root.resolve() != canonical_history_root(root, candidate_dir).resolve():
+        raise HarnessError("Resolution requires the canonical episode history root")
+    if history_root.is_symlink():
+        raise HarnessError("Unsafe episode history root")
+    directory = history_root / selected["episode_id"]
+    task = read_history(directory, expected, candidate, candidate_dir)
+    if task["revision"] != task_revision:
+        raise HarnessError("Resolution task revision conflict")
+    rows = tasks.validate(task)
+    if any(row["state"] != "RECORDED" for row in rows.values()):
+        raise HarnessError("Resolve only after all episode steps are recorded")
+    used = {item["actor_ref"] for item in task["attempts"]
+            if item["step"] in ("implement", "benefit")}
+    if actor_ref in used:
+        raise HarnessError("Terminal review must be separate from implementation and benefit witness")
+    refs = {item["event"]["evidence_ref"] for item in task["events"]}
+    if review_ref in refs:
+        raise HarnessError("Terminal review requires distinct evidence")
+    benefit = rows["benefit"]
+    # Require an actual later learning observation, not merely a task note.
+    matches = [item for item in candidate.get("observations", [])[selected["observation_count"]:]
+               if item["evidence"] == benefit["evidence"]
+               and item["attempt_ref"] == benefit["attempt_ref"]
+               and item["work_ref"] != selected["episode_id"]]
+    if len(matches) != 1:
+        raise HarnessError("Resolution requires exact later ordinary-task learning observation")
+    witness = matches[0]
+    if outcome == "benefit-confirmed" and (witness["outcome"] != "helped" or "residual" in witness):
+        raise HarnessError("Confirmed benefit requires helpful witness without recorded residual")
+    if outcome == "reopen" and witness["outcome"] == "helped" and "residual" not in witness:
+        raise HarnessError("Reopen needs actual residual or non-helpful/uncertain witness")
+    raw = (directory / f"{task_revision:08d}.json").read_bytes()
+    return evolution.validate_resolution({"episode_id": selected["episode_id"],
+        "task_revision": task_revision, "task_sha256": hashlib.sha256(raw).hexdigest(),
+        "outcome": outcome, "review_ref": review_ref, "actor_ref": actor_ref, "reason": reason,
+        "benefit_evidence": benefit["evidence"], "resolved_revision": candidate["revision"]})
+
+
+def verify_resolution(candidate, candidate_dir, root, record):
+    expected = resolution_record(candidate, candidate_dir, root,
+        canonical_history_root(root, candidate_dir), task_revision=record["task_revision"],
+        outcome=record["outcome"], review_ref=record["review_ref"],
+        actor_ref=record["actor_ref"], reason=record["reason"])
+    if expected != record:
+        raise HarnessError("Episode resolution does not match terminal task and learning evidence")
+    return record
+
+
 def materialize(row, root, history_root, create=False, *, candidate_dir, event=None, task_expect=None):
     expected = spec(row)
     selected = selection(row)
     proposal = selected["proposal"]
+    if history_root.resolve() != canonical_history_root(root, candidate_dir).resolve():
+        raise HarnessError("Use the canonical episode history root; reconcile copies through Git")
     if history_root.is_symlink() or not history_root.is_dir():
         raise HarnessError("Episode history root missing or unsafe")
     directory = history_root / selected["episode_id"]

@@ -74,11 +74,13 @@ def _review(row, root, inbox=None):
     results = []
     if row.get("feedback_protocol") != PROTOCOL:
         return {"status": "REVIEW_REQUIRED", "issues": ["Feedback protocol not declared; review legacy record explicitly"],
-                "items": [], "note": "No automatic migration or closure."}, 1
+                "items": [], "evolve": {"status": "UNRESOLVED", "items": []},
+                "note": "No automatic migration or closure."}, 1
     disposition = row.get("learning")
     items = row.get("asset_feedback", [])
     if row["state"] == "ACTIVE" and not row.get("boundary") and not disposition and not items:
         return {"status": "NOT_DUE", "issues": [], "items": [],
+                "evolve": {"status": "NOT_DUE", "items": []},
                 "note": "No material boundary recorded yet."}, 0
     if not disposition:
         issues.append("Missing learning disposition")
@@ -215,7 +217,23 @@ def _review(row, root, inbox=None):
         result["status"] = "REVIEW_REQUIRED" if problems else "RECORDED"
         results.append(result)
         issues.extend(item["asset"] + ": " + problem for problem in problems)
+    pending = {}
+    for item in results:
+        for candidate in item["related"]:
+            opportunity = candidate["opportunity"]
+            if opportunity["status"] not in ("REVIEW_DUE", "SELECTION_RECORDED"):
+                continue
+            if item.get("match") and item["candidate"] == candidate["id"]:
+                if opportunity["status"] == "SELECTION_RECORDED" or item["evidence"] in opportunity["evidence"]:
+                    pending[candidate["id"]] = {"id": candidate["id"], "revision": candidate["revision"],
+                        "status": opportunity["status"], "basis": opportunity["basis"],
+                        "next_safe_action": ("Reconcile selected episode; preserve pending work"
+                            if opportunity["status"] == "SELECTION_RECORDED"
+                            else "Record explicit review or handoff; do not infer closure")}
     return {"status": "REVIEW_REQUIRED" if issues else "FEEDBACK_RECORDED",
+            "evolve": {"status": "PENDING" if pending else ("UNRESOLVED" if issues else "NO_MATCHED_PENDING"),
+                       "items": list(pending.values()),
+                       "note": "Separate from ordinary task feedback; does not claim complete Evolve Loop."},
             "issues": issues, "items": results,
             "note": "Checks supplied local records only. No proof of omitted observations, remote persistence, independent recurrence, promotion or product acceptance."}, 1 if issues else 0
 
@@ -225,4 +243,5 @@ def review(row, root, inbox=None):
         return _review(row, root, inbox)
     except (HarnessError, OSError, UnicodeError, KeyError, TypeError, ValueError) as exc:
         return {"status": "REVIEW_REQUIRED", "issues": ["Feedback inputs need review: " + str(exc)],
-                "items": [], "note": "Preserve the original work and reconcile local inputs."}, 1
+                "items": [], "evolve": {"status": "UNRESOLVED", "items": []},
+                "note": "Preserve the original work and reconcile local inputs."}, 1

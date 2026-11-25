@@ -230,10 +230,23 @@ dispatch; do not replay uncertain effects. Complete implement only with a
 new exact work-bound learning attachment. Later task records use the exact
 implemented clean source (use a distinct checkout for evidence publication).
 Separate reviewer/beneficiary references are necessary but not proof of
-independence. Final recorded outcomes remain review required; explicit
-terminal resolution and actual comparative utility are not yet implemented.
+independence. Final recorded outcomes remain review required until explicit terminal
+review with exact matching later learning evidence. Use the canonical
+history root (repository docs/development/BDH_V07_EPISODES or an external
+inbox sibling episodes directory). See V2c below.
 
-See [V2 progress](../docs/development/BDH_V07_V2_PROGRESS.md).
+Resolve only after every episode step is recorded and matching later
+ordinary-task learning evidence exists:
+
+    python3 dev/bwdev --json learn resolve-episode INBOX ID --expect N --task-expect T --outcome benefit-confirmed --review-ref REF --actor-ref ACTOR --reason REASON
+
+Use reopen for residual or non-helpful evidence. Resolution does not
+promote assets; read audit replays terminal history. A material work
+boundary persists evolve_handoff independently of feedback success.
+Separate local histories must be reconciled in Git; no distributed lock.
+
+See [V2 progress](../docs/development/BDH_V07_V2_PROGRESS.md) and
+[V2c progress](../docs/development/BDH_V07_V2C_PROGRESS.md).
 
 ## Integrated workflow (v0.5)
 

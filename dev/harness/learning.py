@@ -104,7 +104,13 @@ def read_history(directory, root, review_context=None):
         prior_reviews = (prior or {}).get("opportunity_reviews", [])
         if reviews[:len(prior_reviews)] != prior_reviews or len(reviews) > len(prior_reviews) + 1:
             raise HarnessError("Cannot rewrite opportunity review history")
+        resolutions = current.get("opportunity_resolutions", [])
+        prior_resolutions = (prior or {}).get("opportunity_resolutions", [])
+        if resolutions[:len(prior_resolutions)] != prior_resolutions or len(resolutions) > len(prior_resolutions) + 1:
+            raise HarnessError("Cannot rewrite episode resolution history")
         if prior is None:
+            if resolutions:
+                raise HarnessError("Initial capture cannot contain episode resolution")
             if reviews:
                 raise HarnessError("Initial capture cannot contain a review")
             if current["state"] != "CANDIDATE":
@@ -135,6 +141,17 @@ def read_history(directory, root, review_context=None):
             coverage = {"covered_observation_count": len(current.get("observations", [])),
                         "coverage_event": number, "decision_event": number,
                         "opportunity_decision": event}
+        if len(resolutions) > len(prior_resolutions):
+            if prior is None or any(current.get(k) != prior.get(k) for k in set(current) | set(prior)
+                   if k not in ("revision", "opportunity_resolutions")):
+                raise HarnessError("Episode resolution must be a separate revision")
+            resolution = episodes.verify_resolution(prior, Path(directory), root, resolutions[-1])
+            selected = evolution.outstanding_selection(prior)
+            coverage = {"covered_observation_count": selected["observation_count"],
+                        "coverage_event": number, "episode_resolution": resolution}
+        if prior is not None and evolution.outstanding_selection(prior) is not None:
+            if current["state"] in ("DEPRECATED", "REJECTED"):
+                raise HarnessError("Outstanding selected episode cannot be closed by lifecycle edit")
         impl = current.get("implementation")
         previous_impl = (prior or {}).get("implementation")
         if impl != previous_impl and isinstance(impl, dict) and "binding" in impl:
@@ -250,6 +267,14 @@ def register(parser):
     episode.add_argument("--materialize", action="store_true")
     episode.add_argument("--event", help="Explicit JSON task transition; never dispatches work")
     episode.add_argument("--task-expect", type=int, help="Expected task revision for transition")
+    resolve = sub.add_parser("resolve-episode", help="Record explicit terminal episode review; no promotion")
+    resolve.add_argument("inbox")
+    resolve.add_argument("id")
+    resolve.add_argument("--expect", type=int, required=True)
+    resolve.add_argument("--task-expect", type=int, required=True)
+    resolve.add_argument("--outcome", choices=("benefit-confirmed", "reopen"), required=True)
+    for field in ("--review-ref", "--actor-ref", "--reason"):
+        resolve.add_argument(field, required=True)
     defer = sub.add_parser("defer", help="Record why and when to reconsider a candidate")
     defer.add_argument("inbox")
     defer.add_argument("id")
@@ -330,6 +355,14 @@ def run(args, root):
             event = read_json(args.event) if args.event is not None else None
             return episodes.materialize(data, root, Path(args.history_root), args.materialize,
                                         candidate_dir=directory, event=event, task_expect=args.task_expect), 0
+        if args.action == "resolve-episode":
+            event = episodes.resolution_record(data, directory, root,
+                episodes.canonical_history_root(root, directory), task_revision=args.task_expect,
+                outcome=args.outcome, review_ref=args.review_ref, actor_ref=args.actor_ref, reason=args.reason)
+            data["opportunity_resolutions"] = [*data.get("opportunity_resolutions", []), event]
+            result = publish(directory, args.expect, validate(data, root))
+            return {"status": "RECORDED", "record": result,
+                    "note": "Caller-recorded terminal review; no automatic lifecycle promotion."}, 0
         if args.action == "decide":
             ctx = evolution.decision_context(data, review_context[key], asset_digest(root, data["asset"]))
             proposal = read_json(args.proposal) if args.proposal is not None else None
@@ -357,7 +390,7 @@ def run(args, root):
             result = publish(directory, args.expect, validate(data, root))
             return {"status": "RECORDED", "record": result,
                     "note": "Observation linked; no automatic promotion or independent recurrence claim."}, 0
-        if (data.get("opportunity_reviews") and data["opportunity_reviews"][-1]["decision"] == "select"
+        if (evolution.outstanding_selection(data) is not None
                 and (args.action == "defer" or (args.action == "review" and args.to in ("REJECTED", "DEPRECATED")))):
             raise HarnessError("Outstanding selected episode needs explicit reconciliation")
         if args.action == "defer":
