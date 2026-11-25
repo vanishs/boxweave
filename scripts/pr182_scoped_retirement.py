@@ -30,6 +30,9 @@ def interrupted(project):
     # The real operator approval and all production checks still execute.
     def interrupt(plan):
         assert u.scoped_audit(project)["phase"] == "NATIVE_RESTORED"
+        # The live Root executor requires exact ACL exclusivity. A foreign
+        # ACL is a valid preservation witness after owned native effects.
+        run("incus", "network", "acl", "create", "pr182-foreign", "--project", "default")
         raise RuntimeError("PR182_TEST_INTERRUPTION")
     u.scoped_detach_guard = interrupt
     try:
@@ -63,14 +66,24 @@ def main(project, receipt):
     # Add unrelated native resources. Never remove them.
     run("incus", "project", "create", "pr182-foreign")
     run("incus", "network", "acl", "create", "pr182-foreign", "--project", "default")
-    foreign = [run("incus", "query", "/1.0/projects/pr182-foreign"),
-               run("incus", "query", "/1.0/network-acls/pr182-foreign?project=default")]
+    foreign_project = run("incus", "query", "/1.0/projects/pr182-foreign")
+    foreign_acl = run("incus", "query", "/1.0/network-acls/pr182-foreign?project=default")
+    blocked, bad = check_plan(project)
+    assert blocked.returncode != 0 and not bad["ready"], bad
+    assert "DRAIN_ROOT_ACL_INVENTORY_NOT_EXCLUSIVE" in bad["capture"]["blockers"], bad
+    assert run("incus", "query", "/1.0/network-acls/pr182-foreign?project=default") == foreign_acl
+    assert pid("boxweave.service") == before and not u.SCOPED_DRAIN.exists() and not u.AUDIT.exists()
+    print("PR188_H2A_FOREIGN_ACL_PRE_DISPATCH_REFUSED=PASS", flush=True)
+    # Remove only this exact disposable fixture; never delete foreign ACLs
+    # from the uninstaller. Recreate it after native drain in interrupted().
+    run("incus", "network", "acl", "delete", "pr182-foreign", "--project", "default")
     incus_pid = pid("incus.service")
     p, plan = check_plan(project)
     assert p.returncode == 0 and plan["ready"] and len(plan["capture"]["scope"]["retired"]) >= 3, (p.stderr, plan)
     print("PR182_SCOPED_RETIRED_HISTORY=PASS", flush=True)
     tty_run([sys.executable, __file__, "--interrupt", project],
             [(("Type REMOVE SCOPED " + project).encode(), "REMOVE SCOPED " + project)])
+    foreign = [foreign_project, run("incus", "query", "/1.0/network-acls/pr182-foreign?project=default")]
     record = u.scoped_audit(project)
     assert record["phase"] == "NATIVE_RESTORED" and u.SCOPED_FENCE.exists()
     archive = Path(record["archive"])

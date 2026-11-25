@@ -185,18 +185,112 @@ def machine_sha():
     return sha(mid.encode())
 
 
+def cold_sqlite_files(dbpath):
+    dbpath = Path(dbpath)
+    owner = dbpath.parent.lstat()
+    if (not dbpath.is_absolute() or dbpath.parent.resolve() != dbpath.parent or
+            not stat.S_ISDIR(owner.st_mode) or owner.st_mode & 0o077):
+        raise UninstallError("OFFLINE_SQLITE_PRIVATE_DIRECTORY_REQUIRED")
+    files = {}
+    total = 0
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        path = Path(str(dbpath) + suffix)
+        info = checked_file(path, "file", 32 * 1024 * 1024)
+        if info is not None:
+            total += info.st_size
+            if (total > 32 * 1024 * 1024 or info.st_nlink != 1 or
+                    info.st_uid != owner.st_uid or info.st_dev != owner.st_dev or
+                    info.st_mode & 0o077):
+                raise UninstallError("OFFLINE_SQLITE_SOURCE_IDENTITY_OR_BOUND_UNVERIFIED")
+        files[suffix] = file_fingerprint(path)
+    return files
+
+
+@contextmanager
+def cold_sqlite_copy(dbpath):
+    # Same SQLite Unix VFS cold exclusive DB range as diagnostic_snapshot.go.
+    # Never open SQLite on the source, truncate its WAL, or discard evidence.
+    dbpath = Path(dbpath)
+    before = cold_sqlite_files(dbpath)
+    if before[""] is None or before["-journal"] is not None:
+        raise UninstallError("OFFLINE_SQLITE_ROLLBACK_JOURNAL_OR_DB_UNVERIFIED")
+    owner = dbpath.parent.lstat()
+    if not stat.S_ISDIR(owner.st_mode) or owner.st_mode & 0o077:
+        raise UninstallError("OFFLINE_SQLITE_PRIVATE_DIRECTORY_REQUIRED")
+    fds = {}
+    try:
+        for suffix, proof in before.items():
+            if proof is None:
+                continue
+            path = Path(str(dbpath) + suffix)
+            fd = os.open(path, (os.O_RDWR if suffix == "" else os.O_RDONLY) |
+                         os.O_NOFOLLOW | os.O_NONBLOCK)
+            fds[suffix] = fd
+            st = os.fstat(fd)
+            if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or
+                    st.st_uid != owner.st_uid or st.st_dev != owner.st_dev or
+                    st.st_mode & 0o077 or (st.st_dev, st.st_ino, st.st_size) !=
+                    (proof["device"], proof["inode"], proof["size"])):
+                raise UninstallError("OFFLINE_SQLITE_SOURCE_IDENTITY_UNVERIFIED")
+        if sum(x["size"] for x in before.values() if x) > 32 * 1024 * 1024:
+            raise UninstallError("OFFLINE_SQLITE_CAPTURE_LIMIT")
+        try:
+            fcntl.lockf(fds[""], fcntl.LOCK_EX | fcntl.LOCK_NB, 512, 0x40000000)
+        except OSError as exc:
+            raise UninstallError("OFFLINE_SQLITE_SOURCE_BUSY") from exc
+        with tempfile.TemporaryDirectory(prefix="boxweave-offline-sqlite-") as tmp:
+            dst = Path(tmp) / "ledger.sqlite"
+            for suffix, fd in fds.items():
+                st = os.fstat(fd)
+                h = hashlib.sha256()
+                # SHM is an index, not durable transaction data. Verify its
+                # bytes for archive provenance; rebuild only on private copy.
+                target = Path(str(dst) + suffix)
+                with target.open("xb") as out:
+                    os.fchmod(out.fileno(), 0o600)
+                    remaining = before[suffix]["size"]
+                    while remaining:
+                        chunk = os.read(fd, min(remaining, 1024 * 1024))
+                        if not chunk:
+                            raise UninstallError("OFFLINE_SQLITE_EPOCH_CHANGED")
+                        remaining -= len(chunk)
+                        h.update(chunk)
+                        if suffix != "-shm":
+                            out.write(chunk)
+                if suffix == "-shm":
+                    target.unlink()
+                now = os.fstat(fd)
+                current = Path(str(dbpath) + suffix).lstat()
+                if (h.hexdigest() != before[suffix]["sha256"] or
+                        (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns) !=
+                        (now.st_ino, now.st_size, now.st_mtime_ns, now.st_ctime_ns) or
+                        (current.st_dev, current.st_ino) != (now.st_dev, now.st_ino)):
+                    raise UninstallError("OFFLINE_SQLITE_EPOCH_CHANGED")
+            # Reconstruct WAL on a private copy; never use immutable=1 here.
+            yield dst
+    finally:
+        for fd in fds.values():
+            os.close(fd)
+    if cold_sqlite_files(dbpath) != before:
+        raise UninstallError("OFFLINE_SQLITE_EPOCH_CHANGED")
+
+
 def inspect_sqlite(dbpath, guided=False, cold=False):
     """A read-only snapshot; never import a v4/v5 DB into a new controller."""
     if checked_file(dbpath, "file") is None:
         raise UninstallError("no readable controller SQLite evidence")
-    # A quiescent offline plan requires a complete checkpointed database.
-    # SQLite mode=ro alone can create WAL-index sidecars on the source.
-    # Never use immutable=1 on a live/WAL-bearing database.
     if cold:
-        if any(os.path.lexists(str(dbpath) + suffix) for suffix in ("-wal", "-shm", "-journal")):
-            raise UninstallError("OFFLINE_SQLITE_SIDECARS_REQUIRE_REVIEW")
-        before = file_fingerprint(dbpath)
-    conn = sqlite3.connect("file:" + str(dbpath) + "?mode=ro" + ("&immutable=1" if cold else ""), uri=True, timeout=5)
+        with cold_sqlite_copy(dbpath) as copy:
+            conn = sqlite3.connect(copy.as_uri() + "?mode=ro", uri=True, timeout=5)
+            try:
+                if conn.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                    raise UninstallError("OFFLINE_SQLITE_PRIVATE_INTEGRITY_UNVERIFIED")
+            except sqlite3.Error as exc:
+                raise UninstallError("OFFLINE_SQLITE_PRIVATE_INTEGRITY_UNVERIFIED") from exc
+            finally:
+                conn.close()
+            return inspect_sqlite(copy, guided=guided)
+    conn = sqlite3.connect("file:" + str(dbpath) + "?mode=ro", uri=True, timeout=5)
     try:
         conn.execute("PRAGMA query_only=ON")
         conn.execute("BEGIN")
@@ -275,9 +369,6 @@ def inspect_sqlite(dbpath, guided=False, cold=False):
         raise UninstallError("SQLite snapshot cannot be verified: " + str(exc)) from exc
     finally:
         conn.close()
-        if cold and (file_fingerprint(dbpath) != before or
-                     any(os.path.lexists(str(dbpath) + suffix) for suffix in ("-wal", "-shm", "-journal"))):
-            raise UninstallError("OFFLINE_SQLITE_EPOCH_CHANGED")
 
 
 def native_instances(project, guided=False):
@@ -2794,6 +2885,25 @@ def scoped_drain_steps(scope):
     return steps
 
 
+def scoped_drain_global_inventory(project, scope):
+    # The current Root lifecycle contract requires exclusive host-wide
+    # instance inventory and exact default-Project ACL names. Refuse before
+    # admitting a business original, not after creating UNKNOWN.
+    raw, _ = command(["incus", "query", "local:/1.0/network-acls?project=default&recursion=1"], timeout=25)
+    acls = json.loads(raw)
+    expected = {"bw-peer-quarantine"}
+    expected.update(b["acl"] for b in scope["boxes"])
+    if not isinstance(acls, list) or {a.get("name") for a in acls} != expected or len(acls) != len(expected):
+        raise UninstallError("DRAIN_ROOT_ACL_INVENTORY_NOT_EXCLUSIVE")
+    raw, _ = command(["incus", "list", "local:", "--all-projects", "--format", "json"], timeout=25)
+    actual = json.loads(raw)
+    want = {(project, b["name"], b["uuid"]) for b in scope["boxes"]}
+    if not isinstance(actual, list) or len(actual) != len(want) or {
+            (b.get("project"), b.get("name"), (b.get("config") or {}).get("volatile.uuid"))
+            for b in actual} != want:
+        raise UninstallError("DRAIN_ROOT_INSTANCE_INVENTORY_NOT_EXCLUSIVE")
+
+
 def scoped_drain_capture(project, active, observer=None, observer_sha=None, allow_drain=False):
     """Bounded root read only, using the shared H1 observation and existing
     exact scoped unit/archive readers. No approval or effect here."""
@@ -2852,6 +2962,11 @@ def scoped_drain_capture(project, active, observer=None, observer_sha=None, allo
             if (set(scope["power"]) != {b["uuid"] for b in scope["boxes"]} or
                     any(s not in ("Running", "Stopped") for s in scope["power"].values())):
                 blockers.append("DRAIN_NATIVE_POWER_UNVERIFIED")
+            if scope["boxes"]:
+                try:
+                    scoped_drain_global_inventory(project, scope)
+                except UninstallError as exc:
+                    blockers.append(str(exc))
             if not isinstance(local.get("state"), dict) or local["state"].get("state") != "OBSERVED":
                 raise UninstallError("state metadata unavailable")
             state_ids = {f["name"]: f["identity"] for f in local["state"]["files"]
@@ -3243,8 +3358,10 @@ def offline_native_consumers(plan, instances):
 
 
 def offline_ledger_unchanged(plan):
-    expected = next((f["info"] for f in plan["state_files"] if f["name"] == "ledger.sqlite"), None)
-    return (expected is not None and file_fingerprint(STATE / "ledger.sqlite") == expected and
+    expected = {f["name"]: f["info"] for f in plan["state_files"]}
+    files = cold_sqlite_files(STATE / "ledger.sqlite")
+    return (files[""] is not None and all(files[suffix] == expected.get("ledger.sqlite" + suffix)
+                                         for suffix in files) and
             inspect_sqlite(STATE / "ledger.sqlite", guided=True, cold=True) == plan["sqlite"])
 
 
@@ -3347,7 +3464,9 @@ def offline_plan(project, observer=None):
             if maintenance_local_inventory(project, uid) != local:
                 blockers.append("OFFLINE_LOCAL_EVIDENCE_CHANGED")
         except (UninstallError, OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
-            blockers.append("OFFLINE_STATIC_PROOF_UNVERIFIED:" + type(exc).__name__)
+            detail = str(exc)
+            blockers.append(detail if isinstance(exc, UninstallError) and re.fullmatch(r"OFFLINE_SQLITE_[A-Z_]+", detail)
+                            else "OFFLINE_STATIC_PROOF_UNVERIFIED:" + type(exc).__name__)
     result = {"schema": 1, "mode": OFFLINE_MODE, "scope": "full", "project": project,
               "host_machine_id_sha256": host, "retention": "retain",
               "ready": not blockers and plan is not None,

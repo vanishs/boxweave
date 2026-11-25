@@ -48,8 +48,8 @@ def main(project, receipt, testbin):
     run(["systemctl", "stop", u.UNIT.name])
     run(["systemctl", "stop", u.RETIREMENT_UNIT.name])
     db = u.STATE / "ledger.sqlite"
-    assert not any(Path(str(db)+s).exists() for s in ("-wal","-shm","-journal"))
-    before = digest(db)
+    before = u.cold_sqlite_files(db)
+    assert before[""] is not None and before["-journal"] is None
     run(["incus", "project", "create", "h2b-foreign"])
     foreign = subprocess.check_output(["incus", "project", "show", "h2b-foreign"], text=True)
     incus_pid = pid("incus.service")
@@ -58,7 +58,7 @@ def main(project, receipt, testbin):
     assert len(plan["unresolved_originals"]) == 1 and plan["unresolved_originals"][0]["id"] == original, plan
     assert plan["unresolved_originals"][0]["box_uuid"] == box
     assert plan["unresolved_originals"][0]["state"] == "UNKNOWN"
-    assert digest(db) == before and not u.OFFLINE_FENCE.exists() and not u.AUDIT.exists()
+    assert u.cold_sqlite_files(db) == before and not u.OFFLINE_FENCE.exists() and not u.AUDIT.exists()
     print("PR188_H2B_EXACT_UNKNOWN_REVIEW=PASS", flush=True)
     approval = "RETIRE OFFLINE " + project
     tty_run([sys.executable, __file__, "--interrupt-cleanup", project],
@@ -75,10 +75,16 @@ def main(project, receipt, testbin):
     audit = json.loads(u.AUDIT.read_text())
     assert audit["status"] == "COMPLETE", audit
     archive = Path(audit["result"]["retirement_archive"]) / "state-ledger.sqlite"
-    assert digest(archive) == before
-    with sqlite3.connect(archive.as_uri()+"?mode=ro&immutable=1", uri=True) as conn:
-        assert conn.execute("select state from operations where id=?", (original,)).fetchone() == ("UNKNOWN",)
-        assert conn.execute("select count(*) from operation_resource_claims where operation_id=?", (original,)).fetchone()[0] == 1
+    for suffix, proof in before.items():
+        path = Path(str(archive)+suffix)
+        assert (digest(path) == proof["sha256"]) if proof else not path.exists()
+    with u.cold_sqlite_copy(archive) as snapshot:
+        conn = sqlite3.connect(snapshot.as_uri()+"?mode=ro", uri=True)
+        try:
+            assert conn.execute("select state from operations where id=?", (original,)).fetchone() == ("UNKNOWN",)
+            assert conn.execute("select count(*) from operation_resource_claims where operation_id=?", (original,)).fetchone()[0] == 1
+        finally:
+            conn.close()
     print("PR188_H2B_ARCHIVED_UNKNOWN_UNCHANGED=PASS", flush=True)
     assert not u.native_instances(project, guided=True) and not u.OFFLINE_FENCE.exists()
     assert not u.STATE.exists() and not u.BINARY.exists() and not u.NATIVE.exists()

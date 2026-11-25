@@ -20,6 +20,25 @@ class ScopedDrainPlanTests(unittest.TestCase):
                                     "state": "CONFIRMED", "id": "b" * 32}],
                       "power": {self.a: "Running", self.b: "Stopped"}}
 
+    def test_root_inventory_refuses_foreign_before_dispatch(self):
+        import json
+        for b in self.scope["boxes"]:
+            b["acl"] = "bw-peer-" + b["name"]
+        acls = [{"name": "bw-peer-quarantine"}] + [{"name": b["acl"]} for b in self.scope["boxes"]]
+        instances = [{"project": "user-1001", "name": b["name"], "config": {"volatile.uuid": b["uuid"]}}
+                     for b in self.scope["boxes"]]
+        def response(a, i):
+            return [(json.dumps(a), 0), (json.dumps(i), 0)]
+        with mock.patch.object(u, "command", side_effect=response(acls, instances)):
+            u.scoped_drain_global_inventory("user-1001", self.scope)
+        with mock.patch.object(u, "command", side_effect=response(acls + [{"name": "foreign"}], instances)) as call:
+            with self.assertRaisesRegex(u.UninstallError, "ACL_INVENTORY_NOT_EXCLUSIVE"):
+                u.scoped_drain_global_inventory("user-1001", self.scope)
+            self.assertEqual(call.call_count, 1)
+        with mock.patch.object(u, "command", side_effect=response(acls, instances + [{"project": "foreign"}])):
+            with self.assertRaisesRegex(u.UninstallError, "INSTANCE_INVENTORY_NOT_EXCLUSIVE"):
+                u.scoped_drain_global_inventory("user-1001", self.scope)
+
     def test_exact_dependency_order(self):
         steps = u.scoped_drain_steps(self.scope)
         self.assertEqual([s["action"] for s in steps],

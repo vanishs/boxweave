@@ -16,3 +16,5 @@ See [status](../STATUS.md), [active plan](../process/IMPLEMENTATION_PLAN.md) and
 - 2026-11-25: #188 H2C candidate: [Box acceptance and CI gates](PR188_H2C_BOX_ACCEPTANCE.md). 73 tests and real RC13 no-effect negative PASS. Native interruption/purge/reinstall CI required. Earlier offline native phases not signed off.
 
 - 2026-11-25: #188 H3A installer/OAuth phase candidate Box-tested. [Evidence and independent installed CI gates](PR188_H3A_BOX_ACCEPTANCE.md). Nine wrapper tests, Go OAuth regressions and real CLI temporary-ledger continuation PASS; retained labs and original controller credentials not modified. H2C latest native Scoped retirement and Legacy offline lanes remain failed; no full H2 sign-off. H3B not started.
+
+- 2026-11-25: #188 [H2/H3A CI repair](PR188_H2_CI_REPAIR.md). 76 retirement tests, 3 formerly failing installer tests and 9 H3A tests PASS in Box A; Box B repeated live ownership inventory PASS. Full installed teardown/purge pending exact-head CI. No policy relaxation or L0 changes.
