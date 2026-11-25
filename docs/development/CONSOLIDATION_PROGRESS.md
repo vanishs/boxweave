@@ -4,7 +4,7 @@ Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY
 
 | Phase | Box / development status | CI / independent status |
 | --- | --- | --- |
-| P0 | IN_PROGRESS — exact candidate, focused Go tests and source format verified; clean native fixture provisioned; native/coverage rehearsal pending | Documentation-only quality PASS; product CI NOT_RUN |
+| P0 | Baseline and native roundtrip PASS; remaining alternate-fault/two-layer conversion rehearsal OPEN | Prior documentation-only quality PASS; latest checkpoint CI to verify; product CI NOT_RUN |
 | P1 | NOT_STARTED | NOT_RUN |
 | P2 | NOT_STARTED | NOT_RUN |
 | P3 | NOT_STARTED | NOT_RUN |
@@ -101,6 +101,23 @@ Learning: existing environment, verification and source-transfer skills handled 
 - Further inventory: script anchor scan `b81b16dd7c5a183492afe1d4094e90eb` exit 0 (87 selected script files, 1,055-line [script ledger](CONSOLIDATION_P0_SCRIPT_WITNESSES.md), commit `a644ba69b952787e507598da5cacdd2067c8f166`); Go test declaration scan `8ba3e4ad2aacf29a9b0ea84d8de991db` exit 0 (280 test files, 604 declarations, [Go ledger](CONSOLIDATION_P0_GO_WITNESSES.md), commit `e6a7c9d78a7310df75187364a963c5f26b7419d4`). Crosswalk linked in `e13ae726c9a2229a534a7e18aa8f16928be0e340`. All actual replacements remain OPEN pending P1-P4 review and results. Docs-only CI for 322d9ac, a644ba6 and e6a7c9d passed; no native product CI inferred. Crosswalk docs CI pending at last read.
 
 Next: approve only the separately reviewed completed test archive purge; verify no residue, then exact fresh plan, reinstall, fresh ledger and still-unexpired old bearer denial. Preserve the outer development and native lab Boxes. Learning: corrected testkit reply shape without redoing an effect, reused task resume and verification discipline; no product bug or new asset promotion.
+
+### P0 roundtrip complete; implementation handoff
+
+- Original purge Exec `d299ea88a1c3bf67d577afa619280407` exit 0: reviewed digest `4f391daadea7e976e5c85cbe09aa53d96ad797f4207e3af5d8b87bc698488d65`, PURGED, recognized test archive only, no residue. Incus PID 6460 and inherited LXC policy digest unchanged. Sanitized archive evidence had been committed before purge.
+- New exact fresh plan review `6e130e9720dbbd331f65635983e988c55b9a18081e385723ce795d91dd84ff97`; original reinstall and smoke Exec `0c2fd548fa109c13b984a41c9cf80fe2` SUCCEEDED, guest exit 0, both streams retrieved. All four services active, exact original candidate build, six key ledger tables initially empty, still-unexpired previous bearer denied, new actor works and old UUID denied. Actual same-name new-incarnation Create `1b4d64f4029b336b56a826578846b761` and Delete `ebadb2333f2561f84584e698a682402b` SUCCEEDED; no live inner instances, Incus PID and LXC bytes preserved. PR191_P0_ROUNDTRIP=PASS. Stderr is the existing fresh-install Forward default warning, not a test failure.
+- Keep isolated native lab `pr191-p0-native-lab` UUID `ad5aeb01-4a88-454f-88b0-9686c67a1d8a`, installed exact source `1cfcd3da43bc47dfc42edac58d0041c02aa16e56`, SHA256 `8380c32c2b05bb8fc0141a64d26ba1a6d9b62156abf6050916d956f85c529d50`. The post-reinstall smoke leaves a retired identity, not an entirely empty current ledger. Preserve the development Box and all unrelated historical Boxes.
+
+| P0 slice | Final Box / source status |
+| --- | --- |
+| P0a | DONE — exact base/head and prior operations reconciled. |
+| P0b | DONE — isolated developer workspace and dedicated native lab. |
+| P0c | DONE — two byte-identical native builds, focused state/control/install tests and format checks. |
+| P0d | Baseline inventory DONE — 47 workflows, 87 selected scripts, 280 Go test files and 604 declarations, actual CLI/SQL/dependency anchors; semantic per-assertion dispositions and dynamic/indirect consumers remain implementation hold points. |
+| P0e | DONE — exact native Scoped install/auth/N2/N3/restart/retire/archive/purge/reinstall roundtrip. |
+| P0f | Normal/duplicate/restart Scoped startup and L1 installed route rehearsed. Alternate DB/proxy faults and complete two-layer S2.5 rehearsal NOT_RUN; these must be resolved at P1/P2 before removing old paths; independent acceptance at P5. |
+
+P0 baseline/preflight deliverables and native roundtrip complete; residual conversion rehearsal remains explicitly open. Do not interpret this as full P0 acceptance if the complete fault/two-layer rehearsal is required before P1. No product source change. Next safe implementation work after owner instruction: P1a neutral helper extraction with retained regression tests; do not remove old paths or weaken release gates before the remaining witnesses are established. Documentation-only CI remains separate from native/implementation acceptance; obtain exact latest HEAD CI before phase closure. No merge or publication.
 
 ## Update this record at material checkpoints
 
