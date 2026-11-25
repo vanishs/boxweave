@@ -359,8 +359,8 @@ It has no environment dependency beyond standard JavaScript. On an
 ephemeral connector scripting surface copy the reviewed function
 verbatim, rather than evaluate downloaded strings or assume module
 imports/storage. The caller supplies a direct adapter for the existing
-box_exec, operation_get, operation_output_get, box_file_read and
-box_file_apply tools; no extra product capability. The template accepts
+box_exec, operation_get, operation_output_get, box_file_read,
+box_file_list and box_file_apply tools; no extra product capability. The template accepts
 only explicit ASCII canonical paths and bounded work/transfer identity.
 Use the exact plan action rows and independently establish the source
 bytes. It provides SHA256/page validation and counts attempted calls,
@@ -381,7 +381,16 @@ not a client filesystem or permission grant. For other sources omit it
 only after independently checking planned bytes. Use each new client
 instance for one bounded invocation. Retain the returned result/trace
 and all original Operations, including attempted key and uncertain
-responses. Do not expose raw payloads in logs. A fresh ADMITTED response
+responses. The versioned admission association is emitted immediately
+on a validated fresh admission and binds exact tool arguments by digest
+to original Operation ID, immutable nested Tracking ID, Box/incarnation,
+work and explicit transfer context. Retain it verbatim in trusted caller
+evidence. Do not reconstruct missing associations from an Operation
+lookup or matching bytes; RC14 does not expose the original request/key
+in operation_get. Its outer tracking_id identifies the read, not the
+original effect. The association digest detects inconsistent caller
+records, not deliberate forgery or remote tampering. Do not expose raw
+payloads in logs. A fresh ADMITTED response
 is required; other/duplicate receipts stop conservatively. The template
 does not poll indefinitely. If a call cap, missing original response
 or incomplete stream occurs, use the original durable journal and
@@ -390,20 +399,28 @@ Operation evidence; do not reissue a mutation based on the trace alone.
 For an ordinary file step, EVIDENCE_STAGED returns original effect
 and evidence-create references. Supply that result as previous with
 the explicit current journal revision and next exact plan row; the
-template checks the evidence-create Operation and uses advance.
+template rechecks the original effect and evidence-create admission
+associations, original nested Tracking IDs, staged receipt bytes and
+request digest, then uses advance. A stale receipt cannot authorize
+a new claim because the planner checks the original expected revision.
 For a controlled pause, step with pause:true stops after fresh
 admission, before terminal polling/readback. Recover using collect
-with the exact original row, original response/key reference, and
+with the exact original row, full retained original admission
+association, expect from the current canonical journal, and
 stageNotSubmitted:true only when no previous evidence write was
-attempted. Otherwise reconcile original evidence read-only/manual;
+attempted. The template verifies the exact dispatch event and checks
+for subsequent journal entries using a bounded directory list.
+The non-snapshot list is a conservative stale check, not a lock;
+continue to use a single writer and the original CAS. Otherwise reconcile original evidence read-only/manual;
 never infer not-submitted from an absent file or list. Do not execute
 an old step twice. Assembly returns ASSEMBLED_READBACK_REQUIRED with
 original guest exit checked. Stage one final page per invocation with
-stageAssemblyPage(row,index,source optional); each actual MCP page
+stageAssemblyPage with row, index, original assembly association,
+expect (current journal revision), and optional source; each actual MCP page
 uses 32768 bytes so its JSON fits exclusive create. Readback pages
 are staged in the canonical bundle as assembly-page-0000.json etc.
-Use finish with exact assembly row, current revision and original
-Operation/key to reread original streams and run:
+Use finish with exact assembly row, current revision and full original
+admission association to reread original streams and run:
 
     python3 dev/transfer_plan.py record-assembly-pages BUNDLE --expect N --operation-id ORIGINAL --exit-code 0 --count PAGE_COUNT
 

@@ -60,3 +60,23 @@ reconcile read-only. Resume collect only for the exact original file
 dispatch and only if evidence creation is proven not yet attempted.
 No automatic replay or competing writer. See [remote workflow](../../README.md#remote-transfer-composition-candidate).
 Independent utility remains unproven.
+
+### Original admission association (V4c-01)
+
+Keep the complete versioned admission association emitted by the
+reviewed remote template, not just an Operation ID, key, or a fresh
+lookup. It binds the actual admitted Operation and immutable original
+Tracking ID to the exact tool arguments digest, Box/incarnation, work,
+canonical bundle, action, dispatch revision and claim digest. Restore
+only trusted retained caller evidence; never reconstruct an association
+from target bytes or a same-work success. Compare the nested original
+operation.tracking_id, not the read call's outer Tracking ID. A missing
+or contradictory association must stop for original-evidence/manual
+reconciliation. The digest is a consistency check, not authentication.
+For collect and final page staging supply the exact current revision
+from the canonical journal; the template checks the original dispatch
+event and looks for later revisions using a bounded non-snapshot list.
+Maintain the original single-writer assumption and final CAS checks.
+Revalidate both effect and staged receipt association before advance;
+preserve the assembly association for final readback and finish.
+Older template checkpoints without these fields cannot authorize resume.
