@@ -1,7 +1,8 @@
 # BDH v0.7 — proactive improvement execution
 
 Status: V0/V1a CI PASS; V1b and V2a/V2b implemented and Box-tested.
-V2c and V3-V5 pending. See [V2 progress](BDH_V07_V2_PROGRESS.md).
+V2c and V3-V5 pending. See [V2 progress](BDH_V07_V2_PROGRESS.md) and
+[first real selected episode](BDH_V07_FIRST_EPISODE.md).
 See [V0 evidence and checkpoint](BDH_V07_V0_BASELINE.md).
 Stacked PR based on paused #191 at 3494ae8a35c50c386686c9d9d675c1ae37e1b1b7.
 Owner authorized this branch to prepare and develop BDH v0.7 before later
@@ -255,7 +256,7 @@ or promotion to satisfy a metric.
 | V0 | Box baseline complete; CI PASS |
 | V1 | V1a CI PASS; V1b durable decisions Box PASS, child CI pending |
 | V2 | V2a bounded selection/ready DAG and V2b guarded lifecycle Box PASS; V2c terminal resolution and integration safety pending |
-| V3 | Not started |
+| V3 | Actual L014 rev15 selected and ready; implementation not started |
 | V4 | Not started |
 | V5 | Not started |
 
