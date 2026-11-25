@@ -21,6 +21,18 @@ This is the initial crosswalk for the single pre-release consolidation PR. Compl
 
 For each affected original acceptance ID, test function or CI marker capture: baseline file/job/line and original evidence link; required behavior; applicability; disposition RETAINED, REPLACED, OBSOLETE_LEGACY or OPEN/BLOCKED; current test and explicit witness; exact source/binary/fixture/actor; Box result and independent CI run/attempt/job; residual limitation. Record scope decisions separately from observations. Keep existing mandatory acceptance IDs; #170 reconciles all A/SDK/BH/TC and S5 gates with this crosswalk. Do not change signoff format or count just to remove work.
 
+### P0 source inventory and conversion gates
+
+The exact baseline source is `1cfcd3da43bc47dfc42edac58d0041c02aa16e56` (documentation-only initial PR; runtime matches base). P0 enumerated these preservation queues directly in the isolated development Box:
+
+- [Workflow and runtime/SQL reference index](CONSOLIDATION_P0_WITNESSES.md): 47 workflows, literal selectors and PASS consumer anchors, fixed CLI/systemd/mode and SQL references.
+- [Installed script producer/consumer index](CONSOLIDATION_P0_SCRIPT_WITNESSES.md): scanned 87 selected S2/S2.5/installed script files, indexed literal marker and startup anchors.
+- [Go test preservation index](CONSOLIDATION_P0_GO_WITNESSES.md): 280 tracked test files, 604 test/fuzz/benchmark declarations, including build constraints.
+
+These are OPEN preservation inventories, not proof that every test ran or a semantic replacement has passed. Keep dynamic subtests, inline assertions, generated callers and all existing required checks until their actual behavior is dispositioned; a matched marker name or absence of a match is not sufficient. For each affected test removed during P1-P4, record the exact baseline anchor, C-ID, original behavior, target witness or explicitly obsolete Legacy-only rationale, and actual Box/CI result in the relevant phase checkpoint. No wholesale deletion based on prefix or workflow count.
+
+P0 real native evidence belongs in [progress](CONSOLIDATION_PROGRESS.md) with original operations and exact candidate digest. Normal startup with installed Scoped journal/guard and fixed Root ledger is the reusable baseline; alternate DB/socket fault cases and independent dual-layer S2.5 gates require converted fixtures, not a test-mode bypass. Full independent final evidence remains P5.
+
 ## Evidence and merge gates
 
 - Box-first developer evidence for each coherent slice, and independent CI as clean-room fallback and final acceptance. Test environment capabilities and native installed proof are distinct from unit/mock/synthetic evidence. Record missing tools, inherited-policy limits, nonempty test counts, original Operation IDs and redacted raw evidence. Do not count a test skip, anonymous 401, healthy listener or previous SHA as installed/authenticated/packet PASS.
