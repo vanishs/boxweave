@@ -37,8 +37,15 @@ func (f *n3ChangingNetworkSnapshot) GetNetwork(string) (*api.Network, string, er
 	nw := &api.Network{NetworkPut: api.NetworkPut{Config: api.ConfigMap{
 		"ipv4.address": "10.1.2.1/24", "ipv6.address": "fd01:2::1/64"}},
 		Name: "bwbr0", Type: "bridge", Managed: true, Status: "Created"}
+	nw.UsedBy = []string{"/1.0/instances/alpha", "/1.0/profiles/default"}
 	etag := "stable"
 	if f.networkReads > 1 {
+		if f.mode == "network-usedby-order" {
+			nw.UsedBy[0], nw.UsedBy[1] = nw.UsedBy[1], nw.UsedBy[0]
+		}
+		if f.mode == "network-usedby-member" {
+			nw.UsedBy[0] = "/1.0/instances/foreign"
+		}
 		if f.mode == "network-etag" {
 			etag = "changed"
 		}
@@ -97,7 +104,7 @@ func TestN3NativeSnapshotFullNetworkLeaseRaceIsFailClosed(t *testing.T) {
 		mode string
 		pass bool
 	}{
-		{"stable", true}, {"lease-reordered", true},
+		{"stable", true}, {"lease-reordered", true}, {"network-usedby-order", true}, {"network-usedby-member", false},
 		{"lease-removed", false}, {"lease-duplicate", false}, {"lease-owner-change", false},
 		{"lease-error", false}, {"network-etag", false}, {"network-config", false},
 		{"network-error", false}, {"gateway-change", false}, {"instance-change", false},

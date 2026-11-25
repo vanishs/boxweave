@@ -136,11 +136,22 @@ func run() error {
 	recoveryAcknowledge := f.Bool("acknowledge-uncertain-native", false, "explicit acknowledgement that native effect may still be in flight")
 
 	maintenance := f.Bool("maintenance", false, "doctor: root-local read-only maintenance evidence")
+	summary := f.Bool("summary", false, "doctor: concise operator summary on stderr; JSON unchanged")
 	if err := f.Parse(os.Args[2:]); err != nil {
 		return err
 	}
 	if f.NArg() != 0 {
 		return errors.New("unexpected arguments")
+	}
+	if *summary && command != "doctor" {
+		return errors.New("summary is doctor-only")
+	}
+	if command == "doctor" && *project == "" {
+		a, e := resolveDoctorScope(doctorArgs{DB: *db, Socket: *socket, ServiceUser: *serviceUser})
+		if e != nil {
+			return e
+		}
+		*project = a.Project
 	}
 	if *maintenance {
 		if command != "doctor" {
@@ -149,7 +160,7 @@ func run() error {
 		valid := true
 		f.Visit(func(v *flag.Flag) {
 			switch v.Name {
-			case "maintenance", "project":
+			case "maintenance", "project", "summary":
 			default:
 				valid = false
 			}
@@ -157,7 +168,7 @@ func run() error {
 		if !valid {
 			return errors.New("maintenance accepts only exact project, no approval or override")
 		}
-		return runMaintenanceDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser})
+		return runMaintenanceDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser}, *summary)
 	}
 	switch command {
 	case "native-scoped-retirement-plan", "native-scoped-retirement-resume-plan", "native-scoped-retirement-restore", "native-scoped-retirement-guard", "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
@@ -566,7 +577,7 @@ func run() error {
 		return json.NewEncoder(os.Stdout).Encode(m)
 	}
 	if command == "doctor" {
-		return runDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser})
+		return runDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser}, *summary)
 	}
 	if command == "serve" {
 		if err := install.CheckScopedServeMode(*scopedFresh); err != nil {

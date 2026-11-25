@@ -106,6 +106,20 @@ func NewRecoverPlan(r Report, id string, uid int, now time.Time) RecoverPlan {
 		p.Route = "NOT_APPLICABLE"
 		return p
 	}
+	if i.Domain == "service" || i.Domain == "root" && i.Resource == "root-helper" {
+		p.Status = "OPERATOR_REVIEW_REQUIRED"
+		p.Route = "LOCAL_INSTALLED_SERVICE_CONTRACT_REVIEW"
+		p.Authority = "LOCAL_ROOT_REVIEW"
+		p.Reason = "SERVICE_RESTORATION_NOT_PROVEN_SAFE"
+		p.Preconditions = []string{"EXACT_INSTALL_STATUS_AND_EFFECTIVE_UNIT_REQUIRED", "NO_UNSETTLED_ORIGINAL_OR_UNVERIFIED_GUARD", "USE_INSTALL_ACTIVATION_ONLY_FOR_VERIFIED_STAGED_INSTALLATION"}
+		return p
+	}
+	if i.Repairability == "LOCAL_ROOT_OBSERVATION" {
+		p.Status = "OPERATOR_REVIEW_REQUIRED"
+		p.Authority = "LOCAL_ROOT_REVIEW"
+		p.Reason = "ROOT_COVERAGE_REQUIRED_NOT_A_CONFIRMED_FAULT"
+		return p
+	}
 	switch i.Repairability {
 	case "NO_RESET_OR_COMPACTION", "NO_AUTOMATIC_ADDRESS_REUSE":
 		p.Status = "UNSUPPORTED"

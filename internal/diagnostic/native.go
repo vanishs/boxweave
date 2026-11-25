@@ -67,8 +67,8 @@ func ReadNativeObservation(ctx context.Context, r native.Reader, st native.Statu
 		out.Forward = Source{State: "PARTIAL", Reason: "FORWARD_UNRESOLVED_OR_BOUNDED"}
 	}
 	if cap, e := r.ReadCreateAddressCapacity(ctx, snap.ReadAddressHolds); e == nil {
-		// Report counts, not network prefix, and do not imply allocatability.
-		cap.IPv4Prefix = ""
+		// The verified confined bridge prefix is the same typed capacity
+		// field as host_status. This is an upper bound, not allocation proof.
 		out.AddressCapacity = &cap
 		out.AddressCapacitySource = Source{State: "OBSERVED", Reason: "IPV4_UPPER_BOUND_NOT_ALLOCATION_PROOF", EpochNS: snap.EpochNS}
 	}

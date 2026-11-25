@@ -37,6 +37,18 @@ type networkScanSource interface {
 	GetNetworkState(string) (*api.NetworkState, error)
 }
 
+// Incus UsedBy is an unordered set of resource references. Normalize its
+// ordering without ignoring changes in membership or any other field.
+func canonicalScanNetwork(n *api.Network) *api.Network {
+	if n == nil {
+		return nil
+	}
+	copy := *n
+	copy.UsedBy = slices.Clone(n.UsedBy)
+	slices.Sort(copy.UsedBy)
+	return &copy
+}
+
 // scanNativeProject compares an exact bounded inventory and cached static
 // lease witnesses. It does not adopt unrecognized native names or disclose
 // their config/identity. No native mutations are reachable.
@@ -118,7 +130,7 @@ func scanNativeProject(ctx context.Context, c networkScanSource, project string,
 		if !ok {
 			var n *api.Network
 			n, info.etag, e = c.GetNetwork(want.Bridge)
-			info.network = n
+			info.network = canonicalScanNetwork(n)
 			info.err = e
 			if e == nil && n != nil {
 				info.leases, info.err = c.GetNetworkLeases(want.Bridge)
@@ -205,6 +217,7 @@ func scanNativeProject(ctx context.Context, c networkScanSource, project string,
 		if readErr != nil {
 			return out, readErr
 		}
+		current = canonicalScanNetwork(current)
 		if etag != first.etag || !reflect.DeepEqual(current, first.network) {
 			return out, ErrUnverified
 		}

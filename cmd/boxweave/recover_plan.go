@@ -27,7 +27,7 @@ func planFlagPresent(args []string) bool {
 			continue
 		}
 		name := strings.TrimLeft(strings.SplitN(a, "=", 2)[0], "-")
-		if name == "plan" || name == "issue" || name == "apply" || name == "confirm-review-sha256" {
+		if name == "plan" || name == "guided" || name == "issue" || name == "apply" || name == "confirm-review-sha256" {
 			return true
 		}
 	}
@@ -35,6 +35,9 @@ func planFlagPresent(args []string) bool {
 }
 func recoverPlanCLI(args []string) error {
 	for _, a := range args {
+		if a == "--guided" || a == "-guided" {
+			return recoverGuidedCLI(args)
+		}
 		if a == "--apply" || a == "-apply" || strings.HasPrefix(a, "--apply=") || strings.HasPrefix(a, "-apply=") {
 			return recoverApplyCLI(args)
 		}
@@ -50,10 +53,14 @@ func recoverPlanCLI(args []string) error {
 	if e := f.Parse(args); e != nil {
 		return e
 	}
-	if !*plan || !diagnostic.ValidIssueID(*id) || f.NArg() != 0 || !state.SafeDiagnosticProject(*project) {
-		return errors.New("exact --plan --issue and confined -project required")
+	a, e := resolveDoctorScope(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *service})
+	if e != nil {
+		return e
 	}
-	return runRecoverPlan(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *service}, *id)
+	if !*plan || !diagnostic.ValidIssueID(*id) || f.NArg() != 0 || !state.SafeDiagnosticProject(a.Project) {
+		return errors.New("exact --plan --issue and confined project required")
+	}
+	return runRecoverPlan(a, *id)
 }
 
 type planWorkerRequest struct {

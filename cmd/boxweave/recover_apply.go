@@ -90,9 +90,17 @@ func recoverApplyCLI(args []string) error {
 	if p.IssueID != *issue || p.Scope != *project || p.ReviewSHA256 != *confirm || !validReviewedEnvelope(q) {
 		return errors.New("reviewed envelope or explicit confirmation does not match")
 	}
+	return applyReviewedEnvelope(q)
+}
+
+func applyReviewedEnvelope(q reviewedApplyRequest) error {
+	if os.Geteuid() != 0 || !validReviewedEnvelope(q) {
+		return state.ErrInvalid
+	}
+	p := q.Plan
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-	a := fixedRecoveryArgs(*project)
+	a := fixedRecoveryArgs(p.Scope)
 	uid, gid, e := install.ServiceIdentity(doctorInstallPlan(a))
 	if e != nil || uid == 0 || a.Project != "user-"+strconv.Itoa(uid) {
 		return state.ErrInvalid
@@ -122,7 +130,21 @@ func recoverApplyCLI(args []string) error {
 	if !p.ReviewMatches(time.Now()) {
 		return errors.New("review expired; no new recovery admitted")
 	}
-	fresh := collectRecoverPlan(ctx, a, *issue)
+	release, e := acquireMaintenanceLock()
+	if e != nil {
+		return e
+	}
+	defer release()
+	if e = install.CheckScopedDrainFence(); e != nil {
+		return e
+	}
+	if e = install.CheckOfflineRetirementFence(); e != nil {
+		return e
+	}
+	if e = install.CheckScopedRetirementFence(); e != nil {
+		return e
+	}
+	fresh := collectRecoverPlan(ctx, a, p.IssueID)
 	if !p.MatchesFresh(fresh, time.Now()) {
 		return errors.New("current evidence differs from approved review; no new recovery admitted")
 	}

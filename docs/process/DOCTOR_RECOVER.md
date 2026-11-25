@@ -75,3 +75,9 @@ Legacy guided retirement/resume has its own exact review and audit flow. The cur
 
 See [the D4 execution contract](../history/development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md)
 and [the D5 acceptance record](../history/development/V1_PR177_D5_DELIVERY_2026-11-24.md).
+
+## H3B operator summary and guided review
+
+Run `sudo boxweave doctor --summary` for the fixed installed scope. JSON remains on stdout; the concise summary is on stderr. A restricted observer may have expected coverage limits; repeat as root for root-only evidence. Healthy runtime does not authorize removal. Run `sudo boxweave doctor --maintenance --summary` for observation-side maintenance blockers; use the appropriate install/uninstall plan for full effects and approval.
+
+Run `sudo boxweave recover --guided --issue ISSUE_ID` to review an exact supported original. Confirm the displayed digest only if it matches the intended effect. Save the original review envelope and recovery key for the machine apply/replay interface. Decline, stale evidence, unsupported recovery and absent issues must not dispatch an effect. Historical UNKNOWN remains protected. Service/helper restoration requires separate local installed-contract review, not an automatic restart.

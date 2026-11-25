@@ -183,11 +183,18 @@ func (w Worker) ExecutePreparedRootPeerRevocation(original string, call RootPeer
 		_ = w.Store.Unknown(context.Background(), original, "DISPATCHING", reason)
 		_ = w.Store.Unknown(context.Background(), original, "VERIFYING", reason)
 	}
+	if err := w.Store.recordPreparedRootStage(ctx, original, "PEER_ROOT_H3B_REVIEW_STARTED"); err != nil {
+		return err
+	}
 	review, err := call(ctx, original, "")
 	if err != nil || review.Status != "REVIEW_ONLY" || len(review.PlanSHA256) != 64 ||
 		strings.Trim(review.PlanSHA256, "0123456789abcdef") != "" {
 		unknown("PEER_ROOT_PREISOLATION_REVIEW_UNVERIFIED")
 		return ErrResourceLocked
+	}
+	if err := w.Store.recordPreparedRootStage(ctx, original, "PEER_ROOT_H3B_EFFECT_DISPATCH"); err != nil {
+		unknown("PEER_ROOT_EFFECT_BARRIER_UNVERIFIED")
+		return err
 	}
 	result, err := call(ctx, original, review.PlanSHA256)
 	if err != nil || result.Status != "COMPLETE_VERIFIED" || result.PlanSHA256 != review.PlanSHA256 ||

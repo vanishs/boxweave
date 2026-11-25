@@ -71,6 +71,7 @@ type Service struct {
 	BuildVersion    string
 	BuildCommit     string
 	Listener        string
+	retirementLog   retirementLogLimiter
 }
 
 type HostStatus struct {

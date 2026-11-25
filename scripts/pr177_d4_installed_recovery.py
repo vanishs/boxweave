@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Installed D4 acceptance, only in dedicated disposable test installation."""
+import errno
 import hashlib
+import pty
+import select
+import tempfile
 import json
 import os
 import re
@@ -66,6 +70,57 @@ def cleanup_legacy(client, ids, fwd):
         op(client,"box_delete",{"box_id":ids[name]},"d4-delete-"+name)
     wait_status(client,lambda x:x["address_retirement"]["pending"]==0,120)
     print("PR177_D5_LEGACY_CLEANUP=PASS",flush=True)
+
+def guided(project, issue, approve):
+    """Exact local terminal approval, keep the plan and durable key."""
+    with tempfile.TemporaryDirectory(prefix="h3b-guided-") as d:
+        out, err = Path(d)/"out", Path(d)/"err"
+        child, fd = pty.fork()
+        if child == 0:
+            try:
+                for path, dest in ((out, 1), (err, 2)):
+                    with path.open("wb") as f:
+                        os.dup2(f.fileno(), dest)
+                os.execv(BIN, [BIN,"recover","--guided","--issue",issue,"-project",project,
+                               "--reviewer","d4-installed-test","--recovery-key","pr177-d4-reviewed-exact-key"])
+            finally:
+                os._exit(127)
+        history = b""
+        sent = None
+        deadline = time.monotonic()+150
+        try:
+            while time.monotonic() < deadline:
+                ready, _, _ = select.select([fd],[],[],1)
+                if not ready:
+                    continue
+                try:
+                    data = os.read(fd,4096)
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        break
+                    raise
+                if not data:
+                    break
+                history = (history + data)[-8192:]
+                match = re.search(rb"Type RECOVER ([0-9a-f]{64}) to approve: ",history)
+                if match and sent is None:
+                    sent = match.group(1).decode()
+                    os.write(fd, ("RECOVER "+sent+"\n" if approve else "NO\n").encode())
+            else:
+                os.kill(child,15)
+                raise RuntimeError("guided recovery terminal timeout")
+        finally:
+            os.close(fd)
+            _, status = os.waitpid(child,0)
+        assert sent is not None, err.read_text()[-3000:]
+        plan, _ = json.JSONDecoder().raw_decode(err.read_text().lstrip())
+        assert plan["review_sha256"] == sent and plan["status"] == "REVIEW_READY",plan
+        assert (os.waitstatus_to_exitcode(status)==0)==approve,err.read_text()[-3000:]
+        if not approve:
+            assert not out.read_text()
+            return plan,None
+        return plan,json.loads(out.read_text())
+
 
 def main(project, receipt, testbin, mode):
     assert os.geteuid()==0 and mode in ("LEGACY","SCOPED_V2")
@@ -138,7 +193,19 @@ def main(project, receipt, testbin, mode):
         forged=dict(p);forged["original_revision"]+=1
         refused(base,json.dumps(forged))
         assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
-        result=json.loads(run(base,input=planned.stdout,text=True,capture_output=True).stdout)
+        declined,_=guided(project,issue,False)
+        assert declined["original_id"]==original and db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
+        print("PR188_H3B_GUIDED_DECLINE_NO_EFFECT=PASS",mode,flush=True)
+        if mode=="SCOPED_V2":
+            # Guided applies the same reviewed transaction. The saved exact
+            # envelope and key must replay via the old machine API.
+            p,result=guided(project,issue,True)
+            base[-1]=p["review_sha256"]
+            planned.stdout=json.dumps(p)
+            assert p["original_id"]==original
+            print("PR188_H3B_GUIDED_APPLY=PASS",mode,flush=True)
+        else:
+            result=json.loads(run(base,input=planned.stdout,text=True,capture_output=True).stdout)
         rec=result["recovery"]
         assert rec["original_operation_id"]==original and rec["disposition"]=="SETTLED" and rec["operation"]["state"]=="SUCCEEDED",result
         assert result["postcheck"]["state"]=="DURABLE_ORIGINAL_POSTSTATE_VERIFIED" and result["postcheck"]["original_state"]=="SUCCEEDED" and not result["native_retried"],result

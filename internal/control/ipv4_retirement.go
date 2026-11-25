@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/vanishs/boxweave/internal/install"
@@ -32,7 +33,7 @@ func (s *Service) tryRetireDeletedAddress(ctx context.Context, original string) 
 		s.recordRetirementDeferred(ctx, original, err)
 		return
 	}
-	slog.Info("network_address_retirement_verified", "operation", original)
+	slog.Info("network_address_retirement_verified", "operation", original, "suppressed_deferred", s.retirementLog.clear(original))
 }
 
 // SweepIPv4Retirements revisits only completed original Deletes. The
@@ -97,10 +98,62 @@ func runIPv4RetirementLoop(ctx context.Context, interval time.Duration, sweep fu
 }
 func (s *Service) recordRetirementDeferred(ctx context.Context, original string, err error) {
 	reason := retirementFailureClass(err)
-	slog.Info("network_address_retirement_deferred", "operation", original, "reason", reason)
+	if log, repeats := s.retirementLog.observe(original, reason, time.Now()); log {
+		slog.Info("network_address_retirement_deferred", "operation", original, "reason", reason, "suppressed_since_previous_log", repeats)
+	}
 	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 	if e := s.Store.RecordIPv4RetirementDeferred(dctx, s.Native.Project, original, reason); e != nil {
 		slog.Warn("network_address_retirement_diagnostic_unavailable", "operation", original)
 	}
+}
+
+// Bounded per-controller log aggregation, not durable state or an effect
+// gate. The ledger still records the latest typed reason on every attempt.
+const retirementLogInterval = 5 * time.Minute
+const retirementLogLimit = 256
+
+type retirementLogEntry struct {
+	reason     string
+	last       time.Time
+	suppressed int
+}
+type retirementLogLimiter struct {
+	mu      sync.Mutex
+	entries map[string]retirementLogEntry
+}
+
+func (l *retirementLogLimiter) observe(id, reason string, now time.Time) (bool, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.entries == nil {
+		l.entries = map[string]retirementLogEntry{}
+	}
+	x, exists := l.entries[id]
+	if exists && reason == x.reason && now.Sub(x.last) < retirementLogInterval {
+		if x.suppressed < 1000000 {
+			x.suppressed++
+		}
+		l.entries[id] = x
+		return false, 0
+	}
+	if !exists && len(l.entries) >= retirementLogLimit {
+		oldest := ""
+		var when time.Time
+		for k, e := range l.entries {
+			if oldest == "" || e.last.Before(when) {
+				oldest, when = k, e.last
+			}
+		}
+		delete(l.entries, oldest)
+	}
+	l.entries[id] = retirementLogEntry{reason: reason, last: now}
+	return true, x.suppressed
+}
+func (l *retirementLogLimiter) clear(id string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := l.entries[id].suppressed
+	delete(l.entries, id)
+	return n
 }

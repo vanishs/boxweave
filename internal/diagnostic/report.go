@@ -57,7 +57,8 @@ type Report struct {
 	Tunnel              Source                         `json:"tunnel"`
 	PacketReachability  Source                         `json:"packet_reachability"`
 
-	Issues []Issue `json:"issues"`
+	Operator *OperatorSummary `json:"operator_summary,omitempty"`
+	Issues   []Issue          `json:"issues"`
 }
 
 func NewReport(scope string) Report {

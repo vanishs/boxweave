@@ -2750,6 +2750,18 @@ def maintenance_preview(project, retention, host, report, local, planner_sha256=
             offline = True
             issue("FORWARD_ORIGINAL_UNVERIFIED", "REVIEW", f["id"], "Review original proxy without redispatch")
         effect("RETIRE_FORWARD", f, "IDENTITY_OBSERVED" if exact else "UNVERIFIED")
+    # H3B Doctor exposes exactly the H1 observation-side blockers. The
+    # existing wrapper remains the coordinator for local inventory and
+    # effects. A new observer must agree with this compatibility projection;
+    # old pinned observers have no such field.
+    readiness = report.get("maintenance_readiness")
+    if readiness is not None:
+        expected = sorted(issues, key=lambda x: ({"HARD": 0, "REVIEW": 1, "INFO": 2}[x["severity"]], x["code"], x["resource"]))
+        if (not isinstance(readiness, dict) or readiness.get("observation_blockers") != expected or
+                readiness.get("apply_available") is not False or readiness.get("effect_set_complete") is not False):
+            issue("OBSERVER_BLOCKER_PROJECTION_MISMATCH", "HARD", "observation", "Inspect exact Doctor and lifecycle planner versions; preserve original evidence")
+        else:
+            issues = list(readiness["observation_blockers"])
     for key in local.get("mounted_artifacts", []):
         issue("MOUNTED_ARTIFACT", "HARD", key, "Do not traverse or erase independently mounted resources")
     for key, value in local.items():

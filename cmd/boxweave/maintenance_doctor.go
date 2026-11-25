@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -20,9 +21,10 @@ import (
 // status and Recover's issue selector. No approval, readiness or effect
 // permit can be derived from this non-atomic observation.
 type maintenanceReport struct {
-	ObserverSHA256       string `json:"observer_sha256"`
-	LedgerSHA256         string `json:"ledger_observation_sha256,omitempty"`
-	RootLedgerComparison string `json:"root_ledger_comparison"`
+	ObserverSHA256       string               `json:"observer_sha256"`
+	LedgerSHA256         string               `json:"ledger_observation_sha256,omitempty"`
+	RootLedgerComparison string               `json:"root_ledger_comparison"`
+	Readiness            maintenanceReadiness `json:"maintenance_readiness"`
 
 	Version           int                             `json:"version"`
 	Scope             string                          `json:"scope"`
@@ -66,8 +68,9 @@ func captureMaintenanceLedger(ctx context.Context, db, project string) (*state.M
 	}
 	return &l, diagnostic.Source{State: "OBSERVED", Reason: snap.Capture, EpochNS: snap.EpochNS}
 }
-func collectMaintenance(ctx context.Context, a doctorArgs) maintenanceReport {
-	o := maintenanceReport{Version: 1, Scope: a.Project, ObserverVersion: version, ObserverCommit: commit, Coverage: "PARTIAL", RootLedgerComparison: "UNVERIFIED", Database: diagnostic.Source{State: "NOT_CHECKED", Reason: "INSTALLED_ADAPTER_REQUIRED"}}
+func collectMaintenance(ctx context.Context, a doctorArgs) (o maintenanceReport) {
+	defer func() { o.Readiness = summarizeMaintenance(o) }()
+	o = maintenanceReport{Version: 1, Scope: a.Project, ObserverVersion: version, ObserverCommit: commit, Coverage: "PARTIAL", RootLedgerComparison: "UNVERIFIED", Database: diagnostic.Source{State: "NOT_CHECKED", Reason: "INSTALLED_ADAPTER_REQUIRED"}}
 	o.Native.Evidence = install.MaintenanceEvidence{State: "NOT_CHECKED", Reason: "INSTALLED_ADAPTER_REQUIRED"}
 	p := doctorInstallPlan(a)
 	self := maintenanceSelfSHA()
@@ -130,13 +133,20 @@ func collectMaintenance(ctx context.Context, a doctorArgs) maintenanceReport {
 	return o
 }
 
-func runMaintenanceDoctor(a doctorArgs) error {
+func runMaintenanceDoctor(a doctorArgs, summary bool) error {
 	if os.Geteuid() != 0 || !state.SafeDiagnosticProject(a.Project) || a.DB != "/var/lib/boxweave/ledger.sqlite" || a.Socket != "/var/lib/incus/unix.socket.user" || a.ServiceUser != "boxweave" {
 		return errors.New("maintenance observation requires local root and exact installed scope")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	o := collectMaintenance(ctx, a)
+	if summary {
+		fmt.Fprintf(os.Stderr, "Maintenance %s: %s; mode=%s; root-ledger=%s; retirement=%s\n", o.Scope, o.Coverage, o.Installation.Mode, o.RootLedgerComparison, o.Readiness.Retirement)
+		for _, b := range o.Readiness.Blockers {
+			fmt.Fprintf(os.Stderr, "%s %s: %s\n", b.Severity, b.Code, b.Resource)
+		}
+		fmt.Fprintln(os.Stderr, "Observation only: use uninstall.sh --plan (or --scoped --plan / --offline-plan) and --purge-plan for exact H1/H2 blockers and approval. Never infer readiness from healthy runtime.")
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if e := enc.Encode(o); e != nil {
