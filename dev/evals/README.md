@@ -22,3 +22,5 @@ A changed harness should add or update a relevant behavior case when
 useful and run cases plus targeted tests before CI. Mandatory product CI
 remains independent. No comparative Agent benchmark, external adapter
 integration score or productivity gain is claimed yet.
+
+Dual-loop cases additionally cover deferred relevance and no-checkout handoff versus false completion. These are deterministic behavior fixtures, not independent Agent activation tests.

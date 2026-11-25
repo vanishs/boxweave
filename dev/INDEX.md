@@ -5,6 +5,9 @@ Bootstrap registry, read directly by bwdev context. These paths are canonical re
 | Stable ID | Scope / trigger | Canonical asset | Status |
 | --- | --- | --- | --- |
 | rules.entry | Every task | [AGENTS](../AGENTS.md) | Existing |
+| rules.bootstrap | All BoxWeave tasks, checkout or remote | [bootstrap](BOOTSTRAP.md) | Initial |
+| knowledge.remote-entry | No-checkout support, deployment entry | [remote entry](examples/REMOTE_ENTRY.md) | Initial |
+| template.work | Portable task boundary and no-checkout record | [envelope](examples/WORK_ENVELOPE.json) | Initial |
 | knowledge.index | Find architecture, security, MCP, decisions | [docs index](../docs/INDEX.md) | Existing |
 | knowledge.workflow | All development | [workflow](../docs/development/AGENT_WORKFLOW.md) | Existing |
 | knowledge.operations | Original Operation, UNKNOWN | [Operations](../docs/design/OPERATIONS.md), [recovery](../docs/process/UNKNOWN_MANUAL_RECOVERY.md) | Existing |
@@ -15,9 +18,10 @@ Bootstrap registry, read directly by bwdev context. These paths are canonical re
 | skill.task-resume | Continue, handoff, dirty work, lost response | [task-resume](skills/task-resume/SKILL.md) | Initial |
 | skill.box-development | Provision/reuse, dependency or environment problem | [box-development](skills/box-development/SKILL.md) | Initial |
 | skill.verification | Testing, CI failure, native evidence | [verification](skills/verification/SKILL.md) | Initial |
+| skill.harness-improver | Evolve Loop, deferred candidate, feedback and bounded improvement | [improver](skills/harness-improver/SKILL.md) | Initial |
 | skill.continuous-learning | Failure, correction, stage end, reusable improvement | [continuous-learning](skills/continuous-learning/SKILL.md) | Initial |
 | module.install | Edit installer internals | [local guide](../internal/install/AGENTS.md) | Initial |
-| tool.bwdev | Integrated start/resume/status/finish, context, task, verify, learn, CI | [CLI](bwdev), [contract](../docs/development/BWDEV_DESIGN.md) | Initial |
+| tool.bwdev | Universal work entry, start/resume/status/finish, context, task, verify, learn, CI | [CLI](bwdev), [contract](../docs/development/BWDEV_DESIGN.md) | Initial |
 | knowledge.profiles | Task-specific environment prerequisites | [profiles](profiles.json), [box skill](skills/box-development/SKILL.md) | Initial |
 | tool.context-domains | Deterministic path associations | [domains](context_domains.json) | Initial |
 | verification.eval | Harness behavior and comparative evaluation plan | [eval guide](evals/README.md), [cases](evals/cases.json) | Initial |

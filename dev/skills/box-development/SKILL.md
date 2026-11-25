@@ -15,3 +15,7 @@ description: Choose, inspect, reuse or prepare an authorized Box-first developme
 References: [workflow](../../../docs/development/AGENT_WORKFLOW.md), [nesting](../../../docs/design/NESTING.md), [H5 historical evidence](../../../docs/development/PR188_H5_DELIVERY.md), [task-resume](../task-resume/SKILL.md). Git/base and fixture checks derive from actual H5 failures; this is guidance, not an implemented preflight utility.
 
 Optional v0.5: use bwdev profile or start --profile to observe task-specific prerequisites from [profiles](../../profiles.json). Presence of Incus/systemctl is not native readiness. Use existing authorized recipes and independent capability checks; the profile does not install or provision.
+
+## Bounded guest source transfer
+
+If large inline argv is refused at admission, distinguish an explicit refusal with no receipt from a lost acknowledgement. Read any original Operation before further effects; never replay uncertain work or bypass admission. For a new patch or source file in the owned isolated guest, use exclusive box_file_apply create, confirm terminal success and verified file readback, then execute a short explicit argv referencing the reviewed file in the correct checkout. Check actual guest exit and output, and inspect the changed files. Do not infer an exact size limit, overwrite a pre-existing file, or apply this as authorization on a Host. See [BDH-L014](../../learning/BDH-L014/00000003.json).

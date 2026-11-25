@@ -1,5 +1,5 @@
 """Deterministic harness behavior cases, not an Agent productivity benchmark."""
-from . import ci, context, tasks
+from . import ci, context, tasks, evolution, work
 from .common import HarnessError, repo_path
 from .records import read_json
 import argparse
@@ -25,6 +25,16 @@ def _evaluate(root):
         elif kind == "ci":
             actual, _ = ci.evaluate(case["snapshot"], case["repository"], case["sha"], ["quality"])
             ids = [row["state"] for row in actual["checks"]]
+            ok = ids == case["expected_states"]
+        elif kind == "learning":
+            ids = [item["id"] for item in evolution.select(case["rows"], **case["selection"])]
+            ok = ids == case["expected_ids"]
+        elif kind == "work":
+            try:
+                row = work.validate(case["envelope"])
+                ids = [row["state"]]
+            except HarnessError:
+                ids = ["INVALID"]
             ok = ids == case["expected_states"]
         elif kind == "task":
             ids = tasks.ready(case["spec"])

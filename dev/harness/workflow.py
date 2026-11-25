@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from . import checkpoint, ci, context, learning, profiles, tasks, verification
+from . import checkpoint, ci, context, evolution, learning, profiles, tasks, verification
 from .common import HarnessError, observe
 
 
@@ -20,15 +20,18 @@ def start(args, root):
     if inbox.is_dir():
         learned, _ = learning.audit(inbox, root)
         relevant = {p for row in selected["assets"] for p in row["paths"]}
-        candidates = [row for row in learned["records"] if row["state"] in ("CANDIDATE", "STALE")]
+        candidates = [row for row in learned["records"] if row["state"] in evolution.OPEN]
+        related = evolution.select(candidates, task_kind="development", query=args.query,
+            paths=sorted(relevant | set(args.path)), domains=getattr(args, "domain", []),
+            signals=getattr(args, "signal", []))
         data["learning"] = {
             "pending_count": len(candidates),
-            "related": [{"id": row["id"], "asset": row["asset"],
-                         "next_action": "review linked implementation" if row.get("implementation")
-                         else "select and validate bounded improvement"}
-                        for row in candidates if row["asset"] in relevant][:8],
+            "related": [{key: row.get(key) for key in ("id", "asset", "state", "next_action",
+                "match_reasons", "recorded_work_refs", "reconsider")} for row in related],
             "findings": learned["findings"],
         }
+    else:
+        data["learning"] = {"status": "UNAVAILABLE", "related": [], "note": "Learning inbox unavailable; do not infer no reusable findings."}
     if args.spec or args.history:
         if not args.spec or not args.history:
             raise HarnessError("Supply both --spec and --history for task initialization")
@@ -72,7 +75,8 @@ def summary(args, root, finishing=False):
         issues.append("No local evidence supplied")
     if args.inbox:
         audit, code = learning.audit(Path(args.inbox), root)
-        result["learning"] = {"records": [{"id": row["id"], "state": row["state"], "work_ref": row["work_ref"]}
+        result["learning"] = {"records": [{"id": row["id"], "state": row["state"], "work_ref": row["work_ref"],
+                                          "observed_work_refs": sorted({row["work_ref"], *(item["work_ref"] for item in row.get("observations", []))})}
                                          for row in audit["records"]], "findings": audit["findings"]}
         if code:
             issues.append("Learning audit needs review")
@@ -85,10 +89,16 @@ def summary(args, root, finishing=False):
                 issues.append("No-new-asset disposition requires a reason")
         elif disposition.startswith("candidate:"):
             key = disposition.split(":", 1)[1].strip()
-            if not args.inbox or not any(row["id"] == key and row["work_ref"] == data["work_ref"] for row in result.get("learning", {}).get("records", [])):
+            if not args.inbox or not any(row["id"] == key and data["work_ref"] in row["observed_work_refs"] for row in result.get("learning", {}).get("records", [])):
                 issues.append("Learning candidate is not present in supplied inbox")
         else:
             issues.append("Missing learning disposition (candidate:ID or no-new-asset:REASON)")
+        related = getattr(args, "related_candidate", [])
+        if len(set(related)) != len(related) or any(not any(row["id"] == key and
+                data["work_ref"] in row["observed_work_refs"] for row in result.get("learning", {}).get("records", []))
+                for key in related):
+            issues.append("Related learning candidate missing or not linked to work ref")
+        result["related_candidates"] = related
         result["learning_disposition"] = args.learning_disposition
         if not args.ci_snapshot:
             issues.append("No exact-head CI snapshot supplied")
@@ -126,6 +136,8 @@ def register_start(parser):
     parser.add_argument("--path", action="append", default=[])
     parser.add_argument("--query", default="")
     parser.add_argument("--inbox", help="Optional explicit learning history; defaults to dev/learning")
+    parser.add_argument("--domain", action="append", default=[])
+    parser.add_argument("--signal", action="append", default=[])
     parser.add_argument("--spec")
     parser.add_argument("--history")
 
@@ -140,6 +152,7 @@ def register_summary(parser):
     parser.add_argument("--pr", type=int)
     parser.add_argument("--base-sha")
     parser.add_argument("--learning-disposition")
+    parser.add_argument("--related-candidate", action="append", default=[])
     parser.add_argument("--export")
 
 

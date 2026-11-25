@@ -1,8 +1,28 @@
 # BoxWeave Development Harness (BDH) — start here
 
-**Status: bootstrap plus bwdev v0.5.** This is a development-only layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
+**Status: bootstrap plus bwdev v0.5.1.** This is a task-side development and operational learning layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
 
-Next planned increment (not yet implemented): [universal activation and dual-loop delivery plan](../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md).
+Universal activation and dual-loop design and rollout gates: [universal activation and dual-loop delivery plan](../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md).
+
+## Universal entry
+
+Use the short [bootstrap](BOOTSTRAP.md) for every BoxWeave task. A tiny question can use only relevant knowledge and a learning judgment. For material work without a target checkout, use the portable [work envelope](examples/WORK_ENVELOPE.json) via GitHub or an independent control checkout. Unknown target fields stay null; the control repository SHA is not the installed version. A local record is not remote persistence. Use existing start/resume/finish for source development.
+
+```sh
+python3 dev/bwdev --json work plan --kind operations --query 'install migration'
+python3 dev/bwdev --json work check dev/examples/WORK_ENVELOPE.json
+```
+
+Use work begin DIRECTORY SPEC to publish a material work envelope.
+At material progress, failure, correction, handoff or completion, create an
+updated JSON envelope (without revision), then work boundary DIRECTORY FILE
+--expect N. Preserve identity, original evidence and permission scope; include
+a learning disposition and next safe action. work resume reads original
+references and review requirements; work export writes a fresh local copy.
+The target does not need a checkout. Follow [GitHub-only entry](examples/REMOTE_ENTRY.md)
+for remote tasks. UNKNOWN remains UNKNOWN; use linked reconciled work only
+after independent review. Version changes on the same target need new evidence.
+A material outcome record is a caller assertion, not independent PASS.
 
 ## Quick start (optional Python CLI)
 
@@ -58,6 +78,26 @@ python3 dev/bwdev --json learn audit /tmp/my-learning-inbox
 ```
 
 Use learn review with expected revision, explicit review/evidence references and applicable L4 independent-review or L5 owner references. A recorded VERIFIED or ACTIVE is a reviewer assertion, not authority, a registry update or independent proof. Audit detects exact duplicates and reviewed asset/source drift. Keep live histories outside the source worktree; persist sanitized copies in Git/PR and reconcile copies. Markdown inbox remains valid.
+
+## Demand-driven evolution (v0.5.1)
+
+Use [the improver skill](skills/harness-improver/SKILL.md) for material gaps.
+Reuse existing assets first.
+
+```sh
+python3 dev/bwdev --json learn next dev/learning --domain box-exec --signal admission
+python3 dev/bwdev --json work plan --kind harness --domain box-exec
+```
+
+Capture can include --domain, --signal, --task-kind, --impact and --effort.
+Use learn observe with candidate ID, expected revision, work/attempt ref,
+new evidence, observation and outcome to link cross-task feedback.
+learn defer records a reason and reconsideration condition. Relevant deferred
+items reappear without auto-promotion or execution; reopen via review to
+CANDIDATE before attach. start and work plan show reasons and next actions.
+Exact evidence duplicates are refused; semantic duplication and independent
+recurrence need review. Finish accepts --related-candidate for additional
+candidates linked to the work or observations. Missing inbox is not no-learning.
 
 ## Integrated workflow (v0.5)
 

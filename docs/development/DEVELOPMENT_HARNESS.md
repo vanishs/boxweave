@@ -1,6 +1,17 @@
 # BoxWeave Development Harness (BDH)
 
-**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [developer entry](../../dev/README.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.5](BWDEV_DESIGN.md) capabilities in that entry are implemented. No change to product runtime or its tool catalog.
+**Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [developer entry](../../dev/README.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.5.1](BWDEV_DESIGN.md) capabilities in that entry are implemented. No change to product runtime or its tool catalog.
+
+## Universal activation and dual loops
+
+Apply the [portable bootstrap](../../dev/BOOTSTRAP.md) to every BoxWeave
+task, including guidance, product operations, research and development.
+Solve Loop uses relevant assets, advances safely and validates the requested
+outcome. Evolve Loop links material feedback, reuses or improves assets,
+reconsiders deferred work and preserves reviewed evidence. No mandatory
+second task, automatic effects or new asset quota. The [delivery plan](BDH_DUAL_LOOP_DELIVERY_PLAN.md)
+defines rollout and acceptance; actual fresh Agent activation must be
+demonstrated separately.
 
 ## 1. Objectives and boundaries
 

@@ -3,6 +3,7 @@ import hashlib
 import re
 from pathlib import Path
 
+from . import evolution
 from .common import HarnessError, observe, repo_path
 from .records import latest, publish
 
@@ -66,7 +67,7 @@ def validate(data, root):
             raise HarnessError("L4 needs an independent review reference")
         if data["change_class"] == "L5" and not nonempty(data.get("owner_ref")):
             raise HarnessError("L5 needs an explicit owner authorization reference")
-    return data
+    return evolution.validate(data)
 
 
 def all_records(inbox, root):
@@ -124,14 +125,41 @@ def register(parser):
     for key in ("--work-ref", "--observation", "--evidence", "--asset", "--validation"):
         capture.add_argument(key, required=True)
     capture.add_argument("--change-class", choices=("L1", "L2", "L3", "L4", "L5"), required=True)
+    capture.add_argument("--domain", action="append", default=[])
+    capture.add_argument("--task-kind", choices=evolution.KINDS, action="append", default=[])
+    capture.add_argument("--signal", action="append", default=[])
+    capture.add_argument("--impact", choices=evolution.IMPACTS, default="unknown")
+    capture.add_argument("--effort", choices=evolution.EFFORTS, default="unknown")
+    observation = sub.add_parser("observe", help="Link another material observation without duplicating candidate")
+    observation.add_argument("inbox")
+    observation.add_argument("id")
+    observation.add_argument("--expect", type=int, required=True)
+    for field in ("--work-ref", "--attempt-ref", "--evidence", "--observation"):
+        observation.add_argument(field, required=True)
+    observation.add_argument("--outcome", choices=evolution.OUTCOMES, required=True)
+    defer = sub.add_parser("defer", help="Record why and when to reconsider a candidate")
+    defer.add_argument("inbox")
+    defer.add_argument("id")
+    defer.add_argument("--expect", type=int, required=True)
+    defer.add_argument("--reason", required=True)
+    defer.add_argument("--when", required=True)
     attach = sub.add_parser("attach", help="Link implemented improvement and tests without promoting the candidate")
     attach.add_argument("inbox")
     attach.add_argument("id")
     attach.add_argument("--expect", type=int, required=True)
     attach.add_argument("--implementation-ref", required=True)
     attach.add_argument("--validation-evidence", required=True)
-    for action in ("list", "audit", "next"):
+    for action in ("list", "audit"):
         sub.add_parser(action).add_argument("inbox")
+    nxt = sub.add_parser("next")
+    nxt.add_argument("inbox")
+    nxt.add_argument("--kind", choices=evolution.KINDS)
+    nxt.add_argument("--query", default="")
+    nxt.add_argument("--path", action="append", default=[])
+    nxt.add_argument("--domain", action="append", default=[])
+    nxt.add_argument("--signal", action="append", default=[])
+    nxt.add_argument("--limit", type=int, default=8)
+    nxt.add_argument("--all", action="store_true")
     review = sub.add_parser("review", help="Record an explicit externally reviewed disposition")
     review.add_argument("inbox")
     review.add_argument("id")
@@ -148,12 +176,10 @@ def run(args, root):
     if args.action in ("list", "audit", "next"):
         data, code = audit(inbox, root)
         if args.action == "next":
-            data["records"] = [
-                {**row, "next_action": "review linked implementation" if row.get("implementation")
-                 else "select and validate a bounded improvement"}
-                for row in data["records"] if row["state"] in ("CANDIDATE", "STALE")
-            ]
-            data["note"] += " Select a bounded improvement; if implemented, attach evidence and request review."
+            data["records"] = evolution.select(data["records"], task_kind=args.kind,
+                query=args.query, paths=args.path, domains=args.domain,
+                signals=args.signal, limit=args.limit, include_all=args.all)
+            data["note"] += " Selection is advisory; recorded work refs are not independently confirmed recurrence."
         return data, code if args.action in ("audit", "next") else 0
     key = safe_id(args.id)
     directory = inbox / key
@@ -165,6 +191,8 @@ def run(args, root):
             "work_ref": args.work_ref, "observation": args.observation, "evidence": args.evidence,
             "asset": asset, "validation": args.validation, "change_class": args.change_class,
             "fingerprint": fingerprint(args.observation, asset), "source": observe(root),
+            "domains": args.domain, "task_kinds": args.task_kind, "signals": args.signal,
+            "impact": args.impact, "effort": args.effort, "observations": [],
         }
         validate(data, root)
         if any(row["fingerprint"] == data["fingerprint"] for row in rows):
@@ -176,6 +204,22 @@ def run(args, root):
         data = validate(latest(directory), root)
         if data["id"] != key or data["revision"] != args.expect:
             raise HarnessError("Learning identity/revision conflict")
+        if args.action == "observe":
+            if data["state"] in ("REJECTED", "DEPRECATED"):
+                raise HarnessError("Closed candidate; use reviewed follow-up")
+            data = evolution.add_observation(data, {key: getattr(args, key) for key in
+                ("work_ref", "attempt_ref", "evidence", "observation", "outcome")})
+            result = publish(directory, args.expect, validate(data, root))
+            return {"status": "RECORDED", "record": result,
+                    "note": "Observation linked; no automatic promotion or independent recurrence claim."}, 0
+        if args.action == "defer":
+            if data["state"] not in ("CANDIDATE", "VERIFIED"):
+                raise HarnessError("Only candidate or verified may be explicitly deferred")
+            data.update(state="DEFERRED", reconsider={"reason": args.reason, "when": args.when,
+                "observation_count": len(data.get("observations", []))})
+            result = publish(directory, args.expect, validate(data, root))
+            return {"status": "RECORDED", "record": result,
+                    "note": "Deferred, not closed. Relevant future task may reconsider; no effect authorized."}, 0
         if args.action == "attach":
             if data["state"] not in ("CANDIDATE", "STALE") or not nonempty(args.implementation_ref) or not nonempty(args.validation_evidence):
                 raise HarnessError("Attach requires a candidate/stale record and explicit implementation and evidence references")

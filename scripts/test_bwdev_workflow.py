@@ -118,6 +118,27 @@ class WorkflowTests(unittest.TestCase):
                 with self.assertRaises(HarnessError):
                     workflow.summary(args, root, finishing=True)
 
+    def test_finish_links_observation_from_another_task(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            history = directory / "history"
+            spec = directory / "spec.json"
+            spec.write_text(json.dumps({"work_ref":"current","objective":"test",
+                                       "tasks":[{"id":"a","acceptance":"result","depends_on":[]}]}))
+            tasks.run(argparse.Namespace(action="init", directory=history, spec=spec), ROOT)
+            args = argparse.Namespace(history=history, checkpoint=None, evidence=[],
+                inbox=str(directory), repo=None, ci_snapshot=None, pr=None, base_sha=None,
+                learning_disposition="candidate:L1", related_candidate=["L1"], export=None)
+            candidate = {"id":"L1","state":"CANDIDATE","work_ref":"prior",
+                         "observations":[{"work_ref":"current"}]}
+            with patch("harness.learning.audit", return_value=({"records":[candidate],"findings":[]},0)):
+                result, _ = workflow.summary(args, ROOT, finishing=True)
+                self.assertNotIn("Learning candidate is not present in supplied inbox", result["issues"])
+                self.assertNotIn("Related learning candidate missing or not linked to work ref", result["issues"])
+                args.related_candidate = ["L2"]
+                result, _ = workflow.summary(args, ROOT, finishing=True)
+                self.assertIn("Related learning candidate missing or not linked to work ref", result["issues"])
+
     def test_finish_missing_evidence_and_export(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -52,3 +52,7 @@ The original historical report owns actual commands, IDs and results. These obse
 - [BDH-L012 revision 2](learning/BDH-L012/00000002.json): implementation and validation attached; candidate remains pending independent review. CI helper, Skill, regression and Eval now implement this learning. Start surfaces it on relevant tasks; audit checks asset drift. Do not implement it twice.
 
 - [BDH-L013 revision 2](learning/BDH-L013/00000002.json): nonempty test discovery contract implemented and exercised; candidate pending review. This Box's builtin unittest already failed for zero tests, so no universal old-runner defect is asserted.
+
+## Universal activation / dual-loop learning
+
+- [BDH-L014 revision 5](learning/BDH-L014/00000005.json) structures historical BDH-L005 (do not duplicate), links real U2 friction, records deferral and rediscovery, and attaches the bounded Box source-transfer Skill improvement. Candidate remains pending review; subsequent work should inspect implementation rather than repeat it.

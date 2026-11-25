@@ -15,10 +15,10 @@
 
 ## Development Harness (all tasks; lightweight answers allowed)
 
-- Work ref / workflow profile / environment (Box-first or reason for fallback):
+- Work ref / task kind / workflow profile / environment (Box-first or reason for fallback):
 - Task or checkpoint link (or N/A for a trivial task):
 - Relevant acceptance, exact candidate and remaining independent gates:
-- Learning disposition (no-new-asset with reason / candidate link / verified improvement with evidence):
+- Learning disposition (no-new-asset with reason / candidate or deferred link / verified improvement with evidence / pending persistence); related observations and follow-up condition:
 - Next safe action and unresolved blocker, if any:
 
 See [BDH entry](../dev/README.md). Existing quality policy determines applicable checks for docs-only vs source/native work; mark N/A with a reason rather than claiming an unrun test. Do not use this checklist to lower mandatory gates.

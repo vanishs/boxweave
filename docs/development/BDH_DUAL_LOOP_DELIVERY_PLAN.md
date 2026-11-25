@@ -1,6 +1,6 @@
 # BDH universal activation and dual-loop delivery plan
 
-Status: proposed implementation and rollout plan, NOT implemented or accepted.
+Status: implementation plan; v0.5.1 Box implementation and local evidence are recorded in [U1-U4 acceptance](BDH_DUAL_LOOP_ACCEPTANCE.md). Independent CI and fresh Agent surface activation are separate gates.
 Target: PR #189 before merge to v1. Preserve the existing v0.5 implementation
 and evidence. The plan is the next increment, not a new product subsystem.
 Starting verified candidate 9e388cab9f2e605c3f2041c523563b49215201a7,
