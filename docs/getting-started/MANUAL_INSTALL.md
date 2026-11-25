@@ -77,7 +77,7 @@ sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$CANDIDATE" --sha2
 sudo sh install.sh --interactive --scoped-peer-fresh --local-binary "$CANDIDATE" --sha256 "$SHA256"
 ```
 
-The plan prints the actual native scope and scoped_fresh_review_sha256 without persisting installation state. The interactive path rechecks the native review before staging. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../history/development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../history/development/V1_PR178_N5_DELIVERY_2026-11-23.md).
+The plan prints the actual native scope and scoped_fresh_review_sha256 without persisting installation state. The #188 candidate also displays the reviewed IPv4 prefix and nominal capacity before approval; this is not a physical or dual-stack allocation guarantee. The interactive path rechecks the native review before staging. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../history/development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../history/development/V1_PR178_N5_DELIVERY_2026-11-23.md).
 
 No legacy migration/adoption, upgrade, rollback or backup commit is supported for scoped mode. PR #182 implements a separate full-only retirement for fresh installations that recorded the original native preimage; use it only with an installed build and verified wrapper containing #182. Do not delete Root journals, guard/lifecycle units, the Incus guard drop-in or state to bypass a refusal. Any surviving scoped installation evidence blocks legacy maintenance, even if the journal is absent. Unlike legacy Peer, routine scoped Peer grants/revokes are authenticated MCP operations after reviewed setup, and new Boxes default to boot.autostart=true while explicit false is preserved. The 1,024 owned-Box bound is not a physical capacity guarantee. Retained identities, addresses, directional grant history and Root policy records have separate limits.
 
@@ -126,7 +126,7 @@ The [historical detailed RC3–RC13 guide](https://github.com/vanishs/boxweave/b
 
 ### Scoped retirement (requires #182)
 
-Use the matching verified release/candidate wrapper and installed binary. Stop/delete all owned Boxes and revoke Peer/Forward claims through normal MCP operations first; settle outstanding originals using the supported recovery workflow. The retirement plan refuses live or unsettled work and old scoped installations missing the original Project/Profile preimage.
+Use the matching verified release/candidate wrapper and installed binary. Stop/delete all owned Boxes and revoke Peer/Forward claims through normal MCP operations first; settle outstanding originals using the supported recovery workflow. The original #182 retirement plan refuses live or unsettled work. The #188 candidate can instead review a complete exact owned drain (normal Peer/Forward, stop and Delete originals) before retirement; it refuses UNKNOWN, incomplete or foreign native inventory and missing original Project/Profile preimage. Review all destructive effects and preserve required backups first.
 
 ```sh
 sudo sh uninstall.sh --scoped --plan
@@ -149,3 +149,30 @@ sudo sh uninstall.sh --purge
 The erasure plan lists only recognized, reviewed completed retirement archives, closed native preparation journals and the completed audit. It refuses active or unverified native/controller artifacts, nonempty owned Project inventory, unknown archive entries, symlinks and incomplete retirements. If interrupted, repeat the read-only purge plan and approve the same original purge; installation is blocked while the durable purge receipt survives. Do not treat a purge as a way to release outstanding operations or to bypass an installation safety check. It is ordinary file removal, not a guarantee of forensic erasure of disks, snapshots or independent backups.
 
 For RC13, obtain the matching verified RC13 uninstaller for the original legacy retirement. Do not use the RC14 purge wrapper for that initial retirement. Clean up owned Boxes, Peer and Forward via MCP and let native retirement operations settle. A separately staged legacy Peer Root unit or its journals, if present, needs exact local original review; the current generic purge intentionally refuses these residuals rather than deleting an unverified root capability. Retain evidence if the original retirement refuses. Do not substitute the new reader on an old installed binary. Run the new purge only after verified full retirement. No automatic migration, arbitrary native cleanup, removal of Incus itself, dedicated OS account, images or external tunnel is performed. The next Scoped install requires its own fresh native preview and explicit approval; the existing bridge address range is preserved and foreign native projects or customized topology may block admission. The original RC13 Host may still use a /24 bridge rather than the /21 provisioned by a new Incus bootstrap.
+
+### #188 candidate: maintenance preview and exceptional offline retirement
+
+The unified observation-side preview is separate from executable approval.
+For the matching verified candidate wrapper and local installed scope:
+
+```sh
+sudo boxweave doctor --maintenance --summary
+sudo sh uninstall.sh --maintenance-plan --project "$PROJECT" --retention retain
+```
+
+Select erase only to review that retention intent; the preview never
+authorizes erasure. Use the exact maintenance-recheck digest interface
+shown by the matching wrapper to check freshness. It is not a full-retirement
+approval. Normal Scoped retirement uses its own full plan and confirmation.
+
+An explicitly supported stopped Legacy installation with exact cold
+ledger/native provenance may offer the separate --offline-plan and
+--offline-full routes. They archive and preserve the original UNKNOWN
+and claims without settling or replaying it. The executable leaf is
+limited to the verified supported originals; ambiguous historical Peer
+Root journals, unproved native state and partial Scoped installs remain
+blocked. Use --offline-resume-plan and --offline-resume only for supported
+post-native phases of the exact interrupted original. Do not substitute
+a newer candidate binary for the original installed artifact or bypass
+refusal by deleting evidence. After verified complete retirement, review
+purge separately. See [H5 delivery](../development/PR188_H5_DELIVERY.md).

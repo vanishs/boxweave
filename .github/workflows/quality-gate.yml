@@ -26,8 +26,15 @@ jobs:
       - name: Checkout entire history for changed-file whitespace validation
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify exact candidate source
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          echo "H5_QUALITY_SOURCE=$EXACT_HEAD"
       - name: Determine documentation-only vs full CI scope
         id: scope
         env:
@@ -65,21 +72,18 @@ jobs:
           while IFS= read -r path; do
             sh -n "$path"
           done < <(git ls-files '*.sh' '.githooks/pre-*')
-      - name: Python MCP loopback client and protocol negative tests
+      - name: Complete offline Python regression (clean runner)
         if: steps.scope.outputs.full == 'true'
-        run: python3 -m unittest discover -s scripts -p 'test_mcp_testkit.py' -q
-      - name: Integrated Doctor/Recover fixture regressions
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_*.py' -q
+          python3 scripts/pr188_h3a_oauth.py
+      - name: Bounded 1024 SQLite and native model acceptance (not physical scale)
         if: steps.scope.outputs.full == 'true'
-        run: python3 -m unittest discover -s scripts -p 'test_pr177_installed_recovery.py' -q
-      - name: Offline guided upgrade approval and fail-closed tests
-        if: steps.scope.outputs.full == 'true'
-        run: python3 -m unittest discover -s scripts -p 'test_guided_upgrade.py' -q
-      - name: Offline scoped uninstall planner/approval/negative tests
-        if: steps.scope.outputs.full == 'true'
-        run: python3 -m unittest discover -s scripts -p 'test_uninstall_core.py' -q
-      - name: Offline stable release gate and provenance negatives
-        if: steps.scope.outputs.full == 'true'
-        run: python3 -m unittest discover -s scripts -p 'test_v1_stable_gate.py' -q
+        env:
+          BOXWEAVE_N4_PERF_FIXTURE: n4-1024-local-only
+        run: |
+          go test -count=1 -v ./internal/state -run '^TestN4ProjectCapacityAndNetworkAudit1024LocalBudget$'
+          go test -count=1 -v ./internal/native -run '^Test(N3NativeProject1024ObjectsAnd1025FailureNoPartial|N3NativeSnapshotFullNetworkLeaseRaceIsFailClosed)$'
       - name: Ensure precise Go module formatting and verified checksums
         if: steps.scope.outputs.full == 'true'
         run: |

@@ -105,4 +105,4 @@ Work one full phase at a time: isolated Box implementation -> focused source/neg
 - Safe scoped reclamation: decide whether and how to implement after security proof; current identity retention is a deliberate security property. Reporting improvements can proceed without this decision.
 - Whether to change installer default mode or provision a larger private bridge: scope separately against existing native ownership; explicit plan and approval mandatory.
 
-H0 completed and documented at baseline only. H1–H5 not implemented. New runtime behavior or new candidate CI acceptance is not claimed. Start H1A using the retained source lab and read-only H0 fixtures; do not repeat package downloads or old baseline tests unless exact HEAD changes require regression.
+H0 was the baseline feasibility survey, not implementation evidence. H1-H4 candidate implementations and stage evidence are now recorded in the corresponding PR188 reports and execution log. See [H5 integrated delivery](PR188_H5_DELIVERY.md) for the final candidate evidence and exact-head CI gates. Historical stage reports remain unchanged; no physical Host or stable release sign-off is implied.

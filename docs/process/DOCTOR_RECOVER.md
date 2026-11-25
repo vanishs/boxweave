@@ -70,7 +70,7 @@ scope, or the required local authority is unavailable, preserve the
 original claims and evidence. Do not use SQL edits, native replay,
 blanket unlock, policy resets, reinstall or unrelated Box restarts to
 force progress. A reviewed settlement is not a generic repair tool.
-Scoped fresh v2 does not support upgrade or rollback. PR #182 implements a distinct full-only scoped retirement/resume workflow after MCP cleanup, requiring the original fresh native preimage; see the manual installation guide. Older installations without the preimage must retain their original evidence.
+Scoped fresh v2 does not support upgrade or rollback. PR #182 introduced full-only scoped retirement/resume after MCP cleanup, requiring the original fresh native preimage. The #188 candidate additionally reviews and drains exact normal owned dependencies through existing originals before restoration; see the manual installation guide. Older installations without the preimage must retain their original evidence.
 Legacy guided retirement/resume has its own exact review and audit flow. The current installer now emits phase labels and separates optional OAuth configuration from installed service health. Current full retirement consults a fixed read-only native preparation observation before approval and effects, without treating it as permission to delete. Use the matching installed binary/uninstaller and original archive; a STARTED audit is navigation to --resume-plan, not a new uninstall. See [install/uninstall incident closure](../history/development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md).
 
 See [the D4 execution contract](../history/development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md)
@@ -81,3 +81,19 @@ and [the D5 acceptance record](../history/development/V1_PR177_D5_DELIVERY_2026-
 Run `sudo boxweave doctor --summary` for the fixed installed scope. JSON remains on stdout; the concise summary is on stderr. A restricted observer may have expected coverage limits; repeat as root for root-only evidence. Healthy runtime does not authorize removal. Run `sudo boxweave doctor --maintenance --summary` for observation-side maintenance blockers; use the appropriate install/uninstall plan for full effects and approval.
 
 Run `sudo boxweave recover --guided --issue ISSUE_ID` to review an exact supported original. Confirm the displayed digest only if it matches the intended effect. Save the original review envelope and recovery key for the machine apply/replay interface. Decline, stale evidence, unsupported recovery and absent issues must not dispatch an effect. Historical UNKNOWN remains protected. Service/helper restoration requires separate local installed-contract review, not an automatic restart.
+
+## Candidate H4/H5: MCP navigation and capacity
+
+In the #188 candidate, tool errors are typed, redacted, and distinguish
+caller input, pre-admission refusal, normal wait, capacity and an uncertain
+effect. Follow the exact original ID in next_action; do not change an
+idempotency key after a lost receipt. Scope visibility never grants effect
+authority. No new MCP tool or universal repair capability.
+
+Doctor and authenticated host_status report the same bounded capacity
+budgets. LOW means at most 20% remaining; exhausted capacity does not
+mean a failed controller. Retained addresses and history must not be
+manually cleared. The Root history projection is independent of the
+SQLite projection. See [H5 integrated acceptance](../development/PR188_H5_DELIVERY.md)
+and [network capacity](../design/NETWORK.md). These are candidate features
+until a matching release is published.

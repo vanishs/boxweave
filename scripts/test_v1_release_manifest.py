@@ -188,6 +188,9 @@ class ReleaseTests(unittest.TestCase):
             checks.append(True)
             if missing_reader or (reader_drift and len(checks) > 1):
                 raise ns["InstallError"]("INSTALL_MISSING_PREREQUISITE: /usr/sbin/conntrack")
+        ns["SCOPED_PATHS"] = tuple(self.dir / ("scope-" + str(i))
+                                   for i, _ in enumerate(ns["SCOPED_PATHS"]))
+        ns["STATE_DIR"] = self.dir / "isolated-state"
         ns["retirement_reader_preflight"] = reader_preflight
         ns["Path"] = fake_path
         ns["current_host_digest"] = lambda: "e" * 64
