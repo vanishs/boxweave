@@ -210,11 +210,11 @@ def plan(root, task_kind, query, paths=(), domains=(), signals=(), inbox=None):
         learning_status = audit["status"]
         selected_learning = evolution.select(audit["records"], task_kind=task_kind, query=query,
             paths=list(paths) if task_kind == "guidance" else [*paths, *(p for row in items for p in row["paths"])],
-            domains=domains, signals=signals)
+            domains=domains, signals=signals, review_context=audit["review_context"])
         findings = audit["findings"]
     return {"status": "PLAN_ONLY", "task_kind": task_kind,
             "learning": {"status": learning_status, "related": [{key: row.get(key) for key in ("id", "asset", "state", "next_action",
-                          "match_reasons", "recorded_work_refs", "reconsider")} for row in selected_learning],
+                          "match_reasons", "recorded_work_refs", "reconsider", "opportunity")} for row in selected_learning],
                          "findings": findings},
             "required": ["dev/BOOTSTRAP.md", "AGENTS.md", "dev/INDEX.md"],
             "assets": items[:7], "outcome_gate": gate,

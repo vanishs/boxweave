@@ -1,0 +1,118 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-v1a",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "File operations 5a61a4180735998c89d2eac06765d508 and 95e5a0274ae33b7f4207ab740fbe1b5e; whole-file reads 05a204181e9462113860b70a62c5ea61 and 861150e51bb32435e305b55b137b19ef; Exec 31e4a569ed8a5dcc72e390f9970bdfef and d078a1f000172cb51b67c72d86411216 exit 0",
+      "observation": "Existing exclusive-file Skill enabled two source scripts (10648 and 7957 bytes) and short Exec; two Base64 payloads were manually constructed with explicit receipt/readback/Exec coordination. Residual manual preparation observed; new helper benefit unknown.",
+      "outcome": "helped",
+      "reason": "Actual exclusive source script transfer; typed residual cost counts only payload preparation"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-v1a",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "8b2aa63e166791a9804955f4fff0efdd; exact c57c990 checkout verified, grep exit 2",
+      "observation": "Reconciled published V0 tree and checked out exact child; shell brace expansion unsupported, subsequent source read corrected",
+      "outcome": "helped",
+      "reason": "Existing continuity workflow adequate"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-v1a",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "d078a1f000172cb51b67c72d86411216 exit 0; 3a2e7ab7314ac3a9fc679a4bc1bc1141 exit 0",
+      "observation": "Eight targeted and 77 total tests, 14 Eval cases and learning audit passed",
+      "outcome": "helped",
+      "reason": "L012 concerns superseded or cancelled CI; child CI visibility unavailable, no observed supersession"
+    },
+    {
+      "asset": "skill.harness-improver",
+      "attempt_ref": "20261125-v1a",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "27ea38aee31821199462102a4a636bc6 exit 0",
+      "observation": "Real typed residual evidence surfaced as review due without promotion",
+      "outcome": "helped",
+      "reason": "V1a planned source slice; not an autonomous selected episode or implementation claim"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-v1a",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "27ea38aee31821199462102a4a636bc6 exit 0",
+      "observation": "New actual observation recorded at expected rev12 as rev13, historical evidence unchanged",
+      "outcome": "helped",
+      "reason": "Typed field validated; no later benefit claimed"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-v1a",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "3a2e7ab7314ac3a9fc679a4bc1bc1141 exit 0; 27ea38aee31821199462102a4a636bc6 exit 0",
+      "observation": "Existing tests and new advisory selector ran with real records",
+      "outcome": "helped",
+      "reason": "V1b durable review decisions and V2 task binding still open"
+    },
+    {
+      "asset": "dev/harness/check_runner.py",
+      "attempt_ref": "20261125-v1a",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "3a2e7ab7314ac3a9fc679a4bc1bc1141 exit 0",
+      "observation": "Explicit nonempty runner discovered 77 tests",
+      "outcome": "helped",
+      "reason": "L013 zero discovery concern not encountered; regression passed"
+    }
+  ],
+  "attempt_ref": "20261125-v1a",
+  "authority": "Owner authorized child PR development in an isolated owned Box; no parent change, host change, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "File operations 5a61a4180735998c89d2eac06765d508 and 95e5a0274ae33b7f4207ab740fbe1b5e; whole-file reads 05a204181e9462113860b70a62c5ea61 and 861150e51bb32435e305b55b137b19ef; Exec 31e4a569ed8a5dcc72e390f9970bdfef and d078a1f000172cb51b67c72d86411216 exit 0",
+    "8b2aa63e166791a9804955f4fff0efdd; exact c57c990 checkout verified, grep exit 2",
+    "d078a1f000172cb51b67c72d86411216 exit 0; 3a2e7ab7314ac3a9fc679a4bc1bc1141 exit 0",
+    "27ea38aee31821199462102a4a636bc6 exit 0",
+    "3a2e7ab7314ac3a9fc679a4bc1bc1141 exit 0; 27ea38aee31821199462102a4a636bc6 exit 0",
+    "3a2e7ab7314ac3a9fc679a4bc1bc1141 exit 0",
+    "52790340fc35e6f7f6f51958cc998afc exit 1; ce5a648d48c623407e3b80c67432db54 exit 2: duplicate evidence reference refused, original revision 1 retained; deduplicate envelope references without changing feedback facts"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Complete V1b durable review decisions, exact evidence range and reconsideration semantics; do not count V1a as V2-V4 closure",
+  "objective": "Implement and verify V1a typed residual evidence and advisory review readiness",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "c57c9900a00cfdf1ccd3214ca58b90a0ad8cea69",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [
+    "skill.box-development",
+    "skill.task-resume",
+    "skill.verification",
+    "skill.harness-improver",
+    "skill.continuous-learning",
+    "tool.bwdev",
+    "dev/harness/check_runner.py"
+  ],
+  "work_ref": "pr193/v1"
+}

@@ -89,10 +89,11 @@ def validate(data, root):
     return evolution.validate(data)
 
 
-def read_history(directory, root):
+def read_history(directory, root, review_context=None):
     """Check imported learning revisions, not just the newest snapshot."""
     last = validate(latest(directory), root)
     prior = None
+    coverage = {"covered_observation_count": 0, "coverage_event": None}
     immutable = ("kind", "schema_version", "id", "work_ref", "observation",
                  "evidence", "asset", "validation", "change_class", "fingerprint", "source")
     for number in range(1, last["revision"] + 1):
@@ -122,13 +123,19 @@ def read_history(directory, root):
                     raise HarnessError("Unchanged asset is revalidation, not a new bound improvement")
                 if previous_impl.get("evidence_ref") == impl["evidence_ref"]:
                     raise HarnessError("New bound improvement requires distinct validation evidence")
+        if prior is not None and ((impl is not None and impl != previous_impl)
+                or (current["state"] in ("VERIFIED", "ACTIVE") and current["state"] != prior["state"])):
+            coverage = {"covered_observation_count": len(current.get("observations", [])),
+                        "coverage_event": number}
         prior = current
     if prior != last:
         raise HarnessError("Learning history changed while reading")
+    if review_context is not None:
+        review_context[last["id"]] = coverage
     return last
 
 
-def all_records(inbox, root):
+def all_records(inbox, root, review_context=None):
     if not inbox.is_dir() or inbox.is_symlink():
         raise HarnessError("Learning inbox missing or unsafe")
     result = []
@@ -136,7 +143,7 @@ def all_records(inbox, root):
         if path.name.startswith("."):
             continue
         safe_id(path.name)
-        data = read_history(path, root)
+        data = read_history(path, root, review_context)
         if data["id"] != path.name:
             raise HarnessError("Learning ID does not match directory")
         result.append(data)
@@ -144,7 +151,8 @@ def all_records(inbox, root):
 
 
 def audit(inbox, root):
-    rows = all_records(inbox, root)
+    review_context = {}
+    rows = all_records(inbox, root, review_context)
     seen = {}
     findings = []
     source = observe(root)
@@ -168,9 +176,12 @@ def audit(inbox, root):
                     or prior.get("commit") != source["commit"]
                     or prior.get("worktree") != "clean" or source["worktree"] != "clean"):
                 findings.append({"id": row["id"], "issue": "SOURCE_REVIEW_REQUIRED"})
+    for finding in findings:
+        if finding["issue"] in ("IMPLEMENTATION_CHANGED_OR_MISSING", "ASSET_CHANGED_OR_MISSING"):
+            review_context[finding["id"]]["asset_drift"] = True
     return {
         "status": "REVIEW_REQUIRED" if findings else "OBSERVED",
-        "records": rows, "findings": findings,
+        "records": rows, "findings": findings, "review_context": review_context,
         "note": "Exact-text duplicate and asset/source drift hints only; no semantic validation, authorization, or automatic promotion.",
     }, 1 if findings else 0
 
@@ -195,6 +206,7 @@ def register(parser):
     for field in ("--work-ref", "--attempt-ref", "--evidence", "--observation"):
         observation.add_argument(field, required=True)
     observation.add_argument("--outcome", choices=evolution.OUTCOMES, required=True)
+    observation.add_argument("--residual-file", help="Explicit typed residual evidence JSON; omitted means unknown")
     defer = sub.add_parser("defer", help="Record why and when to reconsider a candidate")
     defer.add_argument("inbox")
     defer.add_argument("id")
@@ -238,7 +250,7 @@ def run(args, root):
         if args.action == "next":
             data["records"] = evolution.select(data["records"], task_kind=args.kind,
                 query=args.query, paths=args.path, domains=args.domain,
-                signals=args.signal, limit=args.limit, include_all=args.all)
+                signals=args.signal, limit=args.limit, include_all=args.all, review_context=data["review_context"])
             data["note"] += " Selection is advisory; recorded work refs are not independently confirmed recurrence."
         return data, code if args.action in ("audit", "next") else 0
     key = safe_id(args.id)
@@ -267,8 +279,11 @@ def run(args, root):
         if args.action == "observe":
             if data["state"] in ("REJECTED", "DEPRECATED"):
                 raise HarnessError("Closed candidate; use reviewed follow-up")
-            data = evolution.add_observation(data, {key: getattr(args, key) for key in
-                ("work_ref", "attempt_ref", "evidence", "observation", "outcome")})
+            item = {key: getattr(args, key) for key in
+                    ("work_ref", "attempt_ref", "evidence", "observation", "outcome")}
+            if getattr(args, "residual_file", None) is not None:
+                item["residual"] = evolution.validate_residual(read_json(args.residual_file))
+            data = evolution.add_observation(data, item)
             result = publish(directory, args.expect, validate(data, root))
             return {"status": "RECORDED", "record": result,
                     "note": "Observation linked; no automatic promotion or independent recurrence claim."}, 0

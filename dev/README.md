@@ -163,6 +163,37 @@ recurrence need review. The v0.5.1 legacy --related-candidate finish
 flag is historical; use structured learning_links and exact observations
 in the protocol-1 envelope. Missing or invalid inbox is not no-learning.
 
+### Residual opportunity review (v0.7 V1a candidate)
+
+For a new observation with explicit residual friction, optionally pass
+`learn observe ... --residual-file FILE` with a reviewed local JSON object:
+
+```json
+{
+  "signature": "manual-assembly",
+  "impact": "friction",
+  "environment": null,
+  "cost": null,
+  "uncertainty": "No measured cost yet"
+}
+```
+
+Use only observed cost; when known, cost contains value (nonnegative
+integer), unit (manual-actions, tool-calls, bytes, milliseconds or tokens)
+and provenance (explicit evidence reference). Null means unknown.
+Impact is blocker, risk, friction or unknown. Signature is a bounded
+failure/friction label; no executable content. Historical observations
+without residual metadata remain readable and are not backfilled.
+
+The advisory opportunity in learn next, work plan, start and related
+material feedback identifies review signals and exact evidence beyond
+a history-derived attachment/lifecycle-review boundary. It does not
+prove earlier issues were resolved, authorize work, establish independent
+recurrence, or mutate candidate state. Review can be due even when
+existing Skill use helped and the candidate is VERIFIED or ACTIVE.
+No durable opportunity decision or selected episode is implemented in
+V1a yet; preserve an explicit pending handoff.
+
 ## Integrated workflow (v0.5)
 
 For a nontrivial task with a checkout, use the compositional commands rather

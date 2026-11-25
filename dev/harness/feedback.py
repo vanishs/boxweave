@@ -57,7 +57,8 @@ def asset_paths(root, asset, registry):
 def matching_observation(candidate, row, item):
     expected = {key: item[key] for key in ("attempt_ref", "evidence", "observation", "outcome")}
     expected["work_ref"] = row["work_ref"]
-    if expected in candidate.get("observations", []):
+    if any(all(observed.get(key) == value for key, value in expected.items())
+           for observed in candidate.get("observations", [])):
         return "OBSERVATION"
     # Older captures contain no attempt/outcome. Do not call them later reuse.
     if (candidate["work_ref"] == row["work_ref"]
@@ -99,10 +100,12 @@ def _review(row, root, inbox=None):
     inbox = Path(inbox) if inbox else root / "dev/learning"
     candidates = []
     findings = []
+    review_context = {}
     if inbox.is_dir() and not inbox.is_symlink():
         audit, _ = learning.audit(inbox, root)
         candidates = audit["records"]
         findings = audit["findings"]
+        review_context = audit["review_context"]
     known = {candidate["id"]: candidate for candidate in candidates}
     duplicate_ids = {key for finding in findings if finding["issue"] == "DUPLICATE"
                      for key in (finding["id"], finding["other"])}
@@ -126,7 +129,8 @@ def _review(row, root, inbox=None):
     for item in items:
         validate_item(item)
         paths = asset_paths(root, item["asset"], registry)
-        suggestions = [{"id": candidate["id"], "revision": candidate["revision"], "state": candidate["state"]}
+        suggestions = [{"id": candidate["id"], "revision": candidate["revision"], "state": candidate["state"],
+                        "opportunity": evolution.opportunity(candidate, review_context.get(candidate["id"]))}
                        for candidate in candidates if candidate["asset"] in paths
                        and candidate["state"] not in ("DEPRECATED", "REJECTED")]
         result = {"asset": item["asset"], "evidence": item["evidence"], "decision": item["decision"],
