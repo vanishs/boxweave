@@ -76,3 +76,5 @@ See [status](../STATUS.md), [active plan](../process/IMPLEMENTATION_PLAN.md) and
 - 2026-11-25: #193 [V4c-01 repair](BDH_V07_V4C_REPAIR.md): original independent FAIL retained; scoped 960575b, 24 targeted and 115 integrated tests, Eval14, audit clear, exact four assets matched. L014 rev33 and second episode rev11 review READY. Corrected full live template, independent rereview, utility and CI gates remain open. No parent change, promotion, merge or release.
 
 - 2026-11-25: #193 [V4c technical delivery and V4d pre-registration](BDH_V07_V4D_TRIAL.md): independent review 6064325816 and exact a77e49e CI PASS, original rejection retained. L014 rev34 and episode rev15 benefit READY. Three separate clean matched trial checkouts prepared, no witness transfer or benefit claim. No parent change, promotion, merge or release.
+
+- 2026-11-25: #193 [V4d terminal REOPEN and V4e investigation](BDH_V07_V4E_REUSE_INVESTIGATION.md): actual independent review 6065876762; three observations L014 rev35-37, second episode rev17, terminal reopen rev38; REVIEW_DUE. No new implementation or promotion.
