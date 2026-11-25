@@ -5,7 +5,7 @@ from pathlib import Path
 
 from . import evolution
 from .common import HarnessError, observe, repo_path
-from .records import latest, publish
+from .records import latest, publish, read_json
 
 STATES = {"CANDIDATE", "DEFERRED", "VERIFIED", "ACTIVE", "STALE", "DEPRECATED", "REJECTED"}
 TRANSITIONS = {
@@ -70,6 +70,35 @@ def validate(data, root):
     return evolution.validate(data)
 
 
+def read_history(directory, root):
+    """Check imported learning revisions, not just the newest snapshot."""
+    last = validate(latest(directory), root)
+    prior = None
+    immutable = ("kind", "schema_version", "id", "work_ref", "observation",
+                 "evidence", "asset", "validation", "change_class", "fingerprint", "source")
+    for number in range(1, last["revision"] + 1):
+        current = validate(read_json(Path(directory) / f"{number:08d}.json"), root)
+        if current.get("revision") != number:
+            raise HarnessError("Learning revision differs from history position")
+        if prior is None:
+            if current["state"] != "CANDIDATE":
+                raise HarnessError("Learning history must begin with a candidate")
+        else:
+            if any(current.get(key) != prior.get(key) for key in immutable):
+                raise HarnessError("Cannot rewrite original learning capture")
+            original = prior.get("observations", [])
+            if current.get("observations", [])[:len(original)] != original:
+                raise HarnessError("Cannot remove or rewrite original learning observations")
+            if prior["state"] in ("DEPRECATED", "REJECTED"):
+                raise HarnessError("Closed learning history has a further revision")
+            if current["state"] != prior["state"] and current["state"] not in TRANSITIONS[prior["state"]]:
+                raise HarnessError("Invalid historical learning lifecycle transition")
+        prior = current
+    if prior != last:
+        raise HarnessError("Learning history changed while reading")
+    return last
+
+
 def all_records(inbox, root):
     if not inbox.is_dir() or inbox.is_symlink():
         raise HarnessError("Learning inbox missing or unsafe")
@@ -78,7 +107,7 @@ def all_records(inbox, root):
         if path.name.startswith("."):
             continue
         safe_id(path.name)
-        data = validate(latest(path), root)
+        data = read_history(path, root)
         if data["id"] != path.name:
             raise HarnessError("Learning ID does not match directory")
         result.append(data)
@@ -201,7 +230,7 @@ def run(args, root):
     else:
         if not inbox.is_dir() or inbox.is_symlink():
             raise HarnessError("Learning inbox missing or unsafe")
-        data = validate(latest(directory), root)
+        data = read_history(directory, root)
         if data["id"] != key or data["revision"] != args.expect:
             raise HarnessError("Learning identity/revision conflict")
         if args.action == "observe":

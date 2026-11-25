@@ -157,3 +157,10 @@ Source finish additionally binds work identity, objective, checkpoint attempt,
 repository and clean source SHA; existing task, checkpoint, evidence and CI
 gates still apply. These are local caller-record consistency checks, not proof
 of omitted facts, external persistence, independent recurrence or authority.
+
+For the v0.6 feedback candidate, learning read/mutation checks all local
+revisions for valid capture identity, observation prefix and lifecycle
+transitions. Linked duplicate captures require review. An implementation
+digest mismatch blocks a current improvement claim but does not erase an
+earlier observed reuse. These are caller-record consistency checks, not an
+authenticated or distributed append-only ledger.

@@ -90,8 +90,15 @@ def _review(row, root, inbox=None):
     if set(row.get("learning_links", [])) != linked:
         issues.append("Work learning links differ from linked feedback")
     inbox = Path(inbox) if inbox else root / "dev/learning"
-    candidates = learning.all_records(inbox, root) if inbox.is_dir() and not inbox.is_symlink() else []
+    candidates = []
+    findings = []
+    if inbox.is_dir() and not inbox.is_symlink():
+        audit, _ = learning.audit(inbox, root)
+        candidates = audit["records"]
+        findings = audit["findings"]
     known = {candidate["id"]: candidate for candidate in candidates}
+    duplicate_ids = {key for finding in findings if finding["issue"] == "DUPLICATE"
+                     for key in (finding["id"], finding["other"])}
     if not inbox.is_dir():
         issues.append("Learning inbox unavailable; do not infer no related candidates")
     if inbox.is_symlink():
@@ -140,11 +147,17 @@ def _review(row, root, inbox=None):
                     problems.append("Exact feedback observation missing; use learn observe with the current revision")
                 elif match == "INITIAL_CAPTURE" and disposition and disposition["kind"] == "reuse":
                     problems.append("Initial capture is not evidence of later reuse")
+                if candidate["id"] in duplicate_ids:
+                    problems.append("Linked candidate has a duplicate capture; reconcile inbox")
                 if disposition and disposition["ref"] == candidate["id"]:
                     if disposition["kind"] == "deferred" and candidate["state"] != "DEFERRED":
                         problems.append("Deferral not recorded in candidate")
-                    if disposition["kind"] == "improved" and not candidate.get("implementation"):
-                        problems.append("Improvement has no attached implementation evidence")
+                    if disposition["kind"] == "improved":
+                        if not candidate.get("implementation"):
+                            problems.append("Improvement has no attached implementation evidence")
+                        elif any(f["id"] == candidate["id"] and f["issue"] == "IMPLEMENTATION_CHANGED_OR_MISSING"
+                                 for f in findings):
+                            problems.append("Attached implementation drifted; revalidate before claiming improvement")
         result["issues"] = problems
         result["status"] = "REVIEW_REQUIRED" if problems else "RECORDED"
         results.append(result)

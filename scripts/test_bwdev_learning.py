@@ -110,6 +110,16 @@ class LearningTests(unittest.TestCase):
             self.invoke("attach", "L001", "--expect", "1", "--implementation-ref",
                         "stale", "--validation-evidence", "stale")
 
+    def test_mutation_refuses_rewritten_capture(self):
+        self.capture()
+        directory = self.inbox / "L001"
+        old = records.latest(directory)
+        records.publish(directory, 1, dict(old, evidence="different original evidence"))
+        with self.assertRaises(HarnessError):
+            self.invoke("attach", "L001", "--expect", "2",
+                        "--implementation-ref", "fixture:patch", "--validation-evidence", "fixture:tests")
+        self.assertEqual(records.latest(directory)["revision"], 2)
+
     def test_invalid_id_and_external_asset(self):
         with self.assertRaises(HarnessError):
             self.capture("../outside")

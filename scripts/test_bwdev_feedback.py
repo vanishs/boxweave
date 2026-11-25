@@ -2,6 +2,7 @@
 import argparse
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -166,6 +167,77 @@ class FeedbackTests(unittest.TestCase):
         records.publish(history, 1, dict(self.row, asset_feedback=[dict(self.item, observation="rewritten")]))
         with self.assertRaises(HarnessError):
             work.read_history(history)
+
+    def test_learning_history_cannot_drop_prior_observation(self):
+        self.observe()
+        directory = self.inbox / "BDH-L014"
+        original = records.latest(directory)
+        changed = dict(original, observations=original["observations"][1:])
+        records.publish(directory, original["revision"], changed)
+        self.assertEqual(self.review()[1], 1)
+        with self.assertRaises(HarnessError):
+            learning.audit(self.inbox, ROOT)
+
+    def test_learning_history_rejects_malformed_prior_revision(self):
+        self.observe()
+        prior = self.inbox / "BDH-L014" / "00000002.json"
+        data = records.read_json(prior)
+        prior.write_text(json.dumps(dict(data, kind="invalid")))
+        self.assertEqual(self.review()[1], 1)
+
+    def test_improvement_requires_current_implementation_digest(self):
+        self.observe()
+        directory = self.inbox / "BDH-L014"
+        original = records.latest(directory)
+        records.publish(directory, original["revision"],
+                        dict(original, implementation=dict(original["implementation"], asset_sha256="0"*64)))
+        row = dict(self.row, learning={"kind": "improved", "ref": "BDH-L014"})
+        result, code = self.review(row)
+        self.assertEqual(code, 1)
+        self.assertIn("Attached implementation drifted", " ".join(result["issues"]))
+        # A historic observation remains a fact even if the implementation later changes.
+        self.assertEqual(self.review()[1], 0)
+
+    def test_duplicate_linked_capture_requires_review(self):
+        self.observe()
+        directory = self.inbox / "BDH-L014"
+        duplicate = records.read_json(directory / "00000001.json")
+        records.publish(self.inbox / "Lduplicate", 0, dict(duplicate, id="Lduplicate"))
+        self.assertEqual(self.review()[1], 1)
+
+    def test_concurrent_observe_and_retry_preserve_original_observations(self):
+        directory = self.inbox / "BDH-L014"
+        initial = records.latest(directory)
+        expected = initial["revision"]
+
+        def command(label, revision):
+            return [sys.executable, str(ROOT / "dev/bwdev"), "--json", "learn",
+                    "observe", str(self.inbox), "BDH-L014", "--expect", str(revision),
+                    "--work-ref", "fixture/" + label, "--attempt-ref", "one",
+                    "--evidence", "fixture:" + label, "--observation", "Observed reuse",
+                    "--outcome", "helped"]
+
+        labels = ["writer-a", "writer-b"]
+        children = [subprocess.Popen(command(label, expected), stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True) for label in labels]
+        for child in children:
+            child.communicate(timeout=20)
+        self.assertEqual(sum(child.returncode == 0 for child in children), 1)
+        loser = next(label for label, child in zip(labels, children) if child.returncode != 0)
+        after = records.latest(directory)
+        self.assertEqual(after["revision"], expected + 1)
+        self.assertEqual(after["observations"][:-1], initial["observations"])
+        retry = subprocess.run(command(loser, expected + 1), capture_output=True, timeout=20)
+        self.assertEqual(retry.returncode, 0, retry.stderr.decode())
+        final = records.latest(directory)
+        self.assertEqual(final["revision"], expected + 2)
+        self.assertEqual(final["observations"][:-2], initial["observations"])
+        self.assertEqual({x["evidence"] for x in final["observations"][-2:]},
+                         {"fixture:writer-a", "fixture:writer-b"})
+        replay = subprocess.run(command(loser, expected + 2), capture_output=True, timeout=20)
+        self.assertNotEqual(replay.returncode, 0)
+        self.assertEqual(records.latest(directory), final)
+        self.assertEqual(learning.audit(self.inbox, ROOT)[1], 0)
 
     def test_wrong_link_missing_evidence_and_missing_inbox(self):
         self.observe()

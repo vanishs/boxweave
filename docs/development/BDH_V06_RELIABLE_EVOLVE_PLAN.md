@@ -92,3 +92,30 @@ Full repository staged format attempt 1f173f5f334e5c6e86bd2648251f9689
 exited 1 because the Box PATH lacked gofmt. No Go source is changed here.
 Validate every changed staged file and preserve full source format/build
 checks in CI; do not classify the environment failure as a code regression.
+
+## E4 follow-up: learning-history adversarial regression (2026-11-25)
+
+Box probe 29e874fddcd4dac34e18c951d4c40d87 (exit 0) reproduced three
+remaining false-positive cases on child head 6e6802bbf6b53ff98a43e49876e9aa3c31f865fc:
+dropping an earlier observation, corrupting an earlier revision, and
+claiming improvement despite an attached implementation digest mismatch.
+Validate every learning revision on read and before mutation; retain capture
+identity and append-only observations, enforce lifecycle transitions, and
+refuse further revisions after closure. Linked duplicate captures require
+reconciliation; a drifted attachment cannot substantiate current improvement.
+Historical reuse remains historical evidence rather than a current
+implementation claim. This does not authenticate evidence or detect
+coordinated rewriting of all local revisions; Git/PR review is still required.
+
+Box operation 4dccf3db70e947fc1ee21ae7b14c306e (exit 0) passed 69 regression
+tests, 12 Eval cases and learning audit. Operation
+9f7f73d3800667c706757b7babb04c93 (exit 0) verified both original real
+feedback envelopes still reconcile to L014 revision 7. Separate concurrent
+observe processes, loser retry after reread, and same-evidence replay refusal
+were added; 70 tests passed in operation 53b077f56fd5f242f49f4c0974ee480f
+(exit 0). No new candidate or observation was fabricated for synthetic
+regressions. This bounded improvement and its evidence extend the existing
+plan; L014 remains a candidate, no promotion. No native, parent or gate changes.
+
+Independent L4 review and fresh ordinary-product-task Agent acceptance are
+still outstanding; this is implementer review, not either independent gate.
