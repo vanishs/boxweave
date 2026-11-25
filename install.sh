@@ -5,6 +5,7 @@ set -eu
 exec python3 - "$@" <<'PY_BOXWEAVE_INSTALL'
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -440,49 +441,121 @@ def legacy_fresh_review(candidate, args, native_args):
     return plan, review
 
 
+def phase_unverified(name):
+    return InstallError("INSTALL_PHASE_UNVERIFIED: " + name +
+                        "; retain original files and journals; inspect install-status and doctor locally; do not reinstall blindly")
+
+
 def install_phase(name, command, capture=False):
     print("INSTALL_PHASE=" + name, flush=True)
     try:
         if capture:
             return command_json(command)
         subprocess.run(command, check=True)
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        raise InstallError("INSTALL_PHASE_UNVERIFIED: " + name +
-                           "; retain original files and journals; inspect install-status and doctor locally; do not reinstall blindly") from exc
+    except (OSError, ValueError, InstallError, subprocess.SubprocessError) as exc:
+        raise phase_unverified(name) from exc
+
+
+def normalize_oauth_origin(raw):
+    # Only a single terminal slash is accepted as a convenience.
+    # The installed CLI remains the authoritative validator.
+    origin = raw[:-1] if raw.endswith("/") else raw
+    if not 12 <= len(origin) <= 255 or not origin.startswith("https://"):
+        raise InstallError("OAUTH_ORIGIN_INVALID")
+    host = origin[len("https://"):]
+    labels = host.split(".")
+    if (len(labels) < 2 or host.endswith(".localhost") or
+            not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                    for label in labels)):
+        raise InstallError("OAUTH_ORIGIN_INVALID")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return origin
+    raise InstallError("OAUTH_ORIGIN_INVALID")
+
+
+def oauth_next(args, code):
+    # No origin or credential is echoed on failure.
+    print(code + ": controller installation complete; no reinstall needed")
+    prefix = "sudo runuser -u " + args.service_user + " -- /usr/local/bin/boxweave "
+    print("Check: " + prefix + "oauth-status -project " + args.project)
+    print("If PasswordConfigured is false, use oauth-setup once; otherwise keep the existing password.")
+    print("Continue: " + prefix + "oauth-set-origin -project " + args.project +
+          " -public-origin HTTPS_ORIGIN")
+
+
+def configure_oauth(identity, args, inp, out):
+    status_cmd = identity + ["oauth-status", "-project", args.project]
+    current = command_json(status_cmd)
+    # Older candidates lack PasswordConfigured; use the fresh Doctor observation.
+    password = current.get("PasswordConfigured", getattr(args, "oauth_password_configured", None))
+    if not isinstance(password, bool):
+        oauth_next(args, "OAUTH_PASSWORD_STATE_UNVERIFIED")
+        return 2
+    if not password:
+        out.write("Configure a new OAuth approval password? [y/N] ")
+        out.flush()
+        if inp.readline().strip().lower() != "y":
+            oauth_next(args, "OAUTH_CONFIGURATION_DEFERRED")
+            return 0
+        try:
+            subprocess.run(identity + ["oauth-setup", "-project", args.project],
+                           stdin=inp, stdout=out, stderr=out, check=True)
+        except (OSError, subprocess.SubprocessError):
+            oauth_next(args, "OAUTH_PASSWORD_SETUP_UNVERIFIED")
+            return 2
+        current = command_json(status_cmd)
+        if current.get("PasswordConfigured", True) is not True:
+            oauth_next(args, "OAUTH_PASSWORD_SETUP_UNVERIFIED")
+            return 2
+    origin = args.public_origin
+    if current.get("Enabled") is True and not origin:
+        print("OAUTH_CONFIGURED: existing OAuth configuration retained; remote authorization not verified")
+        return 0
+    for _ in range(3):
+        if not origin:
+            out.write("Existing HTTPS tunnel origin (empty for later): ")
+            out.flush()
+            origin = inp.readline().rstrip("\r\n")
+        if not origin:
+            oauth_next(args, "OAUTH_ORIGIN_MISSING")
+            return 0
+        try:
+            normalized = normalize_oauth_origin(origin)
+        except InstallError:
+            print("OAUTH_ORIGIN_INVALID: use an HTTPS DNS origin without path, port, userinfo, query or fragment")
+            origin = None
+            continue
+        try:
+            subprocess.run(identity + ["oauth-set-origin", "-project", args.project,
+                                       "-public-origin", normalized],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        except (OSError, subprocess.SubprocessError):
+            # The command might have committed before the reply failed.
+            # Observe state instead of blindly repeating a write.
+            pass
+        current = command_json(status_cmd)
+        if current.get("Enabled") is True and current.get("Origin") == normalized:
+            print("OAUTH_CONFIGURED: remote reachability and actual client authorization not verified")
+            print("MCP URL:", normalized + "/mcp")
+            return 0
+        oauth_next(args, "OAUTH_ORIGIN_APPLY_UNVERIFIED")
+        return 2
+    oauth_next(args, "OAUTH_ORIGIN_RETRY_LIMIT")
+    return 2
 
 
 def optional_oauth(identity, args):
-    # The controller is already installed. OAuth is separate, optional
-    # configuration, never a reason to restart or reinstall the controller.
+    # Controller installation is independently complete.
     try:
         with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
-            out.write("Configure a new OAuth approval password? [y/N] ")
-            out.flush()
-            if inp.readline().strip().lower() != "y":
-                print("OAUTH_CONFIGURATION_DEFERRED: local MCP installation remains complete; use oauth-status and the operator guide")
-                return
-            subprocess.run(identity + ["oauth-setup", "-project", args.project],
-                           stdin=inp, stdout=out, stderr=out, check=True)
-            origin = args.public_origin
-            if not origin:
-                out.write("Existing HTTPS tunnel origin (empty for later): ")
-                out.flush()
-                origin = inp.readline().strip()
-            if origin:
-                subprocess.run(identity + ["oauth-set-origin", "-project", args.project,
-                                           "-public-origin", origin], check=True)
-            current = command_json(identity + ["oauth-status", "-project", args.project])
-            if current.get("Enabled") is True and current.get("Origin") == origin and origin:
-                print("OAUTH_CONFIGURED: remote reachability and actual client authorization not verified")
-                print("MCP URL:", origin + "/mcp")
-            elif not origin and current.get("Enabled") is False and current.get("Origin") == "":
-                print("OAUTH_ORIGIN_MISSING: password setup succeeded; configure the HTTPS origin later")
-            else:
-                raise InstallError("OAuth status differs from requested configuration")
-    except (OSError, ValueError, InstallError, subprocess.SubprocessError):
-        # Never print a command exception containing configuration inputs.
-        print("OAUTH_CONFIGURATION_UNVERIFIED: controller installation complete; inspect oauth-status and finish configuration separately", file=sys.stderr)
-        raise SystemExit(2)
+            result = configure_oauth(identity, args, inp, out)
+    except (OSError, ValueError, InstallError, subprocess.SubprocessError, KeyboardInterrupt):
+        oauth_next(args, "OAUTH_CONFIGURATION_UNVERIFIED")
+        result = 2
+    if result:
+        raise SystemExit(result)
 
 
 def main():
@@ -734,31 +807,40 @@ def main():
             prepared = install_phase("NATIVE_PREPARE", [str(candidate), "native-prepare-apply", *native_args,
                  "-native-prepare-sha256", review["review_sha256"], "-approve-local"], capture=True)
             if prepared.get("status") != "APPLIED":
-                raise InstallError("native preparation incomplete; inspect original journal")
+                raise phase_unverified("NATIVE_PREPARE")
             prereq = install_phase("NATIVE_READBACK", [str(candidate), "native-prereq-plan", "-project", args.project], capture=True)
             if not prereq.get("config_ready") or not SHA_RE.fullmatch(prereq.get("review_sha256", "")):
-                raise InstallError("native configuration not ready; preserve staged installation")
+                raise phase_unverified("NATIVE_READBACK")
             print("Native prerequisite readback:", json.dumps(prereq), flush=True)
             install_phase("NATIVE_VERIFY", [str(candidate), "native-prereq-verify", "-project", args.project,
                             "-native-prereq-sha256", prereq["review_sha256"], "-approve-local"])
         if not args.upgrade:
             install_phase("ACTIVATE", [str(candidate), "install-activate", "-project", args.project,
                             "-service-user", args.service_user, "-incus-socket", str(sock), "-approve-local"])
-        install_phase("INSTALLED_STATUS", [str(candidate), "install-status", "-project", args.project,
-                        "-service-user", args.service_user, "-incus-socket", str(sock)])
+        installed_status = install_phase("INSTALLED_STATUS", [str(candidate), "install-status", "-project", args.project,
+                        "-service-user", args.service_user, "-incus-socket", str(sock)], capture=True)
+        print(json.dumps(installed_status), flush=True)
         if fresh_guided:
+            if (installed_status.get("binary_sha256") != sha or
+                    installed_status.get("native_project") != args.project or
+                    installed_status.get("service_user") != args.service_user or
+                    installed_status.get("service_active") is not True or
+                    installed_status.get("restart_required") is not False):
+                raise phase_unverified("INSTALLED_STATUS")
             installed = "/usr/local/bin/boxweave"
             identity = ["runuser", "-u", args.service_user, "--", installed]
-            doctor = json.loads(subprocess.check_output(identity + ["doctor", "-project", args.project], text=True))
+            doctor = install_phase("CONTROLLER_DOCTOR", identity + ["doctor", "-project", args.project], capture=True)
             print("Doctor:", json.dumps(doctor), flush=True)
-            if not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source):
-                raise InstallError("installed doctor build identity differs from reviewed release")
-            if not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready")):
-                raise InstallError("doctor not ready; inspect installed service")
+            if (doctor.get("version") != installed_status.get("version") or
+                    doctor.get("commit") != installed_status.get("build_commit") or
+                    (not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source)) or
+                    not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready"))):
+                raise phase_unverified("CONTROLLER_DOCTOR")
             policy = doctor.get("diagnostic", {}).get("forward_policy", {})
             effective = policy.get("reason") if policy.get("state") == "OBSERVED" else "unverified"
             print("RUNNING_SERVICE_FORWARD_POLICY=" + str(effective))
             print("GUIDED_INSTALL_COMPLETE: native config ready; packet/quota/PRS acceptance remains separate", flush=True)
+            args.oauth_password_configured = doctor.get("diagnostic", {}).get("ledger", {}).get("oauth", {}).get("password_configured")
             optional_oauth(identity, args)
     print("INSTALL_HELPER_APPLY_COMPLETE: inspect original installer manifest and native postflight; not HOST_GO PASS")
 

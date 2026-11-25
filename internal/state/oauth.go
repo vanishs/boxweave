@@ -30,8 +30,9 @@ var oauthPKCE = regexp.MustCompile("^[A-Za-z0-9_-]{43}$")
 var oauthVerifier = regexp.MustCompile("^[A-Za-z0-9._~-]{43,128}$")
 
 type OAuthSettings struct {
-	Origin  string
-	Enabled bool
+	Origin             string
+	Enabled            bool
+	PasswordConfigured bool
 }
 type OAuthIntent struct {
 	ClientID    string
@@ -101,7 +102,7 @@ func validOAuthRedirect(raw string) bool {
 func (s *Store) OAuthConfig(ctx context.Context) (OAuthSettings, error) {
 	var o, p string
 	err := s.db.QueryRowContext(ctx, "SELECT public_origin,password_hash FROM oauth_config WHERE id=1").Scan(&o, &p)
-	return OAuthSettings{Origin: o, Enabled: o != "" && p != ""}, err
+	return OAuthSettings{Origin: o, Enabled: o != "" && p != "", PasswordConfigured: p != ""}, err
 }
 func (s *Store) OAuthPasswordPresent(ctx context.Context) (bool, error) {
 	var v string

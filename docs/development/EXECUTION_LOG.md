@@ -14,3 +14,5 @@ See [status](../STATUS.md), [active plan](../process/IMPLEMENTATION_PLAN.md) and
 - 2026-11-25: #188 bounded H2B Legacy offline retirement candidate Box-tested. [Evidence and pending gates](PR188_H2B_BOX_ACCEPTANCE.md). Actual pinned RC13 read-only refusal and unchanged ledger PASS; new scope/original proof tests and existing 65 Python regressions PASS. Separate installed CI lane added. Historical Peer Root/ACL and partial Scoped offline cases remain blocked; no full H2B sign-off.
 
 - 2026-11-25: #188 H2C candidate: [Box acceptance and CI gates](PR188_H2C_BOX_ACCEPTANCE.md). 73 tests and real RC13 no-effect negative PASS. Native interruption/purge/reinstall CI required. Earlier offline native phases not signed off.
+
+- 2026-11-25: #188 H3A installer/OAuth phase candidate Box-tested. [Evidence and independent installed CI gates](PR188_H3A_BOX_ACCEPTANCE.md). Nine wrapper tests, Go OAuth regressions and real CLI temporary-ledger continuation PASS; retained labs and original controller credentials not modified. H2C latest native Scoped retirement and Legacy offline lanes remain failed; no full H2 sign-off. H3B not started.

@@ -145,6 +145,14 @@ assert x["service_active"] and not x["restart_required"] and len(x["retirement_u
 print("N2_INSTALLED_HELPER_ACTIVATION=PASS",flush=True)
 PY
 fi
+# H3A: real installed CLI with a private disposable DB, no live auth change.
+h3a_pid="$(sudo systemctl show boxweave.service -p MainPID --value)"
+sudo runuser -u boxweave -- "$installed" oauth-status -project "$project" > "$work/h3a-before.json"
+sudo python3 scripts/pr188_h3a_oauth.py --binary "$installed" --project "$project"
+sudo runuser -u boxweave -- "$installed" oauth-status -project "$project" > "$work/h3a-after.json"
+cmp "$work/h3a-before.json" "$work/h3a-after.json"
+test "$(sudo systemctl show boxweave.service -p MainPID --value)" = "$h3a_pid"
+echo PR188_H3A_INSTALLED_NO_EFFECT=PASS
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
 # D1 exact-head installed read-only observations before workload admission.
 d1_pid="$(sudo systemctl show boxweave.service -p MainPID --value)"
