@@ -50,7 +50,7 @@ func TestS2SDKNativeCorrelationMetadataAndFallback(t *testing.T) {
 
 func TestS2PrivateCorrelationDoesNotAuthenticate(t *testing.T) {
 	st, _, _, _ := fixture(t)
-	svc := &Service{Store: st, Native: native.Reader{Project: "bw-test"}}
+	svc := &Service{Store: st, Native: native.Reader{Project: testScopedProject}}
 	req := &mcp.CallToolRequest{
 		Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID: ""}},
 		Params: &mcp.CallToolParamsRaw{Meta: mcp.Meta{
@@ -65,7 +65,7 @@ func TestS2PrivateCorrelationDoesNotAuthenticate(t *testing.T) {
 
 func TestS2RequestPrincipalRequiresExplicitSDKCredential(t *testing.T) {
 	st, _, _, _ := fixture(t)
-	svc := &Service{Store: st, Native: native.Reader{Project: "bw-test"}}
+	svc := &Service{Store: st, Native: native.Reader{Project: testScopedProject}}
 	actor := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	credential := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	tests := []struct {
@@ -89,7 +89,7 @@ func TestS2RequestPrincipalRequiresExplicitSDKCredential(t *testing.T) {
 				req.Extra.TokenInfo.Extra["token_id"] = tc.token
 			}
 			principal, err := svc.requestPrincipal(req)
-			if tc.want && (err != nil || principal.ActorID != actor || principal.Layer != "bw-test" ||
+			if tc.want && (err != nil || principal.ActorID != actor || principal.Layer != testScopedProject ||
 				principal.TokenID != tc.token) {
 				t.Fatalf("valid SDK principal was not retained: %+v, %v", principal, err)
 			}

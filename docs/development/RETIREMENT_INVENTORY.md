@@ -48,3 +48,7 @@ P0 final closeout: the independent clean L2 diagnostic reproduced the native App
 ### P1a shared declarations retained
 
 See [P1a progress](CONSOLIDATION_PROGRESS.md#p1a--shared-native-helpers-box-verified-source-checkpoint). Fixed ledger and native preparation dependencies extracted into native_scope_common.go; pure binding, ACL rule key, guard plan and bounded conntrack remain in neutral files. The explicitly named network_peer_conntrack_legacy.go contains the legacy all-stopped bidirectional path, not permission to remove it before callers/tests convert. Source race and exact body comparison passed; all tests and native gate mappings retained. Remaining shared SQL and runtime dispatch dispositions OPEN.
+
+### P1b source fixture checkpoint
+
+Common source MCP fixture converted to Scoped; retained missing-peer classification, exact replay and actor/ownership denial. Real native ACK/WAL fixtures and Scoped read-only recovery proof remain OPEN; do not remove legacy recovery/dispatch/SQL until equivalent assertions are proven. See [P1b progress](CONSOLIDATION_PROGRESS.md#p1b--scoped-common-source-fixture-and-replay-checkpoint).

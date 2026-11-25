@@ -32,7 +32,7 @@ func TestS5A2HTTPRecoveryRefusesCrossLayerAndUntrustedApproval(t *testing.T) {
 		}
 		return r
 	}
-	original := seed("bw-test", "recovery-http-owned-original")
+	original := seed(testScopedProject, "recovery-http-owned-original")
 	foreign := seed("foreign-layer", "recovery-http-foreign-original")
 	connect := func(raw string) *mcp.ClientSession {
 		t.Helper()

@@ -64,3 +64,5 @@ The original historical report owns actual commands, IDs and results. These obse
 - [BDH-L012 revision 3](learning/BDH-L012/00000003.json): P0 closeout after #192 merge recorded actual exact-source CI and native gate separation; [work history](../docs/development/CONSOLIDATION_P0_CLOSE_WORK_HISTORY/00000002.json) reconciled by original local feedback operation. Reuse only, candidate remains open; no new implementation or promotion.
 
 - [BDH-L014 revision 10](learning/BDH-L014/00000010.json): actual P1a edit admission refusal followed by verified exclusive script and short Exec; [work feedback](../docs/development/CONSOLIDATION_P1A_WORK_HISTORY/00000002.json) reconciled. Reuse, no new implementation or promotion.
+
+- [BDH-L014 revision 11](learning/BDH-L014/00000011.json): P1b proactive exclusive transfer and exact readback; [append-only corrected work feedback](../docs/development/CONSOLIDATION_P1B_SOURCE_WORK_HISTORY/00000003.json) reconciled. Reuse, no promotion.

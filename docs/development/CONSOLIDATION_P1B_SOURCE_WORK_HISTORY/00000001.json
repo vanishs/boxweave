@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-first",
+  "authority": "Owner authorized continued P1 development in existing isolated development Box, no host changes, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Record recovered P1a CI and completed P1b source verification; publish tested bytes",
+  "objective": "Convert common source MCP fixture to Scoped and retain exact replay and refusal witnesses",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "a1e73da0e600b3e8d22c0082fb66c4d5d0b66944",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [],
+  "work_ref": "pr191/p1b-source"
+}

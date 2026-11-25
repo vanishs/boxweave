@@ -20,7 +20,7 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	receipt, err := st.Admit(ctx, state.Admission{
-		Layer: "bw-test", ActorID: adminInfo.ID, TokenID: adminInfo.ID,
+		Layer: testScopedProject, ActorID: adminInfo.ID, TokenID: adminInfo.ID,
 		Key: "mcp-s2-read-original-key-01", RequestID: "original",
 		Action: "box_create", SafeIntent: []byte(`{"name":"safe-test"}`),
 		WorkRef: "acceptance/session-1", AgentRef: "first-agent",
@@ -154,7 +154,7 @@ func TestS2InvalidCredentialCannotMutateAnyNativeTool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ops, err := st.ListOperations(ctx, state.OperationQuery{Layer: "bw-test", Requester: tok.ID})
+	ops, err := st.ListOperations(ctx, state.OperationQuery{Layer: testScopedProject, Requester: tok.ID})
 	if err != nil || len(ops.Operations) != 0 {
 		t.Fatalf("unauthorized admission recorded: %+v %v", ops, err)
 	}
@@ -169,7 +169,7 @@ func TestS2MCPQueuedCancelOriginalReceiptNeverIssuesNativeID(t *testing.T) {
 		t.Fatal(err)
 	}
 	target, err := st.Admit(ctx, state.Admission{
-		Layer: "bw-test", ActorID: tok.ID, TokenID: tok.ID,
+		Layer: testScopedProject, ActorID: tok.ID, TokenID: tok.ID,
 		Key: "s2-original-queued-exec-0001", Action: "box_exec",
 		RequestID: "queued-before-worker", SafeIntent: []byte(`{"guest_command_digest":"safe"}`),
 		ResourceKey: "box:alpha",
@@ -252,7 +252,7 @@ func TestS2MCPOriginalDeleteReplaysAfterBoxGoneWithoutNativeRead(t *testing.T) {
 	boxID := "native-uuid-stale"
 	key := "s2-deleted-original-key-00001"
 	original, err := store.Admit(ctx, state.Admission{
-		Layer: "bw-test", ActorID: actor.ID, TokenID: actor.ID, Key: key,
+		Layer: testScopedProject, ActorID: actor.ID, TokenID: actor.ID, Key: key,
 		Action: "box_delete", RequestID: "original-delete",
 		ResourceKey: "box:deleted-name", BoxUUID: boxID, Incarnation: boxID,
 		SafeIntent: []byte(`{"box_id":"native-uuid-stale"}`),
@@ -326,7 +326,7 @@ func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) 
 				t.Fatal(err)
 			}
 			original, err := st.Admit(ctx, state.Admission{
-				Layer: "bw-test", ActorID: actor.ID, TokenID: actor.ID,
+				Layer: testScopedProject, ActorID: actor.ID, TokenID: actor.ID,
 				Key: "s2-inflight-read-original-key", RequestID: "read-before-revocation",
 				Action: "box_exec", SafeIntent: []byte(`{"test":"no native effect"}`),
 			})

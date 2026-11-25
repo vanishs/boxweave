@@ -67,7 +67,7 @@ func TestH4AAuthenticatedSDKNavigation(t *testing.T) {
 	}
 	// Exact original seeded through real Admit; no native dispatch. The
 	// authenticated handler must refuse before it can reach the worker.
-	a := state.Admission{Layer: "bw-test", ActorID: info.ActorID, TokenID: info.ID, Key: "h4a-original-key-0001", Action: "box_create", ResourceKey: "box:h4a-locked", SafeIntent: []byte(`{"name":"h4a-locked"}`), RequestID: "h4a-fixture"}
+	a := state.Admission{Layer: testScopedProject, ActorID: info.ActorID, TokenID: info.ID, Key: "h4a-original-key-0001", Action: "box_create", ResourceKey: "box:h4a-locked", SafeIntent: []byte(`{"name":"h4a-locked"}`), RequestID: "h4a-fixture"}
 	original, e := st.Admit(ctx, a)
 	if e != nil {
 		t.Fatal(e)
@@ -126,7 +126,7 @@ func TestH4AAuthenticatedSDKNavigation(t *testing.T) {
 	if absent != hidden || strings.Contains(hidden.Error(), foreign.ID) {
 		t.Fatal(absent, hidden)
 	}
-	page, e := st.ListOperations(ctx, state.OperationQuery{Layer: "bw-test", Requester: info.ActorID})
+	page, e := st.ListOperations(ctx, state.OperationQuery{Layer: testScopedProject, Requester: info.ActorID})
 	if e != nil || len(page.Operations) != 1 || page.Operations[0].ID != original.ID || page.Operations[0].State != "UNKNOWN" {
 		t.Fatal(page, e)
 	}

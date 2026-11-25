@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/vanishs/boxweave/internal/install"
+	"github.com/vanishs/boxweave/internal/native"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vanishs/boxweave/internal/state"
@@ -65,6 +66,11 @@ func (s *Service) operatePeerSet(ctx context.Context, req *mcp.CallToolRequest, 
 		}
 		for _, id := range []string{in.SourceBoxID, in.TargetBoxID} {
 			if _, e = s.readOwned(ctx, req, id); e != nil {
+				// Keep absent, foreign and mismatched native identities
+				// indistinguishable from an unverified Peer scope.
+				if errors.Is(e, state.ErrNotFound) || errors.Is(e, native.ErrNotOwned) {
+					return nil, state.Receipt{}, peerScopeRefusal(state.ErrResourceLocked)
+				}
 				return nil, state.Receipt{}, e
 			}
 		}

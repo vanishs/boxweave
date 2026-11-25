@@ -21,7 +21,7 @@ func TestActivityOfficialMCPThreeViewsAndSameLayerTakeover(t *testing.T) {
 		t.Fatal(err)
 	}
 	original, err := st.Admit(ctx, state.Admission{
-		Layer: "bw-test", ActorID: tok.ActorID, TokenID: tok.ID,
+		Layer: testScopedProject, ActorID: tok.ActorID, TokenID: tok.ID,
 		Key: "activity-mcp-original-20261119-01", RequestID: "activity-original",
 		Action: "box_exec", SafeIntent: []byte("{}"), ResourceKey: "box:owned",
 		BoxUUID:     "bcfe32e0-3acf-4f21-8a66-332a84d741a4",
