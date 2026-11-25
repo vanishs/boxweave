@@ -14,6 +14,17 @@ test ! -e /usr/local/bin/boxweave
 test ! -e /etc/systemd/system/boxweave.service
 test ! -e /etc/systemd/system/boxweave-ipv4-retirement.service
 ! id boxweave >/dev/null 2>&1
+# Disposable hosted VM only: the root observer requires a protected parent chain.
+sudo python3 - <<'PYCI'
+import os, stat
+for path in ("/", "/usr", "/usr/local", "/usr/local/bin"):
+    st = os.lstat(path)
+    assert stat.S_ISDIR(st.st_mode) and st.st_uid == 0, path
+    if path in ("/usr/local", "/usr/local/bin"):
+        os.chmod(path, stat.S_IMODE(st.st_mode) & ~0o022)
+    assert not os.lstat(path).st_mode & 0o022, path
+    print("N2_ROOT_PARENT_PROTECTED", path, oct(stat.S_IMODE(os.lstat(path).st_mode)), flush=True)
+PYCI
 work="$(mktemp -d -p /tmp bw-n2-installed.XXXXXX)"
 chmod 0755 "$work"
 commit="$(git rev-parse HEAD)"

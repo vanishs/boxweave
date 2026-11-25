@@ -321,8 +321,9 @@ func ObserveMaintenanceInstallation(ctx context.Context, p Plan, db, selfSHA, co
 }
 
 type MaintenanceNative struct {
-	NativeCount         int    `json:"native_count"`
-	OwnershipComparison string `json:"ownership_comparison"`
+	OwnedPower          map[string]string `json:"owned_power,omitempty"`
+	NativeCount         int               `json:"native_count"`
+	OwnershipComparison string            `json:"ownership_comparison"`
 
 	Evidence          MaintenanceEvidence `json:"evidence"`
 	OwnedMatched      []string            `json:"owned_matched"`
@@ -404,6 +405,10 @@ func ObserveMaintenanceNative(ctx context.Context, p Plan, i MaintenanceInstalla
 				continue
 			}
 			o.OwnedMatched = append(o.OwnedMatched, b.UUID)
+			if o.OwnedPower == nil {
+				o.OwnedPower = map[string]string{}
+			}
+			o.OwnedPower[b.UUID] = v.Status
 			owners[b.Name] = b.UUID
 		}
 		o.NativeCount = len(inst)

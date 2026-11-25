@@ -32,6 +32,7 @@ SCOPED_GUARD_UNIT = Path("/etc/systemd/system/boxweave-scoped-guard.service")
 SCOPED_LIFECYCLE_UNIT = Path("/etc/systemd/system/boxweave-scoped-lifecycle.service")
 SCOPED_INCUS_DROPIN = Path("/etc/systemd/system/incus.service.d/50-boxweave-scoped-guard.conf")
 SCOPED_SOCKET = Path("/run/boxweave-scoped-lifecycle.sock")
+SCOPED_DRAIN = Path("/var/lib/boxweave-scoped-drain-v1.json")
 SCOPED_FENCE = Path("/var/lib/boxweave-scoped-retirement-v1.json")
 PURGE_FENCE = Path("/var/lib/boxweave-purge-v1.json")
 SCOPED_LOCK = Path("/run/lock/boxweave-scoped-retirement.lock")
@@ -55,7 +56,7 @@ class UninstallError(Exception):
 def refuse_scoped_retirement():
     """Legacy retirement, including resume, cannot consume a scoped installation."""
     for path in (SCOPED_JOURNAL, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT,
-                 SCOPED_INCUS_DROPIN, SCOPED_SOCKET, SCOPED_FENCE):
+                 SCOPED_INCUS_DROPIN, SCOPED_SOCKET, SCOPED_FENCE, SCOPED_DRAIN):
         try:
             path.lstat()
         except FileNotFoundError:
@@ -1266,7 +1267,7 @@ def scoped_plan(project):
     plan["scoped_journal"] = scoped_tree(SCOPED_JOURNAL)
     plan["mode"] = SCOPED_MODE
     if plan["sqlite"]["boxes"] or plan["incus_instances"]:
-        plan["blockers"].append("SCOPED_LIVE_BOXES: retire all Boxes, Peer and Forward through MCP first")
+        plan["blockers"].append("SCOPED_LIVE_BOXES: use the exact scoped normal drain coordinator")
     if not os.path.lexists(SCOPED_JOURNAL / "retirement-preimage.json"):
         plan["blockers"].append("SCOPED_RETIREMENT_PREIMAGE_MISSING: older installation has no verified original configuration")
     if not plan["blockers"]:
@@ -1423,6 +1424,10 @@ def scoped_archive(record):
             if file_fingerprint(src) != proof:
                 raise UninstallError("scoped unit changed before archive")
             scoped_copy(src, archive / ("scoped-" + src.name))
+        if plan.get("drain_receipt"):
+            if scoped_private_file(SCOPED_DRAIN, 1024 * 1024) != plan["drain_receipt"]:
+                raise UninstallError("original drain receipt changed before archive")
+            scoped_copy(SCOPED_DRAIN, archive / "drain-receipt.json")
         root_copy = archive / "scoped-journal"
         shutil.copytree(SCOPED_JOURNAL, root_copy, symlinks=True, copy_function=scoped_copy)
         # copytree's copy_function preserves neither owner nor modes; the
@@ -1460,6 +1465,9 @@ def scoped_archive_proof(record):
             ("exec-" + x["name"], x["info"]) for x in (cleanup.get("exec_archive") or {}).get("files", [])]:
         if scoped_private_file(archive / name)["sha256"] != proof["sha256"]:
             raise UninstallError("original scoped archive copy changed: " + name)
+    if plan.get("drain_receipt"):
+        if scoped_private_file(archive / "drain-receipt.json", 1024 * 1024)["sha256"] != plan["drain_receipt"]["sha256"]:
+            raise UninstallError("archived drain receipt changed")
     return archive, cleanup
 
 
@@ -1600,6 +1608,12 @@ def scoped_finish_fence(record):
         for path in (STATE, BINARY, UNIT, SCOPED_JOURNAL, SCOPED_GUARD_UNIT, SCOPED_LIFECYCLE_UNIT, SCOPED_INCUS_DROPIN, SCOPED_SOCKET):
             if os.path.lexists(path):
                 raise UninstallError("completed scoped original has remaining path")
+        if os.path.lexists(SCOPED_DRAIN):
+            proof = record["scoped_plan"].get("drain_receipt")
+            if not proof or scoped_private_file(SCOPED_DRAIN, 1024 * 1024) != proof:
+                raise UninstallError("completed drain receipt mismatch")
+            exact_unlink(SCOPED_DRAIN, proof)
+            scoped_sync_dir(SCOPED_DRAIN.parent)
         SCOPED_FENCE.unlink()
         scoped_sync_dir(SCOPED_FENCE.parent)
 
@@ -1684,6 +1698,35 @@ def scoped_main(args):
     if (args.apply or args.box_uuid or args.native_prepare_sha256 or args.confirm_host_sha256 or
             args.confirm_review_sha256 or args.scope not in (None, "full") or args.guided_full_plan):
         raise UninstallError("scoped retirement is full-only with terminal approval, not legacy apply/scope")
+    if os.path.lexists(SCOPED_DRAIN):
+        if not (args.resume_plan or args.resume):
+            raise UninstallError("SCOPED_DRAIN_IN_PROGRESS: review the original --resume-plan --scoped")
+        prior = read_json(AUDIT) if os.path.lexists(AUDIT) else {}
+        handed_off = prior.get("scoped_plan", {}).get("drain_receipt")
+        if handed_off and scoped_private_file(SCOPED_DRAIN, 1024 * 1024) != handed_off:
+            raise UninstallError("drain handoff proof mismatch")
+        if not handed_off:
+            if args.retirement_archive or os.path.lexists(SCOPED_FENCE):
+                raise UninstallError("unrecognized drain handoff evidence")
+            snapshot = scoped_drain_resume_preview(project)
+            print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
+            if args.resume_plan:
+                return 0 if snapshot["ready"] else 2
+            result = scoped_drain_approve(project, snapshot, resume=True)
+            print(json.dumps(result, indent=2, sort_keys=True), flush=True)
+            return 0
+    elif (args.plan or args.full) and not os.path.lexists(SCOPED_FENCE):
+        if args.retirement_archive:
+            raise UninstallError("retirement archive is only valid for original resume")
+        scoped_incus_active()
+        if native_instances(project, guided=False):
+            snapshot = scoped_drain_plan(project)
+            print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
+            if args.plan:
+                return 0 if snapshot["ready"] else 2
+            result = scoped_drain_approve(project, snapshot)
+            print(json.dumps(result, indent=2, sort_keys=True), flush=True)
+            return 0
     if args.resume_plan or args.resume:
         snapshot = scoped_resume_plan(project, args.retirement_archive)
         print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
@@ -1827,6 +1870,8 @@ def purge_inventory(project):
         permitted.update("installer-backup-" + x["name"] for x in (plan.get("installer_backup") or {}).get("files", []))
         if record.get("mode") == SCOPED_MODE:
             permitted.update(("cleanup.json", "scoped-journal", "scoped-original"))
+            if plan.get("drain_receipt"):
+                permitted.add("drain-receipt.json")
             permitted.update("scoped-" + Path(x).name for x in plan["scoped_units"])
         for path in sorted(archive.iterdir()):
             if path.name not in permitted:
@@ -2118,7 +2163,7 @@ def maintenance_local_inventory(project, uid):
     roots = {"state": STATE, "scoped_journal": SCOPED_JOURNAL, "backup": BACKUP,
              "retired": RETIRED, "audit": AUDIT, "legacy_journal": NATIVE,
              "scriptlet": SCRIPTLET, "scoped_fence": SCOPED_FENCE,
-             "purge_fence": PURGE_FENCE, "controller_binary": BINARY, "controller_unit": UNIT,
+             "purge_fence": PURGE_FENCE, "drain_fence": SCOPED_DRAIN, "controller_binary": BINARY, "controller_unit": UNIT,
              "legacy_root_unit": ROOT_UNIT, "legacy_retirement_unit": RETIREMENT_UNIT,
              "scoped_guard_unit": SCOPED_GUARD_UNIT, "scoped_lifecycle_unit": SCOPED_LIFECYCLE_UNIT,
              "scoped_incus_dropin": SCOPED_INCUS_DROPIN,
@@ -2158,7 +2203,7 @@ def maintenance_local_inventory(project, uid):
         except FileNotFoundError:
             return {"state": "ABSENT"}
         return {"state": "PRESENT_UNVERIFIED", "identity": maintenance_stat(st)}
-    for key in ("retired", "scriptlet", "scoped_fence", "purge_fence", "legacy_root_operations"):
+    for key in ("retired", "scriptlet", "scoped_fence", "purge_fence", "drain_fence", "legacy_root_operations"):
         observe(key, lambda key=key: presence(roots[key]))
     # Count even malformed historical names, without disclosing any names.
     try:
@@ -2322,7 +2367,7 @@ def maintenance_preview(project, retention, host, report, local, planner_sha256=
     if state.get("unknown_entries") or any(not x["safe"] for x in state.get("files", [])):
         issue("STATE_INVENTORY_UNSAFE", "HARD", "state", "Preserve unknown or unsafe entries")
     if local.get("audit", {}).get("state") == "STARTED" or any(
-            local.get(k, {}).get("state") != "ABSENT" for k in ("scoped_fence", "purge_fence")):
+            local.get(k, {"state": "ABSENT"}).get("state") != "ABSENT" for k in ("scoped_fence", "purge_fence", "drain_fence")):
         issue("INTERRUPTED_RETIREMENT", "HARD", "receipt", "Inspect original resume/purge plan; never start a second retirement")
     if local.get("scriptlet", {}).get("state") != "ABSENT":
         issue("SCRIPTLET_PROVENANCE_REQUIRED", "HARD", "scriptlet", "Preserve original global routing evidence")
@@ -2408,8 +2453,389 @@ def maintenance_main(args):
     return 0 if plan["status"] == "REVIEW_ONLY" else 2
 
 
+# Normal Scoped V2 live retirement. The preview is not an effect permit:
+# this separate exact plan is approved locally, durably fenced, then each
+# original is admitted using the existing restricted business handlers.
+DRAIN_MODE = "SCOPED_V2_NORMAL_DRAIN"
+
+
+def scoped_drain_scope(report):
+    l = report["ledger"]
+    n = report["native"]
+    return {"boxes": l["boxes"], "retired": l["retired_boxes"],
+            "peers": [p for p in l["peers"] if p["state"] != "REVOKED"],
+            "forwards": [f for f in l["forwards"] if f["state"] != "REVOKED"],
+            "power": n.get("owned_power") or {}}
+
+
+def scoped_drain_steps(scope):
+    steps = []
+    for p in scope["peers"]:
+        if (p["state"] != "CONFIRMED" or p["source"] != p["source_incarnation"] or
+                p["target"] != p["target_incarnation"] or not p.get("last_verified_original")):
+            raise UninstallError("unverified original Peer direction")
+        steps.append({"action": "box_peer_set", "box": p["source"], "target": p["target"]})
+    for f in scope["forwards"]:
+        if f["state"] != "CONFIRMED" or f["box"] != f["incarnation"]:
+            raise UninstallError("unverified original Forward")
+        steps.append({"action": "port_forward_delete", "box": f["box"], "forward": f["id"]})
+    for b in scope["boxes"]:
+        if b["uuid"] != b["incarnation"] or not b["create_proof"] or b["binding_state"] != "PINNED":
+            raise UninstallError("unverified original Box")
+        steps.append({"action": "box_stop", "box": b["uuid"]})
+        steps.append({"action": "box_delete", "box": b["uuid"]})
+    if len(steps) > 16384:
+        raise UninstallError("approved drain effects exceed supported bound")
+    return steps
+
+
+def scoped_drain_capture(project, active, observer=None, observer_sha=None, allow_drain=False):
+    """Bounded root read only, using the shared H1 observation and existing
+    exact scoped unit/archive readers. No approval or effect here."""
+    uid = pwd.getpwnam("boxweave").pw_uid
+    host = machine_sha()
+    before = maintenance_local_inventory(project, uid)
+    report = {}
+    blockers = []
+    try:
+        if before.get("mounted_artifacts") or before.get("capture"):
+            raise UninstallError("unsafe or unverified mount inventory")
+        report = maintenance_observe(observer or BINARY, observer_sha, project)
+    except (UninstallError, OSError, ValueError, TypeError, subprocess.TimeoutExpired) as exc:
+        blockers.append("DRAIN_OBSERVER_UNAVAILABLE:" + type(exc).__name__)
+    local = maintenance_local_inventory(project, uid)
+    if before != local or host != machine_sha():
+        report = {}
+        blockers.append("DRAIN_LOCAL_EVIDENCE_CHANGED")
+    # Only the current root-private drain is expected during its resume.
+    # A generic preview must still refuse this in-progress transaction.
+    classified = dict(local)
+    if allow_drain:
+        classified["drain_fence"] = {"state": "ABSENT"}
+    preview = maintenance_preview(project, "retain", host, report, classified)
+    for issue in preview["blockers"]:
+        if issue["severity"] == "INFO":
+            continue
+        if not active and issue["code"] == "CONTROLLER_RUNTIME_UNVERIFIED":
+            continue
+        if issue["code"] == "EXEC_ARCHIVE_POST_FENCE_PROOF_REQUIRED":
+            continue  # independently verify below
+        blockers.append(issue["code"] + ":" + issue["resource"])
+    i = report.get("installation") or {}
+    n = report.get("native") or {}
+    identity = i.get("identity") or {}
+    if (i.get("adapter") != "EXACT_RUNNING_OBSERVER_BINARY" or i.get("mode") != "SCOPED_V2" or
+            identity.get("static_contract") != "VERIFIED"):
+        blockers.append("DRAIN_EXACT_CURRENT_SCOPED_CANDIDATE_REQUIRED")
+    if (identity.get("service_unit") != ("ACTIVE" if active else "INACTIVE") or
+            active and identity.get("runtime") != "VERIFIED" or
+            identity.get("guard_unit") != "ACTIVE" or identity.get("lifecycle_unit") != "ACTIVE"):
+        blockers.append("DRAIN_EXACT_SERVICE_STATE_UNVERIFIED")
+    if n.get("base_acl_config") != "RECORDED_PREIMAGE_MATCH" or n.get("bridge_config") != "RECORDED_PREIMAGE_MATCH":
+        blockers.append("DRAIN_EXACT_NATIVE_PREIMAGE_UNVERIFIED")
+    if any(local.get(k, {}).get("state") != "ABSENT" for k in
+           ("backup", "scriptlet", "legacy_root_operations", "scoped_fence", "purge_fence")):
+        blockers.append("DRAIN_MIXED_OR_INTERRUPTED_INSTALLATION")
+    if local.get("audit", {}).get("state") not in ("ABSENT", "COMPLETE"):
+        blockers.append("DRAIN_ORIGINAL_AUDIT_UNSETTLED")
+    # Do not execute the historical binary or traverse unsafe state just
+    # to get a more favorable preview.
+    scope, immutable, witness = None, None, None
+    if report.get("coverage") == "BOUNDED_SOURCES_OBSERVED":
+        try:
+            scope = scoped_drain_scope(report)
+            if (set(scope["power"]) != {b["uuid"] for b in scope["boxes"]} or
+                    any(s not in ("Running", "Stopped") for s in scope["power"].values())):
+                blockers.append("DRAIN_NATIVE_POWER_UNVERIFIED")
+            if not isinstance(local.get("state"), dict) or local["state"].get("state") != "OBSERVED":
+                raise UninstallError("state metadata unavailable")
+            state_ids = {f["name"]: f["identity"] for f in local["state"]["files"]
+                         if f["name"] in ("ledger.sqlite", "install-manifest.json", SERVE_LOCK_NAME) and f["safe"]}
+            if len(state_ids) != 3:
+                blockers.append("DRAIN_REQUIRED_STATE_IDENTITY_UNVERIFIED")
+            # Existing uninstaller ledger reader adds the Exec GC blocker.
+            # Confirmed Peer/Forward/address dependencies are intentionally
+            # handled by the exact normal drain, not ignored by retirement.
+            sql = inspect_sqlite(STATE / "ledger.sqlite", guided=True)
+            allowed = ("peer_grants_NOT_RELEASED:", "forward_claims_NOT_RELEASED:",
+                       "network_address_fences_NOT_RELEASED:")
+            blockers.extend("DRAIN_" + b for b in sql["blockers"] if not b.startswith(allowed))
+            if sql["version"] != 6 or sql["unresolved_operations"]:
+                blockers.append("DRAIN_UNSETTLED_ORIGINALS")
+            exec_archive = inspect_exec_archive(uid)
+            if effective_unit() != str(UNIT):
+                blockers.append("DRAIN_EFFECTIVE_CONTROLLER_UNIT_UNVERIFIED")
+            units = scoped_units()
+            incus_pid = scoped_incus_active()
+            if i.get("adapter") == "EXACT_RUNNING_OBSERVER_BINARY":
+                command([str(BINARY), "install-status", "-project", project], timeout=90)
+            immutable = {"host": host, "project": project, "installed": i.get("installed_sha256"),
+                         "manifest": i.get("manifest_sha256"), "unit": i.get("unit_sha256"),
+                         "preimage": i.get("preimage", {}).get("sha256"), "units": units,
+                         "state_ids": state_ids, "exec_archive": exec_archive,
+                         "incus_pid": incus_pid, "audit": local.get("audit")}
+            witness = {"ledger": report.get("ledger_observation_sha256"),
+                       "native": n.get("evidence", {}).get("sha256"),
+                       "journal": local.get("scoped_journal", {}).get("tree"),
+                       "operations": sql["operations"]}
+            if (not all(VALID_SHA.fullmatch(x or "") for x in
+                        (witness["ledger"], witness["native"], immutable["preimage"],
+                         immutable["installed"], immutable["manifest"], immutable["unit"])) or
+                    not witness["journal"]):
+                blockers.append("DRAIN_WITNESS_INCOMPLETE")
+        except (UninstallError, OSError, ValueError, KeyError, TypeError) as exc:
+            blockers.append("DRAIN_STATIC_OR_LEDGER_PROOF_UNVERIFIED:" + type(exc).__name__)
+    return {"scope": scope, "immutable": immutable, "witness": witness,
+            "blockers": sorted(set(blockers)), "observation": preview}
+
+
+def scoped_drain_plan(project, observer=None, observer_sha=None):
+    if os.path.lexists(SCOPED_DRAIN) or os.path.lexists(SCOPED_FENCE) or os.path.lexists(PURGE_FENCE):
+        raise UninstallError("SCOPED_DRAIN_IN_PROGRESS: inspect the original resume")
+    capture = scoped_drain_capture(project, True, observer, observer_sha)
+    steps = []
+    try:
+        if capture["scope"] is not None:
+            steps = scoped_drain_steps(capture["scope"])
+    except UninstallError:
+        capture["blockers"].append("DRAIN_EXACT_EFFECT_SET_UNVERIFIED")
+    if not steps:
+        capture["blockers"].append("DRAIN_NO_VERIFIED_LIVE_BOX_SET")
+    plan = {"schema": 1, "mode": DRAIN_MODE, "project": project, "scope": "full",
+            "host_machine_id_sha256": machine_sha(), "retention": "retain",
+            "capture": capture, "steps": steps,
+            "actions": ["fence public controller admission; stop only exact Controller",
+                        "revoke exact confirmed Peer directions, remove exact Forward proxies",
+                        "stop and delete exact owned Boxes via durable business Operations",
+                        "archive original receipts; restore native preimage and retire owned services",
+                        "keep Incus, shared bridge/pool, dedicated account and unrelated resources"]}
+    plan["ready"] = not capture["blockers"] and capture["immutable"] is not None and capture["witness"] is not None
+    plan["blockers"] = capture["blockers"]
+    plan["review_sha256"] = sha(b"boxweave-scoped-normal-drain-v1\n" + canonical(plan))
+    if len(canonical(plan)) > 512 * 1024:
+        raise UninstallError("approved normal drain plan exceeds durable receipt bound")
+    return plan
+
+
+def scoped_drain_read(project):
+    scoped_private_file(SCOPED_DRAIN, 1024 * 1024)
+    r = read_json(SCOPED_DRAIN)
+    p = r["approved_plan"]
+    review = p["review_sha256"]
+    if (r["schema"] != 1 or p["schema"] != 1 or p["mode"] != DRAIN_MODE or not p["ready"] or
+            r["project"] != project or p["project"] != project or
+            p["host_machine_id_sha256"] != machine_sha() or r["review_sha256"] != review or
+            sha(b"boxweave-scoped-normal-drain-v1\n" + canonical({k: v for k, v in p.items() if k != "review_sha256"})) != review or
+            r["binary_sha256"] != p["capture"]["immutable"]["installed"] or
+            not VALID_SHA.fullmatch(r["expected_ledger_sha256"]) or not VALID_SHA.fullmatch(r["expected_native_sha256"]) or
+            not re.fullmatch(r"[a-f0-9]{32}", r["actor"]["id"]) or
+            r["phase"] not in ("APPROVED", "DRAINING", "DRAINED") or
+            r["index"] != len(r["completed"]) or not 0 <= r["index"] <= len(r["steps"]) or
+            r["steps"] != [{**step, "key": "scoped-drain-" + r["actor"]["id"] + "-" + str(n)}
+                           for n, step in enumerate(p["steps"])] or
+            r["phase"] == "APPROVED" and r["index"] != 0 or
+            r["phase"] == "DRAINED" and r["index"] != len(r["steps"])):
+        raise UninstallError("exact original normal drain receipt unverified")
+    if (len({x["id"] for x in r["completed"]}) != r["index"] or
+            any(not re.fullmatch(r"[a-f0-9]{32}", x["id"]) for x in r["completed"])):
+        raise UninstallError("normal drain original receipts unverified")
+    return r
+
+
+def scoped_drain_checkpoint(record):
+    scoped_write_json(SCOPED_DRAIN, record)
+
+
+def scoped_drain_begin(plan):
+    import secrets
+    import time
+    if not plan["ready"] or os.path.lexists(SCOPED_DRAIN):
+        raise UninstallError("normal drain not approved or original exists")
+    actor = {"id": secrets.token_hex(16), "expires": int(time.time()) + 30 * 86400}
+    witness = plan["capture"]["witness"]
+    r = {"schema": 1, "project": plan["project"], "binary_sha256": plan["capture"]["immutable"]["installed"],
+         "review_sha256": plan["review_sha256"], "approved_plan": plan, "phase": "APPROVED",
+         "actor": actor, "index": 0, "completed": [],
+         "steps": [{**step, "key": "scoped-drain-" + actor["id"] + "-" + str(n)}
+                   for n, step in enumerate(plan["steps"])],
+         "expected_ledger_sha256": witness["ledger"], "expected_native_sha256": witness["native"],
+         "last_witness": witness}
+    if len(canonical(r)) > 768 * 1024:
+        raise UninstallError("normal drain receipt exceeds durable bound")
+    scoped_drain_checkpoint(r)
+    return r
+
+
+def scoped_drain_expected(record, extra=None):
+    scope = json.loads(json.dumps(record["approved_plan"]["capture"]["scope"]))
+    receipts = record["completed"] + ([extra] if extra is not None else [])
+    for step, receipt in zip(record["steps"], receipts):
+        action, box = step["action"], step["box"]
+        if action == "box_peer_set":
+            scope["peers"] = [p for p in scope["peers"] if not (p["source"] == box and p["target"] == step["target"])]
+        elif action == "port_forward_delete":
+            scope["forwards"] = [f for f in scope["forwards"] if f["id"] != step["forward"]]
+        elif action == "box_stop":
+            scope["power"][box] = "Stopped"
+        elif action == "box_delete":
+            b = next(b for b in scope["boxes"] if b["uuid"] == box)
+            scope["boxes"] = [x for x in scope["boxes"] if x["uuid"] != box]
+            scope["power"].pop(box)
+            scope["retired"].append({"uuid": box, "incarnation": b["incarnation"],
+                                     "name": b["name"], "delete_original": receipt["id"]})
+        else:
+            raise UninstallError("unknown approved drain effect")
+    scope["retired"].sort(key=lambda b: b["uuid"])
+    return scope
+
+
+def scoped_drain_verify(record, active=False, extra=None, exact=True):
+    fresh = scoped_drain_capture(record["project"], active, allow_drain=True)
+    if fresh["blockers"] or fresh["immutable"] != record["approved_plan"]["capture"]["immutable"]:
+        raise UninstallError("SCOPED_DRAIN_REVIEW_DRIFT:" + ",".join(fresh["blockers"]))
+    if fresh["scope"] != scoped_drain_expected(record, extra):
+        raise UninstallError("SCOPED_DRAIN_APPROVED_EFFECT_SET_DRIFT")
+    if exact and fresh["witness"] != record["last_witness"]:
+        raise UninstallError("SCOPED_DRAIN_EXACT_WITNESS_DRIFT")
+    if extra is not None:
+        if fresh["witness"]["operations"] != record["last_witness"]["operations"] + 1:
+            raise UninstallError("SCOPED_DRAIN_UNEXPECTED_ORIGINAL_COUNT")
+        step = record["steps"][record["index"]]
+        l = fresh["observation"]["observation"]["ledger"]
+        if step["action"] == "box_peer_set":
+            matches = [p for p in l["peers"] if p["source"] == step["box"] and p["target"] == step["target"]]
+            if len(matches) != 1 or matches[0]["state"] != "REVOKED" or matches[0].get("last_verified_original") != extra["id"]:
+                raise UninstallError("SCOPED_DRAIN_PEER_ORIGINAL_POSTSTATE_UNVERIFIED")
+        if step["action"] == "port_forward_delete":
+            matches = [f for f in l["forwards"] if f["id"] == step["forward"]]
+            if len(matches) != 1 or matches[0]["state"] != "REVOKED" or matches[0].get("original") != extra["id"]:
+                raise UninstallError("SCOPED_DRAIN_FORWARD_ORIGINAL_POSTSTATE_UNVERIFIED")
+    return fresh
+
+
+def scoped_drain_call(record, probe):
+    # Root command reads only the fixed root-private current receipt. No
+    # arbitrary native args, bearer token, or external MCP session.
+    args = [str(BINARY), "native-scoped-drain-step"]
+    if probe:
+        args.append("--read-only")
+    raw, code = command(args, acceptable=(0, 1), timeout=1040)
+    try:
+        out = json.loads(raw)
+    except ValueError:
+        raise UninstallError("SCOPED_DRAIN_ORIGINAL_OUTCOME_UNVERIFIED: inspect original receipt")
+    if not isinstance(out, dict) or type(out.get("found")) is not bool:
+        raise UninstallError("SCOPED_DRAIN_ORIGINAL_OUTCOME_UNVERIFIED")
+    if not out["found"] and not code and probe:
+        return None
+    rec = out.get("receipt") or {}
+    step = record["steps"][record["index"]]
+    if (code or not out["found"] or rec.get("state") != "SUCCEEDED" or
+            rec.get("action") != step["action"] or rec.get("box_uuid") != step["box"] or
+            rec.get("incarnation") != step["box"] or rec.get("work_ref") != "scoped-drain-" + record["actor"]["id"] or
+            not re.fullmatch(r"[a-f0-9]{32}", rec.get("operation_id") or "")):
+        raise UninstallError("SCOPED_DRAIN_ORIGINAL_UNSETTLED: preserve exact original; never retry uncertain effect")
+    return {"id": rec["operation_id"]}
+
+
+def scoped_drain_resume_preview(project):
+    r = scoped_drain_read(project)
+    status, blocker = "REVIEW_ONLY", None
+    try:
+        if r["phase"] == "APPROVED":
+            active = systemd_status() == "active"
+            scoped_drain_verify(r, active)
+        elif r["index"] < len(r["steps"]):
+            prior = scoped_drain_call(r, True)
+            scoped_drain_verify(r, extra=prior, exact=prior is None)
+        else:
+            scoped_drain_verify(r)
+    except (UninstallError, OSError, ValueError, KeyError, TypeError) as exc:
+        status, blocker = "BLOCKED", str(exc)
+    return {"mode": DRAIN_MODE, "project": project, "phase": r["phase"], "status": status,
+            "ready": status == "REVIEW_ONLY", "review_sha256": r["review_sha256"],
+            "receipt_sha256": file_fingerprint(SCOPED_DRAIN)["sha256"],
+            "completed": r["completed"], "remaining": len(r["steps"]) - r["index"],
+            "blocker": blocker}
+
+
+def scoped_drain_continue(record):
+    project = record["project"]
+    r = scoped_drain_read(project)
+    if r != record:
+        raise UninstallError("original drain changed")
+    if r["phase"] == "APPROVED":
+        active = systemd_status() == "active"
+        scoped_drain_verify(r, active)
+        if active:
+            command(["systemctl", "stop", UNIT.name], timeout=90)
+        scoped_inactive(UNIT.name)
+        scoped_drain_verify(r)
+        r["phase"] = "DRAINING"
+        scoped_drain_checkpoint(r)
+    while r["index"] < len(r["steps"]):
+        scoped_inactive(UNIT.name)
+        prior = scoped_drain_call(r, True)
+        if prior is None:
+            scoped_drain_verify(r)
+            prior = scoped_drain_call(r, False)
+        # A lost local ACK advances only from the exact durable original,
+        # and the independently observed expected prefix. UNKNOWN never
+        # becomes a new dispatch or a fabricated success.
+        after = scoped_drain_verify(r, extra=prior, exact=False)
+        r["completed"].append(prior)
+        r["index"] += 1
+        r["last_witness"] = after["witness"]
+        r["expected_ledger_sha256"] = after["witness"]["ledger"]
+        r["expected_native_sha256"] = after["witness"]["native"]
+        scoped_drain_checkpoint(r)
+    scoped_drain_verify(r)
+    if r["phase"] != "DRAINED":
+        r["phase"] = "DRAINED"
+        scoped_drain_checkpoint(r)
+    # Transition to the original #182 empty native retirement protocol.
+    # Keep the first root fence through the handoff and archive its receipt.
+    with scoped_lock(MAINTENANCE_LOCK):
+        if scoped_drain_read(project) != r:
+            raise UninstallError("drain receipt changed at handoff")
+        scoped_drain_verify(r)
+        plan = scoped_plan(project)
+        if not plan["ready"]:
+            raise UninstallError("SCOPED_DRAIN_EMPTY_RETIREMENT_BLOCKED")
+        plan["drain_receipt"] = scoped_private_file(SCOPED_DRAIN, 1024 * 1024)
+        plan["drain_approved_review"] = r["review_sha256"]
+        inputs = {k: v for k, v in plan.items() if k not in ("ready", "actions", "retained", "review_sha256")}
+        plan["review_sha256"] = sha(canonical(inputs))
+        audited_write({"status": "STARTED", "mode": SCOPED_MODE, "scope": "full",
+                       "host_sha256": plan["host_machine_id_sha256"], "review_sha256": plan["review_sha256"],
+                       "phase": "APPROVED", "scoped_plan": plan, "archive": ""})
+        final = scoped_audit(project)
+        scoped_set_fence(final)
+    return scoped_continue(final)
+
+
+def scoped_drain_approve(project, snapshot, resume=False):
+    if not snapshot["ready"]:
+        raise UninstallError("normal Scoped retirement blocked; preserve exact original")
+    prompt = ("RESUME SCOPED " if resume else "REMOVE SCOPED ") + project
+    with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+        out.write("Type " + prompt + " to approve the exact scoped retirement: ")
+        out.flush()
+        if inp.readline().strip() != prompt:
+            raise UninstallError("OPERATOR_APPROVAL_REQUIRED")
+    with scoped_lock(SCOPED_LOCK):
+        with scoped_lock(MAINTENANCE_LOCK):
+            fresh = scoped_drain_resume_preview(project) if resume else scoped_drain_plan(project)
+            if fresh != snapshot:
+                raise UninstallError("normal scoped retirement evidence changed after approval")
+            r = scoped_drain_read(project) if resume else scoped_drain_begin(fresh)
+        return scoped_drain_continue(r)
+
+
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned uninstall; explicit full-only Scoped Peer v2 retirement after MCP cleanup")
+    parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned uninstall; explicit full-only Scoped Peer v2 retirement")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--maintenance-plan", action="store_true", help="H1B read-only full retirement preview; no apply authority")
     action.add_argument("--maintenance-recheck", action="store_true", help="read-only preview freshness comparison, not approval")
@@ -2420,7 +2846,7 @@ def main(argv=None):
     action.add_argument("--purge", action="store_true", help="permanently erase reviewed completed retirement data; resume same original if interrupted")
     action.add_argument("--resume-plan", action="store_true", help="read-only review of a stopped, archived STARTED retirement")
     action.add_argument("--resume", action="store_true", help="explicit terminal-approved continuation of the exact archived STARTED retirement")
-    parser.add_argument("--scoped", action="store_true", help="explicit full-only Scoped Peer v2 retirement; no native Box deletion")
+    parser.add_argument("--scoped", action="store_true", help="explicit full-only Scoped Peer v2 retirement with exact owned Box cleanup")
     parser.add_argument("--retirement-archive", help="exact root-private original retirement archive for resume")
     parser.add_argument("--guided-full-plan", action="store_true",
                         help="with --plan --scope full: use the same guided read-only archive/inventory checks as --full")

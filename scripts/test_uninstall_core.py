@@ -35,6 +35,7 @@ class FakeHost(unittest.TestCase):
             "BACKUP": root / "installer-backup",
             "RETIRED": root / "retired",
             "SCOPED_FENCE": root / "scoped-fence",
+            "SCOPED_DRAIN": root / "scoped-drain",
             "PURGE_FENCE": root / "purge-fence",
             "SCOPED_LOCK": root / "scoped-lock",
             "MAINTENANCE_LOCK": root / "maintenance-lock",
@@ -851,6 +852,8 @@ class FakeHost(unittest.TestCase):
         plan = {"ready": True, "mode": u.SCOPED_MODE, "project": "user-1001"}
         with mock.patch.object(u.os, "geteuid", return_value=0), \
                 mock.patch.object(u, "scoped_plan", return_value=plan), \
+                mock.patch.object(u, "scoped_incus_active", return_value="1234"), \
+                mock.patch.object(u, "native_instances", return_value=[]), \
                 mock.patch("builtins.open", side_effect=[io.StringIO("NO\n"), io.StringIO()]), \
                 contextlib.redirect_stdout(io.StringIO()):
             with self.assertRaisesRegex(u.UninstallError, "not approved"):

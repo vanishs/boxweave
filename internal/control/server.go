@@ -218,6 +218,11 @@ func (s *Service) Handler() http.Handler {
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: false})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.ScopedPeerFresh && install.CheckScopedDrainFence() != nil {
+			http.Error(w, "SCOPED_DRAIN_IN_PROGRESS", http.StatusServiceUnavailable)
+			return
+		}
+
 		w = &privateMCPWriter{ResponseWriter: w}
 		cfg := state.OAuthSettings{}
 		if s.Store != nil {

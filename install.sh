@@ -36,6 +36,7 @@ RESTRICTED_SOCKET = "/var/lib/incus/unix.socket.user"
 SCOPED_PATHS = (
     Path("/var/lib/boxweave-purge-v1.json"),
     Path("/var/lib/boxweave-scoped-retirement-v1.json"),
+    Path("/var/lib/boxweave-scoped-drain-v1.json"),
     Path("/var/lib/boxweave-scoped-peer-v2"),
     Path("/etc/systemd/system/boxweave-scoped-guard.service"),
     Path("/etc/systemd/system/boxweave-scoped-lifecycle.service"),

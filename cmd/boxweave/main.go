@@ -36,6 +36,25 @@ func run() error {
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if e := install.CheckScopedDrainCommand(command); e != nil {
+		return e
+	}
+	if command == "native-scoped-drain-step" {
+		if len(os.Args) == 2 {
+			return scopedDrainRoot(false)
+		}
+		if len(os.Args) == 3 && os.Args[2] == "--read-only" {
+			return scopedDrainRoot(true)
+		}
+		return state.ErrInvalid
+	}
+	if command == "scoped-drain-worker" {
+		if len(os.Args) != 2 {
+			return state.ErrInvalid
+		}
+		return scopedDrainWorker()
+	}
+
 	if command == "recover-apply-worker" {
 		if len(os.Args) != 2 {
 			return state.ErrInvalid

@@ -44,26 +44,30 @@ def interrupted(project):
 
 def main(project, receipt):
     assert os.geteuid() == 0
-    # Full retirement refuses even stopped owned Boxes. Delete only through MCP.
+    # Normal full retirement previews the exact owned fixture without effects.
     with LoopbackMCP("http://127.0.0.1:18650/mcp", token=token(receipt),
                      allow_mutations=True, timeout=60) as c:
         uuid = op(c, "box_create", {"name": "scoped-retirement-live", "cpu": 1,
                   "memory_mib": 256, "disk_gib": 2, "image": "local:boxweave-ubuntu-24.04",
-                  "internet": True, "start": False}, "pr182-live")["box_uuid"]
+                  "internet": True, "start": True}, "pr182-live")["box_uuid"]
+        second = op(c, "box_create", {"name": "scoped-retirement-peer", "cpu": 1, "memory_mib": 256, "disk_gib": 2, "image": "local:boxweave-ubuntu-24.04", "internet": True, "start": True}, "pr188-peer-fixture")["box_uuid"]
+        op(c, "box_peer_set", {"source_box_id": uuid, "target_box_id": second, "allow": True}, "pr188-peer-direction")
+        op(c, "port_forward_create", {"box_id": uuid, "protocol": "tcp", "host_bind": "127.0.0.1", "host_port": 18082, "guest_port": 18080}, "pr188-forward-fixture")
         before = pid("boxweave.service")
         p, plan = check_plan(project)
-        assert p.returncode == 2 and not plan["ready"] and any("SCOPED_LIVE_BOXES" in b for b in plan["blockers"]), (p.stderr, plan)
+        assert p.returncode == 0 and plan["ready"] and plan["mode"] == u.DRAIN_MODE, (p.stderr, plan)
+        assert [x["action"] for x in plan["steps"]] == ["box_peer_set", "port_forward_delete", "box_stop", "box_delete", "box_stop", "box_delete"]
+        assert {x["box"] for x in plan["steps"]} == {uuid, second}
         assert pid("boxweave.service") == before and not u.AUDIT.exists() and not u.SCOPED_FENCE.exists()
-        print("PR182_SCOPED_LIVE_REFUSED=PASS", flush=True)
-        op(c, "box_delete", {"box_id": uuid}, "pr182-delete")
-    # Add unrelated native resources only after MCP cleanup. Never remove them.
+        print("PR182_SCOPED_LIVE_PLAN=PASS", flush=True)
+    # Add unrelated native resources. Never remove them.
     run("incus", "project", "create", "pr182-foreign")
     run("incus", "network", "acl", "create", "pr182-foreign", "--project", "default")
     foreign = [run("incus", "query", "/1.0/projects/pr182-foreign"),
                run("incus", "query", "/1.0/network-acls/pr182-foreign?project=default")]
     incus_pid = pid("incus.service")
     p, plan = check_plan(project)
-    assert p.returncode == 0 and plan["ready"] and plan["scoped_native"]["retired"] >= 4, (p.stderr, plan)
+    assert p.returncode == 0 and plan["ready"] and len(plan["capture"]["scope"]["retired"]) >= 3, (p.stderr, plan)
     print("PR182_SCOPED_RETIRED_HISTORY=PASS", flush=True)
     tty_run([sys.executable, __file__, "--interrupt", project],
             [(("Type REMOVE SCOPED " + project).encode(), "REMOVE SCOPED " + project)])
@@ -89,6 +93,10 @@ def main(project, receipt):
                  u.SCOPED_LIFECYCLE_UNIT, u.SCOPED_INCUS_DROPIN, u.SCOPED_SOCKET, u.SCOPED_FENCE):
         assert not os.path.lexists(path), path
     assert (archive / "scoped-original").is_dir()
+    drain = json.loads((archive / "drain-receipt.json").read_text())
+    assert drain["phase"] == "DRAINED" and drain["index"] == len(drain["steps"]) == 6
+    assert not u.SCOPED_DRAIN.exists()
+    print("PR188_H2A_DRAIN_COMPLETE=PASS", flush=True)
     print("PR182_SCOPED_COMPLETE=PASS", flush=True)
     # Explicit data erasure is separate from verified full retirement.
     preview = json.loads(run("sh", "uninstall.sh", "--purge-plan", "--project", project))

@@ -589,70 +589,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		}
 		addStrictTool(server, &mcp.Tool{Name: action, Description: desc, Annotations: mutationAnnotations(false)},
 			func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-				if _, err := s.requestPrincipal(req); err != nil {
-					return nil, state.Receipt{}, err
-				}
-				intent := struct {
-					BoxID string `json:"box_id"`
-				}{in.BoxID}
-				original, already, err := s.replayNative(ctx, req, action, in.IdempotencyKey,
-					in.BoxID, in.WorkRef, in.AgentRef, intent)
-				if err != nil {
-					return nil, state.Receipt{}, err
-				}
-				if already {
-					return &mcp.CallToolResult{}, original, nil
-				}
-				box, err := s.readOwned(ctx, req, in.BoxID)
-				if err != nil {
-					return nil, state.Receipt{}, err
-				}
-				r, err := s.admitNative(ctx, req, action, in.IdempotencyKey, box.UUID, box.Incarnation,
-					"box:"+box.Name, in.WorkRef, in.AgentRef, struct {
-						BoxID string `json:"box_id"`
-					}{in.BoxID})
-				if err != nil {
-					return nil, state.Receipt{}, err
-				}
-				power := "start"
-				want := "Running"
-				if action == "box_stop" {
-					power = "stop"
-					want = "Stopped"
-				}
-				var nativeID string
-				effect := func(ctx context.Context) (string, error) {
-					if e := s.verifyLifecyclePin(ctx, r.ID, box); e != nil {
-						return "", state.PreDispatchError{Class: "LIFECYCLE_PIN_UNVERIFIED"}
-					}
-					boxStatus, _, e := s.Native.GetExactBox(ctx, box.Name, box.UUID)
-					if e != nil {
-						return "", preflightNative(e)
-					}
-					if boxStatus.NativeState == want {
-						return "", state.ErrNoNativeChange
-					}
-					id, e := s.Native.SetPower(ctx, box.Name, box.UUID, power)
-					nativeID = id
-					return id, preflightNative(e)
-				}
-				verify := func(ctx context.Context) error {
-					if nativeID != "" {
-						if err := nativeDone(ctx, s.Native, nativeID); err != nil {
-							return err
-						}
-					}
-					current, _, err := s.Native.GetExactBox(ctx, box.Name, box.UUID)
-					if err != nil {
-						return err
-					}
-					if current.NativeState != want {
-						return native.ErrUnverified
-					}
-					return s.verifyLifecyclePin(ctx, r.ID, box)
-				}
-				r, err = s.submitNative(r, effect, verify)
-				return &mcp.CallToolResult{}, r, err
+				return s.operateBoxPower(ctx, req, in, action)
 			})
 	}
 
@@ -730,66 +667,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "box_delete",
 		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Peer requires existing host-local PRS review/approval. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true)},
-		func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if _, err := s.requestPrincipal(req); err != nil {
-				return nil, state.Receipt{}, err
-			}
-			intent := struct {
-				BoxID string `json:"box_id"`
-			}{in.BoxID}
-			original, already, err := s.replayNative(ctx, req, "box_delete", in.IdempotencyKey,
-				in.BoxID, in.WorkRef, in.AgentRef, intent)
-			if err != nil {
-				return nil, state.Receipt{}, err
-			}
-			if already {
-				return &mcp.CallToolResult{}, original, nil
-			}
-			box, err := s.readOwned(ctx, req, in.BoxID)
-			if err != nil {
-				return nil, state.Receipt{}, err
-			}
-			r, err := s.admitNative(ctx, req, "box_delete", in.IdempotencyKey, box.UUID, box.Incarnation,
-				"box:"+box.Name, in.WorkRef, in.AgentRef, struct {
-					BoxID string `json:"box_id"`
-				}{in.BoxID})
-			if err != nil {
-				return nil, state.Receipt{}, err
-			}
-			var nativeID string
-			effect := func(ctx context.Context) (string, error) {
-				id, e := s.executeDependentDelete(ctx, r.ID, box)
-				nativeID = id
-				return id, e
-			}
-			verify := func(ctx context.Context) error {
-				if err := nativeDone(ctx, s.Native, nativeID); err != nil {
-					return err
-				}
-				if err := s.Native.ConfirmDeleteAbsence(ctx, box.Name); err != nil {
-					return err
-				}
-				if s.ScopedPeerFresh {
-					receipt, e := install.NativeScopedLifecycleCall(ctx, r.ID, "DELETE")
-					if e != nil || receipt.Project != box.Project || receipt.Name != box.Name || receipt.UUID != box.UUID || receipt.NativeID != nativeID {
-						return state.VerificationUncertain{Class: "SCOPED_DELETE_ROOT_ACL_UNVERIFIED"}
-					}
-					if e = s.Store.FinalizeVerifiedScopedDelete(ctx, r.ID, box); e != nil {
-						return state.VerificationUncertain{Class: "SCOPED_DELETE_TOMBSTONE_UNVERIFIED"}
-					}
-					return state.ErrVerifiedDeleteCommitted
-				}
-				if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
-					return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
-				}
-				// The original Delete has already committed. The independent bounded
-				// retirement loop discovers this tombstone; never hold the Delete
-				// worker open for an optional root witness.
-				return state.ErrVerifiedDeleteCommitted
-			}
-			r, err = s.submitNative(r, effect, verify)
-			return &mcp.CallToolResult{}, r, err
-		})
+		s.operateBoxDelete)
 
 	addStrictTool(server, &mcp.Tool{Name: "box_exec",
 		Description: "Execute a nonempty argv array asynchronously INSIDE an exact owned guest with typed guest UID/GID; read original stdout/stderr and observed exit_code via operation_output_get. Operation SUCCEEDED is not proof of guest exit 0.",
@@ -900,3 +778,130 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 // Ensure the wire handler imports only ordinary typed SDK/native data and
 // does not create an extra transport, host-shell endpoint or task service.
 var _ = http.StatusNotFound
+
+func (s *Service) operateBoxPower(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput, action string) (*mcp.CallToolResult, state.Receipt, error) {
+	if _, err := s.requestPrincipal(req); err != nil {
+		return nil, state.Receipt{}, err
+	}
+	intent := struct {
+		BoxID string `json:"box_id"`
+	}{in.BoxID}
+	original, already, err := s.replayNative(ctx, req, action, in.IdempotencyKey,
+		in.BoxID, in.WorkRef, in.AgentRef, intent)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	if already {
+		return &mcp.CallToolResult{}, original, nil
+	}
+	box, err := s.readOwned(ctx, req, in.BoxID)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	r, err := s.admitNative(ctx, req, action, in.IdempotencyKey, box.UUID, box.Incarnation,
+		"box:"+box.Name, in.WorkRef, in.AgentRef, struct {
+			BoxID string `json:"box_id"`
+		}{in.BoxID})
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	power := "start"
+	want := "Running"
+	if action == "box_stop" {
+		power = "stop"
+		want = "Stopped"
+	}
+	var nativeID string
+	effect := func(ctx context.Context) (string, error) {
+		if e := s.verifyLifecyclePin(ctx, r.ID, box); e != nil {
+			return "", state.PreDispatchError{Class: "LIFECYCLE_PIN_UNVERIFIED"}
+		}
+		boxStatus, _, e := s.Native.GetExactBox(ctx, box.Name, box.UUID)
+		if e != nil {
+			return "", preflightNative(e)
+		}
+		if boxStatus.NativeState == want {
+			return "", state.ErrNoNativeChange
+		}
+		id, e := s.Native.SetPower(ctx, box.Name, box.UUID, power)
+		nativeID = id
+		return id, preflightNative(e)
+	}
+	verify := func(ctx context.Context) error {
+		if nativeID != "" {
+			if err := nativeDone(ctx, s.Native, nativeID); err != nil {
+				return err
+			}
+		}
+		current, _, err := s.Native.GetExactBox(ctx, box.Name, box.UUID)
+		if err != nil {
+			return err
+		}
+		if current.NativeState != want {
+			return native.ErrUnverified
+		}
+		return s.verifyLifecyclePin(ctx, r.ID, box)
+	}
+	r, err = s.submitNative(r, effect, verify)
+	return &mcp.CallToolResult{}, r, err
+}
+func (s *Service) operateBoxDelete(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
+	if _, err := s.requestPrincipal(req); err != nil {
+		return nil, state.Receipt{}, err
+	}
+	intent := struct {
+		BoxID string `json:"box_id"`
+	}{in.BoxID}
+	original, already, err := s.replayNative(ctx, req, "box_delete", in.IdempotencyKey,
+		in.BoxID, in.WorkRef, in.AgentRef, intent)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	if already {
+		return &mcp.CallToolResult{}, original, nil
+	}
+	box, err := s.readOwned(ctx, req, in.BoxID)
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	r, err := s.admitNative(ctx, req, "box_delete", in.IdempotencyKey, box.UUID, box.Incarnation,
+		"box:"+box.Name, in.WorkRef, in.AgentRef, struct {
+			BoxID string `json:"box_id"`
+		}{in.BoxID})
+	if err != nil {
+		return nil, state.Receipt{}, err
+	}
+	var nativeID string
+	effect := func(ctx context.Context) (string, error) {
+		id, e := s.executeDependentDelete(ctx, r.ID, box)
+		nativeID = id
+		return id, e
+	}
+	verify := func(ctx context.Context) error {
+		if err := nativeDone(ctx, s.Native, nativeID); err != nil {
+			return err
+		}
+		if err := s.Native.ConfirmDeleteAbsence(ctx, box.Name); err != nil {
+			return err
+		}
+		if s.ScopedPeerFresh {
+			receipt, e := install.NativeScopedLifecycleCall(ctx, r.ID, "DELETE")
+			if e != nil || receipt.Project != box.Project || receipt.Name != box.Name || receipt.UUID != box.UUID || receipt.NativeID != nativeID {
+				return state.VerificationUncertain{Class: "SCOPED_DELETE_ROOT_ACL_UNVERIFIED"}
+			}
+			if e = s.Store.FinalizeVerifiedScopedDelete(ctx, r.ID, box); e != nil {
+				return state.VerificationUncertain{Class: "SCOPED_DELETE_TOMBSTONE_UNVERIFIED"}
+			}
+			return state.ErrVerifiedDeleteCommitted
+		}
+		if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
+			return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
+		}
+		// The original Delete has already committed. The independent bounded
+		// retirement loop discovers this tombstone; never hold the Delete
+		// worker open for an optional root witness.
+		return state.ErrVerifiedDeleteCommitted
+	}
+	r, err = s.submitNative(r, effect, verify)
+	return &mcp.CallToolResult{}, r, err
+}
