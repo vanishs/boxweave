@@ -4,7 +4,7 @@ Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY
 
 | Phase | Box / development status | CI / independent status |
 | --- | --- | --- |
-| P0 | Baseline and native roundtrip PASS; remaining alternate-fault/two-layer conversion rehearsal OPEN | Prior documentation-only quality PASS; latest checkpoint CI to verify; product CI NOT_RUN |
+| P0 | Runnable preflight done; L1 native roundtrip and alternate transport refusal PASS; full two-layer native bootstrap BLOCKED | Prior docs CI PASS; latest docs CI to verify; full product/native CI NOT_RUN |
 | P1 | NOT_STARTED | NOT_RUN |
 | P2 | NOT_STARTED | NOT_RUN |
 | P3 | NOT_STARTED | NOT_RUN |
@@ -118,6 +118,22 @@ Next: approve only the separately reviewed completed test archive purge; verify 
 | P0f | Normal/duplicate/restart Scoped startup and L1 installed route rehearsed. Alternate DB/proxy faults and complete two-layer S2.5 rehearsal NOT_RUN; these must be resolved at P1/P2 before removing old paths; independent acceptance at P5. |
 
 P0 baseline/preflight deliverables and native roundtrip complete; residual conversion rehearsal remains explicitly open. Do not interpret this as full P0 acceptance if the complete fault/two-layer rehearsal is required before P1. No product source change. Next safe implementation work after owner instruction: P1a neutral helper extraction with retained regression tests; do not remove old paths or weaken release gates before the remaining witnesses are established. Documentation-only CI remains separate from native/implementation acceptance; obtain exact latest HEAD CI before phase closure. No merge or publication.
+
+### P0f closure of runnable preflight; blocked native depth retained
+
+Resumed exact PR HEAD `27b1e934303871bcf54c62ec5e0dd07707eea199`: quality [45569938420](https://github.com/vanishs/boxweave/actions/runs/45569938420), job 139053825722 PASS; candidate [45569938346](https://github.com/vanishs/boxweave/actions/runs/45569938346), scope job 139053825730 PASS, product/native jobs SKIPPED. No pending original in ADMITTED/DISPATCHING/VERIFYING/UNKNOWN for work_ref pr191 at resume. Both retained Boxes confirmed Running; read-only preflight Execs `7e502f2fb1df7b558da7bf0c08d5ba9c` and `76236a02e915d52c91fa35b51b379901` exit 0, exact installed candidate and clean developer checkout.
+
+The complete [P0f conversion rehearsal and hold-point record](CONSOLIDATION_P0F_REHEARSAL.md), commit `2de0b697126002b771f05b2b6716107d192dfb69`, records actual alternate-ledger/unavailable-transport no-effect PASS, focused SQLite/Scoped fault tests (including explicit skips), every startup family and the new inner fixture. P0f native L2 bootstrap is BLOCKED: independent Incus package/daemon ready, partial native init exit 1, no managed bridge or configured default Profile, no L2 BoxWeave. Original `c3122bcb96e6d12959d4383e1b14c042` preserved; read-only re-plan refusal verified by `b54562cd18e4bbceb3de0fa36f3741ec`. L2 guest `6b9b5d09-af81-413c-91da-fb3f3fee55bc` retained inside L1 `ad5aeb01-4a88-454f-88b0-9686c67a1d8a`. Do not rerun bootstrap blindly, relax native confinement or destroy its evidence. No full two-layer installed/native or real proxy ACK-loss/WAL-cut acceptance claimed.
+
+| Slice | Latest status |
+| --- | --- |
+| P0a-P0e | DONE: prior exact baseline and full L1 native lifecycle roundtrip reused. |
+| P0f-a | DONE: concrete source/marker routing for 16 starts and 10 fault harnesses, normal/duplicate/restart and alternate-ledger failure boundary rehearsed. |
+| P0f-b | BOX_VERIFIED (bounded): local SQLite and modeled Scoped fault/atomicity tests; native accepted-ACK fault fixtures remain OPEN for P1/P2 independent CI. |
+| P0f-c | BLOCKED for full two-layer boot: independent inner native initialization failed and stopped safely; precise source/evidence and runner fallback recorded. |
+| P0 preflight | Runnable preflight deliverables closed; full nested result remains BLOCKED, not unconditional COMPLETE/PASS. Latest docs CI to verify. |
+
+P1a neutral helper extraction is safe independent work after owner instruction, while the unresolved full native gates stay mandatory before dependent removals. Do not weaken P0/P1/P2/P5 acceptance to claim a green stage. P1-P5 product implementation has not started. Learning disposition: existing resume and verification skills cover exact partial-state refusal; new observation about missing underlying native-init stderr belongs in P2/P3 diagnostic acceptance, not a promoted BDH asset. No host changes, no merge, no publication.
 
 ## Update this record at material checkpoints
 
