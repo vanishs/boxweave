@@ -2,6 +2,10 @@
 
 This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize any real host or production resource modification. It applies at every nested BoxWeave layer.
 
+## Development Harness
+
+Use [BDH start/continue/finish](../../dev/README.md) for every task; it wraps this existing workflow without replacing product phase contracts. Discover only relevant assets, capture learning at meaningful boundaries, and save a canonical checkpoint for handoff. For small documentation tasks the lightweight profile is sufficient under the existing quality policy. Future automation is not a prerequisite to use these rules.
+
 ## One-pass development phases and durable Agent handoff
 
 For the new v1 implementation, **begin with** [the single phased implementation plan](../process/IMPLEMENTATION_PLAN.md), [one common execution protocol](PHASE_EXECUTION_PROTOCOL.md), **only** the [current S1–S5 card](../history/development/phases/README.md) and the [current append-only action/decision-log checkpoint](EXECUTION_LOG.md#current-checkpoint). This workflow supplies detailed testing/review procedures **when the current phase reaches them**; it is not a second competing roadmap. Each major phase performs its own scoped research, implementation, positive/negative tests, independent/native acceptance, correction loop, original test rerun, and log/commit/handoff **in one pass**.

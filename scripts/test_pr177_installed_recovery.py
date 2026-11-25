@@ -1,11 +1,24 @@
 """Regression tests for the integrated installed-recovery fixture."""
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pr177_d4_installed_recovery as fixture
 
 
 class InstalledRecoveryTest(unittest.TestCase):
+    def test_restart_listener_waits_for_refused_connection(self):
+        with patch.object(fixture.socket, "create_connection", side_effect=[
+            ConnectionRefusedError(), MagicMock()
+        ]) as connect, patch.object(fixture.time, "sleep"):
+            fixture.wait_mcp_listener()
+        self.assertEqual(connect.call_count, 2)
+
+    def test_restart_listener_times_out_without_replay(self):
+        with patch.object(fixture.socket, "create_connection") as connect:
+            with self.assertRaises(TimeoutError):
+                fixture.wait_mcp_listener(timeout=0)
+            connect.assert_not_called()
+
     def test_legacy_cleanup_stops_only_sibling_before_delete(self):
         states = {"a": "Stopped", "sibling": "Running"}
         events = []

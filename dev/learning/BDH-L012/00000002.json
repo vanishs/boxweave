@@ -1,0 +1,31 @@
+{
+  "asset": "dev/skills/verification/SKILL.md",
+  "change_class": "L2",
+  "evidence": "GitHub Actions run 45550362915: cancelled during v0.3",
+  "fingerprint": "034255cb51d2698ca88e20e5195cfc840b83a19dea3d8449eb9ef92eaf26b19e",
+  "id": "BDH-L012",
+  "implementation": {
+    "asset_sha256": "7567b77b0aba2b495add76cda4b23b3d6a874af296d2a523b2d800ee23ef9516",
+    "evidence_ref": "Box original operation c7cd287388928addb723188c66d0708c: 40 tests, four Eval cases and actual v0.4 CI snapshot with old cancellation excluded",
+    "ref": "PR #189 v0.5: dev/harness/ci.py, dev/skills/verification/SKILL.md, scripts/test_bwdev_workflow.py and dev/evals/cases.json",
+    "source": {
+      "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+      "branch": "feat/v1-bdh-bootstrap",
+      "commit": "5ecf1e8bb655e1d6d66a5ec7566bbee14cd54407",
+      "worktree": "dirty"
+    }
+  },
+  "kind": "learning",
+  "observation": "A superseded quality-gate run can be cancelled by a later head; distinguish cancellation from test failure and inspect the current exact head.",
+  "revision": 2,
+  "schema_version": 1,
+  "source": {
+    "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+    "branch": "feat/v1-bdh-bootstrap",
+    "commit": "c85da136280d268e2548b06bde7c07a5a35d3d40",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "validation": "Review prior and current exact-head CI status before classifying a regression",
+  "work_ref": "boxweave/pr189-bwdev"
+}

@@ -1,0 +1,20 @@
+{
+  "asset": "dev/harness/check_runner.py",
+  "change_class": "L3",
+  "evidence": "Box operation 616764fdbba335c30245927811d103b6: builtin exit 5, explicit runner exit 2",
+  "fingerprint": "82eb1c182bbd19d8065fb771588a21e82f91f9186b5e33b90e3d5d95518c4cbc",
+  "id": "BDH-L013",
+  "kind": "learning",
+  "observation": "Python 3.12.3 in this Box returned 5 for zero-test discovery; use an explicit nonempty discovery contract rather than assume standard-library exit behavior across versions.",
+  "revision": 1,
+  "schema_version": 1,
+  "source": {
+    "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+    "branch": "feat/v1-bdh-bootstrap",
+    "commit": "5ecf1e8bb655e1d6d66a5ec7566bbee14cd54407",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "validation": "Require nonempty discovery and exercise an unmatched pattern",
+  "work_ref": "boxweave/pr189-bwdev"
+}

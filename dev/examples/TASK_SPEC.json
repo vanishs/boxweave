@@ -1,0 +1,1 @@
+{"work_ref":"example/task","objective":"Inspect and verify a bounded change","tasks":[{"id":"inspect","acceptance":"Record source and original evidence","depends_on":[]},{"id":"verify","acceptance":"Record applicable test outcomes","depends_on":["inspect"]}]}

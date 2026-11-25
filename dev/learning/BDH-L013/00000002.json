@@ -1,0 +1,31 @@
+{
+  "asset": "dev/harness/check_runner.py",
+  "change_class": "L3",
+  "evidence": "Box operation 616764fdbba335c30245927811d103b6: builtin exit 5, explicit runner exit 2",
+  "fingerprint": "82eb1c182bbd19d8065fb771588a21e82f91f9186b5e33b90e3d5d95518c4cbc",
+  "id": "BDH-L013",
+  "implementation": {
+    "asset_sha256": "df697dcfee4ccc690a9f31dd0d665bc7b8d7b4182f631f7dfde880fdb031288a",
+    "evidence_ref": "Box operation 616764fdbba335c30245927811d103b6 and test_zero_discovery_refused",
+    "ref": "PR #189 v0.5 check_runner.py and Makefile test-bwdev",
+    "source": {
+      "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+      "branch": "feat/v1-bdh-bootstrap",
+      "commit": "5ecf1e8bb655e1d6d66a5ec7566bbee14cd54407",
+      "worktree": "dirty"
+    }
+  },
+  "kind": "learning",
+  "observation": "Python 3.12.3 in this Box returned 5 for zero-test discovery; use an explicit nonempty discovery contract rather than assume standard-library exit behavior across versions.",
+  "revision": 2,
+  "schema_version": 1,
+  "source": {
+    "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+    "branch": "feat/v1-bdh-bootstrap",
+    "commit": "5ecf1e8bb655e1d6d66a5ec7566bbee14cd54407",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "validation": "Require nonempty discovery and exercise an unmatched pattern",
+  "work_ref": "boxweave/pr189-bwdev"
+}

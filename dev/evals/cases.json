@@ -1,0 +1,248 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "installer-context",
+      "kind": "context",
+      "paths": [
+        "internal/install"
+      ],
+      "query": "",
+      "expected_ids": [
+        "knowledge.maintenance",
+        "skill.verification",
+        "skill.box-development"
+      ]
+    },
+    {
+      "id": "old-cancelled-current-success",
+      "kind": "ci",
+      "repository": "owner/repo",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "snapshot": {
+        "schema_version": 1,
+        "repository": "owner/repo",
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runs": [
+          {
+            "id": 1,
+            "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "event": "pull_request",
+            "path": ".github/workflows/quality-gate.yml",
+            "status": "completed",
+            "conclusion": "cancelled"
+          },
+          {
+            "id": 2,
+            "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "event": "pull_request",
+            "path": ".github/workflows/quality-gate.yml",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      "expected_states": [
+        "REPORTED_SUCCESS"
+      ]
+    },
+    {
+      "id": "missing-current-ci",
+      "kind": "ci",
+      "repository": "owner/repo",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "snapshot": {
+        "schema_version": 1,
+        "repository": "owner/repo",
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runs": [
+          {
+            "id": 1,
+            "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "event": "pull_request",
+            "path": ".github/workflows/quality-gate.yml",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      "expected_states": [
+        "MISSING"
+      ]
+    },
+    {
+      "id": "dependency-blocked",
+      "kind": "task",
+      "spec": {
+        "work_ref": "fixture",
+        "objective": "preserve dependency",
+        "tasks": [
+          {
+            "id": "first",
+            "acceptance": "proof",
+            "depends_on": [],
+            "state": "BLOCKED",
+            "note": "fixture"
+          },
+          {
+            "id": "second",
+            "acceptance": "proof",
+            "depends_on": [
+              "first"
+            ],
+            "state": "PENDING"
+          },
+          {
+            "id": "independent",
+            "acceptance": "proof",
+            "depends_on": [],
+            "state": "PENDING"
+          }
+        ]
+      },
+      "expected_ready": [
+        "independent"
+      ]
+    },
+    {
+      "id": "deferred-related",
+      "kind": "learning",
+      "rows": [
+        {
+          "id": "fixture-deferred",
+          "state": "DEFERRED",
+          "work_ref": "fixture/a",
+          "evidence": "fixture:original",
+          "observation": "Bounded transfer admission",
+          "asset": "dev/skills/box-development/SKILL.md",
+          "domains": [
+            "box-exec"
+          ],
+          "signals": [
+            "admission"
+          ],
+          "task_kinds": [
+            "development"
+          ],
+          "reconsider": {
+            "reason": "later",
+            "when": "next admission",
+            "observation_count": 0
+          },
+          "observations": []
+        }
+      ],
+      "selection": {
+        "domains": [
+          "box-exec"
+        ]
+      },
+      "expected_ids": [
+        "fixture-deferred"
+      ]
+    },
+    {
+      "id": "deferred-unrelated",
+      "kind": "learning",
+      "rows": [
+        {
+          "id": "fixture-deferred",
+          "state": "DEFERRED",
+          "work_ref": "fixture/a",
+          "evidence": "fixture:original",
+          "observation": "Bounded transfer admission",
+          "asset": "dev/skills/box-development/SKILL.md",
+          "domains": [
+            "box-exec"
+          ],
+          "signals": [
+            "admission"
+          ],
+          "task_kinds": [
+            "development"
+          ],
+          "reconsider": {
+            "reason": "later",
+            "when": "next admission",
+            "observation_count": 0
+          },
+          "observations": []
+        }
+      ],
+      "selection": {
+        "task_kind": "guidance",
+        "query": "calendar"
+      },
+      "expected_ids": []
+    },
+    {
+      "id": "unknown-target-not-complete",
+      "kind": "work",
+      "envelope": {
+        "kind": "work",
+        "schema_version": 1,
+        "work_ref": "example/support",
+        "attempt_ref": "first",
+        "task_kind": "operations",
+        "objective": "Guide an authorized installation migration",
+        "risk": "high",
+        "authority": "Read-only guidance; destructive and privileged effects need explicit exact-target approval",
+        "target": {
+          "kind": "unknown",
+          "ref": null,
+          "version": null,
+          "source_sha": null
+        },
+        "state": "RECORDED",
+        "next_safe_action": "Ask for observed version and read relevant installation contract",
+        "evidence": [
+          "fixture"
+        ],
+        "used_assets": [
+          "knowledge.maintenance"
+        ],
+        "learning": {
+          "kind": "none",
+          "ref": "fixture"
+        }
+      },
+      "expected_states": [
+        "INVALID"
+      ]
+    },
+    {
+      "id": "no-checkout-handoff",
+      "kind": "work",
+      "envelope": {
+        "kind": "work",
+        "schema_version": 1,
+        "work_ref": "example/support",
+        "attempt_ref": "first",
+        "task_kind": "operations",
+        "objective": "Guide an authorized installation migration",
+        "risk": "high",
+        "authority": "Read-only guidance; destructive and privileged effects need explicit exact-target approval",
+        "target": {
+          "kind": "unknown",
+          "ref": null,
+          "version": null,
+          "source_sha": null
+        },
+        "state": "HANDOFF",
+        "next_safe_action": "Ask for observed version and read relevant installation contract",
+        "evidence": [],
+        "used_assets": [
+          "knowledge.maintenance"
+        ],
+        "learning": {
+          "kind": "pending",
+          "ref": "remote unavailable"
+        },
+        "boundary": "handoff"
+      },
+      "expected_states": [
+        "HANDOFF"
+      ]
+    }
+  ]
+}

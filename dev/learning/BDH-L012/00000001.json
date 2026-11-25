@@ -1,0 +1,20 @@
+{
+  "asset": "dev/skills/verification/SKILL.md",
+  "change_class": "L2",
+  "evidence": "GitHub Actions run 45550362915: cancelled during v0.3",
+  "fingerprint": "034255cb51d2698ca88e20e5195cfc840b83a19dea3d8449eb9ef92eaf26b19e",
+  "id": "BDH-L012",
+  "kind": "learning",
+  "observation": "A superseded quality-gate run can be cancelled by a later head; distinguish cancellation from test failure and inspect the current exact head.",
+  "revision": 1,
+  "schema_version": 1,
+  "source": {
+    "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+    "branch": "feat/v1-bdh-bootstrap",
+    "commit": "c85da136280d268e2548b06bde7c07a5a35d3d40",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "validation": "Review prior and current exact-head CI status before classifying a regression",
+  "work_ref": "boxweave/pr189-bwdev"
+}

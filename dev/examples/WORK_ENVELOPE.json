@@ -1,0 +1,16 @@
+{
+  "kind": "work",
+  "schema_version": 1,
+  "work_ref": "example/support",
+  "attempt_ref": "first",
+  "task_kind": "operations",
+  "objective": "Guide an authorized installation migration",
+  "risk": "high",
+  "authority": "Read-only guidance; destructive and privileged effects need explicit exact-target approval",
+  "target": {"kind": "unknown", "ref": null, "version": null, "source_sha": null},
+  "state": "ACTIVE",
+  "next_safe_action": "Ask for observed version and read relevant installation contract",
+  "evidence": [],
+  "used_assets": ["knowledge.maintenance"],
+  "learning": null
+}

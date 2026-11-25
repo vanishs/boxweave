@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check lint test test-race test-mcp-python test-uninstall test-stable-gate verify hooks
+.PHONY: fmt fmt-check lint test test-race test-mcp-python test-uninstall test-stable-gate test-bwdev verify hooks
 
 GO ?= go
 PYTHON ?= python3
@@ -30,7 +30,10 @@ test-uninstall:
 test-stable-gate:
 	$(PYTHON) -m unittest discover -s scripts -p 'test_v1_stable_gate.py' -q
 
-verify: lint test-race test-mcp-python test-uninstall test-stable-gate
+test-bwdev:
+	$(PYTHON) dev/harness/check_runner.py 'test_bwdev*.py'
+
+verify: lint test-race test-mcp-python test-uninstall test-stable-gate test-bwdev
 	$(PYTHON) -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'
 	$(PYTHON) -m unittest discover -s scripts -p 'test_pr177_installed_recovery.py' -q
 
