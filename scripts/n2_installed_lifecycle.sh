@@ -194,8 +194,10 @@ D3ABSENT
 test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
 # H1A uses the installed exact-head observer, without requiring controller runtime.
 sudo python3 scripts/pr188_h1a_observe.py "$project" active-empty
+sudo python3 scripts/pr188_h1b_plan.py "$project" active-empty
 sudo systemctl stop boxweave.service
 sudo python3 scripts/pr188_h1a_observe.py "$project" offline-empty
+sudo python3 scripts/pr188_h1b_plan.py "$project" offline-empty --negative-fixtures
 sudo systemctl start boxweave.service
 sudo systemctl is-active --quiet boxweave.service
 
@@ -210,6 +212,7 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   fi
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
   sudo python3 scripts/pr188_h1a_observe.py "$project" live
+  sudo python3 scripts/pr188_h1b_plan.py "$project" live --negative-fixtures
   sudo "$installed" doctor -project "$project" > "$work/d2-scoped-active.json"
   python3 - "$work/d2-scoped-active.json" <<'D2ACTIVE'
 import json,sys

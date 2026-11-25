@@ -1968,9 +1968,444 @@ def purge_main(args):
     return 0
 
 
+# H1B preview only. This is deliberately not accepted by --apply, --full,
+# --scoped, --purge or the existing approved retirement protocol.
+MAINTENANCE_PLAN_SCHEMA = 1
+MAINTENANCE_OBSERVER_CAP = 128 * 1024 * 1024
+
+
+@contextmanager
+def maintenance_observer_fd(path, expected):
+    """Open a root-trusted executable by FD, never hash then exec a pathname."""
+    path = Path(path)
+    if not path.is_absolute() or ".." in path.parts or path == Path("/"):
+        raise UninstallError("maintenance observer requires an absolute clean path")
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for part in path.parts[1:-1]:
+            parent = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW |
+                             os.O_CLOEXEC, dir_fd=fd)
+            os.close(fd)
+            fd = parent
+            st = os.fstat(fd)
+            if st.st_uid != 0 or st.st_mode & 0o022:
+                raise UninstallError("maintenance observer parent is not root-trusted")
+        executable = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC |
+                             os.O_NONBLOCK, dir_fd=fd)
+        try:
+            before = os.fstat(executable)
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != 0 or
+                    before.st_nlink != 1 or before.st_mode & 0o6022 or
+                    not before.st_mode & 0o111 or not 0 < before.st_size <= MAINTENANCE_OBSERVER_CAP):
+                raise UninstallError("unsafe maintenance observer executable")
+            digest = hashlib.sha256()
+            total = 0
+            while True:
+                data = os.read(executable, 1024 * 1024)
+                if not data:
+                    break
+                total += len(data)
+                if total > MAINTENANCE_OBSERVER_CAP:
+                    raise UninstallError("maintenance observer exceeds size bound")
+                digest.update(data)
+            actual = digest.hexdigest()
+            if expected and actual != expected:
+                raise UninstallError("maintenance observer checksum mismatch")
+            if total != before.st_size or maintenance_stat(os.fstat(executable)) != maintenance_stat(before):
+                raise UninstallError("maintenance observer changed during hash")
+            yield executable, actual
+            if maintenance_stat(os.fstat(executable)) != maintenance_stat(before):
+                raise UninstallError("maintenance observer changed during observation")
+        finally:
+            os.close(executable)
+    finally:
+        os.close(fd)
+
+
+def maintenance_stat(info):
+    return [info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode,
+            info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+
+
+def maintenance_observe(path, expected, project):
+    with maintenance_observer_fd(path, expected) as (fd, digest):
+        env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+               "HOME": "/root", "LC_ALL": "C", "LANG": "C"}
+        result = subprocess.run(
+            ["/proc/self/fd/" + str(fd), "doctor", "-maintenance", "-project", project],
+            pass_fds=(fd,), capture_output=True, timeout=60, env=env, check=False)
+        if result.returncode not in (0, 1) or len(result.stdout) > 16 * 1024 * 1024:
+            raise UninstallError("maintenance observer unavailable")
+        report = json.loads(result.stdout)
+        if (not isinstance(report, dict) or report.get("version") != 1 or
+                report.get("scope") != project or report.get("observer_sha256") != digest or
+                report.get("cross_source_atomic") is not False or
+                (result.returncode == 0) != (report.get("coverage") == "BOUNDED_SOURCES_OBSERVED")):
+            raise UninstallError("maintenance observer contract or identity mismatch")
+        return report
+
+
+def maintenance_mounts():
+    # mountinfo also detects bind mounts on the same device. Do not scan
+    # through an independently mounted owned artifact (including descendants).
+    raw = Path("/proc/self/mountinfo").read_bytes()
+    if len(raw) > 4 * 1024 * 1024:
+        raise UninstallError("mount inventory exceeds bound")
+    points = []
+    for line in raw.splitlines():
+        fields = line.split()
+        if len(fields) < 10 or b"-" not in fields:
+            raise UninstallError("mount inventory unverified")
+        point = re.sub(rb"\\([0-7]{3})", lambda m: bytes([int(m[1], 8)]), fields[4])
+        points.append(os.fsdecode(point))
+    return points
+
+
+def maintenance_under_mount(path, points):
+    root = str(path)
+    return any(x == root or x.startswith(root + "/") for x in points)
+
+
+def maintenance_state_inventory(uid):
+    """Metadata only for mutable SQLite/WAL; H1A owns all logical DB reads."""
+    try:
+        fd = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return {"state": "ABSENT"}
+    try:
+        start = os.fstat(fd)
+        if start.st_uid != uid or stat.S_IMODE(start.st_mode) != 0o700:
+            return {"state": "UNSAFE"}
+        files, unknown = [], 0
+        with os.scandir(fd) as entries:
+            for count, entry in enumerate(entries, 1):
+                if count > 8192:
+                    return {"state": "UNVERIFIED", "reason": "STATE_INVENTORY_BOUND"}
+                st = entry.stat(follow_symlinks=False)
+                name = entry.name
+                if name not in STATE_FILES and name != EXEC_ARCHIVE_NAME:
+                    unknown += 1
+                    continue
+                good = (st.st_uid == uid and
+                        (stat.S_ISDIR(st.st_mode) and stat.S_IMODE(st.st_mode) == 0o700
+                         if name == EXEC_ARCHIVE_NAME else
+                         stat.S_ISREG(st.st_mode) and st.st_nlink == 1 and
+                         stat.S_IMODE(st.st_mode) == 0o600))
+                # For active DB components the exact logical content digest
+                # is Go's responsibility; use identity and mode here.
+                files.append({"name": name, "safe": good,
+                              "identity": maintenance_stat(st)[:6]})
+        end = os.fstat(fd)
+        if maintenance_stat(start) != maintenance_stat(end) or not os.path.samestat(end, STATE.lstat()):
+            return {"state": "UNVERIFIED", "reason": "STATE_DIRECTORY_CHANGED"}
+        return {"state": "OBSERVED", "files": sorted(files, key=lambda x: x["name"]),
+                "unknown_entries": unknown}
+    finally:
+        os.close(fd)
+
+
+def maintenance_local_inventory(project, uid):
+    """Reuse existing archive readers only on verified fixed paths.
+
+    Historical retirement provenance remains an independent purge concern.
+    Do not infer ownership from a directory name or read unknown archives.
+    """
+    out = {}
+    try:
+        points = maintenance_mounts()
+    except (UninstallError, OSError, ValueError):
+        return {"capture": {"state": "UNVERIFIED", "reason": "MOUNT_INVENTORY_UNAVAILABLE"}}
+    roots = {"state": STATE, "scoped_journal": SCOPED_JOURNAL, "backup": BACKUP,
+             "retired": RETIRED, "audit": AUDIT, "legacy_journal": NATIVE,
+             "scriptlet": SCRIPTLET, "scoped_fence": SCOPED_FENCE,
+             "purge_fence": PURGE_FENCE, "controller_binary": BINARY, "controller_unit": UNIT,
+             "legacy_root_unit": ROOT_UNIT, "legacy_retirement_unit": RETIREMENT_UNIT,
+             "scoped_guard_unit": SCOPED_GUARD_UNIT, "scoped_lifecycle_unit": SCOPED_LIFECYCLE_UNIT,
+             "scoped_incus_dropin": SCOPED_INCUS_DROPIN,
+             "legacy_root_operations": Path("/var/lib/boxweave-native-peer-conntrack-v1")}
+    mounted = sorted(k for k, p in roots.items() if maintenance_under_mount(p, points))
+    out["mounted_artifacts"] = mounted
+    def observe(key, fn):
+        if key in mounted:
+            out[key] = {"state": "UNSAFE", "reason": "MOUNTED_ARTIFACT"}
+            return
+        try:
+            out[key] = fn()
+        except (UninstallError, OSError, ValueError, KeyError, TypeError):
+            out[key] = {"state": "UNVERIFIED", "reason": "LOCAL_EVIDENCE_UNAVAILABLE"}
+    observe("state", lambda: maintenance_state_inventory(uid))
+    def scoped():
+        if not os.path.lexists(SCOPED_JOURNAL):
+            return {"state": "ABSENT"}
+        return {"state": "OBSERVED", "tree": scoped_tree(SCOPED_JOURNAL)}
+    observe("scoped_journal", scoped)
+    def backup():
+        v = inspect_installer_backup(project)
+        return {"state": "OBSERVED", "proof": v} if v else {"state": "ABSENT"}
+    observe("backup", backup)
+    def audit():
+        if not os.path.lexists(AUDIT):
+            return {"state": "ABSENT"}
+        proof = scoped_private_file(AUDIT, 1024 * 1024)
+        v = audit_status()
+        return {"state": v["status"], "sha256": proof["sha256"]}
+    observe("audit", audit)
+    # Existing completed archives are not read or adopted by a live preview.
+    # The separate exact provenance reader and purge gate own those effects.
+    def presence(path):
+        try:
+            st = path.lstat()
+        except FileNotFoundError:
+            return {"state": "ABSENT"}
+        return {"state": "PRESENT_UNVERIFIED", "identity": maintenance_stat(st)}
+    for key in ("retired", "scriptlet", "scoped_fence", "purge_fence", "legacy_root_operations"):
+        observe(key, lambda key=key: presence(roots[key]))
+    # Count even malformed historical names, without disclosing any names.
+    try:
+        names = []
+        with os.scandir(NATIVE.parent) as entries:
+            for count, entry in enumerate(entries, 1):
+                if count > 32768:
+                    raise UninstallError("historical journal inventory bound")
+                if entry.name.startswith(NATIVE.name + ".closed."):
+                    names.append(entry.name)
+        out["closed_journals"] = {
+            "state": "PRESENT_UNVERIFIED" if names else "ABSENT", "count": len(names),
+            "names_sha256": sha(canonical(sorted(names)))}
+    except (UninstallError, OSError):
+        out["closed_journals"] = {"state": "UNVERIFIED"}
+    return out
+
+
+def maintenance_stable_report(report):
+    # Only timestamps of observation itself are removed; operation/journal
+    # identities and hashes remain bound. Never normalize arbitrary lists.
+    result = json.loads(json.dumps(report))
+    for key in ("database", "native"):
+        result.get(key, {}).pop("epoch_ns", None)
+    return result
+
+
+def maintenance_preview(project, retention, host, report, local, planner_sha256=None):
+    """Pure typed planner: aggregate blockers without mutating any source."""
+    issues, effects = [], []
+    def issue(code, severity, ref, next_action):
+        issues.append({"code": code, "severity": severity, "resource": ref,
+                       "next_action": next_action})
+    def effect(kind, target, proof):
+        effects.append({"kind": kind, "target": target, "coverage": proof})
+    i = report.get("installation") or {}
+    n = report.get("native") or {}
+    l = report.get("ledger")
+    mode = i.get("mode", "UNVERIFIED")
+    runtime = (i.get("identity") or {}).get("runtime")
+    offline = runtime != "VERIFIED"
+    if not report:
+        issue("OBSERVER_UNAVAILABLE", "HARD", "observer", "Run a root-trusted exact supported maintenance observer")
+    if i.get("adapter") not in ("PINNED_RC13", "PINNED_RC14", "EXACT_RUNNING_OBSERVER_BINARY"):
+        issue("INSTALLATION_IDENTITY_UNVERIFIED", "HARD", "installation", "Inspect exact manifest and binary; do not adopt")
+    if (i.get("preimage") or {}).get("state") != "OBSERVED":
+        issue("PREIMAGE_UNVERIFIED", "HARD", "native_preimage", "Preserve original preparation journal; no reconstructed baseline")
+    if report.get("coverage") != "BOUNDED_SOURCES_OBSERVED":
+        issue("SOURCE_COVERAGE_INCOMPLETE", "HARD", "observation", "Repeat read-only observation; missing is not empty")
+    if (report.get("database") or {}).get("state") != "OBSERVED" or not isinstance(l, dict):
+        issue("LEDGER_UNVERIFIED", "HARD", "ledger", "Inspect durable original ledger without starting controller")
+        l = {}
+    elif not VALID_SHA.fullmatch(report.get("ledger_observation_sha256", "")):
+        issue("LEDGER_WITNESS_MISSING", "HARD", "ledger", "Use H1B observation adapter")
+    if (n.get("evidence") or {}).get("state") != "OBSERVED":
+        issue("NATIVE_INVENTORY_UNVERIFIED", "HARD", "native", "Inspect Incus locally; never start it for preview")
+    if l.get("foreign_scope_rows", 0):
+        issue("FOREIGN_LEDGER_SCOPE", "HARD", "ledger", "Preserve foreign rows; do not adopt or remove")
+    if (n.get("unowned_or_mismatched", 0) or n.get("owned_unverified") or
+            n.get("ownership_comparison") != "OBSERVED"):
+        issue("NATIVE_IDENTITY_CONFLICT", "HARD", "native", "Resolve exact UUID/incarnation and original Create evidence")
+    if l.get("orphan_bindings", 0) or l.get("orphan_fences", 0):
+        issue("ORPHAN_NETWORK_EVIDENCE", "HARD", "ledger", "Inspect original binding and fence lineage")
+    if n.get("active_operations", 0):
+        offline = True
+        issue("NATIVE_OPERATIONS_ACTIVE", "REVIEW", "native", "Drain and independently verify quiescence in a later reviewed phase")
+    if n.get("other_projects", 0):
+        issue("OTHER_PROJECTS_PRESERVED", "INFO", "native", "Preserve unrelated Projects; fresh-install prerequisites are separate")
+    for key in ("project_config", "profile_config"):
+        if n.get(key) not in ("BEFORE", "AFTER"):
+            issue("NATIVE_CONFIG_UNVERIFIED", "HARD", key, "Compare recorded preimage; no overwrite of drift")
+    if n.get("bridge_config") not in ("MANAGED_BRIDGE_OBSERVED", "RECORDED_PREIMAGE_MATCH"):
+        issue("BRIDGE_CONFIG_UNVERIFIED", "HARD", "bridge", "Preserve bridge and verify exact native configuration")
+    for key in ("bridge_consumers", "base_acl_consumers"):
+        if n.get(key) not in ("OWNED_REFERENCES_ONLY", "NO_REFERENCES", "NOT_APPLICABLE"):
+            issue("FOREIGN_OR_UNVERIFIED_CONSUMER", "HARD", key, "Inspect references; never alter foreign resources")
+    if (n.get("base_acl_config") not in ("RECORDED_PREIMAGE_MATCH", "ABSENT") or
+            n.get("base_acl_config") == "ABSENT" and n.get("profile_config") == "AFTER"):
+        issue("BASE_ACL_DELTA_UNVERIFIED", "HARD", "base_acl", "Verify exact managed delta before restoration")
+    if n.get("box_acl_references") != "OBSERVED":
+        issue("BOX_ACL_UNVERIFIED", "HARD", "box_acl", "Verify per-Box ACL ownership and consumer evidence")
+    if n.get("forward_references") != "OBSERVED":
+        issue("FORWARD_DEVICE_UNVERIFIED", "HARD", "forward", "Verify exact proxy identity and endpoints")
+    if mode == "SCOPED_V2":
+        root = i.get("root_policy") or {}
+        if root.get("kernel_guard") != "OBSERVED" or report.get("root_ledger_comparison") != "MATCH":
+            issue("ROOT_POLICY_UNVERIFIED", "HARD", "scoped_guard", "Preserve guard and original journal; do not replay")
+    if runtime != "VERIFIED":
+        issue("CONTROLLER_RUNTIME_UNVERIFIED", "REVIEW", "controller", "Use offline retirement review, not a forced restart")
+    for item in i.get("artifacts", []):
+        if item.get("evidence", {}).get("state") not in ("PRESENT", "ABSENT"):
+            issue("ARTIFACT_UNSAFE_OR_UNVERIFIED", "HARD", item["id"], "Inspect fixed path metadata and ownership")
+    for unit in i.get("units", []):
+        if unit.get("drop_ins") != "ABSENT":
+            issue("EFFECTIVE_DROPIN_UNREVIEWED", "HARD", unit["name"], "Review effective systemd configuration; do not remove inherited policy")
+        if unit.get("effective_file", {}).get("state") not in ("OBSERVED", "ABSENT"):
+            issue("EFFECTIVE_UNIT_UNVERIFIED", "HARD", unit["name"], "Verify exact installed fragment")
+    present = {a["id"] for a in i.get("artifacts", []) if a.get("evidence", {}).get("state") == "PRESENT"}
+    legacy = {"legacy_preparation", "legacy_root_unit", "legacy_retirement_unit",
+              "legacy_root_socket", "legacy_retirement_socket", "legacy_root_operations",
+              "legacy_root_lock", "legacy_root_journal"}
+    scoped = {"scoped_root_journal", "scoped_guard_unit", "scoped_lifecycle_unit",
+              "scoped_incus_dropin", "scoped_lifecycle_socket"}
+    if ((present & legacy and present & scoped) or
+            (mode == "SCOPED_V2" and present & legacy) or (mode == "LEGACY" and present & scoped)):
+        issue("MIXED_INSTALLATION_ARTIFACTS", "HARD", "installation", "Retain both original witnesses; no cross-mode adoption")
+    if mode == "SCOPED_V2" and (scoped - {"scoped_lifecycle_socket"}) - present:
+        issue("SCOPED_ARTIFACTS_INCOMPLETE", "HARD", "installation", "Verify exact installed guard and lifecycle contract")
+    if present & {"legacy_root_unit", "legacy_root_socket", "legacy_root_operations", "legacy_root_journal"}:
+        offline = True
+        issue("LEGACY_ROOT_ORIGINAL_REVIEW_REQUIRED", "HARD", "legacy_root", "Verify exact original stage, unit and journal; preserve UNKNOWN")
+    if mode == "LEGACY":
+        for original in l.get("legacy_pending_retirements", []):
+            offline = True
+            issue("LEGACY_RETIREMENT_QUEUE_PRESENT", "REVIEW", original, "Preserve exact original Delete evidence and verify retirement")
+    for original in l.get("legacy_compactions", []):
+        offline = True
+        issue("LEGACY_COMPACTION_PENDING", "HARD", original, "Verify original Root compaction; preserve journal and fences")
+    for row in l.get("nonterminal_or_unknown_originals", []):
+        offline = True
+        issue("ORIGINAL_" + ("UNKNOWN" if row["state"] == "UNKNOWN" else "IN_FLIGHT"),
+              "HARD" if row["action"] == "box_create" else "REVIEW", row["id"],
+              "Preserve original receipt and claims; review exact native outcome without replay")
+    boxes = {(b["uuid"], b["incarnation"]): b for b in l.get("boxes", [])}
+    matched = set(n.get("owned_matched") or [])
+    for b in sorted(boxes.values(), key=lambda x: (x["uuid"], x["incarnation"])):
+        exact = b["uuid"] in matched and b.get("create_proof") and b.get("binding_state") == "PINNED"
+        if not exact:
+            issue("BOX_ORIGIN_UNVERIFIED", "HARD", b["uuid"], "Inspect original Create, binding and native identity")
+        effect("STOP_DELETE_BOX", b, "IDENTITY_OBSERVED" if exact else "UNVERIFIED")
+    for p in l.get("peers", []):
+        if p["state"] == "REVOKED":
+            continue
+        exact = ((p["source"], p["source_incarnation"]) in boxes and
+                 (p["target"], p["target_incarnation"]) in boxes and
+                 p["source"] in matched and p["target"] in matched and p["state"] == "CONFIRMED" and
+                 bool(p.get("last_verified_original")))
+        if not exact:
+            offline = True
+            issue("PEER_ORIGINAL_UNVERIFIED", "REVIEW", p["original"] or p["source"], "Review original directional policy; no replay")
+        effect("RETIRE_PEER_DIRECTION", p, "IDENTITY_OBSERVED" if exact else "UNVERIFIED")
+    for f in l.get("forwards", []):
+        if f["state"] == "REVOKED":
+            continue
+        exact = ((f["box"], f["incarnation"]) in boxes and f["box"] in matched and
+                 f["state"] == "CONFIRMED" and n.get("forward_references") == "OBSERVED")
+        if not exact:
+            offline = True
+            issue("FORWARD_ORIGINAL_UNVERIFIED", "REVIEW", f["id"], "Review original proxy without redispatch")
+        effect("RETIRE_FORWARD", f, "IDENTITY_OBSERVED" if exact else "UNVERIFIED")
+    for key in local.get("mounted_artifacts", []):
+        issue("MOUNTED_ARTIFACT", "HARD", key, "Do not traverse or erase independently mounted resources")
+    for key, value in local.items():
+        if not isinstance(value, dict):
+            continue
+        if value.get("state") in ("UNSAFE", "UNVERIFIED"):
+            issue("LOCAL_ARTIFACT_UNVERIFIED", "HARD", key, "Inspect fixed local evidence without modifying it")
+    state = local.get("state", {})
+    if any(x["name"] == EXEC_ARCHIVE_NAME for x in state.get("files", [])):
+        issue("EXEC_ARCHIVE_POST_FENCE_PROOF_REQUIRED", "REVIEW", "exec_archive", "Review exact output archive files before archival or erasure")
+    if state.get("unknown_entries") or any(not x["safe"] for x in state.get("files", [])):
+        issue("STATE_INVENTORY_UNSAFE", "HARD", "state", "Preserve unknown or unsafe entries")
+    if local.get("audit", {}).get("state") == "STARTED" or any(
+            local.get(k, {}).get("state") != "ABSENT" for k in ("scoped_fence", "purge_fence")):
+        issue("INTERRUPTED_RETIREMENT", "HARD", "receipt", "Inspect original resume/purge plan; never start a second retirement")
+    if local.get("scriptlet", {}).get("state") != "ABSENT":
+        issue("SCRIPTLET_PROVENANCE_REQUIRED", "HARD", "scriptlet", "Preserve original global routing evidence")
+    if any(local.get(k, {}).get("state") in ("PRESENT_UNVERIFIED", "COMPLETE")
+           for k in ("retired", "closed_journals", "audit")):
+        issue("HISTORICAL_ARCHIVE_PROVENANCE_REQUIRED", "HARD" if retention == "erase" else "INFO",
+              "archives", "Preserve existing archives; separate completed-retirement purge review")
+    if retention == "erase":
+        issue("ERASURE_REQUIRES_POST_RETIREMENT_PROOF", "REVIEW", "archives", "Review exact completed archive set after retirement")
+    for unit in i.get("units", []):
+        if unit.get("effective_file", {}).get("state") == "OBSERVED":
+            effect("RETIRE_UNIT", unit["name"], "FRAGMENT_OBSERVED_NOT_OWNERSHIP")
+    for a in sorted(present):
+        if a not in {"retirement_archive_root", "retirement_audit", "retirement_fence", "purge_fence"}:
+            effect("REVIEW_OWNED_ARTIFACT", a, "METADATA_ONLY")
+    effect("RESTORE_RECORDED_NATIVE_PREIMAGE", project,
+           "OBSERVED" if (i.get("preimage") or {}).get("state") == "OBSERVED" else "UNVERIFIED")
+    effect("ARCHIVE_ORIGINAL_EVIDENCE", {"retention": retention}, "POST_FENCE_PROOF_REQUIRED")
+    if retention == "erase":
+        effect("REVIEW_ERASE_COMPLETED_ARCHIVES", project, "POST_RETIREMENT_PROOF_REQUIRED")
+    order = {"RETIRE_PEER_DIRECTION": 0, "RETIRE_FORWARD": 1, "STOP_DELETE_BOX": 2,
+             "ARCHIVE_ORIGINAL_EVIDENCE": 3, "RETIRE_UNIT": 4,
+             "RESTORE_RECORDED_NATIVE_PREIMAGE": 5, "REVIEW_OWNED_ARTIFACT": 6,
+             "REVIEW_ERASE_COMPLETED_ARCHIVES": 7}
+    # Presentation order only; H2 must derive a safe executable sequence.
+    effects.sort(key=lambda x: (order[x["kind"]], canonical(x)))
+    issues.sort(key=lambda x: ({"HARD": 0, "REVIEW": 1, "INFO": 2}[x["severity"]], x["code"], x["resource"]))
+    blocked = any(x["severity"] == "HARD" for x in issues)
+    result = {"schema": MAINTENANCE_PLAN_SCHEMA, "scope": "full", "project": project,
+              "host_machine_id_sha256": host, "retention": retention,
+              "planner_sha256": planner_sha256,
+              "route": "OFFLINE_RETIREMENT_REVIEW" if offline else "NORMAL_CLEANUP_REVIEW",
+              "status": "BLOCKED" if blocked else "REVIEW_ONLY", "ready": False,
+              "classification": "HARD_REFUSAL" if blocked else ("OFFLINE_REVIEW" if offline else "NORMAL_REVIEW"),
+              "apply_available": False, "effect_set_complete": False,
+              "cross_source_atomic": False, "blockers": issues, "proposed_effects": effects,
+              "effects_are_unordered_preview": True,
+              "preserve": ["Incus daemon", "service account", "storage pool", "bridge", "unrelated Projects", "unrelated Host services"],
+              "observation": maintenance_stable_report(report), "local_inventory": local,
+              "next_action": "Resolve hard blockers; H2 must review exact effects under maintenance fence"
+              if blocked else "Review proposed scope; H2 must verify complete effects under maintenance fence"}
+    result["preview_sha256"] = sha(b"boxweave-maintenance-preview-v1\n" + canonical(result))
+    return result
+
+
+def maintenance_main(args):
+    if os.geteuid() != 0 or sys.platform != "linux":
+        raise UninstallError("maintenance preview requires local root")
+    uid = pwd.getpwnam("boxweave").pw_uid
+    project = args.project or "user-" + str(uid)
+    if project != "user-" + str(uid) or uid == 0:
+        raise UninstallError("exact dedicated service Project required")
+    host = machine_sha()
+    path = args.observer_binary or str(BINARY)
+    before = maintenance_local_inventory(project, uid)
+    try:
+        if before.get("mounted_artifacts") or before.get("capture"):
+            raise UninstallError("unsafe or unverified mount inventory")
+        report = maintenance_observe(path, args.observer_sha256, project)
+    except (UninstallError, OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+        report = {}
+    after = maintenance_local_inventory(project, uid)
+    if before != after or host != machine_sha():
+        # Discard cross-source comparison; no favorable preview on drift.
+        report = {}
+        after["capture"] = {"state": "UNVERIFIED", "reason": "LOCAL_EVIDENCE_CHANGED"}
+    plan = maintenance_preview(project, args.retention, host, report, after,
+                               sha(Path(__file__).read_bytes()))
+    if args.maintenance_recheck:
+        match = (host == args.confirm_host_sha256 and
+                 plan["preview_sha256"] == args.confirm_preview_sha256)
+        plan["recheck"] = ("MATCH_BLOCKED" if plan["status"] == "BLOCKED" else "MATCH_REVIEW_ONLY") if match else "STALE_PREVIEW"
+        print(json.dumps(plan, sort_keys=True, indent=2))
+        return 0 if match and plan["status"] == "REVIEW_ONLY" else 2
+    print(json.dumps(plan, sort_keys=True, indent=2))
+    return 0 if plan["status"] == "REVIEW_ONLY" else 2
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned uninstall; explicit full-only Scoped Peer v2 retirement after MCP cleanup")
     action = parser.add_mutually_exclusive_group()
+    action.add_argument("--maintenance-plan", action="store_true", help="H1B read-only full retirement preview; no apply authority")
+    action.add_argument("--maintenance-recheck", action="store_true", help="read-only preview freshness comparison, not approval")
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
     action.add_argument("--full", action="store_true", help="guided full retirement with terminal review and backup")
@@ -1988,7 +2423,26 @@ def main(argv=None):
     parser.add_argument("--native-prepare-sha256", help="full only: exact original native journal review digest")
     parser.add_argument("--confirm-host-sha256", help="apply: exact machine SHA printed by plan")
     parser.add_argument("--confirm-review-sha256", help="apply: exact immutable inventory review SHA")
+    parser.add_argument("--retention", choices=("retain", "erase"), help="explicit maintenance preview retention intent")
+    parser.add_argument("--observer-binary", help="root-local alternate maintenance observer")
+    parser.add_argument("--observer-sha256", help="exact SHA256 of alternate observer")
+    parser.add_argument("--confirm-preview-sha256", help="maintenance recheck only; never an apply digest")
     args = parser.parse_args(argv)
+    if args.maintenance_plan or args.maintenance_recheck:
+        if (args.scope not in (None, "full") or args.scoped or args.guided_full_plan or
+                args.retirement_archive or args.box_uuid or args.native_prepare_sha256 or
+                args.confirm_review_sha256 or not args.retention or
+                bool(args.observer_binary) != bool(args.observer_sha256) or
+                (args.observer_sha256 and not VALID_SHA.fullmatch(args.observer_sha256))):
+            parser.error("maintenance preview requires explicit retention and only exact scope/observer options")
+        if args.maintenance_recheck:
+            if not VALID_SHA.fullmatch(args.confirm_host_sha256 or "") or not VALID_SHA.fullmatch(args.confirm_preview_sha256 or ""):
+                parser.error("maintenance recheck requires exact host and preview SHA256")
+        elif args.confirm_host_sha256 or args.confirm_preview_sha256:
+            parser.error("preview does not accept confirmation digests")
+        return maintenance_main(args)
+    if any((args.retention, args.observer_binary, args.observer_sha256, args.confirm_preview_sha256)):
+        parser.error("maintenance options cannot be used by existing apply/retirement/purge commands")
     if args.purge or args.purge_plan:
         return purge_main(args)
     if os.path.lexists(PURGE_FENCE):

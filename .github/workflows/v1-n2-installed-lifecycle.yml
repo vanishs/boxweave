@@ -13,6 +13,8 @@ on:
       - internal/state/diagnostic_ledger.go
       - scripts/pr177_d4_installed_recovery.py
       - scripts/pr188_h1a_observe.py
+      - scripts/pr188_h1b_plan.py
+      - scripts/test_maintenance_preview.py
       - internal/state/maintenance_observe*.go
       - cmd/boxweave/maintenance_doctor.go
       - internal/state/diagnostic_recovery*.go
@@ -72,6 +74,9 @@ jobs:
           grep -Fxq PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR188_H1A_ACTIVE_EMPTY=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR188_H1A_OFFLINE_EMPTY=PASS "$RUNNER_TEMP/n2-installed.log"
+          for marker in ACTIVE_EMPTY OFFLINE_EMPTY UNTRUSTED_OBSERVER_NONROOT UNSAFE_STATE_STALE NEGATIVE_NO_EFFECT; do
+            grep -Fxq "PR188_H1B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+          done
           if test "$PR182_SCOPED_RETIREMENT" = 1; then
             for marker in LIVE_REFUSED RETIRED_HISTORY INTERRUPTED_RESUMED NATIVE_RESTORED FOREIGN_UNCHANGED COMPLETE; do
               grep -Fxq "PR182_SCOPED_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
@@ -86,6 +91,8 @@ jobs:
             grep -Fxq INSTALL_SCOPED_WRAPPERS_REFUSE_LEGACY=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR177_D2_SCOPED_ACTIVE_RETIRED_DIAGNOSTIC=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR188_H1A_LIVE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H1B_LIVE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H1B_FOREIGN_CONSUMER_STALE=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR177_D3_INSTALLED_PARTIAL_ORIGINAL_PLAN_BLOCKED=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fq 'PR177_D3_INSTALLED_POSITIVE_PLAN=PASS SCOPED_V2' "$RUNNER_TEMP/n2-installed.log"
             grep -Fq 'PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY=PASS SCOPED_V2 ' "$RUNNER_TEMP/n2-installed.log"

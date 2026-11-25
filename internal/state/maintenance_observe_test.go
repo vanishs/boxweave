@@ -73,3 +73,25 @@ func TestH1AMaintenanceForeignAndRedaction(t *testing.T) {
 		t.Fatal("default accepted")
 	}
 }
+
+func TestH1BMaintenanceHistoryWitness(t *testing.T) {
+	ctx := context.Background()
+	s, b, _ := n3RetiredFixture(t)
+	snap := DiagnosticSnapshot{store: s}
+	a, e := snap.ReadMaintenanceLedger(ctx, b.Project)
+	if e != nil || len(a.RetiredBoxes) != a.Retired || a.Retired != 1 || len(a.HistorySHA256) != 64 {
+		t.Fatal(a, e)
+	}
+	again, e := snap.ReadMaintenanceLedger(ctx, b.Project)
+	if e != nil || a.ObservationDigest() != again.ObservationDigest() {
+		t.Fatal("stationary history", e)
+	}
+	// Only a synthetic test DB: change a historical row without changing counts.
+	if _, e = s.db.Exec("UPDATE operations SET error_class='fixture_changed' WHERE layer=?", b.Project); e != nil {
+		t.Fatal(e)
+	}
+	after, e := snap.ReadMaintenanceLedger(ctx, b.Project)
+	if e != nil || after.Retired != a.Retired || after.Claims != a.Claims || after.HistorySHA256 == a.HistorySHA256 || after.ObservationDigest() == a.ObservationDigest() {
+		t.Fatal("same-count history drift missed", e)
+	}
+}

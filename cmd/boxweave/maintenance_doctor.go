@@ -20,6 +20,8 @@ import (
 // status and Recover's issue selector. No approval, readiness or effect
 // permit can be derived from this non-atomic observation.
 type maintenanceReport struct {
+	ObserverSHA256       string `json:"observer_sha256"`
+	LedgerSHA256         string `json:"ledger_observation_sha256,omitempty"`
 	RootLedgerComparison string `json:"root_ledger_comparison"`
 
 	Version           int                             `json:"version"`
@@ -69,6 +71,7 @@ func collectMaintenance(ctx context.Context, a doctorArgs) maintenanceReport {
 	o.Native.Evidence = install.MaintenanceEvidence{State: "NOT_CHECKED", Reason: "INSTALLED_ADAPTER_REQUIRED"}
 	p := doctorInstallPlan(a)
 	self := maintenanceSelfSHA()
+	o.ObserverSHA256 = self
 	instctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	o.Installation = install.ObserveMaintenanceInstallation(instctx, p, a.DB, self, commit)
 	cancel()
@@ -84,6 +87,9 @@ func collectMaintenance(ctx context.Context, a doctorArgs) maintenanceReport {
 	}
 
 	o.Ledger, o.Database = l, d
+	if l != nil {
+		o.LedgerSHA256 = l.ObservationDigest()
+	}
 
 	nc, stop := context.WithTimeout(ctx, 15*time.Second)
 	o.Native = install.ObserveMaintenanceNative(nc, p, o.Installation, l)

@@ -12,6 +12,10 @@ import (
 // ledger, not an approval or live Root handle. All UNKNOWN originals,
 // including historically released ones, remain visible.
 type MaintenanceLedger struct {
+	LegacyPending             []string                `json:"legacy_pending_retirements"`
+	LegacyCompactions         []string                `json:"legacy_compactions"`
+	HistorySHA256             string                  `json:"history_sha256"`
+	RetiredBoxes              []MaintenanceRetiredBox `json:"retired_boxes"`
 	NonterminalRecordedClaims int                     `json:"nonterminal_recorded_claims"`
 	PeerCapacity              *DiagnosticPeerCapacity `json:"peer_capacity,omitempty"`
 
@@ -35,6 +39,12 @@ type MaintenanceBox struct {
 	CreateProof    bool   `json:"create_proof"`
 	BindingState   string `json:"binding_state"`
 	ACL            string `json:"acl,omitempty"`
+}
+type MaintenanceRetiredBox struct {
+	UUID           string `json:"uuid"`
+	Incarnation    string `json:"incarnation"`
+	Name           string `json:"name"`
+	DeleteOriginal string `json:"delete_original"`
 }
 type MaintenanceOriginal struct {
 	ClaimProtection string `json:"claim_protection"`
@@ -94,7 +104,7 @@ func (s *DiagnosticSnapshot) ReadMaintenanceLedger(ctx context.Context, project 
 }
 func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (MaintenanceLedger, error) {
 	var zero MaintenanceLedger
-	o := MaintenanceLedger{Project: project, Boxes: []MaintenanceBox{}, Originals: []MaintenanceOriginal{}, Peers: []MaintenancePeer{}, Forwards: []MaintenanceForward{}}
+	o := MaintenanceLedger{Project: project, LegacyPending: []string{}, LegacyCompactions: []string{}, RetiredBoxes: []MaintenanceRetiredBox{}, Boxes: []MaintenanceBox{}, Originals: []MaintenanceOriginal{}, Peers: []MaintenancePeer{}, Forwards: []MaintenanceForward{}}
 	l, e := readNativeNetworkLedgerTx(ctx, tx, project)
 	if e != nil {
 		return zero, e
@@ -118,6 +128,33 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 			return zero, e
 		}
 	}
+	rows, e := tx.QueryContext(ctx, `SELECT uuid,incarnation,name,deleted_by_operation_id FROM owned_boxes WHERE project=? AND state='DELETED' ORDER BY uuid LIMIT ?`, project, maintenanceRowLimit+1)
+	if e != nil {
+		return zero, e
+	}
+	for rows.Next() {
+		var r MaintenanceRetiredBox
+		if e = rows.Scan(&r.UUID, &r.Incarnation, &r.Name, &r.DeleteOriginal); e != nil {
+			break
+		}
+		if len(o.RetiredBoxes) >= maintenanceRowLimit || !validActivityBoxID(r.UUID) || !validActivityBoxID(r.Incarnation) || !auditName(r.Name) || r.DeleteOriginal != "" && !validHexID(r.DeleteOriginal) {
+			e = ErrDiagnosticInvalid
+			break
+		}
+		o.RetiredBoxes = append(o.RetiredBoxes, r)
+	}
+	if e == nil {
+		e = rows.Err()
+	}
+	if ce := rows.Close(); e == nil {
+		e = ce
+	}
+	if e != nil || len(o.RetiredBoxes) != o.Retired {
+		if e == nil {
+			e = ErrDiagnosticInvalid
+		}
+		return zero, e
+	}
 	// Count only: never reveal another Project's identities or intent.
 	for _, q := range []string{
 		"SELECT count(*) FROM owned_boxes WHERE project!=?",
@@ -127,6 +164,9 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 		"SELECT count(*) FROM network_address_fences WHERE project!=?",
 		"SELECT count(*) FROM peer_grants WHERE project!=?",
 		"SELECT count(*) FROM forward_claims WHERE project!=?",
+		"SELECT count(*) FROM network_ipv4_retirements WHERE project!=?",
+		"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=?",
+		"SELECT count(*) FROM network_ipv4_compactions WHERE project!=?",
 	} {
 		var n int
 		if e = tx.QueryRowContext(ctx, q, project).Scan(&n); e != nil {
@@ -134,7 +174,7 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 		}
 		o.ForeignRows += n
 	}
-	rows, e := tx.QueryContext(ctx, `SELECT o.id,o.action,o.state,o.native_operation_id!='',(SELECT count(*) FROM operation_resource_claims c WHERE c.layer=o.layer AND c.operation_id=o.id)
+	rows, e = tx.QueryContext(ctx, `SELECT o.id,o.action,o.state,o.native_operation_id!='',(SELECT count(*) FROM operation_resource_claims c WHERE c.layer=o.layer AND c.operation_id=o.id)
  FROM operations o WHERE o.layer=? AND (o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING') ) ORDER BY o.id LIMIT ?`, project, maintenanceRowLimit+1)
 	if e != nil {
 		return zero, e
@@ -222,7 +262,109 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 	if e != nil {
 		return zero, e
 	}
+	for _, q := range []struct {
+		query string
+		dst   *[]string
+	}{
+		{`SELECT delete_operation_id FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyPending},
+		{`SELECT delete_operation_id FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyCompactions},
+	} {
+		rows, e := tx.QueryContext(ctx, q.query, project, maintenanceRowLimit+1)
+		if e != nil {
+			return zero, e
+		}
+		for rows.Next() {
+			var id string
+			if e = rows.Scan(&id); e != nil {
+				break
+			}
+			if len(*q.dst) >= maintenanceRowLimit || !validHexID(id) {
+				e = ErrDiagnosticInvalid
+				break
+			}
+			*q.dst = append(*q.dst, id)
+		}
+		if e == nil {
+			e = rows.Err()
+		}
+		if ce := rows.Close(); e == nil {
+			e = ce
+		}
+		if e != nil {
+			return zero, e
+		}
+	}
+	o.HistorySHA256, e = maintenanceHistoryWitness(ctx, tx, project)
+	if e != nil {
+		return zero, e
+	}
 	return o, nil
+}
+
+// Bounded digest of exact identity and historical effect records. No raw
+// actor, credential, arbitrary intent, or log content is emitted.
+func maintenanceHistoryWitness(ctx context.Context, tx *sql.Tx, project string) (string, error) {
+	queries := []string{
+		`SELECT id,action,state,updated_at,resource_key,box_uuid,incarnation,native_operation_id,intent_digest,error_class FROM operations WHERE layer=? ORDER BY id`,
+		`SELECT operation_id,resource_key FROM operation_resource_claims WHERE layer=? ORDER BY operation_id,resource_key`,
+		`SELECT * FROM owned_boxes WHERE project=? ORDER BY uuid`,
+		`SELECT * FROM network_bindings WHERE project=? ORDER BY box_uuid,incarnation,nic`,
+		`SELECT * FROM network_address_fences WHERE project=? ORDER BY bridge,family,address`,
+		`SELECT * FROM network_ipv4_retirements WHERE project=? ORDER BY box_uuid,incarnation`,
+		`SELECT * FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id`,
+		`SELECT * FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id`,
+		`SELECT * FROM peer_grants WHERE project=? ORDER BY source_uuid,source_incarnation,target_uuid,target_incarnation`,
+		`SELECT * FROM forward_claims WHERE project=? ORDER BY forward_id`,
+		`SELECT e.seq,e.operation_id,e.at,e.state FROM operation_events e JOIN operations o ON o.id=e.operation_id WHERE o.layer=? ORDER BY e.seq`,
+		`SELECT a.seq,a.operation_id,a.at,a.decision,a.evidence_digest FROM recovery_audit a JOIN operations o ON o.id=a.operation_id WHERE o.layer=? ORDER BY a.seq`,
+	}
+	h := sha256.New()
+	count, total := 0, 0
+	for _, q := range queries {
+		rows, e := tx.QueryContext(ctx, q, project)
+		if e != nil {
+			return "", e
+		}
+		cols, e := rows.Columns()
+		if e != nil {
+			rows.Close()
+			return "", e
+		}
+		h.Write([]byte(q + "\n"))
+		for rows.Next() {
+			values := make([]any, len(cols))
+			ptrs := make([]any, len(cols))
+			for i := range values {
+				ptrs[i] = &values[i]
+			}
+			if e = rows.Scan(ptrs...); e != nil {
+				break
+			}
+			raw, err := json.Marshal(values)
+			if err != nil {
+				e = err
+				break
+			}
+			count++
+			total += len(raw)
+			if count > 100000 || total > 64<<20 {
+				e = ErrDiagnosticBound
+				break
+			}
+			h.Write(raw)
+			h.Write([]byte{'\n'})
+		}
+		if e == nil {
+			e = rows.Err()
+		}
+		if ce := rows.Close(); e == nil {
+			e = ce
+		}
+		if e != nil {
+			return "", e
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // ObservationDigest compares bounded inputs across independent captures.

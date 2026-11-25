@@ -1,0 +1,38 @@
+# PR188 H1B — read-only retirement preview and freshness review
+
+## Scope and result (2026-11-24)
+
+H1A's five independent CI workflows passed at `b2dbe943af52c5d30191e8a123d083c603ddd560`, including installed lifecycle run 45514409399. H1B implementation and Box acceptance passed; exact-head independent CI remains required. The old uninstall/apply, scoped retirement, recovery and purge contracts have not been widened.
+
+### Entry points
+
+`sudo sh uninstall.sh --maintenance-plan --project user-UID --retention retain` (or explicit `erase`) uses the current installed observer. A locally reviewed historical fixture can use `--observer-binary ABSOLUTE_ROOT_TRUSTED_PATH --observer-sha256 EXACT_SHA256` without replacing the installed historical binary. The root-local observer is executed through its checked open FD, with bounded output and exact self-digest readback. `--maintenance-recheck` requires the same scope/retention/observer, the returned `--confirm-host-sha256` and `--confirm-preview-sha256`; it re-observes current state and returns MATCH_REVIEW_ONLY, MATCH_BLOCKED or STALE_PREVIEW. Exit 0 means review-only, not apply readiness; exit 2 means blocked/stale. Nonroot and mixed apply/preview CLI options are refused.
+
+The preview is an unordered candidate effect inventory, not an execution sequence. It binds the host, installed build identity, observer and planner hashes, exact native and logical ledger observations (including a bounded history digest and retired identities), local artifact inventory, candidate effects and explicit retention intent. Observation epochs alone are excluded from the domain-separated preview digest. It lists all observed blockers with stable code, resource, severity and navigation, distinguishes normal review, offline review and hard refusal, and preserves unrelated Projects, Incus, bridge, storage pool, service account and unrelated services. Historical claims alone are not current blockers. Partial/missing evidence is not empty ownership. A protected UNKNOWN is never released or replayed by this code.
+
+Every preview sets ready=false, apply_available=false, effect_set_complete=false and cross_source_atomic=false. The preview hash is not an approved retirement hash and is not accepted as an apply credential. No maintenance fence, archive copy, service stop, native mutation, deletion, or erasure is performed by the preview/recheck. H2 must bind the complete executable effects, validate archive and native policy provenance, obtain explicit local authorization and recheck under the maintenance fence before effects, with durable resume semantics. Existing historical archive provenance remains deferred to the independent completed-retirement purge proof; retain preserves these artifacts, erase cannot authorize their removal merely from presence or names. H1B's state inventory uses file identity/metadata, Go's logical snapshot for SQLite, exact scoped journal tree and known installer-backup reader; it does not hash mutable SQLite live files or claim ownership of arbitrary entries.
+
+## Box acceptance evidence
+
+Both H0 labs remain on their original installed release. Final Go observer `1.0.0-dev.h1b`, built on topic parent with uncommitted H1B source (embedded commit names the parent): SHA256 `2155ea53ab0405f56640404d4f630afe4c4acdaf72228d0c1e86bc22d16b0d5c`. Final planner bytes in A and B SHA256 `b5f06fa039d346518bf03f94d6a6326787a8e9b3152abb08d4c4f386cc51df36`. The source is submitted from the exact Box files; independent CI rebuilds from HEAD.
+
+| Witness | Original L0 Operation | Result |
+|---|---|---|
+| H1B observer build and repeated H1A tests | `cbce2892703e3536677dd6add04403b5` | exit 0 |
+| RC13 offline first preview | `f0ad4dbbb579be779cb7592a6f141d82` | blocked on two inherited drop-ins, offline review |
+| RC14 first live preview | `ac8692e559b44206cfe3b95e0fdcfc91` | blocked on three inherited drop-ins, normal review |
+| Final A harness: repeat, same/stale digest, wrong host, retain/erase, nonroot and untrusted observer, unknown state fixture, mixed-mode artifacts, no effect | `bbf1cd0990af476c6549e0450f6f79b3` | exit 0 |
+| Final B harness: repeat, same/stale digest, wrong host, retain/erase, foreign ACL/bridge consumer, unrelated Project preserved, no effect, HTTP 200 | `969a53cca9dfd38fa183068f701bf74e` | exit 0 |
+| Real bind mount in private mount namespace, exact temporary fixture, mounted-artifact refusal | `fab5a9fe19862774f3eae748463ddada` | exit 0 |
+| Python uninstall tests and initial planner tests; syntax and diff check | `40954d5772b4845f230a0f6a716a8669` | 53 + 5 PASS |
+| Final six planner tests, Go targeted regression across six packages, gofmt and diff check | `5818ec5fe29482d8e3f3a71a103ab824` | exit 0 |
+
+A: pinned RC13, stopped Controller and helper, zero owned/native instances; database bytes, installed binary/manifest/unit hashes, native config and controller PID unchanged. B: pinned RC14, four running owned Boxes, four retired identities, three confirmed Peer directions, one Forward, 78 recorded historical claims and zero nonterminal claims. Root journal tree contains 87 files, 85490 bytes; observed SHA256 e0d63bff793fddf924220b5a47e8653cb18ea66325e6e89017bea40cd9eb537e. Actual inherited LXC drop-ins remain unreviewed; no change to LXC policy. B's temporary unattached profile referenced the existing bridge and ACL; preview detected foreign/unverified consumer, rejected stale hash, and exact test profile was removed. Separate temporary unrelated empty Project was counted without name disclosure and its config was unchanged before removal. Final Forward HTTP 200 and all three services active. No approved effect, controller restart, installed binary replacement, or deletion of existing Box/native resources took place.
+
+The first temporary transfer grant admission was correctly refused while A's original Exec 66c06a6e5a7f80cdf9d781c938de0b1d was VERIFYING. No UNKNOWN was observed; after original terminal receipt, the exact retry grant 82963a76970b625872e6e0cad1543f6d succeeded. The temporary bounded HTTP server was stopped in A and grant 34a1d8b5071d995c341b1aaee9a572cd revoked SUCCEEDED. Ordinary outer operations add durable history. Both original fixtures retained.
+
+### Regression limits and CI handoff
+
+Full Python discovery on A ran 170 tests (original Exec 66c06a6e5a7f80cdf9d781c938de0b1d): 169 passed, one pre-existing release-manifest installer-plan test refused because A intentionally has RC13 installed (test expects clean host). Do not erase the fixture or weaken the test. Relevant uninstall suite 53 PASS; final H1B suite six PASS. Synthetic tests cover missing preimage, foreign rows, orphan fences, pending Create ambiguity, historical same-count drift, parallel local observation drift, mounted path detection, wrong digests and CLI separation. Real mount, foreign consumer, mixed and unsafe-state fixtures were also tested in Boxes as above; synthetic pending-create/missing-preimage/concurrent-writer tests are not an installed lost-ACK or fault-injection acceptance claim.
+
+The existing N2 clean Ubuntu VM matrix now runs exact-head H1B active-empty and offline-empty plus negative controls in all three lanes, and live preview and foreign-consumer controls in the scoped lane; existing H1A/N2/N3/N4/D4/retirement gates remain. Independent CI validates current installed observer rather than pinned historical adapters and the review-only path without the nested drop-in blocker. No new CI PASS claimed until observed. H1B Box gate complete, submit to CI, keep PR draft. H2A is next after reviewing CI; do not invoke preview hashes as actual approvals.
