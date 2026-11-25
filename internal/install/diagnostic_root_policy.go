@@ -10,13 +10,15 @@ import (
 )
 
 type DiagnosticRootPolicy struct {
-	State                    string `json:"state"`
-	Kernel                   string `json:"kernel_guard"`
-	Sequence                 *int   `json:"sequence,omitempty"`
-	ActiveDirections         *int   `json:"active_directions,omitempty"`
-	HistoryLimit             int    `json:"history_limit,omitempty"`
-	NewGrantHistoryAvailable *bool  `json:"new_grant_history_available,omitempty"`
-	Conntrack                string `json:"conntrack_executable"`
+	State                          string `json:"state"`
+	Kernel                         string `json:"kernel_guard"`
+	Sequence                       *int   `json:"sequence,omitempty"`
+	ActiveDirections               *int   `json:"active_directions,omitempty"`
+	HistoryLimit                   int    `json:"history_limit,omitempty"`
+	NewGrantHistoryAvailable       *bool  `json:"new_grant_history_available,omitempty"`
+	RemainingGrantEventsUpperBound *int   `json:"remaining_grant_events_upper_bound,omitempty"`
+	GrantHistoryLevel              string `json:"grant_history_level,omitempty"`
+	Conntrack                      string `json:"conntrack_executable"`
 }
 
 func diagnosticExecutableState(path string, uid uint32) string {
@@ -84,6 +86,9 @@ func observeScopedDiagnosticRootPolicy(ctx context.Context, project string, out 
 	out.Sequence = &seq
 	out.ActiveDirections = &active
 	out.NewGrantHistoryAvailable = &available
+	remaining := networklimits.ScopedGrantHistoryRemaining(seq, active)
+	out.RemainingGrantEventsUpperBound = &remaining
+	out.GrantHistoryLevel = networklimits.CapacityLevel(networklimits.ScopedPeerHistoryLimit/2, remaining)
 	out.Kernel = "UNVERIFIED"
 	if NativePeerGuardKernelReadback(ctx, current) == nil {
 		again, latest, e := scopedPeerBootCurrent(nativePeerFreshJournalDir, 0, r, initial, "")

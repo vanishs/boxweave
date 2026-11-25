@@ -16,6 +16,10 @@ The 23-tool catalog and successful structured responses are preserved. An MCP to
 
 The handler checks UTF-8 byte length before admission, in addition to advertised schema character bounds. See [H4A acceptance](../development/PR188_H4A_BOX_ACCEPTANCE.md).
 
+## H4B capacity budgets (candidate)
+
+`host_status` and Doctor show live Box slots, IPv4 union upper bound (durable held plus native-only blocked), scoped identity retirement reserve, retained/active/revoked Peer directions, and grant-history upper bound after reserving future revokes. Low means at most 20% remaining; advisory, not a controller fault or allocation proof. Existing fields remain. No new MCP tool or automatic Scoped release. See [capacity and reclamation proposal](../development/PR188_H4B_RECLAMATION_DESIGN.md).
+
 ## `box_file_apply`
 
 Input: exact owned `box_id`, safe guest path, `mode=create|replace|delete`. **No patch mode**.

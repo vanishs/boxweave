@@ -275,6 +275,19 @@ def scoped_review(candidate, project):
 
 def print_scoped_review(review):
     print("Reviewed scoped native preparation:", json.dumps(review, sort_keys=True), flush=True)
+    # The displayed pool is derived from the exact reviewed CIDR, not an
+    # extra mutable input or another approval digest. Older/partial reports
+    # must never be represented as a verified capacity.
+    try:
+        prefix = ipaddress.IPv4Interface(review["IPv4CIDR"])
+        if not 16 <= prefix.network.prefixlen <= 30:
+            raise ValueError("unsupported prefix")
+        nominal = prefix.network.num_addresses - 3
+        print("Reviewed IPv4 capacity: " + str(prefix) + "; nominal identities=" +
+              str(nominal) + "; live Box ledger limit=1024; retired identities remain held.", flush=True)
+    except (KeyError, ValueError, TypeError):
+        print("Reviewed IPv4 capacity: UNVERIFIED; inspect native review before approval.", flush=True)
+    print("No implicit resize or address reuse. Larger exclusive sizing is fresh-bootstrap only.", flush=True)
     print("scoped_fresh_review_sha256=" + review["ReviewSHA256"], flush=True)
 
 

@@ -87,6 +87,9 @@ func (r *Report) ClassifyLedger(l state.DiagnosticLedger) {
 		}
 
 	}
+	if p := l.ScopedIdentityCapacity; p != nil && (p.Level == "EXHAUSTED" || p.Level == "OVER_LIMIT") {
+		r.AddRoutedIssue("capacity", "SCOPED_RETIRED_IDENTITY_CAPACITY", "ledger", "CONFIRMED", "NO_RESET_OR_COMPACTION")
+	}
 	if l.LegacyRetirement != nil && l.LegacyRetirement.Pending > 0 {
 		r.AddRoutedIssue("network", "LEGACY_IPV4_RETIREMENT_PENDING", "ledger", "IN_PROGRESS", "INSPECT_LEGACY_RETIREMENT")
 	}

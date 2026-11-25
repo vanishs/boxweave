@@ -64,6 +64,8 @@ func newToolFailure(tool string, err error) ToolFailure {
 		return failure("IDEMPOTENCY_CONFLICT", "CALLER_INPUT", "NOT_ADMITTED", "Key conflicts with original intent. Check authorized original; do not change keys to bypass it.", reconnectNext())
 	case errors.Is(err, state.ErrInvalid):
 		return failure("INVALID_INPUT", "CALLER_INPUT", "UNVERIFIED", "Invalid admission or arguments; check schema and original if effect status is uncertain.", noNext("CORRECT_INPUT"))
+	case errors.Is(err, state.ErrScopedIdentityCapacity):
+		return failure("SCOPED_RETIRED_IDENTITY_CAPACITY", "CAPACITY", "NOT_ADMITTED", "Retirement reserve exhausted. Existing identities may still be retired; do not reset or reuse history.", statusNext())
 	case errors.Is(err, state.ErrProjectCapacity):
 		return failure("PROJECT_BOX_CAPACITY_REACHED", "CAPACITY", "NOT_ADMITTED", "Owned and unresolved Create slots exhausted; inspect capacity, not a controller failure.", statusNext())
 	case errors.Is(err, state.ErrOwnedName):

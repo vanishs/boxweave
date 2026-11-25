@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"slices"
 
+	"github.com/vanishs/boxweave/internal/networklimits"
 	"github.com/vanishs/boxweave/internal/peerscope"
 )
 
@@ -18,7 +19,7 @@ type ScopedNetworkAuditRetiredBinding struct {
 	CreateID, DeleteID string
 }
 
-const scopedRetiredHistoryLimit = 8192
+const scopedRetiredHistoryLimit = networklimits.ScopedRetiredIdentityLimit
 
 func scopedRetiredOwners(ctx context.Context, tx *sql.Tx, project, bridge string) (map[string]ScopedNetworkAuditRetiredBinding, error) {
 	out := map[string]ScopedNetworkAuditRetiredBinding{}

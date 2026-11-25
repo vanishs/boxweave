@@ -84,6 +84,7 @@ jobs:
           grep -Fxq PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR188_H3B_INSTALLED_DIAGNOSTIC=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR188_H4A_INSTALLED_PREFLIGHT=PASS "$RUNNER_TEMP/n2-installed.log"
+          grep -Fxq PR188_H4B_INSTALLED_CAPACITY_PARITY=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR188_H1A_ACTIVE_EMPTY=PASS "$RUNNER_TEMP/n2-installed.log"
           grep -Fxq PR188_H1A_OFFLINE_EMPTY=PASS "$RUNNER_TEMP/n2-installed.log"
           for marker in ACTIVE_EMPTY OFFLINE_EMPTY UNTRUSTED_OBSERVER_NONROOT UNSAFE_STATE_STALE NEGATIVE_NO_EFFECT; do
@@ -100,6 +101,7 @@ jobs:
           fi
           if test "$PR182_SCOPED_RETIREMENT" = 1; then
             grep -Fxq "PR188_H4A_INSTALLED_BUSY_AND_REPLAY=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H4B_INSTALLED_CHURN_RETENTION=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "PR188_H2A_FOREIGN_ACL_PRE_DISPATCH_REFUSED=PASS" "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "PR188_H2A_DRAIN_COMPLETE=PASS" "$RUNNER_TEMP/n2-installed.log"
             for marker in LIVE_PLAN RETIRED_HISTORY INTERRUPTED_RESUMED NATIVE_RESTORED FOREIGN_UNCHANGED COMPLETE; do
@@ -124,6 +126,7 @@ jobs:
             grep -Fxq "PR188_H3B_GUIDED_DECLINE_NO_EFFECT=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "PR188_H3B_GUIDED_APPLY=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "PR188_H4A_INSTALLED_BUSY_AND_REPLAY=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR188_H4B_INSTALLED_CHURN_RETENTION=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "PR188_H4A_INSTALLED_UNKNOWN_NAVIGATION=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq 'PR177_D5_AUTHENTICATED_POSTCHECK=PASS SCOPED_V2' "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR177_D4_INSTALLED_PARTIAL_APPLY_REFUSED=PASS "$RUNNER_TEMP/n2-installed.log"

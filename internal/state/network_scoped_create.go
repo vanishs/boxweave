@@ -218,5 +218,12 @@ func scopedCreateAdmissionBarrier(ctx context.Context, tx *sql.Tx, a Admission) 
 	if json.Unmarshal(a.SafeIntent, &h) != nil || h.Schema != 2 {
 		return nil
 	}
+	capacity, e := readScopedIdentityCapacity(ctx, tx, a.Layer)
+	if e != nil {
+		return e
+	}
+	if capacity.RemainingNewIdentities == 0 {
+		return ErrScopedIdentityCapacity
+	}
 	return admissionBlock(ctx, tx, `SELECT o.id,o.state FROM operations o WHERE o.layer=? AND o.action IN ('box_create','box_delete','box_update','box_peer_set') AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer)
 }

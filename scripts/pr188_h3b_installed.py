@@ -9,6 +9,7 @@ import sys
 from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import token, pid
 import uninstall_core as u
+from pr188_h4b_installed import check as check_capacity
 
 BIN = "/usr/local/bin/boxweave"
 
@@ -38,6 +39,7 @@ def main(project, receipt, scoped):
         prefix = root["address_capacity"]["ipv4_prefix"]
         assert prefix and prefix == service["address_capacity"]["ipv4_prefix"] == mcp["address_capacity"]["ipv4_prefix"]
         assert root["address_capacity"] == mcp["address_capacity"]
+        check_capacity(mcp,root,scoped)
         assert r["forward_policy"]["state"] == "OBSERVED"
     m, _ = read([BIN, "doctor", "--maintenance", "--summary"])
     v = m["maintenance_readiness"]
@@ -51,6 +53,7 @@ def main(project, receipt, scoped):
     assert u.file_fingerprint(u.STATE / "install-manifest.json") == manifest
     assert pid("boxweave.service") == before
     print("PR188_H3B_INSTALLED_DIAGNOSTIC=PASS", flush=True)
+    print("PR188_H4B_INSTALLED_CAPACITY_PARITY=PASS", flush=True)
 
 if __name__ == "__main__":
     main(sys.argv[1], sys.argv[2], sys.argv[3] == "1")

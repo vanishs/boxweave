@@ -15,3 +15,13 @@ func ScopedPeerHistoryCanAppend(used, active int, allow bool) bool {
 	}
 	return after >= 0 && used+1+after <= ScopedPeerHistoryLimit
 }
+
+// Grant headroom reserves one history event for each active revoke and two
+// for each additional grant (its grant plus future revoke). This is an upper
+// bound, not approval of a particular direction or proof of the Root chain.
+func ScopedGrantHistoryRemaining(used, active int) int {
+	if used < 0 || active < 0 || used > ScopedPeerHistoryLimit || active > ScopedPeerHistoryLimit {
+		return 0
+	}
+	return max(0, (ScopedPeerHistoryLimit-used-active)/2)
+}

@@ -8,6 +8,7 @@ import sys
 from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import op, token
 from pr188_h4a_installed import busy
+from pr188_h4b_installed import live_check
 
 DB = "file:/var/lib/boxweave/ledger.sqlite?mode=ro"
 
@@ -55,6 +56,7 @@ def main(project, receipt):
         assert c.host_status()["ready"]
         args = {"cpu": 1, "memory_mib": 256, "disk_gib": 2,
                 "image": "local:boxweave-ubuntu-24.04", "internet": True, "start": True}
+        empty=live_check(c,project,0,0)
         a = op(c, "box_create", dict(args, name="scoped-alpha"), "scoped-a")["box_uuid"]
         b = op(c, "box_create", dict(args, name="scoped-beta", **{"boot.autostart": False}), "scoped-b")["box_uuid"]
         aa = verify(project, "scoped-alpha", a, "true")
@@ -62,6 +64,9 @@ def main(project, receipt):
         assert aa != ba and {aa, ba, "bw-peer-quarantine"} == acls()
         print("PR178_N2_MCP_SCOPED_CREATE=PASS", flush=True)
         busy(c, a, "SCOPED_V2")
+        active=live_check(c,project,2,0)
+        assert active["address_capacity"]["remaining_ipv4_upper_bound"]==empty["address_capacity"]["remaining_ipv4_upper_bound"]-2
+        assert active["scoped_identity_capacity"]["remaining_new_identities"]==empty["scoped_identity_capacity"]["remaining_new_identities"]-2
         op(c, "box_stop", {"box_id": a}, "scoped-a-stop")
         op(c, "box_delete", {"box_id": a}, "scoped-a-delete")
         assert aa not in acls()
@@ -73,6 +78,9 @@ def main(project, receipt):
         op(c, "box_delete", {"box_id": b}, "scoped-b-delete")
         assert acls() == {"bw-peer-quarantine"}
         assert not incus("list", "--all-projects", "-c", "n", "-f", "csv").strip()
+        retired=live_check(c,project,0,2)
+        assert retired["address_capacity"]["remaining_ipv4_upper_bound"]<=active["address_capacity"]["remaining_ipv4_upper_bound"]
+        assert retired["scoped_identity_capacity"]["remaining_new_identities"]==active["scoped_identity_capacity"]["remaining_new_identities"]
         old = [binding(a), binding(b)]
         d = op(c, "box_create", dict(args, name="scoped-after-delete", start=False,
                                      **{"boot.autostart": False}), "scoped-history-create")["box_uuid"]
@@ -82,6 +90,9 @@ def main(project, receipt):
             assert binding(d)["ipv4"] != prior["ipv4"] and binding(d)["ipv6"] != prior["ipv6"]
         op(c, "box_delete", {"box_id": d}, "scoped-history-delete")
         assert acls() == {"bw-peer-quarantine"}
+        last=live_check(c,project,0,3)
+        assert last["scoped_identity_capacity"]["remaining_new_identities"]==retired["scoped_identity_capacity"]["remaining_new_identities"]-1
+        print("PR188_H4B_INSTALLED_CHURN_RETENTION=PASS",flush=True)
         print("PR178_N2_MCP_LIFECYCLE=PASS", flush=True)
 
 

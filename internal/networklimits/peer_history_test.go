@@ -32,3 +32,28 @@ func TestScopedPeerHistoryReserveRevocation(t *testing.T) {
 		}
 	}
 }
+
+func TestH4BGrantBudgetMatchesAdmission(t *testing.T) {
+	for used := 0; used <= ScopedPeerHistoryLimit; used++ {
+		for active := 0; active <= ScopedDirectionLimit; active++ {
+			remaining := ScopedGrantHistoryRemaining(used, active)
+			if (remaining > 0) != ScopedPeerHistoryCanAppend(used, active, true) {
+				t.Fatalf("used=%d active=%d remaining=%d", used, active, remaining)
+			}
+			if remaining > 0 && !ScopedPeerHistoryCanAppend(used+remaining*2-2, active, true) {
+				t.Fatal("last reserved grant refused", used, active, remaining)
+			}
+		}
+	}
+	for _, c := range []struct {
+		limit, remaining int
+		want             string
+	}{
+		{32, 7, "AVAILABLE"}, {32, 6, "LOW"}, {32, 0, "EXHAUSTED"},
+		{253, 50, "LOW"}, {253, 51, "AVAILABLE"}, {0, 0, "UNVERIFIED"}, {32, 33, "UNVERIFIED"},
+	} {
+		if got := CapacityLevel(c.limit, c.remaining); got != c.want {
+			t.Fatal(c, got)
+		}
+	}
+}

@@ -15,19 +15,26 @@ import (
 // chain length. Retained directions include revoked rows. Revocation
 // reserve is computed by the same rule as scoped admission.
 type DiagnosticPeerCapacity struct {
-	RetainedDirections       int  `json:"retained_directions"`
-	ActiveDirections         int  `json:"active_directions"`
-	PendingOrUnknown         int  `json:"pending_or_unknown"`
-	DirectionLimit           int  `json:"direction_limit"`
-	CompletedLedgerEvents    int  `json:"completed_ledger_events"`
-	HistoryLimit             int  `json:"history_limit"`
-	NewGrantHistoryAvailable bool `json:"new_grant_history_available"`
-	NewDirectionAvailable    bool `json:"new_direction_available"`
+	RetainedDirections             int    `json:"retained_directions"`
+	ActiveDirections               int    `json:"active_directions"`
+	PendingOrUnknown               int    `json:"pending_or_unknown"`
+	DirectionLimit                 int    `json:"direction_limit"`
+	CompletedLedgerEvents          int    `json:"completed_ledger_events"`
+	HistoryLimit                   int    `json:"history_limit"`
+	NewGrantHistoryAvailable       bool   `json:"new_grant_history_available"`
+	NewDirectionAvailable          bool   `json:"new_direction_available"`
+	RevokedDirections              int    `json:"revoked_directions"`
+	RemainingDirections            int    `json:"remaining_directions"`
+	DirectionLevel                 string `json:"direction_level"`
+	ReservedRevokeEvents           int    `json:"reserved_revoke_events"`
+	RemainingGrantEventsUpperBound int    `json:"remaining_grant_events_upper_bound"`
+	GrantHistoryLevel              string `json:"grant_history_level"`
+	LedgerCoverage                 string `json:"ledger_coverage"`
 }
 
 func readDiagnosticPeerCapacity(ctx context.Context, tx *sql.Tx, project string) (DiagnosticPeerCapacity, error) {
-	out := DiagnosticPeerCapacity{DirectionLimit: 32, HistoryLimit: networklimits.ScopedPeerHistoryLimit}
-	e := tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(status='CONFIRMED'),0),coalesce(sum(status IN ('PENDING','UNKNOWN')),0) FROM peer_grants WHERE project=?`, project).Scan(&out.RetainedDirections, &out.ActiveDirections, &out.PendingOrUnknown)
+	out := DiagnosticPeerCapacity{DirectionLimit: networklimits.ScopedDirectionLimit, HistoryLimit: networklimits.ScopedPeerHistoryLimit}
+	e := tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(status='CONFIRMED'),0),coalesce(sum(status IN ('PENDING','UNKNOWN')),0),coalesce(sum(status='REVOKED'),0) FROM peer_grants WHERE project=?`, project).Scan(&out.RetainedDirections, &out.ActiveDirections, &out.PendingOrUnknown, &out.RevokedDirections)
 	if e != nil {
 		return out, e
 	}
@@ -39,6 +46,19 @@ func readDiagnosticPeerCapacity(ctx context.Context, tx *sql.Tx, project string)
 	}
 	out.NewGrantHistoryAvailable = networklimits.ScopedPeerHistoryCanAppend(out.CompletedLedgerEvents, out.ActiveDirections, true)
 	out.NewDirectionAvailable = out.RetainedDirections < out.DirectionLimit
+	out.RemainingDirections = max(0, out.DirectionLimit-out.RetainedDirections)
+	out.ReservedRevokeEvents = out.ActiveDirections
+	out.RemainingGrantEventsUpperBound = networklimits.ScopedGrantHistoryRemaining(out.CompletedLedgerEvents, out.ActiveDirections)
+	out.DirectionLevel = networklimits.CapacityLevel(out.DirectionLimit, out.RemainingDirections)
+	out.GrantHistoryLevel = networklimits.CapacityLevel(out.HistoryLimit/2, out.RemainingGrantEventsUpperBound)
+	out.LedgerCoverage = "SQLITE_ONLY_NOT_ROOT_PROOF"
+	if out.PendingOrUnknown != 0 || out.ActiveDirections+out.RevokedDirections+out.PendingOrUnknown != out.RetainedDirections || out.RetainedDirections > out.DirectionLimit || out.CompletedLedgerEvents+out.ActiveDirections > out.HistoryLimit {
+		out.LedgerCoverage = "UNSETTLED_OR_INCONSISTENT"
+		// Keep existing arithmetic booleans for clients. The new levels do
+		// not advertise availability from an unsettled or malformed ledger.
+		out.DirectionLevel = "UNVERIFIED"
+		out.GrantHistoryLevel = "UNVERIFIED"
+	}
 	return out, nil
 }
 func (s *Store) ReadDiagnosticPeerCapacity(ctx context.Context, project string) (DiagnosticPeerCapacity, error) {
@@ -95,25 +115,26 @@ type DiagnosticLedger struct {
 	HistorySample    []DiagnosticOperation `json:"history_sample"`
 	HistoryTruncated bool                  `json:"history_truncated"`
 
-	ReleasedUnknown   int                     `json:"released_unknown"`
-	Recovered         int                     `json:"recovered"`
-	Activity          ActivityResult          `json:"-"`
-	OAuth             DiagnosticOAuth         `json:"oauth"`
-	PeerCapacity      *DiagnosticPeerCapacity `json:"peer_capacity,omitempty"`
-	LegacyRetirement  *IPv4RetirementStatus   `json:"legacy_retirement,omitempty"`
-	RetiredIdentities int                     `json:"retired_identities"`
-	RetiredLimit      int                     `json:"retired_limit,omitempty"`
-	ForwardConfirmed  int                     `json:"forward_confirmed"`
-	ForwardUnresolved int                     `json:"forward_unresolved"`
-	Network           NativeNetworkLedger     `json:"-"`
-	Forwards          []DiagnosticForward     `json:"-"`
-	ForwardTruncated  bool                    `json:"forward_truncated"`
-	NetworkObserved   bool                    `json:"network_observed"`
-	HoldsObserved     bool                    `json:"holds_observed"`
-	HeldIPv4          int                     `json:"held_ipv4"`
-	HeldIPv6          int                     `json:"held_ipv6"`
-	HeldMAC           int                     `json:"held_mac"`
-	HoldsDigest       string                  `json:"-"`
+	ReleasedUnknown        int                     `json:"released_unknown"`
+	Recovered              int                     `json:"recovered"`
+	Activity               ActivityResult          `json:"-"`
+	OAuth                  DiagnosticOAuth         `json:"oauth"`
+	PeerCapacity           *DiagnosticPeerCapacity `json:"peer_capacity,omitempty"`
+	LegacyRetirement       *IPv4RetirementStatus   `json:"legacy_retirement,omitempty"`
+	RetiredIdentities      int                     `json:"retired_identities"`
+	RetiredLimit           int                     `json:"retired_limit,omitempty"`
+	ScopedIdentityCapacity *ScopedIdentityCapacity `json:"scoped_identity_capacity,omitempty"`
+	ForwardConfirmed       int                     `json:"forward_confirmed"`
+	ForwardUnresolved      int                     `json:"forward_unresolved"`
+	Network                NativeNetworkLedger     `json:"-"`
+	Forwards               []DiagnosticForward     `json:"-"`
+	ForwardTruncated       bool                    `json:"forward_truncated"`
+	NetworkObserved        bool                    `json:"network_observed"`
+	HoldsObserved          bool                    `json:"holds_observed"`
+	HeldIPv4               int                     `json:"held_ipv4"`
+	HeldIPv6               int                     `json:"held_ipv6"`
+	HeldMAC                int                     `json:"held_mac"`
+	HoldsDigest            string                  `json:"-"`
 }
 
 func diagnosticAction(a string) string {
@@ -324,6 +345,11 @@ func readDiagnosticLedgerTx(ctx context.Context, tx *sql.Tx, project, mode, brid
 		}
 		out.PeerCapacity = &cap
 		out.RetiredLimit = scopedRetiredHistoryLimit
+		identity, e := readScopedIdentityCapacity(ctx, tx, project)
+		if e != nil {
+			return out, e
+		}
+		out.ScopedIdentityCapacity = &identity
 	}
 	if e = tx.QueryRowContext(ctx, "SELECT coalesce(sum(state='CONFIRMED'),0),coalesce(sum(state IN ('PENDING','UNKNOWN')),0) FROM forward_claims WHERE project=?", project).Scan(&out.ForwardConfirmed, &out.ForwardUnresolved); e != nil {
 		return out, e
@@ -393,15 +419,15 @@ func readDiagnosticLedgerTx(ctx context.Context, tx *sql.Tx, project, mode, brid
 // digest. Exclude volatile capture time and secrets, compare after scan.
 func (d DiagnosticLedger) ObservationDigest() string {
 	raw, _ := json.Marshal(struct {
-		N                                         NativeNetworkLedger
-		F                                         []DiagnosticForward
-		A                                         []DiagnosticOperation
-		NOK                                       bool
-		Truncated                                 bool
-		Holds                                     string
-		HoldsOK                                   bool
-		ForwardCount, ForwardUnknown, ActiveCount int
-	}{d.Network, d.Forwards, d.Active, d.NetworkObserved, d.ForwardTruncated, d.HoldsDigest, d.HoldsObserved, d.ForwardConfirmed, d.ForwardUnresolved, d.ActiveCount})
+		N                                                       NativeNetworkLedger
+		F                                                       []DiagnosticForward
+		A                                                       []DiagnosticOperation
+		NOK                                                     bool
+		Truncated                                               bool
+		Holds                                                   string
+		HoldsOK                                                 bool
+		ForwardCount, ForwardUnknown, ActiveCount, RetiredCount int
+	}{d.Network, d.Forwards, d.Active, d.NetworkObserved, d.ForwardTruncated, d.HoldsDigest, d.HoldsObserved, d.ForwardConfirmed, d.ForwardUnresolved, d.ActiveCount, d.RetiredIdentities})
 	h := sha256.Sum256(raw)
 	return hex.EncodeToString(h[:])
 }

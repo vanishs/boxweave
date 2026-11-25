@@ -191,6 +191,7 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 				if l.PeerCapacity != nil {
 					legacy.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
 					legacy.ScopedPeerCapacity = l.PeerCapacity
+					legacy.ScopedIdentityCapacity = l.ScopedIdentityCapacity
 				}
 			} else {
 				report.AddRoutedIssue("database", "LEDGER_OBSERVATION_UNVERIFIED", "ledger", "UNVERIFIED", "INSPECT_EVIDENCE")
@@ -318,13 +319,28 @@ func runDoctor(a doctorArgs, summary bool) error {
 	defer cancel()
 	legacy, report := collectDoctor(ctx, a)
 	report.Operator = diagnostic.Summarize(report, os.Geteuid())
+	if legacy.CapacityNeedsReview() {
+		report.Operator.Next = append(report.Operator.Next, "Review capacity budgets before new allocations; do not clear history or recycle addresses manually.")
+	}
 	if summary {
 		fmt.Fprintf(os.Stderr, "Doctor %s: %s; installation=%s; runtime=%s; evidence=%s\n", report.Scope, report.Operator.Status, report.Installation.Mode, report.Installation.Runtime, report.Coverage)
 		if report.ScopedLedger != nil {
 			fmt.Fprintf(os.Stderr, "Owned Boxes=%d; retained identities=%d\n", report.ScopedLedger.Owned, report.ScopedLedger.Retired)
 		}
 		if legacy.AddressCapacity != nil {
-			fmt.Fprintf(os.Stderr, "IPv4 %s: held=%d; remaining upper bound=%d\n", legacy.AddressCapacity.IPv4Prefix, legacy.AddressCapacity.BlockedIPv4, legacy.AddressCapacity.RemainingIPv4UpperBound)
+			fmt.Fprintf(os.Stderr, "IPv4 %s: held=%d; remaining upper bound=%d; %s\n", legacy.AddressCapacity.IPv4Prefix, legacy.AddressCapacity.BlockedIPv4, legacy.AddressCapacity.RemainingIPv4UpperBound, legacy.AddressCapacity.Level)
+			if legacy.AddressCapacity.DurableHeldIPv4 != nil && legacy.AddressCapacity.NativeOnlyBlockedIPv4 != nil {
+				fmt.Fprintf(os.Stderr, "IPv4 durable held=%d; native-only blocked=%d\n", *legacy.AddressCapacity.DurableHeldIPv4, *legacy.AddressCapacity.NativeOnlyBlockedIPv4)
+			}
+		}
+		if p := legacy.ProjectCapacity; p != nil {
+			fmt.Fprintf(os.Stderr, "Live Box slots: owned=%d pending=%d remaining=%d; %s\n", p.Owned, p.PendingCreates, p.Remaining, p.Level)
+		}
+		if p := legacy.ScopedIdentityCapacity; p != nil {
+			fmt.Fprintf(os.Stderr, "Scoped identities: retired=%d owned=%d pending=%d new remaining=%d; %s\n", p.Retired, p.Owned, p.PendingCreates, p.RemainingNewIdentities, p.Level)
+		}
+		if p := legacy.ScopedPeerCapacity; p != nil {
+			fmt.Fprintf(os.Stderr, "Peer directions: active=%d revoked=%d pending/unknown=%d remaining=%d; %s; grant-history upper bound=%d reserved revokes=%d; %s\n", p.ActiveDirections, p.RevokedDirections, p.PendingOrUnknown, p.RemainingDirections, p.DirectionLevel, p.RemainingGrantEventsUpperBound, p.ReservedRevokeEvents, p.GrantHistoryLevel)
 		}
 		for _, next := range report.Operator.Next {
 			fmt.Fprintln(os.Stderr, next)

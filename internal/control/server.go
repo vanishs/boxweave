@@ -89,6 +89,7 @@ type HostStatus struct {
 	AddressCapacity         *native.AddressCapacity       `json:"address_capacity,omitempty"`
 	AddressRetirement       *state.IPv4RetirementStatus   `json:"address_retirement,omitempty"`
 	AddressCapacityStatus   string                        `json:"address_capacity_status,omitempty"`
+	ScopedIdentityCapacity  *state.ScopedIdentityCapacity `json:"scoped_identity_capacity,omitempty"`
 	ScopedPeerCapacity      *state.DiagnosticPeerCapacity `json:"scoped_peer_capacity,omitempty"`
 	ReadinessClass          string                        `json:"readiness_class"`
 	PeerMode                string                        `json:"peer_mode"`
@@ -153,6 +154,9 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 	}
 	if s.ScopedPeerFresh {
 		out.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
+		if cap, e := s.Store.ReadScopedIdentityCapacity(ctx, s.Native.Project); e == nil {
+			out.ScopedIdentityCapacity = &cap
+		}
 		if cap, e := s.Store.ReadDiagnosticPeerCapacity(ctx, s.Native.Project); e == nil {
 			out.ScopedPeerCapacity = &cap
 		}
@@ -213,7 +217,7 @@ func (s *Service) Handler() http.Handler {
 			return result, err
 		}
 	})
-	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies; project_capacity counts owned and unresolved Create slots, not native address/storage availability or permission to dispatch; address_capacity reports scoped IPv4 snapshot upper bound, never an allocation guarantee; no foreign inventory.", Annotations: readToolAnnotations()},
+	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies; project_capacity counts owned and unresolved Create slots, not native address/storage availability or permission to dispatch; address_capacity reports IPv4 snapshot upper bound and durable/native-only holds; scoped identity, direction and grant-history budgets warn before exhaustion; no allocation guarantee; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			principal, err := s.requestPrincipal(req)
 			if err != nil {
@@ -232,7 +236,7 @@ func (s *Service) Handler() http.Handler {
 			if result.Ready && (len(attention.Items) > 0 || attention.Coverage == "UNAVAILABLE") {
 				result.Navigation = attention.NextAction
 			}
-			if result.AddressCapacityStatus == "EXHAUSTED" && result.Navigation.Kind == "NONE" {
+			if result.CapacityNeedsReview() && result.Navigation.Kind == "NONE" {
 				result.Navigation = state.NextAction{Kind: "REVIEW_CAPACITY"}
 			}
 			return privateReadReply(ctx, s, principal.TokenID, result)
@@ -323,4 +327,10 @@ func (s *Service) ListenAndServe() error {
 		go s.ipv4RetirementLoop(gcCtx)
 	}
 	return server.ListenAndServe()
+}
+
+// Advisory capacity navigation never grants allocation or recovery authority.
+func (s HostStatus) CapacityNeedsReview() bool {
+	low := func(v string) bool { return v == "LOW" || v == "EXHAUSTED" || v == "OVER_LIMIT" || v == "UNVERIFIED" }
+	return s.AddressCapacityStatus == "EXHAUSTED" || s.AddressCapacity != nil && low(s.AddressCapacity.Level) || s.ProjectCapacity != nil && low(s.ProjectCapacity.Level) || s.ScopedIdentityCapacity != nil && low(s.ScopedIdentityCapacity.Level) || s.ScopedPeerCapacity != nil && (low(s.ScopedPeerCapacity.DirectionLevel) || low(s.ScopedPeerCapacity.GrantHistoryLevel))
 }
