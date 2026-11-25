@@ -1,21 +1,62 @@
 # Consolidation progress and resumable handoff
 
-Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY.md) | [acceptance](CONSOLIDATION_ACCEPTANCE.md). Topic branch: `feat/v1-pre-release-consolidation-20261124`, base v1 at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. Owner requested one PR, Box-first iterative work and independent CI in parallel. This initial checkpoint is documentation only.
+Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY.md) | [acceptance](CONSOLIDATION_ACCEPTANCE.md). Topic branch: `feat/v1-pre-release-consolidation-20261124`, base v1 at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. Owner requested one PR, Box-first iterative work and independent CI in parallel. This PR still contains documentation-only changes; product implementation has not started.
 
 | Phase | Box / development status | CI / independent status |
 | --- | --- | --- |
-| P0 | READY — preliminary remote source audit seeded inventory; full dependency graph, Box preflight and test conversion rehearsal pending | NOT_RUN for product changes |
+| P0 | IN_PROGRESS — isolated exact-head checkout and candidate build; source tests and native/coverage rehearsal pending | Initial docs-only quality PASS; product CI NOT_RUN |
 | P1 | NOT_STARTED | NOT_RUN |
 | P2 | NOT_STARTED | NOT_RUN |
 | P3 | NOT_STARTED | NOT_RUN |
 | P4 | NOT_STARTED | NOT_RUN |
 | P5 | NOT_STARTED | NOT_RUN |
 
-## Current checkpoint
+## Initial checkpoint (historical)
 
 No development Box selected, no current installed binary observed, no native Operation performed, no code changes or native tests performed by initial planning task. Existing RC environments may be disposable with exact ownership/cleanup checks; preserve uncertain originals. Before work, read actual PR HEAD and comments, discover authorized existing Box and its operations, reconcile dirty work/checkpoints and pending CI, and select the next safe unfinished slice. Do not infer stage or environment from this initial record once later evidence exists.
 
 Planning evidence: exact source anchors in inventory; 47 workflow files, 54 help-listed CLI leaves (not full dispatch inventory), Schema 6, four installed CI modes. S2 and nested release tests need startup conversion; Scoped still uses shared guard/conntrack/native helpers. No full dependency or coverage proof yet. No current stable publication. #170 is separate and must be reconciled after consolidation.
+
+## P0 checkpoint — Box workspace and dependency reconnaissance (2026-11-24 PT)
+
+Source examined: `1cfcd3da43bc47dfc42edac58d0041c02aa16e56`; canonical v1/base `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. No product source change yet. The exact original PR head's [quality gate](https://github.com/vanishs/boxweave/actions/runs/45565927118) succeeded (job 139040580967). The [candidate run](https://github.com/vanishs/boxweave/actions/runs/45565927228) succeeded only on change scope (job 139040581939); source, amd64/arm64, S2 and S2.5 were skipped. No product CI failure or product CI PASS.
+
+| P0 slice | Status / evidence |
+| --- | --- |
+| P0a — resume and exact baseline | DONE: no previous PR191 operations found before this task; existing Boxes inspected; initial head and docs-only CI checked. |
+| P0b — isolated workspace | DONE: reuse `pr188-h0-lab` UUID `9d374e18-196a-493d-bf1f-2d582589f04d` (L1); separate clean clone `/root/pr191-consolidation` at exact head. Existing dirty PR188 checkout preserved. |
+| P0c — candidate and source checks | PARTIAL: Go 1.26.9 recovered from `/root/pr188-h0/toolchain/go/bin`; CGO amd64 candidate built with SHA256 `8380c32c2b05bb8fc0141a64d26ba1a6d9b62156abf6050916d956f85c529d50`. Original build Exec then exited 1 on unsupported `version`; subsequent original `build-info` and three-package test Exec still VERIFYING, not PASS. Make absent from PATH. |
+| P0d — dependency and acceptance inventory | PARTIAL: concrete runtime/schema and installed-lane anchors below; complete per-symbol and per-marker witness mapping, dynamic callers, all workflows and actual CLI leaves still open. |
+| P0e — exact Scoped native baseline | OPEN: fresh install, authenticated positive/negative, Create/Peer/Delete, restart, retirement/reinstall on exact candidate not yet proved. Existing roundtrip lab was inspected read-only and is historical. |
+| P0f — conversion rehearsal | OPEN: prove S2/S2.5 Scoped boot and fault-injection fixture setup; preserve all generic witnesses and isolate genuinely obsolete behavior. |
+
+Original operation record (work_ref `pr191`):
+
+- `b032519267e68e6287ba7a0022c71a14` (exit 0): inspected roundtrip lab; no Git/Go in PATH, active Incus and BoxWeave, no listed instances.
+- `40aa0bbf1b88e4d0dcdb205cd67b8852` (exit 0): inspected scoped lab; four running historical fixtures, left untouched. `f280fd321a15bcad20a36f89f3404a64` (exit 0): inspected developer lab; Incus active, BoxWeave inactive, no listed instances, Git available.
+- `49637409c66eddbb88147b4c95284b20` (exit 0): old PR188 worktree dirty; no existing PR191 path found. No reset or cleanup.
+- `99dfa577f859aeca4c7301ba2cf21bbb` (exit 1): cloned exact clean head successfully; preflight stopped at missing Make. `b9c6bba830ba82cb160265da9e465958` (exit 0): recovered cached toolchain, confirmed 47 workflow files, inspected mode references and S2 startup.
+- `95cafc33de56603c3ce01ab0aff42863` (exit 1): exact binary build and digest completed; invalid `version` command caused overall nonzero. `0af2e5c16cca53d0a8afc9a2eb7173de`: corrected `build-info` then `CGO_ENABLED=1 go test -count=1 ./internal/state ./internal/control ./internal/install`; last observed VERIFYING. Retrieve original exit and both streams before further Exec in this Box; a concurrent read-only plan request was explicitly rejected by the resource lock, not dispatched. Do not replay the original.
+- `c9db9c8a6b2d6f9d8ce077bae05d9d0d` (exit 0): `pr188-roundtrip-lab` UUID `c5a60ef1-9ab0-4e05-bfe1-60a74e08b631`, installed commit `269d82074c033e069e930c09720ba6c5860095de`, digest `ddecccebcf83e8e1c74ca95858d0cb9cdba654b8504676aedd1d73ffaf82fa2b`, Scoped mode, all four services active, no inner instances, all six key ledger tables empty. This corroborates historical fixture state, not current-source native acceptance. Preserve prior evidence and do not reinstall this active lab merely to repeat it.
+
+### P0 dependency and conversion queue
+
+The following anchors refer to the exact source examined, not an implemented conversion. Marker counts are unique literal uppercase PASS names (including expectations); they are not unique tests, and dynamic markers/other assertion styles still need mapping.
+
+| Baseline witness / dependency | Required disposition and next stage |
+| --- | --- |
+| `internal/control/server.go:68,125-155,260,326`; `peer_tools.go:58`; `box_tools.go:416,887`; `operation_tools.go:152`; `operation_recover.go:34`; scoped drain and CLI/install mode consumers | P1 retain Scoped admission, host_status, drain fence, native lifecycle and recovery. Trace each Legacy alternative and all callers before removal; convert fixtures alongside code (C02-C05/C10). |
+| `network_peer_scoped_execute.go:22,43,65,94`, `network_peer_scoped_root_transition.go:35,48,178`, `network_peer_scoped_conntrack.go:15` | P1 extract/retain shared guard witness/batch, replacement, conntrack, native digest and exact proof. Do not remove by filename; compare actual dependencies and prove directional/recovery behavior (C04-C05). |
+| `internal/state/store.go:22,51-53,78-79,272-273,319,404` | P1 trace retirement/queue/compaction readers, writers, indexes, claims and tests. Direct fresh schema bump only with old-state refusal and preservation of original UNKNOWN (C02/C05). |
+| `scripts/accept_s2_native.sh` (16 literal direct serve starts at 296, 341, 848, 1103, 1132, 1213, 1251, 1345, 1383, 1570, 1679, 1950, 2014, 2193, 2378, 2443; 113 literal PASS names) | P0/P1 convert setup and repeated restart/fault process launch together. Preserve previous official SDK probe at 357-382, project/UUID denial, duplicate serve, actual Exec/output, crash/WAL/ACK loss, stale ETag, GC/quota, schema refusal. The protocol's legacy SDK is not Legacy controller support (C02/C03/C05/C11). Explicitly map original legacy SimWAN fixture at 2608-2614 to equivalent Scoped witness before retiring it. |
+| `scripts/s25_bridgehead_lab.sh` (38 literal PASS names; old install-stage/activate at 95/100, hard-coded build labels at 64/66, positive upgrade/rollback at 557-608) | P0/P2 convert startup to supported Scoped install. Retain actual two-layer lifecycle, distinct actors, old-token denial, restart/SIGKILL original recovery, foreign and parent socket denial, v4/v6 positive/negative packet evidence. Separate old Legacy upgrade/rollback positive behavior from generic recovery assertions; explicit Scoped unsupported-operation negative proof and #170 decision where applicable (C03/C05-C09/C11). |
+| `scripts/n2_installed_lifecycle.sh` (24 literal PASS names) and `.github/workflows/v1-n2-installed-lifecycle.yml` (49 literal PASS names; four modes at 72-77) | P0/P2 preserve clean install/read-only/stale review/guard, unique Legacy-hosted generic active/offline retirement/resume/purge, Doctor/Recover, capacity and network churn. Retain scoped roundtrip and directional lifecycle witnesses from `pr188_scoped_roundtrip.py` and `pr178_n2_scoped_lifecycle.py`. Do not delete Legacy lane before each applicable marker has a replacement or explicit obsolete disposition (C04-C08/C11). |
+| `.github/workflows/v1-release.yml:194-195,229-231` | P0/P4 retain independent S2 and S2.5 native gates and dual-arch manifests; use exact candidate artifacts and update required witness checks only in step with converted scripts (C01/C09/C11). |
+| `cmd/boxweave/main.go:174,189,240,260-290,476-508,561-571,663-738` | P3 categorize real dispatcher and fixed service leaves, including hidden Scoped guard/lifecycle commands. Native Incus package migration is separate from obsolete BoxWeave RC compatibility; do not blanket-remove by prefix (C08/C10). |
+
+Next safe action: first read original test operation above; then inspect developer lab's actual residual installation and prerequisite state read-only and generate exact candidate Scoped plan. If this retained lab cannot host a clean candidate without removing other resources or bypassing a safety refusal, use a separate authorized disposable fixture or independent native runner. Complete the full witness ledger and Scoped boot rehearsal before broad P1 deletion. No false CI or native PASS.
+
+Learning disposition: reuse BDH-L001/L002/L006 (tool and fixture capability), L012 (exact CI evidence), and existing verification/resume skills. Recovered nested Go toolchain despite PATH failure; unsupported `version` was corrected to existing `build-info`. No new reusable asset or promotion justified yet; keep failure and original pending operation in this record. No merge or publication.
 
 ## Update this record at material checkpoints
 
