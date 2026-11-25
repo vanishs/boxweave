@@ -1,0 +1,1293 @@
+# P0 baseline witness inventory
+
+Exact source: `1cfcd3da43bc47dfc42edac58d0041c02aa16e56`. All entries OPEN: preserve until a reviewed equivalent or explicit obsolete-only rationale exists. Literal source index, not exhaustive dynamic call graph or test acceptance.
+
+## quality-gate.yml
+
+P4: C01/C11 quality and format.
+
+- 45: `scripts/ci_change_scope.py`
+- 48: `scripts/test_ci_change_scope.py`
+- 49: `scripts/test_local_hook_scope.py`
+- 57: `scripts/check_format.py`
+- 60: `scripts/check_yaml.go`
+- 79: `scripts/pr188_h3a_oauth.py`
+- 85: `TestN4ProjectCapacityAndNetworkAudit1024LocalBudget`
+- 110: `CI_DOCS_ONLY_FAST_PATH`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-forward-install-policy.yml
+
+P1/P2: C03/C05/C06/C11 real TCP/UDP, policies, dependent Delete.
+
+- 11: `scripts/forward_install_policy_ci.sh`
+- 20: `scripts/forward_install_policy_ci.sh`
+- 21: `scripts/forward_project_capabilities_native.py`
+- 51: `scripts/forward_install_policy_ci.sh`
+- 52: `scripts/forward_install_policy_ci.sh`
+- 55: `FORWARD_INSTALL_FRESH_ALL_AND_LOOPBACK_MANAGEMENT`
+- 56: `FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE`
+- 57: `FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_GRANT`
+- 58: `FORWARD_INSTALL_EXTERNAL_POLICY_DENIAL`
+- 59: `FORWARD_INSTALL_WILDCARD_HTTP_PACKET`
+- 60: `FORWARD_INSTALL_PROJECT_PROXY_DENIAL`
+- 61: `FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_ROLLBACK`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-guided-upgrade.yml
+
+P2: C06/C07/C11 fresh/negative and old upgrade-only retirement review.
+
+- 31: `scripts/guided_upgrade_ci.sh`
+- 32: `scripts/guided_upgrade_ci.sh`
+- 56: `scripts/forward_install_policy_ci.sh`
+- 57: `FORWARD_INSTALL_FRESH_ALL_AND_LOOPBACK_MANAGEMENT`
+- 58: `FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-n2-installed-lifecycle.yml
+
+P1/P2/P3: C04-C08/C11 Scoped lifecycle, retirement and recovery.
+
+- 14: `scripts/pr177_d4_installed_recovery.py`
+- 15: `scripts/pr188_h1a_observe.py`
+- 16: `scripts/pr188_h1b_plan.py`
+- 17: `scripts/pr188_h2b_offline.py`
+- 18: `scripts/pr188_h2c_purge.py`
+- 19: `scripts/test_offline_retirement.py`
+- 21: `scripts/test_maintenance_preview.py`
+- 34: `scripts/pr188_h3a_oauth.py`
+- 35: `scripts/pr188_h3b_installed.py`
+- 36: `scripts/pr188_h4a_installed.py`
+- 37: `scripts/pr188_h4b_installed.py`
+- 38: `scripts/test_scoped_drain.py`
+- 39: `scripts/test_lxc_empty_retirement.py`
+- 42: `scripts/test_uninstall_core.py`
+- 52: `scripts/uninstall_core.py`
+- 54: `scripts/pr178_n2_scoped_lifecycle.py`
+- 55: `scripts/pr182_scoped_retirement.py`
+- 56: `scripts/pr188_scoped_roundtrip.py`
+- 57: `scripts/test_scoped_roundtrip.py`
+- 58: `scripts/pr178_n3_scoped_peer.py`
+- 94: `scripts/n2_installed_lifecycle.sh`
+- 95: `scripts/n2_installed_lifecycle.sh`
+- 99: `N2_CLEAN_BOOTSTRAP_ADDRESS_POOL`
+- 100: `PR177_D3_INSTALLED_ABSENT_ISSUE_NO_EFFECT`
+- 101: `PR177_D2_INSTALLED_EMPTY_DIAGNOSTIC_COVERAGE`
+- 102: `PR177_D1_INSTALLED_MODE_AND_AUTHORITY`
+- 103: `PR177_D1_INSTALLED_NO_SERVICE_RESTART`
+- 104: `PR188_H3B_INSTALLED_DIAGNOSTIC`
+- 105: `PR188_H4A_INSTALLED_PREFLIGHT`
+- 106: `PR188_H4B_INSTALLED_CAPACITY_PARITY`
+- 107: `PR188_H1A_ACTIVE_EMPTY`
+- 108: `PR188_H1A_OFFLINE_EMPTY`
+- 113: `PR188_H2C_OFFLINE_POSTNATIVE_RESUMED`
+- 114: `PR188_H2C_OFFLINE_PURGE`
+- 115: `PR188_H2C_PURGE_INTERRUPTED_RESUMED`
+- 122: `PR188_H4A_INSTALLED_BUSY_AND_REPLAY`
+- 123: `PR188_H4B_INSTALLED_CHURN_RETENTION`
+- 124: `PR188_H2A_FOREIGN_ACL_PRE_DISPATCH_REFUSED`
+- 125: `PR188_H2A_DRAIN_COMPLETE`
+- 126: `PR188_UNKNOWN_EFFECTIVE_DROPIN_NO_EFFECT`
+- 131: `PR188_H2C_PURGE_INTERRUPTED_RESUMED`
+- 132: `RC14_SCOPED_PURGE`
+- 133: `PR188_ROUNDTRIP_NETWORK`
+- 134: `PR188_ROUNDTRIP_SCOPED_FRESH_LEDGER_OLD_TOKEN_DENIED`
+- 135: `PR188_ROUNDTRIP_NETWORK`
+- 136: `PR188_ROUNDTRIP_SCOPED_REINSTALL_WORKLOAD`
+- 140: `INSTALL_SCOPED_READONLY_PLAN`
+- 141: `INSTALL_SCOPED_STALE_PLAN_REFUSED`
+- 142: `INSTALL_SCOPED_WRAPPERS_REFUSE_LEGACY`
+- 143: `PR177_D2_SCOPED_ACTIVE_RETIRED_DIAGNOSTIC`
+- 144: `PR188_H1A_LIVE`
+- 145: `PR188_H1B_LIVE`
+- 146: `PR188_H1B_FOREIGN_CONSUMER_STALE`
+- 147: `PR177_D3_INSTALLED_PARTIAL_ORIGINAL_PLAN_BLOCKED`
+- 148: `PR177_D3_INSTALLED_POSITIVE_PLAN`
+- 149: `PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY`
+- 150: `PR188_H3B_GUIDED_DECLINE_NO_EFFECT`
+- 151: `PR188_H3B_GUIDED_APPLY`
+- 152: `PR188_H4A_INSTALLED_BUSY_AND_REPLAY`
+- 153: `PR188_H4B_INSTALLED_CHURN_RETENTION`
+- 154: `PR188_H4A_INSTALLED_UNKNOWN_NAVIGATION`
+- 155: `PR177_D5_AUTHENTICATED_POSTCHECK`
+- 156: `PR177_D4_INSTALLED_PARTIAL_APPLY_REFUSED`
+- 158: `PR177_D2_SCOPED_DEGRADED_DIAGNOSTIC`
+- 159: `PR178_N3_GUARD_PREREQUISITE`
+- 164: `PR178_N3_INSTALLED_LIVE_FLOWS`
+- 165: `PR178_N3_ACTIVE_POLICY_LIFECYCLE`
+- 166: `PR178_N3_BOOT_POLICY`
+- 167: `PR178_N3_INSTALLED_PEER`
+- 174: `I2_GUIDED_LEGACY_PREVIEW_NO_EFFECT`
+- 175: `I3_LEGACY_DRIFT_REFUSED_BEFORE_RETIREMENT`
+- 176: `PR177_D3_INSTALLED_POSITIVE_PLAN`
+- 177: `PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY`
+- 178: `PR188_H3B_GUIDED_DECLINE_NO_EFFECT`
+- 179: `PR188_H4A_INSTALLED_BUSY_AND_REPLAY`
+- 180: `PR188_H4A_INSTALLED_UNKNOWN_NAVIGATION`
+- 181: `PR177_D5_LEGACY_CLEANUP`
+- 182: `PR177_D5_AUTHENTICATED_POSTCHECK`
+- 187: `PR188_H2C_PURGE_INTERRUPTED_RESUMED`
+- 188: `RC14_LEGACY_PURGE`
+- 189: `RC14_FRESH_LEDGER`
+- 190: `RC14_LEGACY_TO_SCOPED_REINSTALL`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-n4-capacity-budgets.yml
+
+P1: C04/C05 capacity and retention.
+
+- 42: `TestN4ProjectCapacityAndNetworkAudit1024LocalBudget`
+- 43: `N4_1024_SQLITE_AND_PEER_ROOT_LEDGER_BUDGET`
+- 48: `N4_1024_NATIVE_MODEL_BOUND_ONLY`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-release.yml
+
+P4/P5: C01/C09/C11/C12 exact artifacts and stable gates.
+
+- 34: `scripts/ci_change_scope.py`
+- 37: `CI_DOCS_ONLY_CANDIDATE_SKIP`
+- 63: `scripts/s2_unknown_create_binding_probe.go`
+- 64: `scripts/s2_p1_bound_create_receipt_fault_probe.go`
+- 69: `scripts/s2_p1_bound_create_receipt_fault.sh`
+- 70: `scripts/s2_p1_bound_create_receipt_fault_probe.go`
+- 75: `scripts/s2_p1_bound_create_receipt_fault.sh`
+- 77: `scripts/test_v1_release_manifest.py`
+- 194: `scripts/accept_s2_native.sh`
+- 195: `S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS`
+- 229: `scripts/s25_bridgehead_lab.sh`
+- 230: `S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER`
+- 231: `S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED`
+- 265: `scripts/v1_release_manifest.py`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s1-a071-block-disk.yml
+
+P2/P5: C01/C06/C09 real block and quota.
+
+- 25: `scripts/accept_s1_a071_block_disk.sh`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s1-check.yml
+
+P4: C01/C11 quality and format.
+
+- 79: `scripts/s25_lab_agent.go`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s2-format-snapshot.yml
+
+P4: C01/C11 quality and format.
+
+- 24: `scripts/s2_ack_loss_probe.go`, `scripts/s2_ack_loss_proxy.go`, `scripts/s2_crash_probe.go`, `scripts/s2_exec_gc_probe.go`, `scripts/s2_legacy_sdk_probe.go`, `scripts/s2_mcp_quota_probe.go`, `scripts/s2_native_guest_quota_probe.go`, `scripts/s2_native_probe.go`, `scripts/s2_p0_native_sqlite_probe.go`, `scripts/s2_p0_native_sqlite_proxy.go`, `scripts/s2_p1_bound_create_receipt_fault_probe.go`, `scripts/s2_p1_native_create_delete_overlap_probe.go`, `scripts/s2_p1_operation_list_boundary_probe.go`, `scripts/s2_p1_private_read_delay_proxy.go`, `scripts/s2_p1_private_read_inflight_probe.go`, `scripts/s2_p1_stop_delete_probe.go`, `scripts/s2_p1_stop_delete_proxy.go`, `scripts/s2_p1_token_inflight_probe.go`, `scripts/s2_p1_two_controllers_probe.go`, `scripts/s2_p2_alternate_pool_probe.go`, `scripts/s2_p2_malformed_exec_probe.go`, `scripts/s2_p2_malformed_exec_proxy.go`, `scripts/s2_queued_cancel_seed.go`, `scripts/s2_sqlite_fsync_probe.go`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s2-list-boundary.yml
+
+P1/P3: C02/C03/C05/C11 original receipts, auth, fault and SDK semantics.
+
+- 34: `scripts/s2_p1_operation_list_boundary.sh`
+- 35: `scripts/s2_p1_operation_list_boundary_ci.sh`
+- 36: `scripts/s2_p1_operation_list_boundary_ci.sh`
+- 37: `S2_P1_REAL_INSTALLED_OPERATION_LIST_INFLIGHT_REVOCATION_AND_EXPIRY_NO_LEAK`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s2-native.yml
+
+P1/P3: C02/C03/C05/C11 original receipts, auth, fault and SDK semantics.
+
+- 11: `scripts/s2_p1_operation_list_boundary.sh`
+- 12: `scripts/s2_p1_operation_list_boundary_probe.go`
+- 36: `scripts/accept_s2_native.sh`, `scripts/s2_exec_gc_installed_review.sh`, `scripts/s2_p0_native_sqlite_fault.sh`, `scripts/s2_p0_unbound_create_review.sh`, `scripts/s2_p0_unknown_review.sh`, `scripts/s2_p1_bound_create_receipt_fault.sh`, `scripts/s2_p1_native_create_delete_overlap.sh`, `scripts/s2_p1_operation_list_boundary.sh`, `scripts/s2_p1_private_read_inflight.sh`, `scripts/s2_p1_simulated_wan_lab.sh`, `scripts/s2_p1_stop_delete_fault.sh`, `scripts/s2_p1_token_inflight.sh`, `scripts/s2_p1_two_controllers.sh`, `scripts/s2_p2_alternate_pool.sh`, `scripts/s2_p2_malformed_exec_fault.sh`, `scripts/s2_p3_evidence_audit.py`
+- 39: `scripts/test_s2_p3_evidence_audit.py`
+- 42: `scripts/test_s2_p3_scoped_acceptance.py`
+- 47: `scripts/accept_s2_native.sh`
+- 48: `scripts/s2_p3_evidence_audit.py`
+- 52: `scripts/s2_p3_scoped_acceptance.py`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s25-bh018-installed-candidate.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 44: `TestBH018`
+- 46: `BH018_ISOLATED_SOURCE_SQLITE_GUARD`
+- 56: `scripts/accept_s2_native.sh`
+- 61: `BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS`
+- 62: `BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP`
+- 67: `BH018_INSTALLED_SERVICE_KILLED_DURING_REAL_EXEC_SQLITE_WAL_COMMIT`
+- 68: `BH018_INSTALLED_WAL_KILL_SQLITE_TERMINAL_OR_UNKNOWN_CROSSCHECK`
+- 69: `BH018_INSTALLED_SERVICE_PRECOMMIT_SIGKILL_GUEST_EFFECT_ONCE`
+- 70: `BH018_INSTALLED_SERVICE_WAL_COMMIT_SIGKILL_UNKNOWN_LOCK_AND_TEARDOWN`
+- 71: `BH018_INSTALLED_SERVICE_KILLED_AFTER_REAL_EXEC_SQLITE_WAL_SYNC`
+- 72: `BH018_INSTALLED_POSTSYNC_ACK_LOST_FULL_COMMIT_RESTORED`
+- 73: `BH018_INSTALLED_SERVICE_POSTSYNC_SIGKILL_GUEST_EFFECT_ONCE`
+- 74: `BH018_INSTALLED_SERVICE_AFTER_WAL_FSYNC_ACKLOSS_RECOVERY`
+- 75: `S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS`
+- 77: `BH018_CANDIDATE_REAL_INSTALLED_HTTP_MCP_MATRIX`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s25-bh018-native.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 40: `scripts/bh018_native_exec_probe.go`
+- 42: `scripts/bh018_native_exec_probe.go`
+- 73: `BH018_PINNED_SIGNED_INCUS_76`
+- 81: `BH018_EXACT_GUEST_COMMAND_PRECONDITIONS`
+- 83: `BH018_SIDE_EFFECT_NEGATIVE_CONTROLS_PREPARED`
+- 91: `BH018_NATIVE_ORIGINAL_27_CASES`
+- 92: `BH018_NATIVE_FAILURE_126_127_WITH_GUEST_SIDE_EFFECTS`
+- 93: `BH018_DIRECT_SDK_ORIGINALS_WITH_GUEST_FAILURE_BOUNDARY`
+- 98: `scripts/bh019_inner_setup.sh`
+- 99: `scripts/bh019_bpf_lab.sh`
+- 106: `scripts/s25_package_proxy.py`
+- 118: `BH019_ALLOWLISTED_PROXY_READY`
+- 119: `scripts/bh019_bpf_lab.sh`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s25-bridgehead.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 33: `scripts/s25_bridgehead_lab.sh`
+- 34: `scripts/s25_inner_setup.sh`
+- 35: `scripts/s25_independent_verifier.py`
+- 36: `scripts/s25_simwan6.py`
+- 37: `scripts/s25_r12_foreign_l1.py`
+- 38: `scripts/s25_lab_agent.go`
+- 44: `scripts/s25_bridgehead_lab.sh`
+- 45: `S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL`
+- 46: `S25_ORIGINAL_KEY_DIFFERENT_INTENT_DENIED`
+- 47: `S25_MCP_QUIET_RUNNING_BOUNDED_WAIT`
+- 48: `S25_MCP_QUIET_FINISH_UNCANCELLED`
+- 49: `S25_V_QUIET_ORIGINAL_SQLITE_RECONCILED`
+- 50: `S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID`
+- 51: `S25_V_L1_MCP_L2_UPDATE_STOP_START_SAME_NATIVE_UUID`
+- 52: `S25_V_MCP_L2_NATIVE_IPV4_IPV6_GATEWAY_EGRESS`
+- 53: `S25_MCP_GUEST_GIT_TEST_ORIGINAL_FAILURE`
+- 54: `S25_MCP_GUEST_GIT_FIX_AND_RETEST`
+- 55: `S25_V_MCP_ORIGINAL_GIT_FAIL_AND_REPAIR_OPS`
+- 56: `S25_SIMWAN6_SEPARATELY_ROUTED_TLS_HOST_CONTROL`
+- 57: `S25_SIMWAN6_OUTER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON`
+- 58: `S25_V_SIMWAN6_OUTER_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL`
+- 59: `S25_V_SIMWAN6_OUTER_ORIGINAL_MCP_PEER_DELETED`
+- 60: `S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON`
+- 61: `S25_V_SIMWAN6_INNER_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL`
+- 62: `S25_V_SIMWAN6_INNER_ORIGINAL_MCP_PEER_DELETED`
+- 63: `S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED`
+- 64: `S25_R2_REAL_SERVICE_SIGKILL_DISTINCT_PID_HTTP_AUTH_RECOVERY`
+- 65: `S25_R2_SIGKILL_ORIGINAL_TWO_AGENT_SQLITE_AND_NATIVE_NO_REPLAY`
+- 66: `S25_R2_UNBACKED_ROLLBACK_AND_BAD_UPGRADE_DIGEST_REFUSED`
+- 67: `S25_R2_EXACT_SOURCE_CANARY_UPGRADE_WITH_LEDGER_BACKUP`
+- 68: `S25_R2_OPERATOR_FALLBACK_WHILE_MCP_UNAVAILABLE`
+- 69: `S25_R2_OPERATOR_ROOT_LOCAL_EXACT_BINARY_ROLLBACK`
+- 70: `S25_R2_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_ROLLBACK`
+- 71: `S25_V_R2_ORIGINAL_OPS_EXACT_BINARY_SQLITE_NATIVE_ROLLBACK`
+- 72: `S25_V_R12_L1_FOREIGN_PROJECT_PACKET_AND_PARENT_SOCKET`
+- 73: `S25_V_R12_L1_FOREIGN_NATIVE_UUID_CLEANUP`
+- 74: `S25_R12_L1_FOREIGN_PACKET_AND_SOCKET_INDEPENDENT_V`
+- 75: `S25_R12_TWO_AGENT_RESOURCE_CONFLICT_DENIED`
+- 76: `S25_R12_REAL_MCP_REPLY_LOST_AFTER_DISPATCH_NO_RETRY`
+- 77: `S25_R12_INDEPENDENT_AGENT_RECOVERED_MCP_LOST_REPLY_ORIGINAL`
+- 78: `S25_R12_REVOKED_ORIGINAL_AGENT_HTTP_401`
+- 79: `S25_R12_POST_REVOKE_SECOND_AGENT_ORIGINAL_RECEIPT_INTACT`
+- 80: `S25_V_R12_LOST_ACK_EXACT_ONE_NATIVE_EXEC_ORIGINAL`
+- 81: `S25_R2_ORIGINAL_SQLITE_NATIVE_CLEAN_AFTER_ROLLBACK`
+- 82: `S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s25-native.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 31: `scripts/accept_s2_native.sh`
+- 36: `scripts/accept_s2_native.sh`
+- 37: `S25_NATIVE_PREREQ_CONFIG_AND_DIGEST`
+- 38: `S2_P1_TWO_CONTROLLER_NATIVE_ACLS_EXCLUSIVE_INDEPENDENT_ROOT_READBACK`
+- 39: `S25_S2_LEGACY_SIMWAN_SEPARATE_FROM_HARDENED_ACL`
+- 40: `S25_NATIVE_EXCLUSIVE_ACL_PRIVATE_ROUTED_EGRESS_DENY`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s3-file-installed.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 16: `scripts/s3_file_installed_probe.go`
+- 17: `scripts/s25_bridgehead_lab.sh`
+- 18: `scripts/s25_inner_setup.sh`
+- 58: `scripts/s25_bridgehead_lab.sh`
+- 59: `scripts/s3_file_installed_probe.go`
+- 60: `scripts/s3_file_installed_probe.go`
+- 61: `scripts/s3_file_installed_probe.go`
+- 63: `S3_INSTALLED_DISPOSABLE_SOURCE_PRECHECK`
+- 68: `scripts/s25_bridgehead_lab.sh`
+- 69: `S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY`
+- 70: `S3_INSTALLED_INDEPENDENT_NATIVE_BOX_ABSENCE`
+- 71: `S3_INSTALLED_SCOPED_HTTP_MCP_NATIVE_INTEGRATION`
+- 72: `S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS`
+- 74: `S5B_TC015_TWO_AUTHENTICATED_SDK_PROCESSES_NATIVE_VERIFIED_AND_CLEANUP`
+- 75: `S5B_TC015_DISTINCT_AUTHENTICATED_ACTORS_AND_NATIVE_ORIGINALS`
+- 76: `S5B_TC016_EXTERNAL_GIT_STALE_WRITER_REFUSED_WINNER_PRESERVED`
+- 78: `S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP`
+- 80: `S3_INSTALLED_FILE_TOOLS_AND_PHASE3_SUPERVISED_GIT_REAL_NATIVE_VERIFIER`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s3-file-native.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 15: `scripts/s3_file_installed_probe.go`
+- 16: `scripts/s25_bridgehead_lab.sh`
+- 17: `scripts/s25_inner_setup.sh`
+- 60: `S3_NATIVE_ONE_USE_RUNNER_GUARD`
+- 90: `S3_NATIVE_SIGNED_INCUS_76`
+- 111: `S3_NATIVE_HOSTILE_GUEST_FIXTURES`
+- 117: `TestS3RealIncusSFTPFileNegatives`
+- 119: `S3_NATIVE_SFTP_12_WRITERS_SINGLE_WINNER_NO_FOREIGN_EFFECT`
+- 120: `S3_NATIVE_SFTP_SYMLINK_HARDLINK_FIFO_NO_EFFECT`
+- 121: `S3_NATIVE_SFTP_HUGE_DIRECTORY_BOUNDED_WIRE_BYTES`
+- 126: `S3_NATIVE_INDEPENDENT_GUEST_POSTSTATE`
+- 138: `S3_NATIVE_DISPOSABLE_GUEST_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-a-installed.yml
+
+P1/P3: C02/C03/C05/C11 original receipts, auth, fault and SDK semantics.
+
+- 13: `scripts/ci_change_scope.py`
+- 14: `scripts/test_ci_change_scope.py`
+- 54: `TestNativePeerACLWholePolicyComparison`, `TestS2RequestPrincipalRequiresExplicitSDKCredential`
+- 58: `TestSameVersionSQLiteDDLDriftAndTriggersFailClosed`
+- 68: `scripts/accept_s2_native.sh`
+- 76: `S4_A_STAGE2_NATIVE_PROBE_SOURCE_SIGNATURES`
+- 88: `scripts/accept_s2_native.sh`
+- 89: `scripts/s4_oauth_native_integration.sh`
+- 90: `scripts/s4_oauth_installed_probe.go`
+- 91: `scripts/s4_raw_native_event_tap.go`
+- 93: `TestS4`
+- 95: `S4_A_FOCUSED_SOURCE_AND_WITNESS_CONTRACT`
+- 104: `scripts/accept_s2_native.sh`
+- 121: `S4_A_RAW_NATIVE_ORIGINAL_TERMINAL`
+- 125: `S4_A_RAW_DELETE_TERMINAL_ATOMIC_TOMBSTONE_SINGLE_ORIGINAL`
+- 126: `S4_A_RAW_CREATE_EXEC_FINAL_SQLITE_UUID_EXIT_CORRELATION`
+- 127: `S4_A_RAW_NATIVE_EVENT_ORIGINAL_TERMINAL`
+- 128: `S4_A_RAW_NATIVE_EVENT_STREAM`
+- 129: `S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE`
+- 130: `S4_A_INSTALLED_OAUTH_REVOKED_GRANT_MANUAL_NO_ADMISSION`
+- 131: `S4_A_INDEPENDENT_GUEST_ONE_EFFECT`
+- 132: `BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS`
+- 133: `BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP`
+- 134: `S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS`
+- 136: `S4_A_INSTALLED_INCUS_76_RESTRICTED_HTTP_MCP_AND_INDEPENDENT_RAW_TERMINAL`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b1-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 7: `scripts/s4_b1_acl_sdk_probe.go`
+- 36: `scripts/s4_b1_acl_sdk_probe.go`
+- 37: `scripts/s4_b1_acl_sdk_probe.go`
+- 39: `S4_B1_FRESH_HOST_AND_SDK_BUILD`
+- 60: `S4_B1_SIGNED_NATIVE_76_NO_SCRIPTLET_GLOBAL_CHANGE`
+- 86: `S4_B1_IPV4_IPV6_NATIVE_DHCP_RA`
+- 91: `S4_B1_IPV4_IPV6_DEFAULT_INGRESS_DENY_PACKET`
+- 97: `S4_B1_IPV4_IPV6_ONE_WAY_PEER_PACKET`
+- 101: `S4_B1_IPV4_IPV6_REVOKE_NEW_FLOW`
+- 111: `S4_B1_NATIVE_TCP_PROXY_WITH_REVOKED_PEER`
+- 119: `S4_B1_NATIVE_TCP_PROXY_PORT_COLLISION_REJECTED`
+- 138: `S4_B1_NATIVE_UDP_PROXY_PACKET`
+- 142: `S4_B1_PROXY_REMOVAL_REFUSED_NEW_CONNECTION`
+- 154: `S4_B1_EXACT_NATIVE_CLEANUP`
+- 170: `TestS4B1ExactS1ACLNativeFixture`
+- 212: `S4_B1_S1_NATIVE_EGRESS_INTERNET_TRUE_GATEWAY_V4V6`
+- 237: `TestS4B1CarveOnlyOwnedBridgeForNativeExperiment`
+- 240: `S4_B1_EXPERIMENT_CARVED_S1_PEER_ALLOW_IPV4_IPV6`
+- 256: `S4_B1_EXPERIMENT_CARVED_S1_REVERSE_THIRD_PARTY_DENY`
+- 283: `S4_B1_NATIVE_OLD_IPV4_ALLOCATED_TO_DIFFERENT_UUID`
+- 294: `S4_B1_SOURCE_A_OLD_NEIGHBOR_CLEARED`
+- 311: `TestS4B1RevokeStaleRulesNativeExperiment`
+- 317: `S4_B1_IPV4_REVOKE_NEW_UUID_PACKET_DENY`
+- 328: `S4_B1_S1_EGRESS_LEASE_EXPERIMENT_EXACT_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-bridge-ownership-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 50: `S4_B2_SEPARATE_OPERATOR_BRIDGE_PROJECT_CONFIGURED`
+- 63: `S4_B2_FOREIGN_RESTRICTED_PROJECT_NETWORK_REFERENCES_DENIED`
+- 69: `S4_B2_FOREIGN_RESTRICTED_PROJECT_RAW_PARENT_DENIED`
+- 101: `S4_B2_BRIDGE_EXCLUSIVITY_NATIVE_DISPOSABLE_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-controller-root-installed.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 66: `TestNativePeerACLWholePolicyComparison`, `TestS2RequestPrincipalRequiresExplicitSDKCredential`
+- 68: `STAGE2_SOURCE_EXACT_MCP_PRINCIPAL_AND_WHOLE_ACL`
+- 104: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 135: `TestS4B2NativeInstalledRootSeedReviewedGrant`
+- 139: `TestS4B2NativeInstalledNonrootSeedOriginal`
+- 145: `S4_B2_INSTALLED_SETUP_RESTRICTED_PROJECT_AND_PINNED_ROOT_GRANT`
+- 169: `S4_B2_INSTALLED_FOREIGN_STATIC_ADDRESS_READY`
+- 170: `scripts/s4_b2_native_flow_probe.go`
+- 201: `S4_B2_INSTALLED_FOREIGN_NETWORK_PATH_READY_BOTH_FAMILIES`
+- 222: `S4_B2_INSTALLED_FOREIGN_PROJECT_FOUR_ESTABLISHED_FLOWS_BEFORE_ROOT`
+- 269: `S4_B2_INSTALLED_ROOT_UNMANAGED_OVERLAPPING_KERNEL_ROUTE_REFUSED`
+- 292: `S4_B2_ROOT_SYSTEMD_PINNED_ROOT_UID_SOCKET_PERMISSION`
+- 296: `S4_B2_ROOT_SYSTEMD_SO_PEERCRED_FOREIGN_REJECT`
+- 309: `S4_B2_ROOT_SYSTEMD_SIGKILL_RESTART_STALE_SOCKET_NO_EFFECT`
+- 318: `TestS4B2NativeInstalledPostACLRealEffectUnknown`
+- 328: `S4_B2_INSTALLED_ROOT_POST_ACL_NATIVE_PARTIAL_SQLITE_UNKNOWN`
+- 333: `TestS4B2NativeInstalledPartialUnknownProjectLock`
+- 345: `TestS5A4NativeMCPPeerRecovery`
+- 349: `S4_B2_INSTALLED_ROOT_INCOMPLETE_JOURNAL_READONLY_REFUSAL_NO_REPLAY`
+- 358: `S4_B2_INSTALLED_ROOT_POST_ACL_PARTIAL_FOREIGN_FOUR_FLOWS_UNAFFECTED`
+- 373: `TestS5A4NativeMCPPeerRecovery`
+- 379: `S4_B2_INSTALLED_ROOT_ACK_LOST_COMPLETED_JOURNAL_READONLY_RECOVERED_NO_REPLAY`
+- 383: `S4_B2_INSTALLED_ROOT_EXECUTE_EXIT_ZERO`
+- 397: `TestS4B2NativeRootKernelPerNICDropReadback`
+- 409: `S4_B2_INSTALLED_NONROOT_ROOT_SOCKET_OPERATOR_SHA_ORIGINAL_NFT_SQLITE_REVOKE`
+- 419: `S4_B2_INSTALLED_FOREIGN_PROJECT_ESTABLISHED_TCP_UDP_DUALSTACK_SURVIVED_REVOKE`
+- 439: `S4_B2_ROOT_SYSTEMD_NEW_BINARY_UPGRADE_NO_REPLAY`
+- 445: `S4_B2_ROOT_SYSTEMD_BINARY_ROLLBACK_PRESERVES_ORIGINAL_JOURNAL`
+- 451: `TestS4B2NativeInstalledAmbiguousResumeStopsAllSiblings`
+- 454: `S4_B2_INSTALLED_ROOT_AMBIGUOUS_START_NO_JOURNAL_REPLAY`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-dedicated-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 50: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 60: `S4_B2_NATIVE_DEDICATED_RESTRICTED_BRIDGE_AND_S1_FIXTURE`
+- 93: `S4_B2_NATIVE_DEDICATED_THREE_STATIC_DUAL_STACK_GUESTS`
+- 99: `TestS4B2NativeDedicatedBridgeExactPeer`
+- 100: `TestS4B2NativeFaultLabStaleETag`
+- 108: `S4_B2_NATIVE_DEDICATED_INTERNET_FALSE_EXACT_PEER_IPV4_IPV6`
+- 113: `S4_B2_NATIVE_DEDICATED_INTERNET_FALSE_GATEWAY_EGRESS_DENY`
+- 119: `S4_B2_NATIVE_DEDICATED_REVERSE_AND_C_DENY`
+- 141: `TestS4B2NativeFaultLabUnknownSameProjectConsumer`
+- 144: `S4_B2_FAULT_LAB_UNKNOWN_CONSUMER_CLEANUP`
+- 145: `TestS4B2NativeDedicatedBridgeRevoke`
+- 162: `S4_B2_FAULT_LAB_IPV6_REVOKE_BEFORE_REUSED_UUID_DENY`
+- 163: `S4_B2_NATIVE_DEDICATED_REVOKE_BEFORE_DUAL_STACK_REUSE_NO_IP_TRANSFER`
+- 174: `S4_B2_NATIVE_DEDICATED_COMPLETE_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-fanout-fault-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 49: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 59: `S4_B2_NATIVE_DEDICATED_RESTRICTED_BRIDGE_AND_S1_FIXTURE`
+- 89: `TestS4B2NativeDedicatedBridgeExactPeer`
+- 102: `S4_B2_FANOUT_CONTROL_AFTER_C_LINK_LOSS_A_TO_B_STILL_REACHABLE`
+- 104: `TestS4B2NativeDedicatedBridgeRevoke`
+- 155: `S4_B2_FANOUT_NATIVE_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-grant-fault-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 49: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 59: `S4_B2_NATIVE_DEDICATED_RESTRICTED_BRIDGE_AND_S1_FIXTURE`
+- 84: `S4_B2_GRANT_FAULT_PREGRANT_A_TO_B_DENIED`
+- 90: `S4_B2_GRANT_FAULT_AFTER_C_VETH_LOSS_PREPUT_A_TO_B_DENIED`
+- 95: `TestS4B2NativeDedicatedBridgeExactPeer`
+- 137: `S4_B2_GRANT_FAULT_NATIVE_EXACT_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 40: `S4_B2_FRESH_HOST_AND_SDK_BUILD`
+- 61: `S4_B2_SIGNED_NATIVE_76_NO_SCRIPTLET_GLOBAL_CHANGE`
+- 73: `TestS4B1ExactS1ACLNativeFixture`
+- 106: `S4_B2_S1_DEFAULT_DENIAL_V4V6`
+- 107: `TestS4B2NativeExactTargetEgressAndIngress`
+- 109: `S4_B2_INTERNET_FALSE_EXACT_PEER_IPV4`
+- 111: `S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_INITIAL`
+- 123: `S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_EGRESS`
+- 129: `S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_BOTH`
+- 143: `S4_B2_TEST_ONLY_STATIC_NEIGHBOR_EXACT_V6`
+- 161: `S4_B2_INTERNET_FALSE_GENERAL_EGRESS_BLOCKED`
+- 164: `S4_B2_B_ONLY_EGRESS_ALLOW_IPV6`
+- 170: `S4_B2_BOTH_EGRESS_ALLOW_IPV6_WITH_STATIC_NEIGHBOR`
+- 183: `S4_B2_REVERSE_AND_THIRD_PARTY_V4V6_DENY`
+- 191: `S4_B2_INTERNET_FALSE_GENERAL_EGRESS_BLOCKED`
+- 197: `S4_B2_INTERNET_TRUE_GATEWAY_ICMP`
+- 202: `S4_B2_INTERNET_TRUE_PEER_AND_UNGRANTED_TARGET_DENY`
+- 228: `S4_B2_FOREIGN_PROJECT_NORMAL_ADDRESS_DENY`
+- 264: `TestS4B2NativeRevokeBeforeIPRelease`
+- 281: `S4_B2_NATIVE_REVOKE_BEFORE_OLD_IPV4_REUSE_DENY`
+- 290: `S4_B2_NATIVE_EXACT_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-ndp-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 59: `TestS4B1ExactS1ACLNativeFixture`
+- 81: `TestS4B2NativeExactTargetEgressAndIngress`
+- 83: `S4_B2_NDP_IPV4_CONTROL`
+- 169: `S4_B2_NDP_DISPOSABLE_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-quiescent-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 65: `scripts/s4_b2_native_flow_probe.go`
+- 106: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 116: `S4_B2_NATIVE_DEDICATED_RESTRICTED_BRIDGE_AND_S1_FIXTURE`
+- 154: `S4_B2_QUIESCENT_BASELINE_A_TO_B_DENIED`
+- 164: `TestS4B2NativeRootBridgeAudit`
+- 175: `S4_B2_NATIVE_ROOT_BRIDGE_AUDIT_AND_REFUSALS`
+- 179: `TestS4B2NativeStoreLedgerBridgeAudit`
+- 185: `S4_B2_SQLITE_COMPLETE_LEDGER_TO_ROOT_INCUS_AUDIT`
+- 186: `S4_B2_ROOT_SQLITE_READ_ONLY_WAL_AUDIT`
+- 187: `S4_B2_ROOT_SQLITE_NATIVE_DOUBLE_SNAPSHOT_STABLE`
+- 188: `S4_B2_SQLITE_MAC_CLAIM_NATIVE_ROOT_MISMATCH_REFUSED`
+- 189: `S4_B2_SQLITE_ADDRESS_QUARANTINE_REFUSED`
+- 190: `S4_B2_DURABLE_LEDGER_NATIVE_ROOT_READONLY_GATE`
+- 197: `TestS4B2NativeRootRejectsForeignRawNIC`
+- 200: `S4_B2_FOREIGN_RAW_NIC_AUDIT_REFUSED_AND_EXACT_CLEANUP`
+- 205: `TestS4B2NativeSDKSharedACLQuiescence`
+- 209: `TestS4B2NativeCompiledDropTombstoneApply`
+- 214: `TestS4B2NativeRootPairConntrackAfterQuiescence`
+- 223: `S4_B2_NATIVE_ROOT_FOREIGN_UUID_CONNTRACK_REFUSED`
+- 225: `S4_B2_NATIVE_ROOT_FOREIGN_MAC_CONNTRACK_REFUSED`
+- 227: `S4_B2_NATIVE_ROOT_UNREGISTERED_HOST_BRIDGE_PORT_REFUSED`
+- 229: `S4_B2_NATIVE_ROOT_ZERO_HOST_BRIDGE_PORTS_AFTER_STOP`
+- 231: `S4_B2_ROOT_PEER_REVIEW_WRITABLE_SQLITE_DENIED`
+- 233: `S4_B2_ROOT_PEER_REVIEW_PROTECTED_LEDGER_AND_STOPPED_NATIVE_DROP`
+- 235: `S4_B2_ROOT_PEER_REVIEW_FOREIGN_PAIR_REFUSED`
+- 237: `S4_B2_ROOT_PEER_REVIEW_MAC_DRIFT_REFUSED`
+- 239: `S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_JOURNALED_FOUR_SCOPES`
+- 241: `S4_B2_GLOBAL_ROOT_NATIVE_ALL_PROJECTS_NETWORK_SCOPE`
+- 243: `S4_B2_NATIVE_ROOT_HOST_KERNEL_ROUTES_EXCLUSIVE`
+- 245: `S4_B2_NATIVE_KERNEL_SEEDED_TCP_UDP_DUALSTACK_AND_FOREIGN`
+- 247: `S4_B2_NATIVE_KERNEL_EXACT_PAIR_FOUR_SCOPES_DELETED`
+- 249: `S4_B2_NATIVE_KERNEL_FOREIGN_TCP_UDP_FLOW_UNTOUCHED`
+- 253: `S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_REPLAY_DENIED`
+- 255: `S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_WRITER_DENIED`
+- 257: `TestS4B2NativeCompiledDropTombstoneRemove`
+- 258: `S4_B2_NATIVE_ROOT_BOUNDED_CONNTRACK_AFTER_THREE_BOX_BARRIER`
+- 262: `TestS4B2RootConntrack`
+- 264: `S4_B2_ROOT_CONNTRACK_DURABLE_ONE_SHOT`
+- 265: `S4_B2_ROOT_CONNTRACK_CRASH_ORIGINAL_UNKNOWN_NO_REPLAY`
+- 266: `S4_B2_ROOT_CONNTRACK_PARTIAL_SCOPE_OR_DIGEST_REFUSED`
+- 267: `S4_B2_ROOT_CONNTRACK_NO_REPLAY_JOURNAL_NATIVE_RUNNER`
+- 268: `TestS4B2NativeDedicatedBridgeExactPeer`
+- 269: `TestS4B2NativeDedicatedBridgeRevoke`
+- 271: `S4_B2_NATIVE_SDK_BARRIER_BEFORE_ACL_GRANT_REVOKE`
+- 278: `S4_B2_NATIVE_SDK_ALL_THREE_ENDPOINTS_BARRIER_AND_RECOVERED_FIXTURE`
+- 289: `S4_B2_QUIESCENT_BOTH_ENDPOINTS_STOPPED_NATIVE_UUID_RETAINED`
+- 295: `S4_B2_QUIESCENT_STOPPED_B_IPV4_COLLISION_REFUSED`
+- 301: `S4_B2_QUIESCENT_STOPPED_B_IPV6_COLLISION_REFUSED`
+- 302: `S4_B2_QUIESCENT_STOPPED_B_BOTH_NATIVE_STATIC_ADDRESSES_HELD`
+- 308: `TestS4B2NativeDedicatedBridgeExactPeer`
+- 319: `S4_B2_QUIESCENT_FAILED_GRANT_NO_RUNNING_ENDPOINTS`
+- 340: `S4_B2_QUIESCENT_FAILED_GRANT_DAEMON_RESTART_STILL_STOPPED_AND_PINNED`
+- 351: `S4_B2_QUIESCENT_POST_FAILED_PUT_RESTART_DUAL_STACK_DENIED`
+- 361: `S4_B2_QUIESCENT_REPAIRED_UNRELATED_NIC`
+- 362: `TestS4B2NativeDedicatedBridgeExactPeer`
+- 363: `S4_B2_QUIESCENT_STOPPED_ENDPOINT_GRANT_ETAG_READBACK`
+- 374: `S4_B2_QUIESCENT_AFTER_SUCCESSFUL_GRANT_A_TO_B_DUAL_STACK`
+- 379: `scripts/s4_b2_native_flow_probe.go`
+- 419: `TestS4B2NativeCompiledLiveTrackedFlowDrop`
+- 469: `S4_B2_NATIVE_COMPILED_DROP_PLUS_EXACT_CONNTRACK_DELETE_TCP_UDP_DUALSTACK_DENIED`
+- 470: `TestS4B2NativeCompiledLiveTrackedFlowRestore`
+- 478: `S4_B2_NATIVE_DISPOSABLE_LIVE_ACL_GRANT_RESTORED`
+- 481: `TestS4B2NativeDedicatedBridgeRevoke`
+- 510: `TestS4B2NativeCompiledDropTombstoneApply`
+- 511: `TestS4B2NativeRootKernelPerNICDropReadback`
+- 520: `TestS4B2NativeCompiledDropTombstoneRemove`
+- 521: `S4_B2_NATIVE_COMPILED_DROP_EXACT_BASELINE_RESTORED`
+- 538: `S4_B2_QUIESCENT_EXPLICIT_DROP_NATIVE_RULE_RESTORED`
+- 561: `S4_B2_QUIESCENT_REVOKE_NATIVE_ROTATED_IPV4_IPV6`
+- 568: `S4_B2_QUIESCENT_REVOKE_ROTATED_BOTH_FAMILIES_DENIED`
+- 613: `S4_B2_QUIESCENT_NO_GLOBAL_CONNTRACK_FLUSH`
+- 625: `S4_B2_QUIESCENT_NEW_FLOWS_AFTER_REVOKE_SCOPED_CONNTRACK_DENIED`
+- 635: `S4_B2_QUIESCENT_EXACT_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-scriptlet-native.yml
+
+P1/P4: C04/C05/C10/C11 old global execution retirement review, retain foreign refusal and kernel/packet proof.
+
+- 58: `S4_B2_SCRIPTLET_DISPOSABLE_PREPARE_NATIVE_7_6`
+- 89: `S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX`
+- 118: `S4_B2_SCRIPTLET_NATIVE_OLD_CLIENT_ALLOWED_DENIED_MATRIX`
+- 125: `S4_B2_SCRIPTLET_NATIVE_DEDICATED_EXACT_ACL_ONLY_DENIALS`
+- 140: `S4_B2_SCRIPTLET_NATIVE_EXACT_ACL_PUT_READBACK`
+- 151: `S4_B2_SCRIPTLET_NATIVE_FOREIGN_ACL_PUT_DENIED`
+- 163: `S4_B2_SCRIPTLET_FAILED_SCRIPT_CHANGE_EXISTING_RIGHTS_UNCHANGED`
+- 173: `S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_MATRIX_AFTER_EXACT_ROLLBACK`
+- 177: `S4_B2_SCRIPTLET_GLOBAL_AUTH_TEST_COMPLETED_EXACT_ROLLBACK`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-scriptlet-parity-native.yml
+
+P1/P4: C04/C05/C10/C11 old global execution retirement review, retain foreign refusal and kernel/packet proof.
+
+- 47: `S5B1_EXACT_SCRIPTLET_CLI_BINARY`
+- 103: `S4_B2_SCRIPTLET_REAL_GUEST_EXECS_FILES_FIXTURE`
+- 104: `S4_B2_SCRIPTLET_DISPOSABLE_PREPARE_NATIVE_7_6`
+- 183: `S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX`
+- 192: `TestS4B2ScriptletProductRootNativeApplyRollback`
+- 193: `S4_B2_NATIVE_PRODUCT_SCRIPTLET_JOURNALED_GLOBAL_UPDATE_ROLLBACK`
+- 208: `S5B_SCRIPTLET_RESTRICTED_USER_CONFIG_ISOLATED`
+- 212: `S5B_SCRIPTLET_EXACT_RESTRICTED_EMPTY_PROJECT`
+- 217: `S5B_SCRIPTLET_ALL_FOUR_RESTRICTED_CLIENTS_ACCOUNTED`
+- 224: `S5B_SCRIPTLET_EXACT_PLAN_READ`
+- 235: `S5B1_SCRIPTLET_CLI_PLAN_AND_NEGATIVES`
+- 249: `S5B1_SCRIPTLET_CLI_APPLY_STATUS_RECONCILE_NATIVE`
+- 258: `S5B1_SCRIPTLET_CLI_EXACT_ROLLBACK_AND_RECONCILE`
+- 266: `TestS4B2ScriptletNativePolicySource`
+- 268: `S4_B2_SCRIPTLET_PRODUCT_GENERATED_POLICY_SOURCE`
+- 283: `S4_B2_SCRIPTLET_NATIVE_OLD_CLIENT_ALLOWED_DENIED_MATRIX`
+- 297: `S4_B2_SCRIPTLET_INSTALLED_NATIVE_DAEMON_RESTART_OLD_CLIENT_RIGHTS_PARITY`
+- 317: `S4_B2_SCRIPTLET_LEGACY_SAME_PROJECT_EDIT_PARITY`
+- 328: `S4_B2_SCRIPTLET_LEGACY_FOREIGN_PROJECT_EDIT_DENIED`
+- 332: `S4_B2_SCRIPTLET_LEGACY_GLOBAL_AND_PROJECT_EDIT_DENY`
+- 333: `S4_B2_SCRIPTLET_NATIVE_DEDICATED_EXACT_ACL_ONLY_DENIALS`
+- 348: `S4_B2_SCRIPTLET_NATIVE_EXACT_ACL_PUT_READBACK`
+- 359: `S4_B2_SCRIPTLET_NATIVE_FOREIGN_ACL_PUT_DENIED`
+- 371: `S4_B2_SCRIPTLET_FAILED_SCRIPT_CHANGE_EXISTING_RIGHTS_UNCHANGED`
+- 378: `S4_B2_SCRIPTLET_FAILED_NATIVE_UPDATE_RESTART_PRESERVES_EXACT_RIGHTS`
+- 391: `S4_B2_SCRIPTLET_LEGACY_POST_ROLLBACK_PROFILE_PARITY`
+- 392: `S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_MATRIX_AFTER_EXACT_ROLLBACK`
+- 399: `S4_B2_SCRIPTLET_EXACT_ROLLBACK_SURVIVES_NATIVE_DAEMON_RESTART`
+- 403: `S4_B2_SCRIPTLET_GLOBAL_AUTH_TEST_COMPLETED_EXACT_ROLLBACK`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b2-static-address-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 42: `S4_B2_NATIVE_STATIC_BRIDGE_STATEFUL_IPV6_READY`
+- 68: `S4_B2_NATIVE_STATIC_DUAL_STACK_GUEST_ASSIGNED`
+- 109: `S4_B2_NATIVE_STATIC_DISPOSABLE_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b3-contention-upgrade-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 27: `scripts/s4_b3_native_packet_probe.go`
+- 28: `scripts/s4_b3_native_mcp_client.go`
+- 86: `S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN`
+- 99: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 127: `S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS`
+- 140: `TestS4B3NativeRootSeedBaselineAndExactScope`
+- 145: `TestS4B3NativeNonrootSeedClaimedGrantOriginal`
+- 177: `TestS4B3NativeNonrootMarkCompletedGrantACKLost`
+- 189: `S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY`
+- 195: `TestS4B3NativeNonrootAdmitFollowupPeer`
+- 206: `S4_B3_NATIVE_SAME_PROJECT_CONCURRENT_PEER_ADMISSION_REFUSED`
+- 214: `S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY`
+- 220: `TestS4B3NativeInstalledRootGrantActualEffect`
+- 250: `S4_B3_INSTALLED_ROOT_BINARY_UPGRADE_COMPLETED_GRANT_NO_REPLAY`
+- 258: `S4_B3_INSTALLED_ROOT_BINARY_ROLLBACK_ORIGINAL_JOURNAL_PRESERVED`
+- 288: `S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT`
+- 300: `scripts/s4_b3_native_mcp_client.go`
+- 331: `S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE`
+- 347: `TestS4B3NativeNonrootAdmitFollowupPeer`
+- 372: `TestS4B3NativeNonrootConfirmFollowupPeer`
+- 377: `S4_B3_INSTALLED_FOLLOWUP_CLAIM_PRS_SOCKET_ROOT_SQLITE`
+- 380: `S4_B3_NATIVE_INSTALLED_REVOKE_NEXT_GRANT_EXACT_REGRANT_FULL_LINK`
+- 382: `S4_B3_NATIVE_INSTALLED_TWO_GRANTS_ONE_REVOKE_FULL_LINK`
+- 416: `S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY`
+- 417: `scripts/s4_b3_native_packet_probe.go`
+- 440: `S4_B3_REAL_NATIVE_ACCEPT`
+- 457: `S4_B3_REAL_NATIVE_REVERSE_REJECT`
+- 463: `S4_B3_REAL_NATIVE_UNRELATED_REJECT`
+- 466: `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY`
+- 483: `scripts/s4_b3_native_packet_probe.go`
+- 503: `S4_B3_NATIVE_RETAINED_B_TO_C`
+- 521: `S4_B3_NATIVE_REVOKED_A_TO_B`
+- 524: `S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS`
+- 541: `scripts/s4_b3_native_packet_probe.go`
+- 560: `S4_B3_REGRANT_REAL_PACKET_ALLOW`
+- 576: `S4_B3_REGRANT_REVERSE_REAL_PACKET_DENIED`
+- 579: `S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP`
+- 608: `S4_B3_NATIVE_MCP_B_TO_C_REAL_ECHO`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b3-final-closure-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 13: `scripts/s2_queued_cancel_seed.go`
+- 39: `scripts/s4_b3_native_packet_probe.go`
+- 40: `scripts/s4_b3_native_mcp_client.go`
+- 80: `TestNativePeerACLWholePolicyComparison`, `TestS2RequestPrincipalRequiresExplicitSDKCredential`
+- 82: `STAGE2_SOURCE_EXACT_MCP_PRINCIPAL_AND_WHOLE_ACL`
+- 116: `S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN`
+- 135: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 163: `S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS`
+- 176: `TestS4B3NativeRootSeedBaselineAndExactScope`
+- 181: `TestS4B3NativeNonrootSeedClaimedGrantOriginal`
+- 213: `TestS4B3NativeNonrootMarkCompletedGrantACKLost`
+- 225: `S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY`
+- 236: `S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY`
+- 242: `TestS4B3NativeInstalledRootGrantActualEffect`
+- 291: `S4_B3_NATIVE_INCUS_PRS_SERVICE_CYCLE_COMPLETED_GRANT_PERSISTED_NO_REPLAY`
+- 300: `S4_B3_NATIVE_INCUS_SERVICE_CYCLE_FROZEN_ETAG_UNKNOWN_NICS_STOPPED`
+- 331: `S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT`
+- 343: `scripts/s4_b3_native_mcp_client.go`
+- 374: `S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE`
+- 390: `TestS4B3NativeNonrootAdmitFollowupPeer`
+- 415: `TestS4B3NativeNonrootConfirmFollowupPeer`
+- 420: `S4_B3_INSTALLED_FOLLOWUP_CLAIM_PRS_SOCKET_ROOT_SQLITE`
+- 423: `S4_B3_NATIVE_INSTALLED_REVOKE_NEXT_GRANT_EXACT_REGRANT_FULL_LINK`
+- 425: `S4_B3_NATIVE_INSTALLED_TWO_GRANTS_ONE_REVOKE_FULL_LINK`
+- 459: `S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY`
+- 460: `scripts/s4_b3_native_packet_probe.go`
+- 483: `S4_B3_REAL_NATIVE_ACCEPT`
+- 500: `S4_B3_REAL_NATIVE_REVERSE_REJECT`
+- 506: `S4_B3_REAL_NATIVE_UNRELATED_REJECT`
+- 509: `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY`
+- 526: `scripts/s4_b3_native_packet_probe.go`
+- 546: `S4_B3_NATIVE_RETAINED_B_TO_C`
+- 564: `S4_B3_NATIVE_REVOKED_A_TO_B`
+- 567: `S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS`
+- 584: `scripts/s4_b3_native_packet_probe.go`
+- 603: `S4_B3_REGRANT_REAL_PACKET_ALLOW`
+- 619: `S4_B3_REGRANT_REVERSE_REAL_PACKET_DENIED`
+- 622: `S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP`
+- 636: `scripts/s4_b3_native_packet_probe.go`
+- 643: `S5B_PUBLIC_PEER_PACKET_BOTH_FIXTURES_READY`
+- 657: `S4_B3_NATIVE_MCP_B_TO_C_REAL_ECHO`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b3-final-gates-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 27: `scripts/s4_b3_native_packet_probe.go`
+- 28: `scripts/s4_b3_native_mcp_client.go`
+- 94: `S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN`
+- 113: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 141: `S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS`
+- 171: `S4_B3_NATIVE_FOREIGN_STATIC_ADDRESS_READY`
+- 172: `scripts/s4_b2_native_flow_probe.go`
+- 203: `S4_B3_NATIVE_FOREIGN_NETWORK_PATH_READY_BOTH_FAMILIES`
+- 224: `S4_B3_NATIVE_FOREIGN_PROJECT_FOUR_ESTABLISHED_FLOWS_BEFORE_ROOT`
+- 225: `S4_B3_FOREIGN_LIVE_BASELINE_ESTABLISHED`
+- 237: `TestS4B3NativeRootSeedBaselineAndExactScope`
+- 242: `TestS4B3NativeNonrootSeedClaimedGrantOriginal`
+- 274: `TestS4B3NativeNonrootMarkCompletedGrantACKLost`
+- 286: `S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY`
+- 295: `S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY`
+- 301: `TestS4B3NativeInstalledRootGrantActualEffect`
+- 321: `S4_B3_FOREIGN_PROJECT_ESTABLISHED_TCP_UDP_IPV4_IPV6_SURVIVED_GRANT`
+- 339: `S4_B3_INSTALLED_ROOT_SIGKILL_RESTART_COMPLETED_GRANT_NO_REPLAY`
+- 369: `S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT`
+- 381: `scripts/s4_b3_native_mcp_client.go`
+- 412: `S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE`
+- 428: `TestS4B3NativeNonrootAdmitFollowupPeer`
+- 453: `TestS4B3NativeNonrootConfirmFollowupPeer`
+- 458: `S4_B3_INSTALLED_FOLLOWUP_CLAIM_PRS_SOCKET_ROOT_SQLITE`
+- 461: `S4_B3_NATIVE_INSTALLED_REVOKE_NEXT_GRANT_EXACT_REGRANT_FULL_LINK`
+- 463: `S4_B3_NATIVE_INSTALLED_TWO_GRANTS_ONE_REVOKE_FULL_LINK`
+- 497: `S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY`
+- 498: `scripts/s4_b3_native_packet_probe.go`
+- 521: `S4_B3_REAL_NATIVE_ACCEPT`
+- 538: `S4_B3_REAL_NATIVE_REVERSE_REJECT`
+- 544: `S4_B3_REAL_NATIVE_UNRELATED_REJECT`
+- 547: `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY`
+- 564: `scripts/s4_b3_native_packet_probe.go`
+- 584: `S4_B3_NATIVE_RETAINED_B_TO_C`
+- 602: `S4_B3_NATIVE_REVOKED_A_TO_B`
+- 605: `S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS`
+- 622: `scripts/s4_b3_native_packet_probe.go`
+- 641: `S4_B3_REGRANT_REAL_PACKET_ALLOW`
+- 657: `S4_B3_REGRANT_REVERSE_REAL_PACKET_DENIED`
+- 660: `S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP`
+- 689: `S4_B3_NATIVE_MCP_B_TO_C_REAL_ECHO`
+- 762: `S4_B3_FOREIGN_PROJECT_AND_BRIDGE_DELETED`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b3-foreign-revoke-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 27: `scripts/s4_b3_native_packet_probe.go`
+- 28: `scripts/s4_b3_native_mcp_client.go`
+- 86: `S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN`
+- 99: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 127: `S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS`
+- 157: `S4_B3_NATIVE_FOREIGN_STATIC_ADDRESS_READY`
+- 158: `scripts/s4_b2_native_flow_probe.go`
+- 189: `S4_B3_NATIVE_FOREIGN_NETWORK_PATH_READY_BOTH_FAMILIES`
+- 210: `S4_B3_NATIVE_FOREIGN_PROJECT_FOUR_ESTABLISHED_FLOWS_BEFORE_ROOT`
+- 211: `S4_B3_FOREIGN_LIVE_BASELINE_ESTABLISHED`
+- 223: `TestS4B3NativeRootSeedBaselineAndExactScope`
+- 228: `TestS4B3NativeNonrootSeedClaimedGrantOriginal`
+- 260: `TestS4B3NativeNonrootMarkCompletedGrantACKLost`
+- 272: `S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY`
+- 281: `S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY`
+- 287: `TestS4B3NativeInstalledRootGrantActualEffect`
+- 307: `S4_B3_FOREIGN_PROJECT_ESTABLISHED_TCP_UDP_IPV4_IPV6_SURVIVED_GRANT`
+- 325: `S4_B3_INSTALLED_ROOT_SIGKILL_RESTART_COMPLETED_GRANT_NO_REPLAY`
+- 355: `S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT`
+- 367: `scripts/s4_b3_native_mcp_client.go`
+- 398: `S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE`
+- 414: `TestS4B3NativeNonrootAdmitFollowupPeer`
+- 439: `TestS4B3NativeNonrootConfirmFollowupPeer`
+- 444: `S4_B3_INSTALLED_FOLLOWUP_CLAIM_PRS_SOCKET_ROOT_SQLITE`
+- 447: `S4_B3_NATIVE_INSTALLED_REVOKE_NEXT_GRANT_EXACT_REGRANT_FULL_LINK`
+- 449: `S4_B3_NATIVE_INSTALLED_TWO_GRANTS_ONE_REVOKE_FULL_LINK`
+- 483: `S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY`
+- 484: `scripts/s4_b3_native_packet_probe.go`
+- 507: `S4_B3_REAL_NATIVE_ACCEPT`
+- 524: `S4_B3_REAL_NATIVE_REVERSE_REJECT`
+- 530: `S4_B3_REAL_NATIVE_UNRELATED_REJECT`
+- 533: `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY`
+- 550: `scripts/s4_b3_native_packet_probe.go`
+- 570: `S4_B3_NATIVE_RETAINED_B_TO_C`
+- 588: `S4_B3_NATIVE_REVOKED_A_TO_B`
+- 591: `S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS`
+- 608: `scripts/s4_b3_native_packet_probe.go`
+- 627: `S4_B3_REGRANT_REAL_PACKET_ALLOW`
+- 643: `S4_B3_REGRANT_REVERSE_REAL_PACKET_DENIED`
+- 646: `S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP`
+- 675: `S4_B3_NATIVE_MCP_B_TO_C_REAL_ECHO`
+- 699: `S4_B3_FOREIGN_PROJECT_IPV4_IPV6_TCP_UDP_SURVIVED_DIRECTIONAL_REVOKE`
+- 765: `S4_B3_FOREIGN_PROJECT_AND_BRIDGE_DELETED`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b3-grant-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 31: `scripts/s4_b3_native_packet_probe.go`
+- 32: `scripts/s4_b3_native_mcp_client.go`
+- 33: `scripts/s4_b5_linked_delete_client.py`
+- 93: `S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN`
+- 110: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 138: `S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS`
+- 151: `TestS4B3NativeRootSeedBaselineAndExactScope`
+- 156: `TestS4B3NativeNonrootSeedClaimedGrantOriginal`
+- 188: `TestS4B3NativeNonrootMarkCompletedGrantACKLost`
+- 191: `TestS5A4NativeMCPPeerRecovery`
+- 205: `S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY`
+- 214: `S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY`
+- 220: `TestS4B3NativeInstalledRootGrantActualEffect`
+- 252: `S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT`
+- 264: `scripts/s4_b3_native_mcp_client.go`
+- 295: `S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE`
+- 311: `TestS4B3NativeNonrootAdmitFollowupPeer`
+- 336: `TestS4B3NativeNonrootConfirmFollowupPeer`
+- 341: `S4_B3_INSTALLED_FOLLOWUP_CLAIM_PRS_SOCKET_ROOT_SQLITE`
+- 344: `S4_B3_NATIVE_INSTALLED_REVOKE_NEXT_GRANT_EXACT_REGRANT_FULL_LINK`
+- 346: `S4_B3_NATIVE_INSTALLED_TWO_GRANTS_ONE_REVOKE_FULL_LINK`
+- 380: `S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY`
+- 381: `scripts/s4_b3_native_packet_probe.go`
+- 404: `S4_B3_REAL_NATIVE_ACCEPT`
+- 421: `S4_B3_REAL_NATIVE_REVERSE_REJECT`
+- 427: `S4_B3_REAL_NATIVE_UNRELATED_REJECT`
+- 430: `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY`
+- 447: `scripts/s4_b3_native_packet_probe.go`
+- 467: `S4_B3_NATIVE_RETAINED_B_TO_C`
+- 485: `S4_B3_NATIVE_REVOKED_A_TO_B`
+- 488: `S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS`
+- 505: `scripts/s4_b3_native_packet_probe.go`
+- 524: `S4_B3_REGRANT_REAL_PACKET_ALLOW`
+- 540: `S4_B3_REGRANT_REVERSE_REAL_PACKET_DENIED`
+- 543: `S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP`
+- 572: `S4_B3_NATIVE_MCP_B_TO_C_REAL_ECHO`
+- 604: `scripts/s4_b5_linked_delete_client.py`
+- 635: `scripts/s4_b5_linked_delete_client.py`
+- 657: `S4_B5_NATIVE_LINKED_PRS_DELETE_TOMBSTONE_UNRELATED_PACKETS`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b3-stale-etag-native.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 27: `scripts/s4_b3_native_packet_probe.go`
+- 28: `scripts/s4_b3_native_mcp_client.go`
+- 86: `S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN`
+- 99: `TestS4B2NativeDedicatedBridgeACLSetup`
+- 127: `S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS`
+- 140: `TestS4B3NativeRootSeedBaselineAndExactScope`
+- 145: `TestS4B3NativeNonrootSeedClaimedGrantOriginal`
+- 177: `TestS4B3NativeNonrootMarkCompletedGrantACKLost`
+- 189: `S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY`
+- 206: `S4_B3_NATIVE_STALE_APPROVED_ACL_ETAG_NO_FALSE_GRANT`
+- 212: `TestS4B3NativeInstalledRootGrantActualEffect`
+- 244: `S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT`
+- 256: `scripts/s4_b3_native_mcp_client.go`
+- 287: `S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE`
+- 303: `TestS4B3NativeNonrootAdmitFollowupPeer`
+- 328: `TestS4B3NativeNonrootConfirmFollowupPeer`
+- 333: `S4_B3_INSTALLED_FOLLOWUP_CLAIM_PRS_SOCKET_ROOT_SQLITE`
+- 336: `S4_B3_NATIVE_INSTALLED_REVOKE_NEXT_GRANT_EXACT_REGRANT_FULL_LINK`
+- 338: `S4_B3_NATIVE_INSTALLED_TWO_GRANTS_ONE_REVOKE_FULL_LINK`
+- 372: `S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY`
+- 373: `scripts/s4_b3_native_packet_probe.go`
+- 396: `S4_B3_REAL_NATIVE_ACCEPT`
+- 413: `S4_B3_REAL_NATIVE_REVERSE_REJECT`
+- 419: `S4_B3_REAL_NATIVE_UNRELATED_REJECT`
+- 422: `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY`
+- 439: `scripts/s4_b3_native_packet_probe.go`
+- 459: `S4_B3_NATIVE_RETAINED_B_TO_C`
+- 477: `S4_B3_NATIVE_REVOKED_A_TO_B`
+- 480: `S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS`
+- 497: `scripts/s4_b3_native_packet_probe.go`
+- 516: `S4_B3_REGRANT_REAL_PACKET_ALLOW`
+- 532: `S4_B3_REGRANT_REVERSE_REAL_PACKET_DENIED`
+- 535: `S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP`
+- 564: `S4_B3_NATIVE_MCP_B_TO_C_REAL_ECHO`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s4-b4-forward-native.yml
+
+P1/P2: C03/C05/C06/C11 real TCP/UDP, policies, dependent Delete.
+
+- 69: `TestB4ForwardSpecAndExactProxyDevice`
+- 72: `scripts/s4_b2_native_flow_probe.go`
+- 129: `S4_B4_DISPOSABLE_NATIVE_FIXTURE_READY`
+- 137: `TestB4NativeOwnedProxyTCPUDP`
+- 148: `TestB4InstalledMCPNativeCreateListDelete`
+- 151: `S4_B4_INSTALLED_AUTHENTICATED_23_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP`
+- 152: `S4_B4_MCP_NATIVE_OCCUPIED_HOST_LISTENER_NO_FALSE_SUCCESS`
+- 153: `S4_B4_MCP_EXTERNAL_DENY_MISSING_CONSENT_ADDRESS_PORT_WILDCARD`
+- 158: `TestB4InstalledMCPNativeCreateListDelete`
+- 159: `FORWARD_ALL_MCP_NO_ACK_OR_FOREIGN_ADDRESS_DENIED`
+- 163: `FORWARD_ALL_NATIVE_WILDCARD_PACKET_AND_CLEANUP`
+- 165: `TestB4NativeOriginalCrashRecovery`
+- 166: `S4_B4_NATIVE_REAL_PROCESS_KILL_ACK_AND_POSTREAD_MATRIX`
+- 172: `TestS5A4NativeMCPNetworkRecovery`
+- 173: `S5_A4_FORWARD_REAL_IPV4_IPV6_TCP_UDP_RECOVERY`
+- 174: `S5_A4_DEPENDENT_DELETE_NATIVE_RECOVERY`
+- 176: `TestB5NativeMCPForwardDependentDelete`
+- 177: `S4_B5_NATIVE_MCP_FORWARD_DEPENDENT_DELETE`
+- 209: `TestB5NativeDeleteAckLoss`
+- 212: `S4_B5_MISSING_ACK_NOT_INFERRED_SUCCESS`
+- 214: `S4_B5_KNOWN_TERMINAL_DELETE_REVIEWED_ATOMIC_SETTLEMENT`
+- 216: `S4_B5_EXPIRED_OR_MISSING_NATIVE_RECEIPT_UNKNOWN`
+- 218: `S4_B5_ACTUAL_FINAL_NATIVE_DELETE_FAILED`
+- 219: `S4_B5_REAL_PARTIAL_CLEANUP_FINAL_DELETE_REFUSED_UNKNOWN`
+- 230: `S4_B4_NATIVE_SCOPED_TCP_UDP_SOURCE_PACKET_CLEANUP`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s5a1-installed.yml
+
+P1/P3: C02/C03/C05/C11 original receipts, auth, fault and SDK semantics.
+
+- 8: `scripts/s2_bh018_atomic_mcp_probe.go`
+- 9: `scripts/accept_s2_native.sh`
+- 47: `TestBH018`, `TestS4OAuth`, `TestS5A1`
+- 49: `scripts/accept_s2_native.sh`
+- 54: `BH018_S5A1_FRESH_READBACK_126`
+- 55: `BH018_S5A1_FRESH_READBACK_127`
+- 56: `BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP`
+- 57: `S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS`
+- 59: `S5A1_INSTALLED_NATIVE`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s5a2-installed.yml
+
+P3: C05/C08/C11 review/recovery/archive.
+
+- 13: `scripts/s5a2_recovery_probe.go`
+- 14: `scripts/s5a2_installed_cli_review.sh`
+- 36: `TestS5A`
+- 42: `scripts/accept_s2_native.sh`
+- 50: `S5A5_NATIVE_RECONNECT_BLOCKER_INSPECT_RECOVERY_LINKS`
+- 51: `S5A5_NATIVE_POST_DELETE_ORIGINAL_ARCHIVE_AND_EVIDENCE`
+- 53: `S5A2_INSTALLED_NATIVE`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s5b-integrated-native.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 57: `scripts/accept_s2_native.sh`
+- 58: `scripts/s25_bridgehead_lab.sh`
+- 72: `scripts/accept_s2_native.sh`, `scripts/s4_oauth_installed_probe.go`
+- 73: `scripts/s25_bridgehead_lab.sh`
+- 77: `S5B_RESTRICTED_TEST_EXECUTABLE_READY`
+- 81: `scripts/accept_s2_native.sh`
+- 92: `S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE`
+- 107: `scripts/accept_s2_native.sh`
+- 116: `S5B_PRIVATE_FSYNC_PARENT_TRAVERSAL`
+- 119: `S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL`
+- 124: `scripts/accept_s2_native.sh`
+- 142: `scripts/s2_p1_native_create_delete_overlap.sh`
+- 147: `scripts/accept_s2_native.sh`, `scripts/s25_bridgehead_lab.sh`, `scripts/s2_p1_native_create_delete_overlap.sh`
+- 152: `S5B_OVERLAP_APPROVED_HARNESS_DIFF`
+- 158: `scripts/s25_bridgehead_lab.sh`
+- 159: `scripts/s25_independent_verifier.py`
+- 170: `scripts/s25_independent_verifier.py`
+- 174: `S5B6_INDEPENDENT_REAL_NATIVE_WRONG_UUID_DETECTED`
+- 175: `scripts/s25_independent_verifier.py`
+- 176: `S5B6_INDEPENDENT_REAL_NATIVE_ORIGINAL_RECHECK`
+- 181: `scripts/uninstall_core.py`
+- 182: `scripts/accept_s2_native.sh`
+- 183: `scripts/s25_bridgehead_lab.sh`
+- 184: `scripts/s2_p1_native_create_delete_overlap.sh`
+- 185: `scripts/accept_s2_native.sh`, `scripts/s25_bridgehead_lab.sh`, `scripts/s2_p1_native_create_delete_overlap.sh`
+- 201: `scripts/accept_s2_native.sh`
+- 202: `BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP`, `S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS`, `S4_A_INSTALLED_OAUTH_REVOKED_GRANT_MANUAL_NO_ADMISSION`, `S4_A_RAW_NATIVE_ORIGINAL_TERMINAL`, `S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE`
+- 206: `scripts/accept_s2_native.sh`
+- 207: `S5A2_NATIVE_INSTALLED_RECOVERY`, `S5A2_NATIVE_STAGED_ROOT_CLI_MCP_PARITY_NO_REPLAY`, `S5A5_NATIVE_POST_DELETE_ORIGINAL_ARCHIVE_AND_EVIDENCE`
+- 211: `scripts/s25_bridgehead_lab.sh`
+- 212: `S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS`, `S5B_TC015_DISTINCT_AUTHENTICATED_ACTORS_AND_NATIVE_ORIGINALS`, `S5B_TC015_TWO_AUTHENTICATED_SDK_PROCESSES_NATIVE_VERIFIED_AND_CLEANUP`, `S5B_TC016_EXTERNAL_GIT_STALE_WRITER_REFUSED_WINNER_PRESERVED`
+- 215: `scripts/s25_bridgehead_lab.sh`
+- 216: `S25_R2_OPERATOR_ROOT_LOCAL_EXACT_BINARY_ROLLBACK`, `S25_R2_REAL_SERVICE_SIGKILL_DISTINCT_PID_HTTP_AUTH_RECOVERY`, `S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED`, `S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER`, `S5B6_INDEPENDENT_REAL_NATIVE_ORIGINAL_RECHECK`, `S5B6_INDEPENDENT_REAL_NATIVE_WRONG_UUID_DETECTED`
+- 242: `S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE`
+- 243: `S5B_PRIVATE_FSYNC_PARENT_TRAVERSAL`
+- 244: `S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL`
+- 245: `S5B_OVERLAP_APPROVED_HARNESS_DIFF`
+- 246: `BH018_S5A1_FRESH_READBACK_126`
+- 247: `BH018_S5A1_FRESH_READBACK_127`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s5b-peer-production.yml
+
+P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN.
+
+- 7: `scripts/s5b_peer_production_native.sh`
+- 8: `scripts/s5b_peer_production_native.py`
+- 38: `scripts/s5b_peer_production_native.sh`
+- 39: `scripts/s5b_peer_production_native.py`
+- 44: `scripts/s5b_peer_production_native.sh`
+- 45: `S5B_PROD_MCP_CREATE_AUTOMATIC_PINNED_THREE_BOXES`
+- 46: `S5B_PROD_REAL_CREATE_TO_PEER_GRANT_REVOKE_REGRANT`
+- 47: `S5B_PROD_COMBINED_ACTIVE_PEER_FORWARD_PENDING_EXEC_RESTART`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s5b-rc10-residual-native.yml
+
+P1/P3/P4: C03/C05/C08/C11 obsolete RC paths vs generic original recovery.
+
+- 7: `scripts/s5b_rc10_residual_native.sh`
+- 8: `scripts/s5b_rc10_residual_native.py`
+- 9: `scripts/s5b_rc10_cli_auth_probe.go`
+- 36: `scripts/s5b_rc10_residual_native.sh`
+- 37: `scripts/s5b_rc10_residual_native.py`
+- 38: `scripts/s5b_rc10_cli_auth_probe.go`
+- 43: `scripts/s5b_rc10_residual_native.sh`
+- 44: `S5B_RC10_CLI_AUTH`
+- 45: `S5B_RC10_CLI_NATIVE_PEER_PURGE_PLAN`
+- 46: `S5B_RC10_ACTIVE_FORWARD_REAL_ACL_PUT_FAULT`
+- 47: `S5B_RC10_PARTIAL_PRS_FORWARD_RESTART_FENCE_NO_REPLAY`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s5b-rc10-specialized-recovery.yml
+
+P1/P3/P4: C03/C05/C08/C11 obsolete RC paths vs generic original recovery.
+
+- 7: `scripts/s5b_rc10_specialized_recovery.sh`
+- 8: `scripts/s5b_rc10_specialized_recovery.py`
+- 34: `scripts/s5b_rc10_specialized_recovery.sh`
+- 35: `scripts/s5b_rc10_specialized_recovery.py`
+- 40: `scripts/s5b_rc10_specialized_recovery.sh`
+- 41: `S5B_RC10_SPECIALIZED_RECOVERY_CLI_SIX_LEAVES`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-s5b1-frozen-installed.yml
+
+P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity.
+
+- 9: `scripts/s5b1_installed_closeout.sh`
+- 10: `scripts/s25_bridgehead_lab.sh`
+- 11: `scripts/s3_file_installed_probe.go`
+- 57: `scripts/uninstall_core.py`
+- 58: `scripts/s25_bridgehead_lab.sh`
+- 59: `scripts/s5b1_installed_closeout.sh`
+- 60: `scripts/s3_file_installed_probe.go`
+- 61: `scripts/s25_bridgehead_lab.sh`
+- 62: `scripts/s5b1_installed_closeout.sh`
+- 67: `scripts/s25_bridgehead_lab.sh`
+- 68: `S5B1_CLI_GUARDED_ACTUAL_SUBSET`
+- 70: `S5B1_EXACT_23_SCHEMA_CACHE_TYPED_TEXT_AND_REFUSALS`
+- 71: `S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD`
+- 72: `S5B1_EXACT_INSTALLED_OLD_NEW_SDK_SCOPED`
+- 74: `S5B2_READY_TIMEOUT_DELAY_RESTART_NATIVE_DETAIL_ARCHIVE`
+- 76: `S5B1_ACTUAL_GUIDED_FULL_RETIREMENT_ARCHIVE_AND_INCUS_PRESERVED`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-stable-candidate.yml
+
+P4/P5: C01/C09/C11/C12 exact artifacts and stable gates.
+
+- 41: `scripts/test_v1_release_manifest.py`
+- 120: `scripts/v1_release_manifest.py`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-stable-release.yml
+
+P4/P5: C01/C09/C11/C12 exact artifacts and stable gates.
+
+- 47: `scripts/v1_stable_release_ci.py`
+- 71: `scripts/v1_stable_release_ci.py`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## v1-unknown-create-repair.yml
+
+P1/P3: C02/C03/C05/C11 original receipts, auth, fault and SDK semantics.
+
+- 31: `TestCreateNativeFailure`, `TestCreatePostread`, `TestCreateVerified`, `TestUnknownCreate`
+- 36: `scripts/accept_s2_native.sh`
+- 37: `S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS`
+
+Dynamic selectors, script exits and inline assertions remain OPEN.
+
+## Runtime/SQL reference index
+
+All entries OPEN; retain shared helper consumers and fail-closed old-state refusal.
+
+- `.github/workflows/v1-s4-b2-controller-root-installed.yml`: 259, 264, 271, 277, 278, 280, 283, 284, 288, 289, 293, 298, 301, 303, 304, 323, 335, 339, 364, 366, 376, 381, 391, 424, 428, 431, 432, 433, 434, 440, 442, 443
+- `.github/workflows/v1-s4-b2-scriptlet-parity-native.yml`: 202, 222, 231, 232, 233, 236, 238, 240, 247, 250, 252, 254
+- `.github/workflows/v1-s4-b3-contention-upgrade-native.yml`: 152, 154, 157, 159, 162, 166, 167, 171, 179, 183, 186, 207, 211, 238, 240, 241, 242, 244, 251, 253, 254, 255, 306, 307, 308, 310, 312, 315, 317, 320, 324, 328, 351, 352, 353, 355, 357, 360, 362, 365, 369, 374, 672
+- `.github/workflows/v1-s4-b3-final-closure-native.yml`: 188, 190, 193, 195, 198, 202, 203, 207, 215, 219, 222, 229, 233, 261, 278, 281, 282, 288, 349, 350, 351, 353, 355, 358, 360, 363, 367, 371, 394, 395, 396, 398, 400, 403, 405, 408, 412, 417, 721
+- `.github/workflows/v1-s4-b3-final-gates-native.yml`: 249, 251, 254, 256, 259, 263, 264, 268, 276, 280, 283, 288, 292, 326, 329, 334, 387, 388, 389, 391, 393, 396, 398, 401, 405, 409, 432, 433, 434, 436, 438, 441, 443, 446, 450, 455, 770
+- `.github/workflows/v1-s4-b3-foreign-revoke-native.yml`: 235, 237, 240, 242, 245, 249, 250, 254, 262, 266, 269, 274, 278, 312, 315, 320, 373, 374, 375, 377, 379, 382, 384, 387, 391, 395, 418, 419, 420, 422, 424, 427, 429, 432, 436, 441, 773
+- `.github/workflows/v1-s4-b3-grant-native.yml`: 163, 165, 168, 170, 173, 177, 178, 182, 194, 199, 202, 207, 211, 270, 271, 272, 274, 276, 279, 281, 284, 288, 292, 315, 316, 317, 319, 321, 324, 326, 329, 333, 338, 615, 616, 617, 619, 621, 624, 626, 629, 633, 715
+- `.github/workflows/v1-s4-b3-stale-etag-native.yml`: 152, 154, 157, 159, 162, 166, 167, 171, 179, 183, 186, 198, 262, 263, 264, 266, 268, 271, 273, 276, 280, 284, 307, 308, 309, 311, 313, 316, 318, 321, 325, 330, 628
+- `cmd/boxweave/main.go`: 31, 102, 174, 241, 315, 339, 365, 377, 422, 434, 441, 450, 459, 615, 628, 631, 638, 644, 710
+- `cmd/boxweave/scoped_drain.go`: 249
+- `docs/development/RETIREMENT_INVENTORY.md`: 7, 9, 11, 13, 16
+- `docs/getting-started/MANUAL_INSTALL.md`: 68, 70, 71, 76, 77
+- `install.sh`: 647, 879
+- `internal/control/box_tools.go`: 416, 887
+- `internal/control/operation_recover.go`: 34
+- `internal/control/operation_tools.go`: 152
+- `internal/control/peer_tools.go`: 58
+- `internal/control/scoped_drain.go`: 25
+- `internal/control/server.go`: 68, 132, 147, 155, 260, 326
+- `internal/install/diagnostic_observe.go`: 170, 181, 204
+- `internal/install/diagnostic_observe_test.go`: 60, 61, 64
+- `internal/install/local.go`: 222
+- `internal/install/maintenance_observe.go`: 247
+- `internal/install/native_peer_root_service.go`: 18, 54
+- `internal/install/native_peer_root_service_test.go`: 22
+- `internal/install/native_peer_root_socket.go`: 22
+- `internal/install/native_prepare_retirement_check.go`: 33, 38
+- `internal/install/native_prereq_prepare.go`: 259, 358
+- `internal/install/native_scriptlet_apply.go`: 22, 24
+- `internal/install/native_scriptlet_plan.go`: 43, 126
+- `internal/install/native_scriptlet_policy.go`: 37
+- `internal/install/network_ipv4_compaction.go`: 111, 115, 224
+- `internal/install/network_ipv4_retirement.go`: 48, 287
+- `internal/install/network_peer_conntrack.go`: 37, 123, 193, 282
+- `internal/install/network_peer_conntrack_store.go`: 51
+- `internal/install/network_peer_fresh_admission.go`: 20
+- `internal/install/network_peer_fresh_apply.go`: 19, 72, 73, 94, 96
+- `internal/install/network_peer_fresh_bootstrap.go`: 15, 16, 17
+- `internal/install/network_peer_fresh_bootstrap_test.go`: 39, 46, 70
+- `internal/install/network_peer_fresh_ipv6.go`: 74
+- `internal/install/network_peer_fresh_kernel.go`: 64, 78, 91, 101
+- `internal/install/network_peer_fresh_sdk.go`: 66
+- `internal/install/network_peer_guard_journal_transition.go`: 13, 14, 30
+- `internal/install/network_peer_guard_journal_transition_test.go`: 18, 60
+- `internal/install/network_peer_guard_kernel_readback.go`: 26, 129, 293
+- `internal/install/network_peer_guard_kernel_readback_test.go`: 12, 44
+- `internal/install/network_peer_guard_transition.go`: 32, 40, 99, 100, 102, 114, 115
+- `internal/install/network_peer_guard_transition_test.go`: 13, 31, 47, 53, 70, 73, 79, 80, 84, 88, 104, 114, 115, 128, 146, 156, 157, 167, 168
+- `internal/install/network_peer_scoped_acl_cas.go`: 54
+- `internal/install/network_peer_scoped_acl_cas_test.go`: 92, 116, 197, 216
+- `internal/install/network_peer_scoped_boot_policy.go`: 92, 95, 99, 172, 174, 220, 274, 284
+- `internal/install/network_peer_scoped_boot_policy_test.go`: 34, 41, 56, 118
+- `internal/install/network_peer_scoped_conntrack.go`: 15
+- `internal/install/network_peer_scoped_create.go`: 341
+- `internal/install/network_peer_scoped_delete.go`: 118
+- `internal/install/network_peer_scoped_direction_native_test.go`: 217
+- `internal/install/network_peer_scoped_effect_journal.go`: 113
+- `internal/install/network_peer_scoped_effect_journal_test.go`: 41, 58, 94
+- `internal/install/network_peer_scoped_execute.go`: 22, 43, 65, 94
+- `internal/install/network_peer_scoped_execute_test.go`: 52
+- `internal/install/network_peer_scoped_guard.go`: 26, 32, 37, 42, 47, 48, 169
+- `internal/install/network_peer_scoped_guard_test.go`: 21
+- `internal/install/network_peer_scoped_prefix.go`: 16, 80
+- `internal/install/network_peer_scoped_provenance.go`: 140
+- `internal/install/network_peer_scoped_recover.go`: 15, 44
+- `internal/install/network_peer_scoped_retirement.go`: 51, 306
+- `internal/install/network_peer_scoped_root_kernel_collector.go`: 28
+- `internal/install/network_peer_scoped_root_kernel_collector_test.go`: 48, 129, 150, 212
+- `internal/install/network_peer_scoped_root_transition.go`: 35
+- `internal/install/network_peer_scoped_service_dependency_test.go`: 11
+- `internal/state/maintenance_observe.go`: 170, 171, 172, 287, 288, 331, 332, 333
+- `internal/state/network_address_holds.go`: 63, 129
+- `internal/state/network_audit_ledger.go`: 92
+- `internal/state/network_create_binding.go`: 75, 86
+- `internal/state/network_create_recovery.go`: 56, 66
+- `internal/state/network_deleted_binding.go`: 19, 50
+- `internal/state/network_ipv4_compaction.go`: 12, 55, 76, 90
+- `internal/state/network_ipv4_compaction_test.go`: 212
+- `internal/state/network_ipv4_retirement.go`: 100, 123, 166, 238, 262, 277, 285, 296, 303, 311, 426, 428, 430, 457, 465, 521, 543, 546, 549, 572, 579, 585
+- `internal/state/network_ipv4_retirement_churn_test.go`: 116, 133
+- `internal/state/network_ipv4_retirement_test.go`: 80, 128
+- `internal/state/network_pin_repair_check.go`: 68, 89
+- `internal/state/network_scoped_audit_ledger.go`: 96, 97, 98, 129
+- `internal/state/store.go`: 51, 52, 53, 78, 79
+- `scripts/n2_installed_lifecycle.py`: 121, 139
+- `scripts/n2_installed_lifecycle.sh`: 73, 82, 389, 392
+- `scripts/pr188_scoped_roundtrip.py`: 92
+- `scripts/s5b1_installed_closeout.sh`: 50, 56
+- `scripts/s5b_peer_production_native.py`: 28, 104, 107, 110, 117, 122
+- `scripts/s5b_rc10_residual_native.py`: 28, 104, 107, 110, 117, 122, 321, 324, 326, 359
+- `scripts/test_guided_upgrade.py`: 134
+- `scripts/test_uninstall_core.py`: 31, 220, 253
+- `scripts/uninstall_core.py`: 23, 24, 358, 657, 853, 2090, 3551, 3765
+
+Next: S2 normal/duplicate/restart serve vs alternate fault DB/socket; S2.5 outer/inner Scoped startup; installed offline/resume/purge parity. Do not substitute old SDK compatibility with old runtime support. All replacement proof remains OPEN.
