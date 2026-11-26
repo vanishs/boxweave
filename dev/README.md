@@ -64,6 +64,29 @@ revision; include their IDs in learning_links. Never invent an observation
 or force a new asset. Use the same sanitized evidence reference and fact in
 the work record and learning revision.
 
+For an already recorded exact observation, avoid typing its fact fields
+again at the boundary. Keep the work/attempt identity, used asset and
+original evidence reference in the boundary JSON, and provide the
+explicit learning disposition and all other feedback as usual. Instead of
+duplicating the linked item and candidate ID, use:
+
+    python3 dev/bwdev --json work boundary HISTORY DRAFT --expect N --inbox INBOX --link-observation BDH-L013 REVISION "explicit reason"
+
+Repeat --link-observation ID REVISION REASON for distinct candidates in
+the same boundary. The Python helper reads validated current histories,
+requires one observation for the exact work and attempt, resolves exactly
+one explicitly used asset, and copies the recorded evidence, outcome and
+observation into the linked feedback item. It adds the candidate reference;
+the Agent supplies the explicit link and reason, not a second copy of
+facts. Preserve all previously published feedback in DRAFT. The helper
+does not invent evidence, alter learning records, select an improvement,
+infer authority or verify the external source/operation. Missing evidence,
+uncertain outcome, ambiguity, aliases, duplicate/conflicting candidate,
+stale revision, changed target/source or a changed link at the normal
+second review stop before publication. Use the normal explicit feedback and pending handoff when
+a reference cannot be safely resolved. Ordinary work/learning revision
+checks remain separate local writes, not a distributed transaction.
+
 Run bwdev work feedback FILE to review exact local links; work boundary and
 resume also surface review. Pending feedback can be durably handed off
 without blocking independent product work; a final RECORDED/ANSWERED

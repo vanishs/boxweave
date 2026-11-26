@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dev"))
@@ -78,6 +79,126 @@ class FeedbackTests(unittest.TestCase):
         for key, value in (("attempt_ref", "other"), ("observation", "changed"), ("outcome", "misled")):
             changed = dict(self.row, asset_feedback=[dict(self.item, **{key: value})])
             self.assertEqual(self.review(changed)[1], 1)
+
+    def reference_fixture(self):
+        self.observe()
+        revision = records.latest(self.inbox / "BDH-L014")["revision"]
+        draft = dict(self.row, asset_feedback=[], learning_links=[])
+        return draft, ["BDH-L014", str(revision), self.item["reason"]]
+
+    def reference_boundary(self, draft, links):
+        history = self.base / "reference-work"
+        initial = dict(self.row, state="ACTIVE", asset_feedback=[], learning_links=[], learning=None)
+        initial.pop("boundary")
+        records.publish(history, 0, initial)
+        file = self.base / "reference-boundary.json"
+        file.write_text(json.dumps(draft), encoding="utf-8")
+        return argparse.Namespace(action="boundary", directory=history, file=file,
+                                  expect=1, inbox=self.inbox, link_observation=links)
+
+    def test_reference_link_records_existing_exact_observation(self):
+        draft, link = self.reference_fixture()
+        args = self.reference_boundary(draft, [link])
+        before = records.latest(self.inbox / "BDH-L014")
+        result, code = work.run(args, ROOT)
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["record"]["asset_feedback"], [self.item])
+        self.assertEqual(result["record"]["learning_links"], ["BDH-L014"])
+        self.assertEqual(result["feedback"]["status"], "FEEDBACK_RECORDED")
+        self.assertEqual(work.read_history(args.directory)["revision"], 2)
+        self.assertEqual(records.latest(self.inbox / "BDH-L014"), before)
+        self.assertEqual(records.read_json(args.file), draft)
+        with self.assertRaises(HarnessError):
+            work.run(args, ROOT)
+
+    def test_reference_rejects_stale_missing_or_ambiguous_identity(self):
+        draft, link = self.reference_fixture()
+        for change, links in (
+                ({}, [[link[0], str(int(link[1])-1), link[2]]]),
+                ({}, [["absent", link[1], link[2]]]),
+                ({"work_ref": "different"}, [link]),
+                ({"attempt_ref": "different"}, [link]),
+                ({"evidence": []}, [link]),
+                ({"used_assets": []}, [link]),
+                ({"used_assets": [self.item["asset"], "dev/skills/box-development/SKILL.md"]}, [link]),
+                ({"state": "UNKNOWN"}, [link]),
+                ({}, [link, link]),
+                ({"asset_feedback": [self.item]}, [link])):
+            with self.subTest(change=change, links=links):
+                row = dict(draft, **change)
+                with self.assertRaises(HarnessError):
+                    feedback.derive_links(work.validate(row), ROOT, self.inbox, links)
+        with self.assertRaises(HarnessError):
+            feedback.derive_links(draft, ROOT, self.base / "absent", [link])
+        args = self.reference_boundary(dict(draft, evidence=[]), [link])
+        with self.assertRaises(HarnessError):
+            work.run(args, ROOT)
+        self.assertEqual(records.latest(args.directory)["revision"], 1)
+
+    def test_reference_refuses_changed_target_even_with_new_evidence(self):
+        draft, link = self.reference_fixture()
+        changed = dict(draft, target=dict(draft["target"], source_sha="a"*40),
+                       evidence=[*draft["evidence"], "new source evidence"])
+        args = self.reference_boundary(changed, [link])
+        # The ordinary explicit transition can bind a newly observed source;
+        # the derivation cannot infer that old observation facts match it.
+        work.advance(work.read_history(args.directory), changed, 1)
+        with self.assertRaisesRegex(HarnessError, "Changed target/source"):
+            work.run(args, ROOT)
+        self.assertEqual(records.latest(args.directory)["revision"], 1)
+
+    def test_reference_refuses_conflicting_candidate_and_duplicate_capture(self):
+        draft, link = self.reference_fixture()
+        original = records.read_json(self.inbox / "BDH-L014" / "00000001.json")
+        duplicate = dict(original, id="fixture-duplicate")
+        records.publish(self.inbox / "fixture-duplicate", 0, duplicate)
+        with self.assertRaises(HarnessError):
+            feedback.derive_links(draft, ROOT, self.inbox, [link])
+        # Use a different fingerprint and the exact same observed fact.
+        other = dict(original, id="fixture-conflict", observation="Different original capture",
+                     fingerprint=learning.fingerprint("Different original capture", original["asset"]))
+        records.publish(self.inbox / "fixture-conflict", 0, other)
+        # Remove only the isolated duplicate fixture, not canonical history.
+        shutil.rmtree(self.inbox / "fixture-duplicate")
+        learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="fixture-conflict",
+                     expect=1, work_ref=draft["work_ref"], attempt_ref=draft["attempt_ref"],
+                     evidence=self.item["evidence"], observation=self.item["observation"],
+                     outcome=self.item["outcome"]), ROOT)
+        with self.assertRaisesRegex(HarnessError, "Conflicting recorded"):
+            feedback.derive_links(draft, ROOT, self.inbox, [link])
+
+    def test_reference_rejects_uncertain_or_multiple_observations(self):
+        draft, link = self.reference_fixture()
+        directory = self.inbox / "BDH-L014"
+        learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
+                     expect=int(link[1]), work_ref=draft["work_ref"], attempt_ref=draft["attempt_ref"],
+                     evidence="different evidence", observation="Another observation",
+                     outcome="uncertain"), ROOT)
+        newer = [link[0], str(int(link[1])+1), link[2]]
+        with self.assertRaisesRegex(HarnessError, "ambiguous"):
+            feedback.derive_links(draft, ROOT, self.inbox, [newer])
+        learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
+                     expect=int(newer[1]), work_ref=draft["work_ref"], attempt_ref="uncertain attempt",
+                     evidence="uncertain evidence", observation="Unproved effect", outcome="uncertain"), ROOT)
+        last = [link[0], str(int(newer[1])+1), link[2]]
+        with self.assertRaisesRegex(HarnessError, "Uncertain observation"):
+            feedback.derive_links(dict(draft, attempt_ref="uncertain attempt", evidence=["uncertain evidence"]),
+                                  ROOT, self.inbox, [last])
+
+    def test_reference_rechecks_revision_before_boundary_publication(self):
+        draft, link = self.reference_fixture()
+        args = self.reference_boundary(draft, [link])
+        review = feedback.review
+        def changed(row, root, inbox):
+            learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
+                         expect=int(link[1]), work_ref="another work", attempt_ref="one",
+                         evidence="new observation evidence", observation="New observation",
+                         outcome="helped"), ROOT)
+            return review(row, root, inbox)
+        with patch.object(feedback, "review", side_effect=changed):
+            with self.assertRaisesRegex(HarnessError, "Derived link changed"):
+                work.run(args, ROOT)
+        self.assertEqual(records.latest(args.directory)["revision"], 1)
 
     def test_related_no_change_and_explicit_not_applicable(self):
         row = dict(self.row, asset_feedback=[dict(self.item, decision="no-change", candidate=None)])

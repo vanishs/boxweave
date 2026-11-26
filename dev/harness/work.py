@@ -313,6 +313,9 @@ def register(parser):
     a.add_argument("file")
     a.add_argument("--expect", required=True, type=int)
     a.add_argument("--inbox")
+    a.add_argument("--link-observation", nargs=3, action="append", default=[],
+                   metavar=("ID", "REVISION", "REASON"),
+                   help="Derive one explicitly linked exact observation; repeat for distinct candidates")
     r = sub.add_parser("resume", help="Read original envelope and reconciliation requirements")
     r.add_argument("directory")
     r.add_argument("--inbox")
@@ -339,8 +342,20 @@ def run(args, root):
     else:
         row = read_history(args.directory)
         if args.action == "boundary":
-            updated = advance(row, read_json(args.file), args.expect)
+            draft = validate(read_json(args.file))
+            links = getattr(args, "link_observation", [])
+            expected_links = {}
+            if links:
+                # Reject stale work/scope before deriving, and preserve the
+                # original transition/feedback gates after derivation.
+                advance(row, draft, args.expect)
+                if draft["target"] != row["target"]:
+                    raise HarnessError("Changed target/source requires explicit boundary feedback")
+                draft, expected_links = feedback.derive_links(draft, root, inbox, links)
+            updated = advance(row, draft, args.expect)
             reviewed, code = feedback.review(updated, root, inbox)
+            if expected_links:
+                feedback.check_derived_links(reviewed, expected_links)
             if updated["state"] in ("RECORDED", "ANSWERED"):
                 if code or reviewed["status"] != "FEEDBACK_RECORDED":
                     return {"status": "REVIEW_REQUIRED", "published": False, "feedback": reviewed,

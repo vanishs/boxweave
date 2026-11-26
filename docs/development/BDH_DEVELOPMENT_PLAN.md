@@ -204,7 +204,33 @@ proof of PR/base association or release acceptance. No CI workflow change.
 R2 technical delivery complete; independent fresh ordinary Agent discovery
 and use is still pending because the implementer cannot initiate a separate
 session in this surface. Do not label this smoke independent or waive the
-minimum exit. R3-R7 not started.
+minimum exit. R3 was subsequently authorized; R4-R7 not started.
+
+Owner retirement (2026-11-25): [JS/Node retirement evidence](https://github.com/vanishs/boxweave/pull/193#issuecomment-7179571864), exact 7238f630292532610a21f88077bd633bdf4db5b6.
+Remove experimental client JS template and four Node-dependent test methods;
+retain Python planner, direct authorized MCP, original admission/readback
+safety and historical evidence. Box 116/116 no skips, Eval14 PASS.
+L014 implementation digest drift is real and remains REVIEW_REQUIRED;
+fixture-only tests updated, canonical histories and both REOPENs unchanged.
+No new transfer episode, no promotion. Python is the BDH script system.
+
+R3 checkpoint (2026-11-25): [implementation and actual retained-record replay](https://github.com/vanishs/boxweave/pull/193#issuecomment-7179629656).
+Opt-in repeatable work boundary --link-observation ID REVISION REASON
+uses validated prior observation and current explicit work/attempt, target,
+used asset and evidence refs. Agent supplies link and reason. Existing
+advance/preserve/review/publication gates stay in force; reject stale or
+ambiguous/conflicting/missing/unknown refs and changed target/source.
+No extra per-boundary call, schema, learning revision or new executor.
+Final Box 122/122 no skips, Eval14 PASS, format/diff PASS, audit expected
+L014 drift only. Replay in isolated copies of actual R1 observations L013
+rev3 and L014 rev40: same normalized five feedback items, HANDOFF,
+FEEDBACK_RECORDED and Evolve PENDING. Same-serializer boundary 5055 to
+3828 bytes plus 179 reference argv bytes, net 1048 fewer; 2 to 0 linked
+fact retypes. Not fresh Agent performance; no demonstrated reduction in
+number of manual submissions, overall tool calls, time or tokens.
+Separate histories are not a distributed transaction. Local technical
+implementation/replay complete; exact-head CI and actual fresh-use/benefit
+validation pending. R4-R7 not authorized. See linked PR for exact CI updates.
 
 ### R0 — research and reuse gate (research recorded; owner decision pending)
 
@@ -345,7 +371,9 @@ blocker.
 | R0 | Research recorded; owner review/scope decision pending |
 | R1 | Baseline and narrow scope recommendation recorded; owner decision pending |
 | R2 | Technical delivery PASS and code CI PASS; fresh ordinary Agent use pending |
-| R3-R4 | NOT_STARTED; implementation awaits approved scope |
+| JS/Node retirement | Implemented, Box PASS, CI reconcile at current head; historical drift retained |
+| R3 | Local technical implementation and retained-record replay PASS; CI and fresh-use/benefit pending |
+| R4 | NOT_STARTED; implementation awaits approved scope |
 | R5-R6 | NOT_STARTED |
 | R7 / original V5 | OPEN |
 | L014 V4e-03/04 | Deferred; REOPEN retained |
@@ -356,6 +384,8 @@ latest progress and wait for the owner's instruction. R0 research is recorded in
 R1 baseline is recorded in [the baseline note](BDH_R1_BASELINE.md).
 R2 technical delivery and neutral witness instructions are in the linked PR
 record above. Complete the fresh ordinary Agent discovery/use gate without
-repeating valid Box or CI evidence. R3-R4 require explicit owner authorization.
+repeating valid Box or CI evidence. R3 authorized and local technical results
+recorded; reconcile exact-head CI and fresh ordinary use. R4 requires explicit
+owner authorization.
 Do not repeat R0/R1 without a material change in evidence. On later resumptions
 continue the next authorized unfinished slice, not the first stage.
