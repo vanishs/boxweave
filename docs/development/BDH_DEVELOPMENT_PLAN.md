@@ -253,7 +253,59 @@ or episode. Later separate process retrieved exact reason/condition, full
 rev41 appended. This is knowledgeable same-Agent cross-process recovery,
 not an independent fresh task/session or measured overall Agent benefit.
 Canonical histories and both REOPENs unchanged. R4 local technical PASS;
-exact-head CI and fresh ordinary use pending. R5 requires owner authorization.
+exact-head quality 45735552060 and candidate 45735551966 SUCCESS on 55be132
+(native and release skipped); fresh ordinary use remains pending. R5 now
+owner-authorized.
+
+### Reference mechanisms and actual composition (R0 reconciliation)
+
+These are design adaptations of mature mechanisms, not six imported
+frameworks. See [R0 research](BDH_R0_REUSE_RESEARCH.md) for the original
+references and decisions. No new external package or service is required.
+
+| Reference | Current BDH realization | Evidence / remaining limit |
+| --- | --- | --- |
+| Mozilla Mach | Existing Python bwdev dispatcher, context/profile selection, R2 opt-in work plan --brief | Unified entry and concise output implemented; fresh ordinary discovery/use pending |
+| SWE-agent / Agentless | Relevant assets and short registered verification commands; R2 context projection | Existing Agent-facing interfaces, no Agent framework or reusable remote executor; R5 validates actual use |
+| LLVM lit / Bazel (also pre-commit) | Existing check_runner, verify plan/run/inspect, exact-source CI and format gates | Reused nonempty, deterministic verification; not a new runner |
+| Chromium depot_tools | Existing verification exit/output/source evidence, work/attempt and R3 exact observation links | Partial observation only; no automatic complete MCP call/failure/retry/time/token instrumentation or telemetry service |
+| KCS v6 | Existing learning inbox, audit/next/opportunity/defer/decide; R4 brief review and flag/defer policy | Local/cross-process retrieval verified; owner authorizes improvement selection/implementation; fresh-session evidence pending |
+| Google SRE toil | R1 baseline prioritization, R3 avoid repeated transcription, R4 concise on-demand review | Measured local payload/record improvements, not measured end-to-end toil reduction; automatic aggregation and all-call cost coverage not demonstrated |
+
+Conceptual relationships (existing components, not separate services):
+
+    Owner task -> Agent judgment -> bwdev/context (R2)
+                                  -> Solve: authorized MCP/Python -> verify -> deliver
+                                  -> observed facts / exact references (R3)
+                                        -> immutable work/learning evidence
+                                        -> Evolve: inbox / defer (R4)
+                                             -> owner-requested Agent review
+                                             -> owner scope authorization
+                                             -> bounded improvement / independent validation
+                                             -> Git/PR assets -> later discovery and reuse
+
+Solve can continue or honestly hand off independently of nonblocking
+Evolve work. Python records what it actually observes; the Agent supplies
+semantic judgments and explicit references for otherwise inaccessible
+connector events. Preserve UNKNOWN, pending and drift. Git/PR provides
+sanitized evidence and knowledge persistence, not global dispatch or a
+transaction. R2 reduced a material plan output 6720 to 4513 bytes (32.8%);
+R3 removed two linked fact retypes and saved net 1048/5055 serialized
+boundary bytes (20.7%); R4 global review 47835 to 5346 bytes (88.8%). These
+are different local measures, not additive, token savings or a 10/60
+productivity claim. Do not broaden automatic metrics collection ahead of
+R5/R6; first measure actual accessible overhead and disclose missing data.
+
+R5 checkpoint (2026-11-25): [witness protocol and preflight](BDH_R5_WITNESS.md).
+Owner requested recording the reference composition and starting R5.
+Freeze exact R4 code 55be132 and owned clean /root/pr193-r5-witness; Python
+3.12.3, Git 2.43.0, no gh/Go/gofmt/Node. Preflight only, no ordinary test
+executed. Actual fresh independent ChatGPT sessions are not launchable
+through the implementer's available authorized tools. Neutral prompts and
+oracle prepared; fresh witness execution requires a separate user-started
+session. Do not repeat prior R2-R4 smoke/replays or claim them independent.
+No new code or feature scope; R5 actual-use gates remain OPEN. R6-R7 not
+started.
 
 ### R0 — research and reuse gate (research recorded; owner decision pending)
 
@@ -396,8 +448,9 @@ blocker.
 | R2 | Technical delivery PASS and code CI PASS; fresh ordinary Agent use pending |
 | JS/Node retirement | Complete, Box and exact retirement CI PASS; historical drift retained |
 | R3 | Technical implementation/replay and applicable exact code CI PASS; fresh-use/benefit pending |
-| R4 | Local technical implementation and retained-record recovery PASS; exact-head CI and fresh ordinary use pending |
-| R5-R6 | NOT_STARTED |
+| R4 | Technical implementation/recovery and exact code CI PASS; fresh ordinary use pending |
+| R5 | AUTHORIZED, witness protocol/preflight ready; fresh independent sessions pending |
+| R6 | NOT_STARTED |
 | R7 / original V5 | OPEN |
 | L014 V4e-03/04 | Deferred; REOPEN retained |
 | Other Agent integrations | Deferred |
@@ -408,7 +461,9 @@ R1 baseline is recorded in [the baseline note](BDH_R1_BASELINE.md).
 R2 technical delivery and neutral witness instructions are in the linked PR
 record above. Complete the fresh ordinary Agent discovery/use gate without
 repeating valid Box or CI evidence. R3 applicable code CI PASS; fresh ordinary
-use remains pending. R4 technical results recorded; reconcile exact-head CI
-and fresh ordinary use. R5 requires explicit owner authorization.
+use remains pending. R4 applicable exact code CI PASS. R5 authorized;
+use the linked witness protocol and actual fresh sessions, not the
+implementer's smoke, to close the independent gates. R6 requires owner
+authorization.
 Do not repeat R0/R1 without a material change in evidence. On later resumptions
 continue the next authorized unfinished slice, not the first stage.
