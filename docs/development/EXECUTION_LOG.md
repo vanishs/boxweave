@@ -118,3 +118,5 @@ P1b-06b1: C03/C11 previous official SDK native protocol/lifecycle witness retain
 P1b-06b2: C03/C05/C11 current SDK shared catalog and output/reconnect/cancel assertions reused unchanged in installed Scoped subset; private fixed-ledger witness and exact Go build verified. Independent installed CI_PENDING; actual storage/GC, full S2 and S2.5 gates retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b2--current-official-sdk-shared-output-and-catalog-assertions).
 
 P1b-06b4: 0842da7 SDK/Exec WAL CI_VERIFIED (N2 14/14); generic Update ACK durability BOX_VERIFIED, native CI_PENDING. Transport ACK/ETag/postread and quota/GC retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b4--generic-update-ack-durability-candidate).
+
+P1b-06b5: Update ACK durability CI_VERIFIED at 0b0b0fb; full original S2 SDK/packet candidate on fixed installed Scoped BOX_VERIFIED, CI_PENDING. Physical quota, other fault and S2.5 gates retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b5--full-original-s2-protocolpacket-probe-on-installed-scoped).

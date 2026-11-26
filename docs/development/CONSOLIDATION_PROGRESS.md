@@ -302,6 +302,16 @@ Patch 28b0256e6bc55f28f0c43e43bb3f2af5 SUCCEEDED, 13198 bytes SHA256 b43f5be823b
 
 Remaining transport Update ACK/ETag/postread, ENOSPC, physical quota/GC, remaining S2 and S2.5; P1c/d/e gated. No merge/release.
 
+### P1b-06b5 — full original S2 protocol/packet probe on installed Scoped
+
+Parent `0b0b0fb6267e8892ab4adee6fd083fbd2a0c8ceb` five workflows SUCCESS, N2 45765608697 16/16. Update retained-receipt job 139725666461 original 85edb5640c687e22d6864e840807d2ff tracking 29551dbf98a7e74ad17318ce47e5ed08 native 8c8043e4-1449-449c-96ea-488bc451b3e6; no-receipt job 139725666760 original ade777451dc447e3d225f0722ec55581 tracking 67c262a874390cabddcbaaeb1c33a30d. Both original retained markers identical across restart and durability PASS. Transport loss distinct and OPEN. Resume 3d46a13e5db1d08d94467fe869cf82a0 exit0 clean head; UNKNOWN query 37068d834594e8511edeb14960047fe2 empty.
+
+New scoped-s2-native N2 candidate runs entire existing full official SDK probe on real fixed installed Scoped ledger, unchanged assertion bodies, hosted/exact-candidate guard. Reuse original queue/history seed under exact nonroot service UID and fixed DB, original concurrent append handshake, three real credentials plus revoked/expired, same-name foreign fixture, original simulated WAN, actual spool size observation bound to original, independent fixed-ledger crosschecks. Retain native foreign fixture rather than admin-clean it. No block-device or EDQUOT proof from default pool. Previous subset and release gates retained until equivalence observed.
+
+Patch receipts c5e85ef5d170fde6c619950e0cdc944a (18559 bytes SHA256 c3eeca4db39821ab0db4c4c123d091334d313c2aec839bb1467d185e0db3cdcb), 34d6f35297890ab7e93ae60d62c77f28 (7313 bytes SHA256 cafff8d75744e780cebba834a9da8ef2ee59b40cbd3cca677d6ee687ed280238) verified. Build 3b127bfe005e7132575cbf5fc2b7fb1b exit0, current SDK v1.8.0 probe SHA d032f6ce7517d3e3f82948aa6da11a3ec51d4f4e0e695054da9ad18fe2f1fc4c; seed 478812ed7301361793f8497a0cb9477c4f37edfc10ea8eac18d9e9a6e437c9d5. Private 18/18 tests, shell syntax, YAML47/format1310 b982bf0ed0fd95172525037427682ba3 exit0; bound fixture stage b34118644e481ccb0cc459d1a006b58e exit0. Source only; full probe CI_PENDING. L014 rev44 59627692af788f93fc48d5fd1d33482e, work rev8 4f5b2cec32906dee56a59c2b77ec1b9d FEEDBACK_RECORDED exit0. No promotion.
+
+Remaining exact transport faults, ENOSPC, physical quota/GC, S2.5, P1c/d/e gated. No merge/release.
+
 ## Update this record at material checkpoints
 
 Record current phase/slice, base and head (avoid self-referential commit hashes), worktree/Box UUID and layer, actual installed build/digest, original operations and evidence, code/test changes, test inventory and results, CI run/attempt/job/SHA and current status, failing case and repair or genuine blocker, remaining dependencies, next safe work, learning disposition/link. Keep prior evidence append-only or link to the execution log; never overwrite failures. Preserve distinct Box/source/native/CI status. While CI is pending, state what safe work continues. A phase can be submitted to CI before its CI closes; mark COMPLETE only after required acceptance. Final review binds exact HEAD.

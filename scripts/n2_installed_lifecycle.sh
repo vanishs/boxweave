@@ -224,6 +224,13 @@ sudo systemctl is-active --quiet boxweave.service
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
 sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test "${P1B_S2_NATIVE:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-sdk-probe" ./scripts/s2_native_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
+  sh scripts/pr191_scoped_s2_native.sh "$project" "$work/actor.receipt" "$first" "$work/s2-native-sdk-probe" "$work/s2-queued-cancel-seed"
+  exit 0
+fi
 if test "${P1B_S2_OLD_SDK:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   # Same independent old-SDK module recipe as accept_s2_native.sh.

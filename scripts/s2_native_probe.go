@@ -678,6 +678,11 @@ func main() {
 		return
 	}
 	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
+	installed := os.Getenv("BW_S2_INSTALLED_SCOPED_NATIVE") == "1"
+	if installed {
+		check(os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" &&
+			url == "http://127.0.0.1:18650/mcp", "installed Scoped test requires one-use hosted runner")
+	}
 	peer := os.Getenv("BW_S2_PEER_TOKEN")
 	admin2Token := os.Getenv("BW_S2_ADMIN2_TOKEN")
 	admin1ID := os.Getenv("BW_S2_ADMIN1_ID")
@@ -698,6 +703,10 @@ func main() {
 	defer admin2.Close()
 	peerSession := connect(ctx, url, peer)
 	defer peerSession.Close()
+	if installed {
+		status := call(ctx, admin, "host_status", map[string]any{})
+		check(field(status, "peer_mode") == "SCOPED_V2", "installed Scoped service required")
+	}
 	verifyToolCatalog(ctx, admin)
 	hostileProtocolMatrix(ctx, admin, peerSession)
 	hostileTypedToolMatrix(ctx, admin)
@@ -1561,4 +1570,7 @@ func main() {
 		"native async operation emitted unexpected MCP progress notification")
 	fmt.Println("S2_NATIVE_ASYNC_PROGRESS_OPTIONAL_NO_FAKE_EVENTS=PASS")
 	fmt.Println("S2_NATIVE_END_TO_END=PASS")
+	if installed {
+		fmt.Println("P1B_SCOPED_S2_NATIVE_PROBE=PASS")
+	}
 }

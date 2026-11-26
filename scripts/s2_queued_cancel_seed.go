@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
+	"strconv"
 	"strings"
 
 	"github.com/vanishs/boxweave/internal/state"
@@ -18,9 +20,17 @@ func main() {
 	db := os.Getenv("BW_S2_SEED_DB")
 	project := os.Getenv("BW_S2_SEED_PROJECT")
 	token := os.Getenv("BW_S2_SEED_ADMIN_TOKEN")
-	if !strings.HasPrefix(db, "/tmp/bw-v1-s2-ghci.") ||
-		!strings.HasSuffix(db, "/ledger/ledger.sqlite") ||
-		!strings.HasPrefix(project, "user-") || !strings.HasPrefix(token, "bw1_") ||
+	disposableDB := strings.HasPrefix(db, "/tmp/bw-v1-s2-ghci.") && strings.HasSuffix(db, "/ledger/ledger.sqlite")
+	if os.Getenv("BW_S2_INSTALLED_SCOPED_NATIVE") == "1" {
+		// Use the installed original only in the clean N2 hosted fixture.
+		// Never create an alternate live controller or seed a missing DB.
+		account, err := user.Lookup("boxweave")
+		info, statErr := os.Lstat(db)
+		disposableDB = err == nil && account.Uid == strconv.Itoa(os.Geteuid()) &&
+			project == "user-"+account.Uid && db == "/var/lib/boxweave/ledger.sqlite" &&
+			statErr == nil && info.Mode().IsRegular()
+	}
+	if !disposableDB || !strings.HasPrefix(project, "user-") || !strings.HasPrefix(token, "bw1_") ||
 		os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Geteuid() == 0 {
 		panic("queued cancel seed limited to disposable nonroot GH Incus lab")
