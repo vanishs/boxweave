@@ -1,7 +1,10 @@
 # BDH development plan — simplify, reuse, verify
 
-Status: owner-directed planning checkpoint, 2026-11-25. Implementation is
-NOT_STARTED under this plan; wait for owner instruction to begin.
+Status: owner authorized R7 on 2026-11-25. Implementation slices delivered;
+R5 partial, R6 pilot complete with utility NOT MET. Final independent
+review, current documentation-head CI and owner disposition remain open.
+The checkpoint paragraphs below preserve dated evidence; the consolidated
+status and R7 decision section govern current work.
 Continue in [PR #193](https://github.com/vanishs/boxweave/pull/193), on
 feat/v1-bdh-proactive-improvement-20261125. Do not open another PR.
 Parent #191 stays paused at 3494ae8a35c50c386686c9d9d675c1ae37e1b1b7.
@@ -304,10 +307,10 @@ executed. Actual fresh independent ChatGPT sessions are not launchable
 through the implementer's available authorized tools. Neutral prompts and
 oracle prepared; fresh witness execution requires a separate user-started
 session. Do not repeat prior R2-R4 smoke/replays or claim them independent.
-No new code or feature scope; R5 actual-use gates remain OPEN. R6-R7 not
-started.
+This was the original R5 preparation boundary, superseded by the actual
+witness and R6 records below; do not repeat preparation or prior tests.
 
-### R0 — research and reuse gate (research recorded; owner decision pending)
+### R0 — historical research and reuse gate (completed; scope authorized)
 
 Before R1-R4 implementation, investigate a small shortlist of mature
 engineering tools and credible studies against actual BDH source and
@@ -428,9 +431,74 @@ Tiny guidance must stay lightweight; a legitimate manual fallback remains
 allowed. A focused registered check may skip the full plan; actual
 registered helper use is the minimum R2 discovery/use result, not a quota
 for every task. Do not repeat tests solely to get a preferred route.
-R5a technical/docs validation and fresh use are distinct; W1/W3/W5,
-R3 fresh linkage and remaining R4 actual lifecycle use stay open.
-R6/R7 not authorized.
+R5a technical/docs validation and fresh registered-helper use passed.
+W1/W3 and W5 were subsequently completed; R3 fresh linkage and R4 actual
+lifecycle use remain open. See the consolidated dispositions below.
+
+### R5-R7 actual-use and final decision checkpoint
+
+R5 [independent W5 synthesis](https://github.com/vanishs/boxweave/pull/193#issuecomment-7180823730)
+and [CI reconciliation](https://github.com/vanishs/boxweave/pull/193#issuecomment-7180870813):
+PARTIAL PASS. W1 canonical tiny guidance, W2 actual registered check use,
+W3 controlled handoff and W4 remote historical review passed in their
+respective scopes. W4 fresh local learning lifecycle remains partial.
+R5a at f4a63f6 has docs-only validation and exact-head applicable push CI,
+[ordinary registered-helper use](https://github.com/vanishs/boxweave/pull/193#issuecomment-7180607474),
+and lightweight canonical guidance. Candidate-specific tiny behavior,
+universal activation and causal navigation benefit are not established.
+[W3 recovery](https://github.com/vanishs/boxweave/pull/193#issuecomment-7180772925)
+verified original ADMITTED -> SUCCEEDED guest exit 0, 125/125 tests,
+clean exact source and matching retained log without reported replay.
+It is not a crash, UNKNOWN settlement or formal protocol-1 resume proof.
+
+R6 [preregistration](https://github.com/vanishs/boxweave/pull/193#issuecomment-7180910955),
+[matched material case](https://github.com/vanishs/boxweave/pull/193#issuecomment-7181137986)
+and [tiny case / closeout](https://github.com/vanishs/boxweave/pull/193#issuecomment-7181175533):
+pilot complete, functional PASS, incremental locator utility NOT MET.
+Both ordinary Instant lanes selected the same existing registered
+recovery-fixture check; separate original Operations and identical
+retained log/record hashes, six mock tests passed per lane. A (repository
+locator only) reported 20 connector calls, B (canonical bootstrap locator)
+30, including B's initial incomplete turn and one additional user
+intervention. Both manual persistent record counts zero; primary
+30% reduction criterion unmeasurable and not achieved. A did not resolve
+current canonical v1, so the assurance scopes differ. Tiny answers both
+correct, no Box effects or ceremony, A0/B6 remote reads; A reused prior
+context, so the matched tiny-cost gate is not established. Actual hidden
+model effort, tokens, total wall time and prior exposure are unknown.
+No pure no-BDH control, no causal/general productivity or High-equivalence
+claim. Do not repeat the pilot or add an optional High lane to rescue
+the outcome. Preserve negative evidence and stop this evaluation.
+
+R7 authorized: technical/evidence reconciliation on frozen source f4a63f6,
+with code last changed at 55be132. Applicable exact push workflows and
+jobs succeeded on both, and native/release jobs were skipped. Parent #191
+still paused at its exact base. Compare to #191: 35 commits, 129 paths,
+BDH Python code/tests, records and docs; no product Go runtime or CI
+workflow changes. The two original L014 REOPEN resolutions are retained
+in canonical revision 39, CANDIDATE, both episode histories revision 17.
+JS retirement's historical implementation digest drift remains a visible
+review requirement, not a new promotion or a clean audit. This checkpoint
+does not claim a new independent source-wide review by the implementer.
+
+| Open gate | Proposed disposition and trigger |
+| --- | --- |
+| R2 / R6 measured utility | Retain negative/inconclusive pilot; measure only a genuine future material task with comparable evidence and overhead; do not claim a percentage |
+| R3 fresh linked feedback | Retain technical/replay PASS, observe first applicable real material boundary with exact existing observation; no fabricated learning write |
+| R4 fresh lifecycle | Retain technical/cross-process and remote review evidence; observe actual gap, honest boundary and later retrieval when naturally applicable |
+| L014 / V4 / V5 | Retain CANDIDATE, both REOPENs and expected drift; no third selection; reconsider when recurring actual transfer toil or supported authorized caller-side reuse changes |
+| Product acceptance and integration | No waiver of #191 native ACK/WAL, nesting, P4 or required CI; independent R7 review plus explicit owner decision required before any scoped integration |
+
+Recommend freezing feature work and asking a distinct reviewer to inspect
+the complete #193 diff, evidence and exact final documentation-head CI.
+Unconditional integration readiness is NOT established while required
+utility and lifecycle exits remain open. Only the owner can decide to
+accept a narrowly scoped integration with those non-safety gaps explicitly
+carried forward; do not mark them PASS. Any required safety or CI failure
+must remain blocking. No merge, release, promotion or parent edit follows
+from R7 authorization. If the reviewer finds no safety/code blocker,
+present the scoped acceptance decision to the owner, not another
+unrequested implementation cycle.
 
 ## 5. Measurement and independent acceptance
 
@@ -478,28 +546,24 @@ blocker.
 | Stage | Status |
 | --- | --- |
 | Planning and historical navigation | Prepared, docs-only |
-| R0 | Research recorded; owner review/scope decision pending |
-| R1 | Baseline and narrow scope recommendation recorded; owner decision pending |
-| R2 | Technical delivery PASS and code CI PASS; fresh ordinary Agent use pending |
+| R0 | Complete; research and owner scope recorded |
+| R1 | Complete; actual baseline and subsequent owner scope recorded |
+| R2 | Technical and scoped registered-helper actual-use PASS; measured benefit open |
 | JS/Node retirement | Complete, Box and exact retirement CI PASS; historical drift retained |
-| R3 | Technical implementation/replay and applicable exact code CI PASS; fresh-use/benefit pending |
-| R4 | Technical implementation/recovery and exact code CI PASS; fresh ordinary use pending |
-| R5 | Actual W2 functional and coached use PASS; independent reuse gap; W4 remote retrieval/assessment PASS, lifecycle partial; W1/W3/W5 open |
-| R5a | Owner-authorized navigation/evidence separation; docs validation and fresh ordinary witness pending |
-| R6 | NOT_STARTED |
-| R7 / original V5 | OPEN |
+| R3 | Technical implementation/replay and applicable exact code CI PASS; fresh linked boundary and benefit open |
+| R4 | Technical recovery and remote review PASS; fresh full local lifecycle and benefit open |
+| R5 | W5 synthesis complete; PARTIAL PASS; W1/W2/W3 and W4 remote review scoped PASS; W4 lifecycle and utility open |
+| R5a | Bounded navigation delivery PASS; docs CI and fresh helper use PASS; utility unproven |
+| R6 | Pilot COMPLETE; functional PASS, incremental utility NOT MET, general utility inconclusive |
+| R7 / original V5 | R7 authorized; consolidation and final review/CI in progress; V5 utility open, owner scope decision pending |
 | L014 V4e-03/04 | Deferred; REOPEN retained |
 | Other Agent integrations | Deferred |
 
 Reusable handoff: read canonical bootstrap and this plan in #193, reconcile
-latest progress and wait for the owner's instruction. R0 research is recorded in [the reuse research note](BDH_R0_REUSE_RESEARCH.md).
-R1 baseline is recorded in [the baseline note](BDH_R1_BASELINE.md).
-R2 technical delivery and neutral witness instructions are in the linked PR
-record above. Complete the fresh ordinary Agent discovery/use gate without
-repeating valid Box or CI evidence. R3 applicable code CI PASS; fresh ordinary
-use remains pending. R4 applicable exact code CI PASS. R5 authorized;
-use the linked witness protocol and actual fresh sessions, not the
-implementer's smoke, to close the independent gates. R6 requires owner
-authorization.
-Do not repeat R0/R1 without a material change in evidence. On later resumptions
-continue the next authorized unfinished slice, not the first stage.
+the exact head/base, R7 review and current CI evidence. Do not repeat
+accepted tests or manufacture observations. Complete the distinct final
+review, report the actual blockers and seek explicit owner disposition of
+remaining non-safety gates before integration. R0-R6 historical work
+remains traceable in the linked evidence. Later ordinary work should
+observe naturally applicable R3/R4 gaps and defer nonblocking improvement
+unless the owner requests it. No merge or release without separate scope.
