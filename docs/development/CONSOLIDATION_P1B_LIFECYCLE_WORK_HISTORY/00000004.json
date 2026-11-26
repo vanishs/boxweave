@@ -1,0 +1,152 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-recovery",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "a76e13bffeeaed6451e5a87f5bf0d368; f8fffa74621769ccb495b27eb90ff1e1 exit 0",
+      "observation": "Verified exclusive transfer and short Exec of 4684-byte script",
+      "outcome": "helped",
+      "reason": "Exact previous observation appended to reconciled inbox revision 40; original facts retained"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+      "observation": "Local source gates and independent installed failure distinguished",
+      "outcome": "helped",
+      "reason": "L012 prior stale-CI candidate not applicable to exact head failure"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+      "observation": "Reconciled original HEAD and prior CI before edits",
+      "outcome": "helped",
+      "reason": "Existing guidance adequate"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+      "observation": "Reviewed candidate and retained unresolved observation failure",
+      "outcome": "helped",
+      "reason": "Correct episode-history sibling copy restored safe read and observation; no asset change justified"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+      "observation": "Registered format clean binding passed; local feedback observe refused unsafe directory",
+      "outcome": "helped",
+      "reason": "Correct episode-history sibling copy restored safe read and observation; no asset change justified"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "N2 45757512001 jobs 139699502455, 139699502522, 139699502525, 139699502572 SUCCESS; after-sync cold and live SUCCEEDED",
+      "observation": "Four independent WAL jobs passed, while other N2 gates remained pending",
+      "outcome": "helped",
+      "reason": "Exact SHA and native witness checked; no new verification asset needed"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Box Exec 560c51f5104594ab014787b8e21ea3d8 exit 0 clean c3dcc9d; original pr191 UNKNOWN list empty",
+      "observation": "Reconciled actual clean checkout and original operation states before work",
+      "outcome": "helped",
+      "reason": "Existing guidance adequate"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Original file receipts re-read; copied canonical episode history; local L014 observation Exec d4dce9b492042829ba16b591e917d201 exit 0",
+      "observation": "Reused and reviewed existing L014 rather than inventing a new candidate",
+      "outcome": "helped",
+      "reason": "No independent efficiency uplift or promotion established"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Box Exec 2ae0aec1c449df030877f50eed5690f2 exit 0; recovery-fixture LOCAL_RECORD_MATCH at clean c3dcc9d",
+      "observation": "Registered recovery-fixture check and inspect passed on exact clean source",
+      "outcome": "helped",
+      "reason": "Reused existing deterministic check; no new tool needed"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Prior remediation checkpoint c3dcc9d; file operations 6c5e6a0ba28055e5cd5bb0f2cf642985, 53d7d8d047e436205dbab4698a99b60c, 6be63b25c977aa25f883155320a04df6, 862beb4bd14adc17c61a90bf9c6159f2 re-read SUCCEEDED; final gate c4ba7362c8b8ca4d01f85f7e0ca35aa4 exit 0",
+      "observation": "Prior WAL remediation reused exclusive source transfer after inline argv refusal, then verified all six final staged blobs against Git hashes; original receipts re-read during this handoff. No measured independent efficiency benefit.",
+      "outcome": "helped",
+      "reason": "Explicit new-source boundary: prior actual remediation, original receipts re-read; no new asset or promotion"
+    }
+  ],
+  "attempt_ref": "20261125-wal-remediation",
+  "authority": "Owner authorized P1 development in isolated Box; no shared host changes, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "a76e13bffeeaed6451e5a87f5bf0d368; f8fffa74621769ccb495b27eb90ff1e1 exit 0",
+    "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+    "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+    "64e2136da624a0927c11580d9df46207 exit 0; exact episode history copied and L014 revision 40 appended",
+    "Prior remediation checkpoint c3dcc9d; file operations 6c5e6a0ba28055e5cd5bb0f2cf642985, 53d7d8d047e436205dbab4698a99b60c, 6be63b25c977aa25f883155320a04df6, 862beb4bd14adc17c61a90bf9c6159f2 re-read SUCCEEDED; final gate c4ba7362c8b8ca4d01f85f7e0ca35aa4 exit 0",
+    "N2 45757512001 jobs 139699502455, 139699502522, 139699502525, 139699502572 SUCCESS; after-sync cold and live SUCCEEDED",
+    "Box Exec 2ae0aec1c449df030877f50eed5690f2 exit 0; recovery-fixture LOCAL_RECORD_MATCH at clean c3dcc9d",
+    "Box Exec 560c51f5104594ab014787b8e21ea3d8 exit 0 clean c3dcc9d; original pr191 UNKNOWN list empty",
+    "Original file receipts re-read; copied canonical episode history; local L014 observation Exec d4dce9b492042829ba16b591e917d201 exit 0"
+  ],
+  "evolve_handoff": {
+    "items": [],
+    "status": "UNRESOLVED"
+  },
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Inspect remaining exact-head Legacy and Scoped CI, preserve four WAL PASS witnesses, continue S2/S2.5 conversion; no retirement or merge yet.",
+  "objective": "Scoped completed-journal lifecycle recovery and retired lineage",
+  "revision": 4,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "c3dcc9df10afd5df57b6085f7ff3bd52d2f8980f",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "skill.task-resume",
+    "skill.continuous-learning",
+    "tool.bwdev"
+  ],
+  "work_ref": "pr191/p1b-lifecycle-recovery"
+}
