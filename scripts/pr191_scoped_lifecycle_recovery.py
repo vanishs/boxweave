@@ -78,6 +78,33 @@ def settle(c, original, kind, uuid, key):
     rec, before = journal(oid, kind, native_id)
     assert rec["UUID"] == uuid
     inspect = c.call("operation_recover", {"operation_id": oid, "mode": "inspect"}).structured
+    if inspect["diagnosis"]["disposition"] != "SAFE_RECOVER":
+        # Diagnostic evidence from the exact disposable Root service only.
+        # Never emit arbitrary journal messages, credentials or native output.
+        log = subprocess.run(["journalctl", "-u", "boxweave-scoped-lifecycle.service",
+                              "--no-pager", "-o", "cat", "-n", "100"],
+                             capture_output=True, text=True, timeout=15, check=True).stdout
+        prefix = "Root original " + oid + " refused or uncertain: "
+        matches = [line.split(prefix, 1)[1] for line in log.splitlines() if prefix in line]
+        classes = (
+            ("original native Create not proven complete", "ORIGINAL_NATIVE_TERMINAL"),
+            ("native Project not quiescent", "PROJECT_NATIVE_BUSY"),
+            ("completed original lifecycle journal unavailable", "COMPLETED_JOURNAL"),
+            ("scoped Create original differs from completed journal", "ORIGINAL_JOURNAL_MISMATCH"),
+            ("scoped native Create identity or stopped/boot preimage changed", "CREATE_SHAPE"),
+            ("scoped Create NIC or disk shape changed", "NIC_DISK_SHAPE"),
+            ("completed Create ACL unverified", "CREATE_ACL"),
+            ("foreign or ambiguous native static lease", "LEASE_CONFLICT"),
+            ("missing native static leases", "LEASE_MISSING"),
+            ("scoped native inventory differs from ledger", "NATIVE_INVENTORY"),
+            ("resource locked", "LEDGER_RESOURCE_LOCKED"),
+            ("scoped Delete absence unverified", "DELETE_ABSENCE"),
+            ("scoped Delete ACL absence unverified", "DELETE_ACL"),
+        )
+        detail = next((label for fragment, label in classes
+                       if matches and fragment in matches[-1]),
+                      "UNCLASSIFIED_ROOT_REFUSAL" if matches else "NO_ROOT_REFUSAL_LOG")
+        print("P1B_SCOPED_RECOVERY_ROOT_REFUSAL", oid, detail, flush=True)
     assert inspect["diagnosis"]["disposition"] == "SAFE_RECOVER", inspect
     assert inspect["diagnosis"]["reason"] == "SCOPED_LIFECYCLE_COMPLETED_NO_REPLAY", inspect
     assert inspect["diagnosis"]["claim_protection"] == "RETAINED" and not inspect["native_retried"]

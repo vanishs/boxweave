@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-recovery",
+  "authority": "Owner authorized P1 development in isolated Box; no shared host changes, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Retrospective envelope for recorded implementation and source verification; continue independent native acceptance",
+  "objective": "Scoped completed-journal lifecycle recovery and retired lineage",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "1c1ca42ebbb913f9c264c77aaeaf08cb0cf44db6",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [],
+  "work_ref": "pr191/p1b-lifecycle-recovery"
+}

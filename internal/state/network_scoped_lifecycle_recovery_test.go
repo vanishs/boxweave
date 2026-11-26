@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -182,9 +183,22 @@ func TestP1ScopedDeleteCompletedRecoveryAtomic(t *testing.T) {
 	s, orig, in, pin := p1CreateFixture(t, true)
 	final := pin
 	final.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
-	if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, final); e != nil {
+	// Recover Create first, so Delete and the final retirement audit exercise
+	// the complete recovered lineage, not two isolated settlement paths.
+	if e := s.Unknown(ctx, orig.ID, "VERIFYING", "FINAL_COMMIT_LOST"); e != nil {
 		t.Fatal(e)
 	}
+	createReq, createTarget := a4Request(t, s, orig.ID)
+	createTx, e := s.db.BeginTx(ctx, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	createProof, e := readScopedCreateOriginalTxPhase(ctx, createTx, orig.ID, in.Project, in.Bridge, "UNKNOWN")
+	createTx.Rollback()
+	if e != nil {
+		t.Fatal(e)
+	}
+	a4Settle(t, s, createReq, createTarget, p1CompletedProof(t, createTarget, "CREATE", final, ScopedLifecycleOriginalSHA256(createProof)))
 	a := b5DeleteAdmission(t, s, p1UUID, in.Name)
 	a.Layer = in.Project
 	a.SafeIntent, _ = json.Marshal(struct {
@@ -257,5 +271,30 @@ func TestP1ScopedDeleteCompletedRecoveryAtomic(t *testing.T) {
 	}
 	if e = s.db.QueryRow("SELECT count(*) FROM network_address_fences WHERE box_uuid=? AND state='RELEASED' AND operation_id=?", p1UUID, parent.ID).Scan(&n); e != nil || n != 2 {
 		t.Fatal(n, e)
+	}
+	// Empty active inventory is valid for the retirement-specific reader.
+	check := func() error {
+		tx, e := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if e != nil {
+			return e
+		}
+		defer tx.Rollback()
+		ledger, e := readCompleteScopedNetworkAuditLedgerModeTx(ctx, tx, in.Project, in.Bridge, true)
+		if e != nil {
+			return e
+		}
+		if len(ledger.Boxes) != 0 || len(ledger.Retired) != 1 || ledger.Retired[0].CreateID != orig.ID || ledger.Retired[0].DeleteID != parent.ID {
+			t.Fatal(ledger)
+		}
+		return nil
+	}
+	if e = check(); e != nil {
+		t.Fatal("recovered retirement history refused", e)
+	}
+	if _, e = s.db.Exec("DELETE FROM recovery_audit WHERE operation_id=? AND decision='RECOVERY_SETTLED'", parent.ID); e != nil {
+		t.Fatal(e)
+	}
+	if e = check(); e == nil {
+		t.Fatal("recovery event without linked audit accepted")
 	}
 }

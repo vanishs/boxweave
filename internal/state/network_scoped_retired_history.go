@@ -68,7 +68,7 @@ func scopedRetiredOriginals(ctx context.Context, tx *sql.Tx, project, bridge str
 		return zero, ErrResourceLocked
 	}
 	keys := append([]string{"box:" + h.Name}, b.reservationKeys()...)
-	if e = scopedRetiredClaims(ctx, tx, h.CreateID, project, keys, "ORIGINAL_CREATE_UUID_ATOMIC"); e != nil {
+	if e = scopedRetiredClaims(ctx, tx, h.CreateID, project, keys, "ORIGINAL_CREATE_UUID_ATOMIC", "RECOVERY_SCOPED_CREATE_ATOMIC_NO_REPLAY"); e != nil {
 		return zero, e
 	}
 	err = tx.QueryRowContext(ctx, `SELECT safe_intent,resource_key,actor_id,token_id,native_operation_id FROM operations
@@ -79,12 +79,12 @@ func scopedRetiredOriginals(ctx context.Context, tx *sql.Tx, project, bridge str
 	if err != nil || !bytes.Equal(raw, want) || actor == "" || token == "" || nativeID == "" || resource != "box:"+h.Name {
 		return zero, ErrResourceLocked
 	}
-	if e = scopedRetiredClaims(ctx, tx, h.DeleteID, project, []string{"box:" + h.Name, deleteProjectKey(project)}, "SCOPED_DELETE_ACL_ABSENT_ATOMIC"); e != nil {
+	if e = scopedRetiredClaims(ctx, tx, h.DeleteID, project, []string{"box:" + h.Name, deleteProjectKey(project)}, "SCOPED_DELETE_ACL_ABSENT_ATOMIC", "RECOVERY_SCOPED_DELETE_ACL_ABSENT_NO_REPLAY"); e != nil {
 		return zero, e
 	}
 	return h, nil
 }
-func scopedRetiredClaims(ctx context.Context, tx *sql.Tx, id, project string, expected []string, event string) error {
+func scopedRetiredClaims(ctx context.Context, tx *sql.Tx, id, project string, expected []string, event, recovered string) error {
 	rows, e := tx.QueryContext(ctx, "SELECT resource_key,layer FROM operation_resource_claims WHERE operation_id=? ORDER BY resource_key", id)
 	if e != nil {
 		return e
@@ -110,8 +110,27 @@ func scopedRetiredClaims(ctx context.Context, tx *sql.Tx, id, project string, ex
 	if !slices.Equal(keys, expected) {
 		return ErrResourceLocked
 	}
-	var n int
-	if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail=?", id, event).Scan(&n); e != nil || n != 1 {
+	var n, recovery int
+	if e = tx.QueryRowContext(ctx, "SELECT COUNT(*),COALESCE(SUM(CASE WHEN safe_detail=? THEN 1 ELSE 0 END),0) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail IN (?,?)", recovered, id, event, recovered).Scan(&n, &recovery); e != nil || n != 1 {
+		return ErrResourceLocked
+	}
+	if recovery == 0 {
+		return nil
+	}
+	// A recovered terminal event is not sufficient by itself. Require the
+	// separate, exact read-only recovery receipt and its matching audit row.
+	// Normal finalization still requires its original atomic event.
+	intent, _ := json.Marshal(struct {
+		Original string `json:"original_operation_id"`
+	}{id})
+	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o JOIN operations r
+ ON r.layer=o.layer AND r.box_uuid=o.box_uuid AND r.incarnation=o.incarnation
+ JOIN recovery_audit a ON a.operation_id=o.id AND a.at=r.created_at AND a.reviewer=r.actor_id
+ WHERE o.id=? AND o.layer=? AND r.id!=o.id AND r.action='operation_recover'
+ AND r.state='SUCCEEDED' AND r.native_operation_id='' AND r.resource_key='recovery:'||o.id
+ AND CAST(r.safe_intent AS TEXT)=? AND r.actor_id!='' AND r.token_id!=''
+ AND a.decision='RECOVERY_SETTLED' AND length(a.evidence_digest)=64 AND a.evidence_digest NOT GLOB '*[^0-9a-f]*'
+ AND EXISTS (SELECT 1 FROM operation_events ev WHERE ev.operation_id=r.id AND ev.state='SUCCEEDED' AND ev.safe_detail='SETTLED:SCOPED_LIFECYCLE_COMPLETED_NO_REPLAY')`, id, project, string(intent)).Scan(&n); e != nil || n != 1 {
 		return ErrResourceLocked
 	}
 	return nil
