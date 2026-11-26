@@ -31,10 +31,16 @@ func check(ok bool, what string) {
 }
 func field(m map[string]any, k string) string         { v, _ := m[k].(string); return v }
 func child(m map[string]any, k string) map[string]any { v, _ := m[k].(map[string]any); return v }
-func conn(ctx context.Context, token string) *mcp.ClientSession {
+func scoped() bool                                    { return os.Getenv("BW_S2_MALFORM_SCOPED") == "1" }
+
+func conn(ctx context.Context, token, mode string) *mcp.ClientSession {
+	endpoint := "http://127.0.0.1:18665/mcp"
+	if scoped() && mode != "malform" {
+		endpoint = "http://127.0.0.1:18650/mcp"
+	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "s2-p2-native-malformed-verifier", Version: "1"}, nil)
 	s, e := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: "http://127.0.0.1:18665/mcp", HTTPClient: &http.Client{Transport: auth{token}},
+		Endpoint: endpoint, HTTPClient: &http.Client{Transport: auth{token}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
 	check(e == nil && s != nil, "test local MCP unavailable")
@@ -58,10 +64,13 @@ func invoke(ctx context.Context, s *mcp.ClientSession, n string, a map[string]an
 }
 
 type saved struct {
-	BoxID    string `json:"box_id"`
-	CreateID string `json:"create_id"`
-	ExecID   string `json:"exec_id"`
-	NativeID string `json:"native_id"`
+	BoxID          string `json:"box_id"`
+	CreateID       string `json:"create_id"`
+	ExecID         string `json:"exec_id"`
+	NativeID       string `json:"native_id"`
+	CreateNative   string `json:"create_native,omitempty"`
+	CreateTracking string `json:"create_tracking,omitempty"`
+	ExecTracking   string `json:"exec_tracking,omitempty"`
 }
 
 func save(path string, v saved) {
@@ -104,7 +113,10 @@ func main() {
 	path := filepath.Join(dir, "original.json")
 	ctx, cancel := context.WithTimeout(context.Background(), 190*time.Second)
 	defer cancel()
-	s := conn(ctx, token)
+	if scoped() {
+		check(project == fmt.Sprintf("user-%d", os.Geteuid()), "fixed restricted UID mismatch")
+	}
+	s := conn(ctx, token, mode)
 	defer s.Close()
 	switch mode {
 	case "seed":
@@ -118,7 +130,13 @@ func main() {
 		check(len(uuid) == 36, "seed box UUID not native-bound")
 		box, e := invoke(ctx, s, "box_get", map[string]any{"box_id": uuid})
 		check(e == nil && field(child(box, "box"), "native_state") == "Running", "seed must be actually Running")
-		save(path, saved{BoxID: uuid, CreateID: id})
+		x := saved{BoxID: uuid, CreateID: id}
+		if scoped() {
+			x.CreateNative = field(op, "native_operation_id")
+			x.CreateTracking = field(op, "tracking_id")
+			check(len(x.CreateNative) == 36 && len(x.CreateTracking) == 32 && field(op, "incarnation") == uuid, "exact Create identity missing")
+		}
+		save(path, x)
 		fmt.Println("S2_P2_MALFORMED_NATIVE_EXEC_OWNED_RUNNING_SEEDED=PASS")
 	case "malform", "resume":
 		x := load(path)
@@ -132,6 +150,10 @@ func main() {
 			out, e := invoke(ctx, s, "box_exec", execArgs)
 			check(e == nil && len(field(out, "operation_id")) == 32, "native Exec not admitted")
 			x.ExecID = field(out, "operation_id")
+			x.ExecTracking = field(out, "tracking_id")
+			if scoped() {
+				check(len(x.ExecTracking) == 32, "missing original Exec tracking")
+			}
 			save(path, x)
 		}
 		check(len(x.ExecID) == 32, "original Exec receipt missing")
@@ -139,6 +161,9 @@ func main() {
 		nativeID := field(op, "native_operation_id")
 		check(nativeID != "" && field(op, "box_uuid") == x.BoxID,
 			"missing native ID/UUID in ambiguous original")
+		if scoped() {
+			check(field(op, "tracking_id") == x.ExecTracking && field(op, "incarnation") == x.BoxID, "Exec original identity changed")
+		}
 		check(field(child(op, "next_action"), "kind") == "HOST_LOCAL_REVIEW",
 			"malformed native success was misreported as safe")
 		if mode == "malform" {
@@ -150,13 +175,32 @@ func main() {
 		again, e := invoke(ctx, s, "box_exec", execArgs)
 		check(e == nil && field(again, "operation_id") == x.ExecID && again["duplicate"] == true,
 			"same-key replay redispatched native command")
+		if scoped() {
+			check(field(again, "tracking_id") == x.ExecTracking && field(again, "native_operation_id") == nativeID && field(again, "state") == "UNKNOWN", "duplicate original changed")
+			for _, stream := range []string{"stdout", "stderr"} {
+				_, e = invoke(ctx, s, "operation_output_get", map[string]any{"operation_id": x.ExecID, "stream": stream})
+				check(e != nil, "UNKNOWN unexpectedly provided uncommitted output")
+			}
+		}
 		competing := map[string]any{}
 		for k, v := range execArgs {
 			competing[k] = v
 		}
 		competing["idempotency_key"] = "s2-p2-malformed-native-competing-effect"
-		_, e = invoke(ctx, s, "box_exec", competing)
-		check(e != nil, "new-key guest Exec bypassed ambiguous original lock")
+		if scoped() {
+			r, err := s.CallTool(ctx, &mcp.CallToolParams{Name: "box_exec", Arguments: competing})
+			check(err == nil && r != nil && r.IsError, "new key not refused by tool")
+			raw, err := json.Marshal(r.Meta["io.boxweave.error"])
+			var failure struct {
+				Code      string
+				Admission string
+				Next      map[string]any `json:"next_action"`
+			}
+			check(err == nil && json.Unmarshal(raw, &failure) == nil && failure.Code == "UNKNOWN_BLOCKER" && failure.Admission == "NOT_ADMITTED" && field(failure.Next, "operation_id") == x.ExecID, "missing exact original blocker navigation")
+		} else {
+			_, e = invoke(ctx, s, "box_exec", competing)
+			check(e != nil, "new-key guest Exec bypassed ambiguous original lock")
+		}
 		if mode == "malform" {
 			fmt.Println("S2_P2_REAL_INCUS_MALFORMED_FINAL_EXEC_RETURN_UNKNOWN_NO_RETRY=PASS")
 		} else {

@@ -132,3 +132,5 @@ P1b-06b9: See CONSOLIDATION_PROGRESS.md exact c237e78 retention failure and sing
 P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transport faults CI_VERIFIED; shared original physical quota/SDK/archive witness BOX_VERIFIED, new Scoped native CI_PENDING. Original S2 direct-native quota and remaining fault/consumer mapping retained. See CONSOLIDATION_PROGRESS.md; no retirement waiver.
 
 - 2026-11-26: #191 [P1b-06d2](CONSOLIDATION_PROGRESS.md#p1b-06d2---held-operation_get-and-changing-signed-cursor): 333b6b5 seven CI workflows all PASS, N2 22/22. Separate Box worktree held-read/cursor conversion, typed auth refusal and no-native-effect independent oracle source tests PASS; original blocked alternate-pool stage preserved, native acceptance pending publication and CI. No policy relaxation, merge or release.
+
+- 2026-11-26: #191 [P1b-06d3](CONSOLIDATION_PROGRESS.md#p1b-06d3---real-malformed-terminal-exec) candidate source proof PASS, five independent oracle regressions and two native/state tests. Real malformed Exec/UNKNOWN and restart evidence requires new independent CI. Prior alternate-pool staged tree unchanged. No merge/release.

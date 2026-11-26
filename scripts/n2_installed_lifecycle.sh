@@ -320,6 +320,13 @@ if test "${P1B_S2_OLD_SDK:-0}" = 1; then
   sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_sdk_compat.py "$project" "$work/actor.receipt" "$first" "$work/s2-legacy-sdk-probe" "$work/s2-native-sdk-probe"
   exit 0
 fi
+if test "${P1B_S2_MALFORMED_EXEC:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-probe" ./scripts/s2_p2_malformed_exec_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-proxy" ./scripts/s2_p2_malformed_exec_proxy.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_malformed_exec.py "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
 if test "${P1B_S2_EXEC_CRASH:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
