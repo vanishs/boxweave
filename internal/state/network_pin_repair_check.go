@@ -39,7 +39,7 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations c WHERE c.id=? AND c.layer=? AND c.action='box_create'
  AND c.state='SUCCEEDED' AND c.box_uuid=? AND c.incarnation=? AND c.resource_key=?
  AND EXISTS(SELECT 1 FROM operation_events e WHERE e.operation_id=c.id AND e.state='SUCCEEDED')
- AND `+retirementCreateEvidence, t.ID, t.Layer, t.UUID, t.Incarnation, t.Resource).Scan(&n)
+ AND `+successfulCreateLineageEvidence, t.ID, t.Layer, t.UUID, t.Incarnation, t.Resource).Scan(&n)
 	if e != nil {
 		return e
 	}

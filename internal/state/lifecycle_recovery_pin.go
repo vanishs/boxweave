@@ -74,7 +74,7 @@ func readLifecycleRecoveryPin(ctx context.Context, q credentialRowQuery, t Recov
 		// recovery receipt and audit; an edited state bit alone is not
 		// provenance sufficient for native lifecycle or Delete.
 		var lineage int
-		e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations c WHERE c.id=? AND c.state='SUCCEEDED' AND EXISTS(SELECT 1 FROM operation_events e WHERE e.operation_id=c.id AND e.state='SUCCEEDED') AND "+retirementCreateEvidence, originalID).Scan(&lineage)
+		e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations c WHERE c.id=? AND c.state='SUCCEEDED' AND EXISTS(SELECT 1 FROM operation_events e WHERE e.operation_id=c.id AND e.state='SUCCEEDED') AND "+successfulCreateLineageEvidence, originalID).Scan(&lineage)
 		if e != nil {
 			return VerifiedCreateBinding{}, "", e
 		}
