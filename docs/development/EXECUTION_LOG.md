@@ -146,3 +146,5 @@ P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transp
 - 2026-11-26 P1b-06d8: reuse S25 nested installations for same-name dual-controller native and authenticated isolation, separate read-only no-admission oracle and ephemeral CI-only cross-auth test. Box 2384236361225267212f4166cafac04c exit0, 6+4 source tests and build/syntax/format/YAML pass. d32939b overlap native job 139837920373 passed. Native dual CI pending.
 
 - 2026-11-26 P1b-06d9: exact 1fbbd07 S25 job 139846416445 failed before inner install at signed Ubuntu package index size mismatch (original Exec beb7a5fcdc441009bec0f85e6da6a58a exit100). Test-only bounded signed metadata refresh, no signature/HTTPS relaxation or mutation replay. Box b6c65aa57825b650d1fcaf86db4bce86 exit0, 5+6+4 tests. Native confirmation pending.
+
+- P1b-06d10: 72/72 map and five private Doctor layouts verified in Box eafdca12c4857424d570aeb8ce74af9a exit0. Actual installed proof pending; original gates retained.

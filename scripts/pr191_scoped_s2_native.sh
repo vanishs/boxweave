@@ -20,6 +20,7 @@ test "$(sha256sum "$n2_work/candidate-a" | cut -d' ' -f1)" = "$candidate_sha"
 test "$(git rev-parse HEAD)" = "${N2_EXACT_HEAD:?}"
 db=/var/lib/boxweave/ledger.sqlite
 runtime="$(sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_scoped_s2_native.py "$project" "$candidate_sha" before)"
+sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_scoped_schema_refusal.py "$project" "$candidate_sha"
 work="$(mktemp -d -p /tmp bw-v1-s2-ghci.XXXXXX)"
 chmod 0711 "$work"
 umask 077

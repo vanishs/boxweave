@@ -85,6 +85,8 @@ on:
       - scripts/s2_gc_delete_proxy.go
       - scripts/s2_mcp_quota_probe.go
       - scripts/pr191_scoped_s2_native.py
+      - scripts/pr191_scoped_schema_refusal.py
+      - scripts/test_pr191_scoped_schema_refusal.py
       - scripts/test_pr191_scoped_s2_native.py
       - scripts/s2_queued_cancel_seed.go
       - scripts/s2_p1_simulated_wan_lab.sh
@@ -219,6 +221,7 @@ jobs:
             exit 0
           fi
           if test "$P1B_S2_UPDATE_TRANSPORT" = 1; then
+            grep -Eq '^P1B_SCOPED_LEGACY_UNKNOWN_RELEASE_REFUSED_ORIGINAL_RETAINED=PASS [a-f0-9]{32} [a-f0-9-]{36}$' "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
             for mode in etag ack postread; do
@@ -236,11 +239,14 @@ jobs:
             exit 0
           fi
           if test "$P1B_S2_NATIVE" = 1; then
+            for layout in foreign corrupt old ambiguous versioned-foreign; do
+              grep -Fxq "P1B_SCOPED_SCHEMA_REFUSED=PASS $layout" "$RUNNER_TEMP/n2-installed.log"
+            done
             grep -Fxq P1B_SCOPED_PUBLIC_IPV4_TLS_ORIGINAL_EVIDENCE=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Exq 'P1B_SCOPED_PUBLIC_IPV4_TLS_INDEPENDENT=(PASS|UNVERIFIED)' "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
-            for marker in P1B_SCOPED_S2_NATIVE_PROBE P1B_SCOPED_S2_FIXED_LEDGER P1B_SCOPED_S2_NATIVE_FOREIGN_UNCHANGED P1B_SCOPED_S2_FOREIGN_UUID_READ_DENIED P1B_SCOPED_S2_REDACTION S2_NATIVE_REAL_SQLITE_HISTORY_WRITER_DURING_MCP_PAGE P1B_SCOPED_RESERVED_WAN_TLS_ON_DENIED P1B_SCOPED_RESERVED_WAN_TLS_OFF_ON_DENIED P1B_SCOPED_RESERVED_WAN_INDEPENDENT_ZERO_HITS S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS S2_NATIVE_PACKET_INTERNET_ON_DOES_NOT_UNBLOCK_PEERS; do
+            for marker in S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED P1B_SCOPED_SCHEMA_FIXED_INSTALLED_NO_EFFECT P1B_SCOPED_S2_NATIVE_PROBE P1B_SCOPED_S2_FIXED_LEDGER P1B_SCOPED_S2_NATIVE_FOREIGN_UNCHANGED P1B_SCOPED_S2_FOREIGN_UUID_READ_DENIED P1B_SCOPED_S2_REDACTION S2_NATIVE_REAL_SQLITE_HISTORY_WRITER_DURING_MCP_PAGE P1B_SCOPED_RESERVED_WAN_TLS_ON_DENIED P1B_SCOPED_RESERVED_WAN_TLS_OFF_ON_DENIED P1B_SCOPED_RESERVED_WAN_INDEPENDENT_ZERO_HITS S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS S2_NATIVE_PACKET_INTERNET_ON_DOES_NOT_UNBLOCK_PEERS; do
               grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             grep -Eq '^P1B_SCOPED_S2_PHYSICAL_SPOOL=(PASS|UNVERIFIED)$' "$RUNNER_TEMP/n2-installed.log"

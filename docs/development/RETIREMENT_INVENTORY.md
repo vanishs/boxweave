@@ -94,3 +94,5 @@ P1b-06d5: REPLACE_TEST candidate s2_p1_native_create_delete_overlap.sh on fixed 
 P1b-06d6: REPLACE_TEST candidate original s2_p1_bound_create_receipt_fault.sh using existing Scoped installed final-commit rollback/reviewed recovery plus exact SDK negative and independent no-effect checks. BOX_VERIFIED, installed CI_PENDING. Legacy copy-only UUID binding not a supported Scoped recovery path; source negative and installed positive reviewed recovery retained. Stop replacement CI_VERIFIED.
 
 P1b-06d8: legacy s2_p1_two_controllers.sh / SDK witness mapping: two supported fixed installed Scoped controllers in nested independent native daemons, same-name distinct UUID/original, independent ACLs/ledger/socket, cross-token and typed foreign Get/Delete/OperationGet denial, no admission, existing cleanup and same-daemon foreign Project witness retained. Source verified, installed CI pending; old gate not removed.
+
+P1b-06d10: see CONSOLIDATION_P1B_WITNESS_CROSSWALK.md; 72 markers mapped, no retirement waiver or deletion.

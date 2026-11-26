@@ -90,6 +90,29 @@ def supervised(argv, log):
                 child.wait(timeout=30)
 
 
+def legacy_unknown_refusals(project, oid, uuid):
+    # Only a fresh installed Scoped UNKNOWN fixture. The historical generic
+    # claim-release path is deliberately unsupported here. No valid challenge
+    # is obtained, and no mutation is replayed.
+    original = snapshot(oid)
+    assert original[0][0][2]=="UNKNOWN" and original[1] and not original[3]
+    history = rows("SELECT id,state,tracking_id,updated_at FROM operations ORDER BY id")
+    base = [str(BIN),"recover","-db",DB,"-project",project,
+            "-incus-socket",SOCKET,"-service-user","boxweave",
+            "-operation",oid,"-reviewer","p1b-scoped-refusal","-approve-local"]
+    for action in ("inspect","challenge","release"):
+        args = base+["-action",action]
+        if action=="release":
+            args += ["-challenge","0"*64,"-confirm-uuid",uuid,
+                     "-reason","Obsolete route negative fixture only.","-acknowledge-uncertain-native"]
+        result=subprocess.run(args,capture_output=True,text=True,timeout=40)
+        assert result.returncode!=0 and "scoped original requires the reviewed recovery route" in result.stderr, action
+        assert snapshot(oid)==original
+        assert rows("SELECT id,state,tracking_id,updated_at FROM operations ORDER BY id")==history
+    print("P1B_SCOPED_LEGACY_UNKNOWN_RELEASE_REFUSED_ORIGINAL_RETAINED=PASS",
+          oid,uuid,flush=True)
+
+
 def main(project, receipt, candidate_sha):
     assert os.geteuid() == 0 and os.environ.get("GITHUB_ACTIONS") == "true"
     assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
@@ -240,6 +263,10 @@ def main(project, receipt, candidate_sha):
         assert work_snapshot("p1b/scoped-update-transport-"+mode) == before_work
         assert marker.read_bytes() == marks
         native_proof(mode)
+        if mode=="postread":
+            legacy_unknown_refusals(project,cp["OriginalID"],uuid)
+            assert original_proof(mode,cp,marker)==before
+            native_proof(mode)
         retained[mode] = (cp["OriginalID"], before)
         for prior, (oid, saved) in retained.items():
             assert snapshot(oid) == saved
