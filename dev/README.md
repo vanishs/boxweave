@@ -13,6 +13,28 @@ python3 dev/bwdev --json work plan --kind operations --query 'install migration'
 python3 dev/bwdev --json work check dev/examples/WORK_ENVELOPE.json
 ```
 
+For a concise first read on a checkout that supports R2, add --brief to
+work plan (check its help on an older checkout). Example for a source check:
+
+```sh
+python3 dev/bwdev --json work plan --brief --kind development --query 'CI scope test' --path scripts/test_ci_change_scope.py
+python3 dev/bwdev --json verify plan
+python3 dev/bwdev --json verify run scope /tmp/new-scope-evidence --retain-log
+python3 dev/bwdev --json verify inspect /tmp/new-scope-evidence
+```
+
+Use a fresh authorized evidence directory and select the applicable
+registered check; the example is not a universal gate or a native test.
+The brief view keeps the same asset IDs/paths/status, mandatory context,
+gate, source, feedback guidance, candidate order, review statuses and audit
+findings. It omits descriptions and verbose opportunity evidence/decision
+detail; rerun with the same inputs without --brief before reviewing a
+candidate or making a decision. Reconcile current records, not stale
+output. No automatic dispatch, selection, authority or closure. A local
+helper is not an available remote connector; if the checkout or caller
+route is unavailable, use the existing authorized connector/manual entry.
+Tiny guidance still needs only relevant knowledge, not a work record.
+
 Use work begin DIRECTORY SPEC to publish a material work envelope.
 At material progress, failure, correction, handoff or completion, create an
 updated JSON envelope (without revision), then work boundary DIRECTORY FILE

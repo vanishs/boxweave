@@ -243,6 +243,49 @@ def plan(root, task_kind, query, paths=(), domains=(), signals=(), inbox=None):
             "note": "Control checkout is not target identity. No effect, permission, or record created. Guidance may use manual GitHub-only entry."}
 
 
+def brief_plan(result):
+    """Project the existing advisory plan, never change selection or gates."""
+    related = []
+    for row in result["learning"]["related"]:
+        opportunity = row["opportunity"]
+        decision = opportunity["decision"]
+        related.append({
+            **row,
+            "opportunity": {
+                "status": opportunity["status"],
+                "reasons": opportunity["reasons"],
+                "observation_count": opportunity["observation_count"],
+                "evidence_count": len(opportunity["evidence"]),
+                "decision": decision["decision"] if decision else None,
+            },
+        })
+    return {
+        **result,
+        "view": "BRIEF",
+        "assets": [{key: row[key] for key in ("id", "paths", "status")}
+                   for row in result["assets"]],
+        "learning": {**result["learning"], "related": related},
+        "next_action": (
+            "Read applicable contracts/local AGENTS.md; use verify plan, then "
+            "verify run CHECK FRESH_DIRECTORY and verify inspect for selected "
+            "registered source checks."
+            if result["task_kind"] in ("development", "harness") else
+            "Read applicable contracts/local AGENTS.md and use the smallest safe task workflow."
+        ),
+        "execution_route": (
+            "Local bwdev plan executed in this checkout. Asset paths are discovery, "
+            "not proof of executable or connector availability. Use authorized "
+            "connectors directly or the documented manual fallback; no new authority."
+        ),
+        "detail": (
+            "Same selection and audit findings as the full plan. For evidence, "
+            "review basis, decisions or asset descriptions, rerun without --brief "
+            "using the same inputs and reconcile current records. No BDH "
+            "implementation or selection without explicit owner authorization."
+        ),
+    }
+
+
 def register(parser):
     sub = parser.add_subparsers(dest="action", required=True)
     p = sub.add_parser("plan")
@@ -252,6 +295,7 @@ def register(parser):
     p.add_argument("--domain", action="append", default=[])
     p.add_argument("--signal", action="append", default=[])
     p.add_argument("--inbox")
+    p.add_argument("--brief", action="store_true", help="Compact advisory view; omit evidence detail, not warnings")
     v = sub.add_parser("check", help="Validate a portable envelope without writing")
     v.add_argument("file")
     f = sub.add_parser("feedback", help="Reconcile material feedback with the learning inbox (read-only)")
@@ -279,7 +323,8 @@ def register(parser):
 
 def run(args, root):
     if args.action == "plan":
-        return plan(root, args.kind, args.query, args.path, args.domain, args.signal, args.inbox), 0
+        result = plan(root, args.kind, args.query, args.path, args.domain, args.signal, args.inbox)
+        return (brief_plan(result) if getattr(args, "brief", False) else result), 0
     inbox = getattr(args, "inbox", None)
     if args.action == "feedback":
         return feedback.review(validate(read_json(args.file)), root, inbox)
