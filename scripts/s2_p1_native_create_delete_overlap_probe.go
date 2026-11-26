@@ -132,11 +132,32 @@ func main() {
 		"start": false, "internet": false,
 		"idempotency_key": "s2-native-overlap-original-create",
 	}
+	scoped := os.Getenv("BW_S2_OVERLAP_SCOPED") == "1"
+	path := filepath.Join(dir, "ledger.sqlite")
+	if scoped {
+		must(project == fmt.Sprintf("user-%d", os.Geteuid()), "exact restricted UID mismatch")
+		path = "/var/lib/boxweave/ledger.sqlite"
+	}
+	db, e := sql.Open("sqlite3", "file:"+path+"?mode=ro&_query_only=1&_busy_timeout=5000")
+	if !scoped {
+		db.Close()
+		db, e = sql.Open("sqlite3", path)
+	}
+	must(e == nil, "cannot inspect test ledger")
+	defer db.Close()
+	var priorDeletes int
+	e = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations WHERE action='box_delete'").Scan(&priorDeletes)
+	must(e == nil, "read baseline delete count")
 	created, ok := call(ctx, mainSession, "box_create", createArgs)
 	must(ok && len(field(created, "operation_id")) == 32, "native original Create admission failed")
 	id := field(created, "operation_id")
 	awaitMarker(ctx, filepath.Join(dir, "held"))
-	st, e := state.Open(filepath.Join(dir, "ledger.sqlite"))
+	var st *state.Store
+	if scoped {
+		st, e = state.OpenNetworkAuditReadOnly(path)
+	} else {
+		st, e = state.Open(path)
+	}
 	must(e == nil, "cannot inspect test-only pre-atomic SQLite")
 	defer st.Close()
 	original, e := st.Get(ctx, id)
@@ -185,16 +206,18 @@ func main() {
 	for problem := range errs {
 		panic("S2_P1_NATIVE_OVERLAP_FAIL: " + problem)
 	}
-	db, e := sql.Open("sqlite3", filepath.Join(dir, "ledger.sqlite"))
-	must(e == nil, "cannot independently read exact SQLite")
-	defer db.Close()
+
 	var deleteCount int
 	e = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations WHERE action='box_delete'").Scan(&deleteCount)
-	must(e == nil && deleteCount == 0, "rejected concurrent Delete inserted durable work")
+	must(e == nil && deleteCount == priorDeletes, "rejected concurrent Delete inserted durable work")
 	verify, e := st.Get(ctx, id)
 	must(e == nil && verify.State == "VERIFYING" && verify.BoxUUID == "" && verify.Incarnation == "",
 		"real concurrent Delete changed still-held original")
 	fmt.Println("S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED=PASS")
+	if scoped {
+		newMarker(filepath.Join(dir, "denied"), string(evidence))
+		awaitMarker(ctx, filepath.Join(dir, "denials-verified"))
+	}
 	// The test-only Go overlay pauses only box_create; subsequent verified
 	// box_delete does not need any GDB-style disarm marker.
 	newMarker(filepath.Join(dir, "release"), "safe to complete native original\n")
@@ -206,12 +229,21 @@ func main() {
 	var createEvents int
 	e = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='ORIGINAL_CREATE_UUID_ATOMIC'", id).Scan(&createEvents)
 	must(e == nil && createEvents == 1, "successful Create omitted or duplicated atomic terminal event")
+	if scoped {
+		newMarker(filepath.Join(dir, "created"), string(evidence))
+		awaitMarker(ctx, filepath.Join(dir, "create-verified"))
+	}
 	// Only after the original is VERIFIED may a fresh new-key Delete be admitted.
 	removal, ok := call(ctx, mainSession, "box_delete", map[string]any{
 		"box_id": uuid, "idempotency_key": "s2-overlap-delete-after-verified"})
 	must(ok && len(field(removal, "operation_id")) == 32, "verified original blocked legitimate Delete")
 	deleteID := field(removal, "operation_id")
-	finish(ctx, mainSession, deleteID)
+	deleted := finish(ctx, mainSession, deleteID)
+	if scoped {
+		witness, err := json.Marshal(map[string]string{"create_id": id, "create_tracking": field(final, "tracking_id"), "create_native": field(final, "native_operation_id"), "delete_id": deleteID, "delete_tracking": field(deleted, "tracking_id"), "delete_native": field(deleted, "native_operation_id"), "uuid": uuid})
+		must(err == nil, "cannot marshal final identity")
+		newMarker(filepath.Join(dir, "completed.json"), string(witness))
+	}
 	var tombstone, deletedBy string
 	var deletedAt int64
 	e = db.QueryRowContext(ctx, "SELECT state,deleted_by_operation_id,deleted_at FROM owned_boxes WHERE uuid=?", uuid).Scan(&tombstone, &deletedBy, &deletedAt)

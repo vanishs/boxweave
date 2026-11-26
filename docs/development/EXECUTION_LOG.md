@@ -136,3 +136,5 @@ P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transp
 - 2026-11-26: #191 [P1b-06d3](CONSOLIDATION_PROGRESS.md#p1b-06d3---real-malformed-terminal-exec) candidate source proof PASS, five independent oracle regressions and two native/state tests. Real malformed Exec/UNKNOWN and restart evidence requires new independent CI. Prior alternate-pool staged tree unchanged. No merge/release.
 
 - 2026-11-26: #191 [P1b-06d4](CONSOLIDATION_PROGRESS.md#p1b-06d4---standalone-stop-accepted-ack-loss): auth/cursor a11ce61 installed CI PASS. Standalone Stop ACK-loss candidate SDK/proxy and six independent oracle tests PASS in Box, real installed acceptance pending. No merge/release; prior alternate-pool staged tree untouched.
+
+- 2026-11-26: #191 [P1b-06d5](CONSOLIDATION_PROGRESS.md#p1b-06d5---pre-atomic-installed-scoped-createdelete-overlap): malformed Exec exact 2d0cd3e seven workflows and N2 23/23 PASS. Pre-atomic overlap SDK, both overlay builds, four oracle tests and Scoped Create regression PASS after SQL parameter correction; real installed overlap CI pending. No merge/release or policy change.

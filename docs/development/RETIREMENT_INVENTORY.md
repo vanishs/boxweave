@@ -88,3 +88,5 @@ P1b-06d2: REPLACE_TEST candidate for original s2_p1_token_inflight.sh and s2_p1_
 P1b-06d3: REPLACE_TEST candidate s2_p2_malformed_exec_fault.sh with installed fixed-ledger Scoped transport witness, original proxy/SDK retained. No native teardown of UNKNOWN in replacement; deliberate disposable runner retention. BOX_VERIFIED, CI_PENDING. No runtime removal.
 
 P1b-06d4: REPLACE_TEST standalone Stop portion of original s2_p1_stop_delete_fault.sh with restricted native 202/ACK-loss and exact fixed Scoped ledger; original SDK/proxy retained and old Stop/Delete gate unchanged. BOX_VERIFIED, CI_PENDING. Held operation_get/cursor replacement CI_VERIFIED; no retirement waiver.
+
+P1b-06d5: REPLACE_TEST candidate s2_p1_native_create_delete_overlap.sh on fixed installed Scoped ledger, same Root helper/guard, one-use source overlay, independent pre/post native and ledger witness. BOX_VERIFIED, CI_PENDING. Malformed Exec replacement CI_VERIFIED. Original legacy gates retained.

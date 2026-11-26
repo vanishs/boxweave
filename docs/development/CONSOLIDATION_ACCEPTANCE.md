@@ -91,3 +91,5 @@ P1b-06d2: 333b6b5 exact-head all seven workflows/N2 22/22 CI_VERIFIED; noquota/E
 P1b-06d3: C03/C05/C11 malformed terminal Exec replacement BOX_VERIFIED source only, new N2 lane CI_PENDING. Actual accepted 202, native final metadata, exact original/lock, no synthetic output, restart and exactly-once witness required; retain UNKNOWN and native guest until disposable runner retirement. No old fixture retirement or waiver.
 
 P1b-06d4: a11ce61 installed auth/cursor replacement CI_VERIFIED (139824837922); standalone Stop accepted ACK loss replacement BOX_VERIFIED source only, new exact installed lane CI_PENDING. Keep UNKNOWN/claim, original native witness and independent real Stopped proof; no retired test or gate.
+
+P1b-06d5: 2d0cd3e all seven workflows/N2 23/23 PASS, actual malformed Exec retained UNKNOWN CI_VERIFIED. Scoped preatomic overlap replacement BOX_VERIFIED (both overlay builds, SDK, calibrated read-only oracle); native independent 12-way rejection, exact unbound claims, Create commit and Delete tombstone CI_PENDING. Retain legacy overlap gate until proven; no waiver.

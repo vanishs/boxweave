@@ -328,6 +328,21 @@ if test "${P1B_S2_MALFORMED_EXEC:-0}" = 1; then
   exit 0
 fi
 
+if test "${P1B_S2_OVERLAP:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  parent="$(mktemp -d -p /tmp bw-v1-s2-ghci.XXXXXX)"
+  chmod 0711 "$parent"
+  lab="$parent/p1-native-overlap"
+  mkdir -m 0700 "$lab"
+  BW_S2_OVERLAP_SCOPED=1 python3 scripts/s2_p1_build_overlap_overlay.py "$PWD/internal/state/lifecycle.go" "$lab"
+  CGO_ENABLED=1 go build -trimpath -buildvcs=false -overlay="$lab/go-overlay.json" -ldflags "-X main.version=1.0.0-dev.n2-overlap -X main.commit=$commit" -o "$work/s2-scoped-overlap-service" ./cmd/boxweave
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-scoped-overlap-sdk" ./scripts/s2_p1_native_create_delete_overlap_probe.go
+  overlay_sha="$(sha256sum "$work/s2-scoped-overlap-service" | cut -d' ' -f1)"
+  echo "P1B_SCOPED_OVERLAP_TEST_BINARY_SHA256=$overlay_sha"
+  test -z "$(git status --porcelain)"
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_overlap.py "$project" "$work/actor.receipt" "$first" "$lab" "$overlay_sha"
+  exit 0
+fi
 if test "${P1B_S2_STOP_ACK:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-stop-delete-probe" ./scripts/s2_p1_stop_delete_probe.go
