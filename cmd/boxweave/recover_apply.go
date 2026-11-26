@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -153,7 +154,7 @@ func applyReviewedEnvelope(q reviewedApplyRequest) error {
 	// native evidence and the transaction checks original/ledger again.
 	identity := install.ObserveDiagnosticInstallation(ctx, doctorInstallPlan(a), a.DB)
 	if identity.Mode != p.Mode || identity.IdentitySHA256 != p.InstallationSHA256 || !p.ReviewMatches(time.Now()) {
-		return state.ErrConflict
+		return fmt.Errorf("reviewed recovery: root installation identity changed: %w", state.ErrConflict)
 	}
 	return spawnReviewedApply(ctx, q, uid, gid)
 }
@@ -222,7 +223,7 @@ func recoverApplyWorker() error {
 	recheck := func(ctx context.Context) error {
 		i := install.ObserveDiagnosticInstallation(ctx, doctorInstallPlan(a), a.DB)
 		if i.Candidate != p.Mode || i.InstalledIdentity != "VERIFIED" || i.Runtime != "VERIFIED" || i.IdentitySHA256 != p.InstallationSHA256 || i.Mode == "CONFLICT" || p.Mode == "LEGACY" && i.Mode != "LEGACY" || !p.ReviewMatches(time.Now()) {
-			return state.ErrConflict
+			return fmt.Errorf("reviewed recovery: restricted installation identity changed: %w", state.ErrConflict)
 		}
 		if p.OriginalAction == "port_forward_create" {
 			policy, ok := install.ObserveDiagnosticForwardPolicy(ctx, doctorInstallPlan(a), i)

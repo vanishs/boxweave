@@ -58,23 +58,9 @@ done
 test "$queued" != "$foreign"
 test -z "$(sudo incus list --all-projects -c n -f csv)"
 
-# Retain the original independent same-name native negative. A newly
-# created, empty test Project has no shared NIC and no existing resources.
-foreign_project=bw-s2-foreign-ci-project
-foreign_name=bw-s2-ghci-110a
-pool="$(sudo incus profile device get default root pool --project "$project")"
-test -n "$pool"
-sudo incus project create "$foreign_project" --config features.images=false
-sudo incus profile device add default root disk path=/ pool="$pool" --project "$foreign_project"
-sudo incus init --empty "$foreign_name" --project "$foreign_project"
-foreign_uuid="$(sudo incus config get "$foreign_name" volatile.uuid --project "$foreign_project")"
-printf '%s\n' "$foreign_uuid" | grep -Eq '^[0-9a-f-]{36}$'
-sudo incus config show "$foreign_name" --project "$foreign_project" > "$work/foreign-before"
-if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus info "$foreign_name" --project "$foreign_project" > "$work/foreign-denied" 2>&1; then
-  echo "Restricted service unexpectedly accessed the isolated foreign fixture" >&2
-  exit 1
-fi
-echo S2_P1_SECOND_REAL_PROJECT_SAME_NAME_NATIVE_INSTANCE_DENIED_TO_NONROOT=PASS
+# Scoped Root lifecycle deliberately refuses ANY foreign native inventory.
+# The foreign fixture is checked after positive lifecycle, never by changing
+# the global inventory guard. Earlier c843166 failure is retained evidence.
 (umask 022; sh scripts/s2_p1_simulated_wan_lab.sh setup "$work" "$project")
 ca="$(base64 -w0 "$work/s2-simwan-cert.pem")"
 test -n "$ca"
@@ -97,6 +83,7 @@ wait_marker() {
   done
   if test ! -s "$work/$marker"; then
     cat "$work/probe.log"
+    sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_scoped_s2_native.py "$project" "$candidate_sha" failure || :
     echo "Original probe did not reach $marker" >&2
     exit 1
   fi
@@ -141,6 +128,25 @@ fi
 grep -Fxq S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT=PASS "$work/probe.log"
 grep -Fxq S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS "$work/probe.log"
 echo P1B_SCOPED_S2_REDACTION=PASS
+test -z "$(sudo incus list --all-projects -c n -f csv)"
+# Retain the original independent same-name native negative. A newly
+# created, empty test Project has no shared NIC and no existing resources.
+foreign_project=bw-s2-foreign-ci-project
+foreign_name=bw-s2-ghci-110a
+pool="$(sudo incus profile device get default root pool --project "$project")"
+test -n "$pool"
+sudo incus project create "$foreign_project" --config features.images=false
+sudo incus profile device add default root disk path=/ pool="$pool" --project "$foreign_project"
+sudo incus init --empty "$foreign_name" --project "$foreign_project"
+foreign_uuid="$(sudo incus config get "$foreign_name" volatile.uuid --project "$foreign_project")"
+printf '%s\n' "$foreign_uuid" | grep -Eq '^[0-9a-f-]{36}$'
+sudo incus config show "$foreign_name" --project "$foreign_project" > "$work/foreign-before"
+if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus info "$foreign_name" --project "$foreign_project" > "$work/foreign-denied" 2>&1; then
+  echo "Restricted service unexpectedly accessed the isolated foreign fixture" >&2
+  exit 1
+fi
+echo S2_P1_SECOND_REAL_PROJECT_SAME_NAME_NATIVE_INSTANCE_DENIED_TO_NONROOT=PASS
+sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_scoped_s2_native.py "$project" "$candidate_sha" foreign "$receipt" "$foreign_uuid"
 test "$(sudo incus config get "$foreign_name" volatile.uuid --project "$foreign_project")" = "$foreign_uuid"
 sudo incus config show "$foreign_name" --project "$foreign_project" > "$work/foreign-after"
 cmp "$work/foreign-before" "$work/foreign-after"

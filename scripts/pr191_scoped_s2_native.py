@@ -14,7 +14,8 @@ import sys
 from pr178_n2_scoped_lifecycle import acls
 from pr191_scoped_ack_loss import guard_identity, native_names
 from pr191_scoped_lifecycle_recovery import rows
-from n2_installed_lifecycle import pid
+from n2_installed_lifecycle import pid, token
+from mcp_testkit import LoopbackMCP, MCPToolError
 
 MAIN = "bw-s2-ghci-110a"
 PEER = "bw-s2-peer-native-110c"
@@ -104,6 +105,28 @@ def main(project, candidate_sha, phase, *args):
         for key, _ in KEYS:
             assert not by_key(rows, key)
         print("|".join(map(str, ids)) + "|" + hashlib.sha256(guard.encode()).hexdigest())
+        return
+    if phase == "failure":
+        assert not args
+        for r in rows("SELECT id,tracking_id,action,state,native_operation_id,error_class FROM operations WHERE state='UNKNOWN' ORDER BY id"):
+            print("P1B_SCOPED_S2_UNKNOWN", *r)
+        return
+    if phase == "foreign":
+        assert len(args) == 2 and native_names() == [MAIN]
+        receipt, uuid = args
+        assert re.fullmatch(r"[0-9a-f-]{36}", uuid)
+        assert not rows("SELECT uuid FROM owned_boxes WHERE uuid=?", (uuid,))
+        before = rows("SELECT id,state,native_operation_id FROM operations ORDER BY id")
+        with LoopbackMCP(token=token(receipt), allow_mutations=False, timeout=60) as c:
+            try:
+                c.call("box_get", {"box_id": uuid})
+            except MCPToolError:
+                pass
+            else:
+                raise AssertionError("foreign native UUID exposed through MCP")
+            assert not c.call("box_list", {}).structured["boxes"]
+        assert rows("SELECT id,state,native_operation_id FROM operations ORDER BY id") == before
+        print("P1B_SCOPED_S2_FOREIGN_UUID_READ_DENIED=PASS")
         return
     if phase == "spool":
         assert len(args) == 2

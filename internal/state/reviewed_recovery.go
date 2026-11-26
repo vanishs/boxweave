@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -67,15 +68,15 @@ func reviewedRecoveryLeaf(t RecoveryTarget, p RecoveryProof, mode string) string
 func checkReviewedRecoveryTx(ctx context.Context, tx *sql.Tx, r RecoveryRequest, t RecoveryTarget, p RecoveryProof) error {
 	b := r.Review
 	if b == nil || !b.valid() || r.LocalReviewer == "" || time.Now().UnixNano() >= b.ExpiresNS || reviewedRecoveryLeaf(t, p, b.Mode) != b.Leaf || RecoveryWitnessDigest(t, p) != b.WitnessSHA256 {
-		return ErrConflict
+		return fmt.Errorf("reviewed recovery: transaction review or proof changed: %w", ErrConflict)
 	}
 	original, e := readDiagnosticOriginalTx(ctx, tx, r.Layer, r.OriginalID)
 	if e != nil || original.Target != t || original.Digest != b.OriginalSHA256 || t.Released || !original.CredentialActive && t.Action == "box_peer_set" {
-		return ErrConflict
+		return fmt.Errorf("reviewed recovery: transaction original changed: %w", ErrConflict)
 	}
 	l, e := readDiagnosticLedgerTx(ctx, tx, r.Layer, b.Mode, "incusbr-"+strings.TrimPrefix(r.Layer, "user-"))
 	if e != nil || l.ObservationDigest() != b.LedgerSHA256 {
-		return ErrConflict
+		return fmt.Errorf("reviewed recovery: transaction ledger changed: %w", ErrConflict)
 	}
 	return ctx.Err()
 }
