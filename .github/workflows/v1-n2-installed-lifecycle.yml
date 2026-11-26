@@ -53,6 +53,8 @@ on:
       - scripts/n2_installed_lifecycle.*
       - scripts/pr178_n2_scoped_lifecycle.py
       - scripts/pr191_scoped_lifecycle_recovery.py
+      - scripts/s2_p1_bound_create_receipt_fault_probe.go
+      - scripts/test_pr191_scoped_create_rollback.py
       - scripts/pr191_scoped_ack_loss.py
       - scripts/pr191_scoped_s2_native.sh
       - scripts/pr191_scoped_s2_retention.sh
@@ -369,6 +371,8 @@ jobs:
               grep -Fxq "PR178_N2_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             grep -Fxq PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq P1B_SCOPED_CREATE_ROLLBACK_SAME_KEY_AND_TYPED_NEW_KEY_REFUSALS=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Eq '^P1B_SCOPED_CREATE_ROLLBACK_UNBOUND_NO_EFFECT=PASS [a-f0-9]{32} [a-f0-9-]{36} [a-f0-9]{32} [a-f0-9-]{36}$' "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq P1B_SCOPED_FINAL_COMMIT_NATIVE_RECOVERY=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N3_INSTALLED_LIVE_FLOWS=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N3_ACTIVE_POLICY_LIFECYCLE=PASS "$RUNNER_TEMP/n2-installed.log"

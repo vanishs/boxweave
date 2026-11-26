@@ -90,3 +90,5 @@ P1b-06d3: REPLACE_TEST candidate s2_p2_malformed_exec_fault.sh with installed fi
 P1b-06d4: REPLACE_TEST standalone Stop portion of original s2_p1_stop_delete_fault.sh with restricted native 202/ACK-loss and exact fixed Scoped ledger; original SDK/proxy retained and old Stop/Delete gate unchanged. BOX_VERIFIED, CI_PENDING. Held operation_get/cursor replacement CI_VERIFIED; no retirement waiver.
 
 P1b-06d5: REPLACE_TEST candidate s2_p1_native_create_delete_overlap.sh on fixed installed Scoped ledger, same Root helper/guard, one-use source overlay, independent pre/post native and ledger witness. BOX_VERIFIED, CI_PENDING. Malformed Exec replacement CI_VERIFIED. Original legacy gates retained.
+
+P1b-06d6: REPLACE_TEST candidate original s2_p1_bound_create_receipt_fault.sh using existing Scoped installed final-commit rollback/reviewed recovery plus exact SDK negative and independent no-effect checks. BOX_VERIFIED, installed CI_PENDING. Legacy copy-only UUID binding not a supported Scoped recovery path; source negative and installed positive reviewed recovery retained. Stop replacement CI_VERIFIED.

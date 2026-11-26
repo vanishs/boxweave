@@ -125,7 +125,51 @@ def settle(c, original, kind, uuid, key):
     return rec
 
 
-def main(project, receipt, candidate_sha):
+def rollback_snapshot(oid, uuid, project, pin, query=rows):
+    original = query("SELECT state,box_uuid,incarnation,native_operation_id,tracking_id,error_class FROM operations WHERE id=?", (oid,))
+    assert len(original)==1 and original[0][:3]==("UNKNOWN","","")
+    assert original[0][3] and original[0][4]
+    for table in ("owned_boxes","network_bindings","network_address_fences"):
+        col = "uuid" if table=="owned_boxes" else "box_uuid"
+        assert not query("SELECT "+col+" FROM "+table+" WHERE "+col+"=?", (uuid,))
+    prefix = "create-pin:"+pin["Bridge"]+":"
+    claims = {"box:"+NAME, prefix+"v4:"+pin["IPv4"], prefix+"v6:"+pin["IPv6"],
+              prefix+"mac:"+pin["MAC"], prefix+"acl:bw-peer-quarantine"}
+    assert set(query("SELECT layer,resource_key FROM operation_resource_claims WHERE operation_id=?", (oid,))) == {
+        (project,key) for key in claims}
+    events = query("SELECT seq,state,safe_detail FROM operation_events WHERE operation_id=? ORDER BY seq", (oid,))
+    assert not any(e[1]=="SUCCEEDED" or e[2]=="NATIVE_UUID_CONFIRMED" for e in events)
+    assert not query("SELECT operation_id FROM recovery_audit WHERE operation_id=?", (oid,))
+    return (original, events, query("SELECT id,state,tracking_id,updated_at,native_operation_id FROM operations ORDER BY id"))
+
+
+def verify_rollback(project, receipt, probe, create, request, uuid, rec):
+    account=pwd.getpwnam("boxweave")
+    work=Path(receipt).parent
+    assert work.parent==Path("/tmp") and work.name.startswith("bw-n2-installed.")
+    assert Path(probe)==work/"s2-bound-create-probe"
+    oid=create["operation_id"]
+    native=create["native_operation_id"]
+    assert create["state"]=="UNKNOWN" and not create.get("box_uuid") and not create.get("incarnation")
+    assert rec["UUID"]==uuid and rec["OriginalID"]==oid and rec["NativeID"]==native
+    prior=rollback_snapshot(oid,uuid,project,rec["Binding"])
+    before=instance(project,NAME)
+    root_before=journal(oid,"CREATE",native)
+    checkpoint=work/"scoped-final-cut-original.json"
+    with checkpoint.open("x") as f:
+        os.fchmod(f.fileno(),0o600)
+        json.dump(dict(request=request,original_id=oid,native_id=native,tracking_id=create["tracking_id"],uuid=uuid),f)
+    os.chown(checkpoint,account.pw_uid,account.pw_gid)
+    env=dict(os.environ,BW_S2_BOUND_SCOPED="1",BW_S2_BOUND_LAB=str(work),
+             BW_S2_BOUND_TOKEN=token(receipt),BW_S2_BOUND_PROJECT=project)
+    subprocess.run(["runuser","-u","boxweave","--",probe],env=env,check=True,timeout=60)
+    assert rollback_snapshot(oid,uuid,project,rec["Binding"])==prior
+    assert instance(project,NAME)==before and journal(oid,"CREATE",native)==root_before
+    assert acls()=={"bw-peer-quarantine",rec["Binding"]["ACL"]}
+    print("P1B_SCOPED_CREATE_ROLLBACK_UNBOUND_NO_EFFECT=PASS",oid,native,create["tracking_id"],uuid,flush=True)
+
+
+def main(project, receipt, candidate_sha, probe):
     assert os.geteuid() == 0
     assert os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
     assert project == "user-" + str(pwd.getpwnam("boxweave").pw_uid)
@@ -137,9 +181,10 @@ def main(project, receipt, candidate_sha):
     with LoopbackMCP(token=token(receipt), allow_mutations=True, timeout=60) as c:
         hs = c.host_status()
         assert hs["ready"] and hs["peer_mode"] == "SCOPED_V2" and hs["native"]["project"] == project
-        create = cut(c, "box_create", {"name": NAME, "cpu": 1, "memory_mib": 256,
-                                       "disk_gib": 2, "image": "local:boxweave-ubuntu-24.04",
-                                       "internet": True, "start": True}, "scoped-create-final-cut")
+        create_args = {"name": NAME, "cpu": 1, "memory_mib": 256,
+                       "disk_gib": 2, "image": "local:boxweave-ubuntu-24.04",
+                       "internet": True, "start": True}
+        create = cut(c, "box_create", create_args, "scoped-create-final-cut")
         assert not create.get("box_uuid"), create
         assert not rows("SELECT uuid FROM owned_boxes WHERE name=?", (NAME,))
         before = instance(project, NAME)
@@ -148,7 +193,11 @@ def main(project, receipt, candidate_sha):
         assert rec["UUID"] == uuid and before["status"] == "Running"
         assert before["config"]["user.boxweave.create_operation"] == create["operation_id"]
         assert acls() == {"bw-peer-quarantine", rec["Binding"]["ACL"]}
+        verify_rollback(project, receipt, probe, create,
+                        dict(create_args,idempotency_key="pr191-scoped-create-final-cut",
+                             work_ref="p1b/scoped-create-final-cut"),uuid,rec)
         settle(c, create, "CREATE", uuid, "scoped-create-final-reconcile")
+        assert rows("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family",(uuid,))==[("RESERVED",create["operation_id"])]*2
         acl = verify(project, NAME, uuid, "true")
         assert instance(project, NAME)["config"]["volatile.uuid"] == uuid
         assert instance(project, NAME)["status"] == "Running"

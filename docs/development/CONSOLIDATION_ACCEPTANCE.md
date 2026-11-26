@@ -93,3 +93,5 @@ P1b-06d3: C03/C05/C11 malformed terminal Exec replacement BOX_VERIFIED source on
 P1b-06d4: a11ce61 installed auth/cursor replacement CI_VERIFIED (139824837922); standalone Stop accepted ACK loss replacement BOX_VERIFIED source only, new exact installed lane CI_PENDING. Keep UNKNOWN/claim, original native witness and independent real Stopped proof; no retired test or gate.
 
 P1b-06d5: 2d0cd3e all seven workflows/N2 23/23 PASS, actual malformed Exec retained UNKNOWN CI_VERIFIED. Scoped preatomic overlap replacement BOX_VERIFIED (both overlay builds, SDK, calibrated read-only oracle); native independent 12-way rejection, exact unbound claims, Create commit and Delete tombstone CI_PENDING. Retain legacy overlap gate until proven; no waiver.
+
+P1b-06d6: ab00971 standalone Stop ACK-loss CI_VERIFIED (139830829075). C03/C05/C11 original atomic Create rollback/refusal mapping augmented in existing real installed final-commit fault: SDK typed refusals plus independent pre/post no-effect/claim snapshot BOX_VERIFIED; actual new installed gate CI_PENDING. Legacy copy-only UUID bind refused by Scoped source tests, reviewed real original recovery preserved. No waiver.

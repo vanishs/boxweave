@@ -380,7 +380,8 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
     sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt" "$work/candidate-a" "$first"
     exit 0
   fi
-  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_lifecycle_recovery.py "$project" "$work/actor.receipt" "$first"
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-bound-create-probe" ./scripts/s2_p1_bound_create_receipt_fault_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_lifecycle_recovery.py "$project" "$work/actor.receipt" "$first" "$work/s2-bound-create-probe"
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
   sudo python3 scripts/pr188_h1a_observe.py "$project" live
   sudo python3 scripts/pr188_h1b_plan.py "$project" live --negative-fixtures
