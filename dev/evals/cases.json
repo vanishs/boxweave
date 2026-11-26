@@ -420,6 +420,100 @@
       "expected_states": [
         "REVIEW_REQUIRED"
       ]
+    },
+    {
+      "id": "finish-unread-output",
+      "kind": "finish-gate",
+      "observations": {
+        "ready": [],
+        "working": [],
+        "pending_output": [
+          "original"
+        ],
+        "operations_reviewed": true,
+        "issues": []
+      },
+      "expected_states": [
+        "CONTINUE_OR_RESOLVE"
+      ]
+    },
+    {
+      "id": "finish-independent-ready",
+      "kind": "finish-gate",
+      "observations": {
+        "ready": [
+          "next"
+        ],
+        "working": [],
+        "pending_output": [],
+        "operations_reviewed": true,
+        "issues": [
+          "CI pending"
+        ]
+      },
+      "expected_states": [
+        "CONTINUE_OR_RESOLVE"
+      ]
+    },
+    {
+      "id": "finish-working",
+      "kind": "finish-gate",
+      "observations": {
+        "ready": [],
+        "working": [
+          "current"
+        ],
+        "pending_output": [],
+        "operations_reviewed": true,
+        "issues": []
+      },
+      "expected_states": [
+        "CONTINUE_OR_RESOLVE"
+      ]
+    },
+    {
+      "id": "finish-unreviewed",
+      "kind": "finish-gate",
+      "observations": {
+        "ready": [],
+        "working": [],
+        "pending_output": [],
+        "operations_reviewed": false,
+        "issues": []
+      },
+      "expected_states": [
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "id": "finish-blocked",
+      "kind": "finish-gate",
+      "observations": {
+        "ready": [],
+        "working": [],
+        "pending_output": [],
+        "operations_reviewed": true,
+        "issues": [
+          "blocked"
+        ]
+      },
+      "expected_states": [
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "id": "finish-clear",
+      "kind": "finish-gate",
+      "observations": {
+        "ready": [],
+        "working": [],
+        "pending_output": [],
+        "operations_reviewed": true,
+        "issues": []
+      },
+      "expected_states": [
+        "HANDOFF_READY"
+      ]
     }
   ]
 }

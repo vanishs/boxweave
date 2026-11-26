@@ -131,7 +131,9 @@ tested code SHA from a later evidence-only commit, and run applicable
 exact-head checks for delivery. These are consistency checks of supplied
 references, not authentication of external evidence or automatic promotion.
 
-Use bwdev finish with --work-history DIRECTORY for structured delivery review,
+Use bwdev finish with --work-history DIRECTORY and --operations-reviewed
+for structured delivery review after reviewing original required outputs;
+repeat --pending-output ID for unresolved required output,
 rather than legacy reason-only learning flags. The complete work history,
 objective, checkpoint attempt and exact repository/source must agree. This is an advisory
 record check, not proof of remote persistence, completeness of observations,

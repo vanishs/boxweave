@@ -100,3 +100,5 @@ The original historical report owns actual commands, IDs and results. These obse
 - [BDH-L012 revision 5](learning/BDH-L012/00000005.json): [consolidated CI observation](../docs/development/BDH_CI_OBSERVATION_CHECKPOINT.md), candidate refinement; independent benefit pending.
 
 - [Early checkpoint candidate](../docs/development/BDH_EARLY_CHECKPOINT.md): actual P1 interruption and reuse; candidate refinement of existing resume Skill and template. Observe overhead and actual recovery; no proven benefit yet.
+
+- [Finish Gate and compact resume candidate](../docs/development/BDH_FINISH_GATE_CHECKPOINT.md): owner-authorized bounded workflow refinement; regression and Eval evidence, independent review and real-task benefit pending.

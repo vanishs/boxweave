@@ -28,6 +28,13 @@ when available; retain the canonical safety and acceptance requirements.
    current canonical instructions are inaccessible, report the limitation
    and do not assume stale rules, permissions or acceptance.
 
+For remote clients, group relevant capability discovery in one lookup where
+supported. Reuse exact discovered schemas within the task; discover further
+only when needed. Resolve the current checkpoint pointer first, then read
+that checkpoint and relevant acceptance rules rather than reloading long
+historical progress logs. Expand historical evidence only for a concrete
+gap, conflict, or required witness.
+
 ## Choose the shortest applicable route
 
 Use the authorized task checkout's [short task routes](INDEX.md#short-task-routes)
@@ -72,6 +79,15 @@ safety or acceptance guidance to avoid historical exposure.
    improvements and sanitized material records through authorized Git/PR
    storage. If persistence is inaccessible, return an explicit pending
    record. Small read-only guidance needs no Box, PR or new asset.
+
+## Before ending material work
+
+Apply the [Finish Gate](skills/task-resume/SKILL.md#finish-gate-candidate)
+before returning a final report. Use bwdev finish for structured delivery
+where available, or the equivalent manual check. A pending CI run or
+completed Exec receipt alone is not a reason to stop. Continue safe ready
+work within the requested scope; record a concrete blocker or budget
+boundary and the next safe action if continuation is impossible.
 
 The repository owns the workflow; an Agent/project setting only locates
 this entry. Do not copy evolving rules into platform configuration. Repo

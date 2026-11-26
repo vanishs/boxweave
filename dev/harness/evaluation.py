@@ -1,5 +1,5 @@
 """Deterministic harness behavior cases, not an Agent productivity benchmark."""
-from . import ci, context, tasks, evolution, work
+from . import ci, context, tasks, evolution, work, workflow
 from .common import HarnessError, repo_path
 from .records import read_json
 import argparse
@@ -53,6 +53,9 @@ def _evaluate(root):
                 raise HarnessError("Unknown feedback witness variant")
             actual, _ = work.feedback.review(work.validate(row), root)
             ids = [actual["status"]]
+            ok = ids == case["expected_states"]
+        elif kind == "finish-gate":
+            ids = [workflow.finish_gate(**case["observations"])]
             ok = ids == case["expected_states"]
         elif kind == "task":
             ids = tasks.ready(case["spec"])

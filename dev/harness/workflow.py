@@ -44,6 +44,15 @@ def start(args, root):
     return data, code
 
 
+def finish_gate(ready, working, pending_output, operations_reviewed, issues):
+    """Advisory decision from supplied observations, not remote verification."""
+    if pending_output or ready or working:
+        return "CONTINUE_OR_RESOLVE"
+    if not operations_reviewed or issues:
+        return "REVIEW_REQUIRED"
+    return "HANDOFF_READY"
+
+
 def summary(args, root, finishing=False):
     data, _ = tasks.run(argparse.Namespace(action="status", directory=args.history), root)
     source = observe(root)
@@ -144,6 +153,20 @@ def summary(args, root, finishing=False):
                                         pr=args.pr, base_sha=args.base_sha)
         if code:
             issues.append("Exact-head CI needs review")
+    if finishing:
+        pending = getattr(args, "pending_output", [])
+        reviewed = getattr(args, "operations_reviewed", False)
+        working = [row["id"] for row in data["tasks"] if row["state"] == "WORKING"]
+        if not reviewed:
+            issues.append("Original Operation/output review not reported")
+        if pending:
+            issues.append("Unconsumed required Operation output: " + ", ".join(pending))
+        result["finish_gate"] = {
+            "decision": finish_gate(data["ready"], working, pending, reviewed, issues),
+            "ready": data["ready"], "working": working, "pending_output": pending,
+            "operation_review": "CALLER_REPORTED" if reviewed else "NOT_REPORTED",
+            "note": "Continue safe ready work or resolve original evidence; otherwise record the concrete blocker and next action. No remote proof or authority granted.",
+        }
     result["status"] = "REVIEW_REQUIRED" if issues else "HANDOFF_SUMMARY"
     result["note"] = ("Advisory observations only. Caller must independently verify authority, "
                       "native state, CI jobs/base and learning disposition. Never grants merge permission.")
@@ -211,7 +234,13 @@ class Resume:
 
 
 class Finish:
-    register = staticmethod(register_summary)
+    @staticmethod
+    def register(parser):
+        register_summary(parser)
+        parser.add_argument("--operations-reviewed", action="store_true",
+                            help="Report review of current-task original Operations and required outputs, including none")
+        parser.add_argument("--pending-output", action="append", default=[],
+                            help="Original Operation ID with required output still unconsumed; repeat as needed")
 
     @staticmethod
     def run(args, root):

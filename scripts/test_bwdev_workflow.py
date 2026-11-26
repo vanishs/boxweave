@@ -127,8 +127,19 @@ class WorkflowTests(unittest.TestCase):
                 self.assertIn("No structured work feedback history supplied", missing["issues"])
                 args.work_history = work_history
                 args.learning_disposition = None
+                unreviewed, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)
+                self.assertEqual(unreviewed["finish_gate"]["decision"], "REVIEW_REQUIRED")
+                args.operations_reviewed = True
+                args.pending_output = ["fixture-original"]
+                unread, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)
+                self.assertEqual(unread["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
+                self.assertEqual(unread["finish_gate"]["pending_output"], ["fixture-original"])
+                args.pending_output = []
                 result, code = workflow.summary(args, root, finishing=True)
                 self.assertEqual(code, 0, result)
+                self.assertEqual(result["finish_gate"]["decision"], "HANDOFF_READY")
                 self.assertEqual(result["status"], "HANDOFF_SUMMARY")
                 for field, value, message in (
                     ("attempt_ref", "other", "Feedback attempt differs from checkpoint"),
@@ -188,6 +199,8 @@ class WorkflowTests(unittest.TestCase):
             result, code = workflow.summary(args, ROOT, finishing=True)
             self.assertEqual(code, 1)
             self.assertIn("No local evidence supplied", result["issues"])
+            self.assertEqual(result["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
+            self.assertEqual(result["finish_gate"]["ready"], ["a"])
             self.assertEqual(json.loads(Path(args.export).read_text())["work_ref"], "example")
             with self.assertRaises(FileExistsError):
                 workflow.summary(args, ROOT, finishing=True)

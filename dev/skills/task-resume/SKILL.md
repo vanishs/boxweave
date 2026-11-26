@@ -48,3 +48,39 @@ Record observed or estimated call count and scope, checkpoint overhead,
 and whether a later continuation actually reused the checkpoint. Do not
 claim crash recovery or improved productivity from a saved record alone.
 No automatic scheduler, quota probe, new permission or product tool.
+
+
+## Finish Gate (candidate)
+
+For history discovery, prefer exact original Operation IDs and the current
+work_ref. When searching history, bound by the last trusted checkpoint time
+(with overlap where needed), work_ref and a small page; expand only for
+missing evidence, conflicts or required recovery. Review older UNKNOWN and
+unresolved originals without a recent-time filter. A bounded list is not
+proof that no older Operation exists.
+
+Before ending material work, reuse task status, the current CI snapshot
+and the receipts already held; do not add repetitive list/poll calls.
+
+1. Consume required original terminal output, including pagination and
+   observed exit status; read required stderr or other evidence. If not
+   available, retain the original ID and concrete blocker; never replay
+   uncertain effects. A terminal receipt is not the result.
+2. Inspect ready and WORKING tasks, including independent work while CI
+   waits. Continue safe actionable work within scope. If none is actionable,
+   distinguish requested completion, verified blockers and actual budget
+   boundaries; record the exact next safe action.
+3. For structured delivery, use existing bwdev finish with
+   --operations-reviewed after this review (including no Operations);
+   repeat --pending-output ORIGINAL_ID for each known unread required
+   output. CONTINUE_OR_RESOLVE directs the caller to resolve evidence or
+   continue safe work, REVIEW_REQUIRED requires review, and HANDOFF_READY
+   is only local advisory readiness. The flags are caller reports, not a
+   remote scan, and do not establish completeness or authority.
+4. Without structured records, apply the same checklist manually and save
+   the result with the existing checkpoint/PR handoff and learning judgment.
+   No invented task history, extra scheduler, or forced polling. Record
+   scope, evidence, remaining actionable work, and explicit stop reason.
+
+This candidate cannot intercept a client ending a response without invoking
+it. Verify actual ordinary-task use and costs before claiming efficacy.
