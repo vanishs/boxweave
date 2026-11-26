@@ -39,4 +39,21 @@ done
 test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:18650/mcp)" = 401
 sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" \
   python3 scripts/pr191_scoped_private_reads.py "$project" "$receipt" "$sha"
+# Reuse the original long-poll and signed-cursor SDK against the unchanged
+# installed controller. No native fixtures, alternate listener or new DB.
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-token-inflight-probe" ./scripts/s2_p1_token_inflight_probe.go
+lab="$work/p1-token-inflight"
+mkdir -m 0700 "$lab"
+sudo chown boxweave:incus "$lab"
+umask 077
+oracle() {
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" \
+    python3 scripts/pr191_scoped_auth_poll_oracle.py "$project" "$receipt" "$sha" "$@"
+}
+oracle before > "$work/auth-poll-before.json"
+sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_INSTALLED_SCOPED_AUTH=1 BW_S2_AUTH_LAB="$lab" BW_S2_AUTH_PROJECT="$project" \
+  "$work/s2-token-inflight-probe" > "$work/auth-poll-results.txt"
+oracle after "$work/auth-poll-before.json" "$work/auth-poll-results.txt"
+cat "$work/auth-poll-results.txt"
 test "$runtime" = "$(sudo systemctl show incus.service boxweave-scoped-lifecycle.service boxweave-scoped-guard.service -p MainPID -p ActiveEnterTimestampMonotonic)"

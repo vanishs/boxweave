@@ -63,6 +63,9 @@ on:
       - scripts/s2_native_guest_quota_probe.go
       - scripts/pr191_scoped_auth_races.sh
       - scripts/pr191_scoped_private_reads.py
+      - scripts/pr191_scoped_auth_poll_oracle.py
+      - scripts/test_pr191_scoped_auth_poll_oracle.py
+      - scripts/s2_p1_token_inflight_probe.go
       - scripts/s2_p1_operation_list_boundary.sh
       - scripts/s2_p1_operation_list_boundary_probe.go
       - scripts/s2_p1_private_read_inflight_probe.go
@@ -169,6 +172,10 @@ jobs:
             done
             test "$(grep -c '^P1B_SCOPED_LIST_AUTH_ORIGINAL ' "$RUNNER_TEMP/n2-installed.log")" = 2
             test "$(grep -c '^P1B_SCOPED_PRIVATE_READ_ORIGINAL ' "$RUNNER_TEMP/n2-installed.log")" = 1
+            test "$(grep -c '^P1B_SCOPED_GET_AUTH_ORIGINAL ' "$RUNNER_TEMP/n2-installed.log")" = 2
+            for marker in S2_P1_INSTALLED_MCP_REVOKED_DURING_READ_NO_LEAK S2_P1_INSTALLED_MCP_EXPIRED_DURING_READ_NO_LEAK S2_P1_REAL_INSTALLED_MCP_STATUS_CHANGED_DURING_SIGNED_CURSOR P1B_SCOPED_CURSOR_EXACT_FIVE_ORIGINALS P1B_SCOPED_AUTH_POLL_CURSOR_FIXED_LEDGER_NO_NATIVE_EFFECT; do
+              grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
             grep -Fxq P1B_SCOPED_PRIVATE_READ_SEED_IDLE=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq S2_P2_REAL_NATIVE_RECORDED_STDOUT_STALLED_CLIENT_DISCONNECT_RECOVER=PASS "$RUNNER_TEMP/n2-installed.log"
             for auth in REVOKED EXPIRED; do

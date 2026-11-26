@@ -370,8 +370,13 @@ func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) 
 				}
 			}
 			got := <-response
-			if got.err == nil && got.result != nil && !got.result.IsError {
-				t.Fatalf("private long-poll released original after token invalidation: %+v", got.result)
+			if got.err != nil || got.result == nil || !got.result.IsError || got.result.StructuredContent != nil {
+				t.Fatalf("private long-poll did not return a redacted tool-level refusal: %v", got.err)
+			}
+			rawError, err := json.Marshal(got.result.Meta["io.boxweave.error"])
+			var failure ToolFailure
+			if err != nil || json.Unmarshal(rawError, &failure) != nil || failure.Code != "AUTHORIZATION_REQUIRED" || failure.Category != "AUTHORIZATION" {
+				t.Fatal("long-poll did not return the typed authorization refusal")
 			}
 			unchanged, err := st.Get(ctx, original.ID)
 			if err != nil || unchanged.ID != original.ID || unchanged.State != "ADMITTED" {
