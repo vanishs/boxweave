@@ -44,6 +44,8 @@ type Service struct {
 	Store  *state.Store
 	Native Observer
 	Layer  string
+	// ScopedMode is installation-selected, never an MCP input.
+	ScopedMode bool
 	// PeerWitness is the installed, root-authenticated read-only PRS RPC.
 	// No plan, approval assertion or root request parameters come from MCP.
 	PeerWitness            func(context.Context, string) (state.RootPeerResult, error)
@@ -178,7 +180,7 @@ func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result
 	if ctx.Err() != nil {
 		return Result{}, ctx.Err()
 	}
-	record, e := s.Store.CommitRecovery(ctx, r, t, p)
+	record, e := s.commitRecovery(ctx, r, t, p)
 	if e != nil {
 		return Result{}, e
 	}
@@ -204,6 +206,13 @@ func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result
 	latest.Disposition, latest.Reason = record.Disposition, record.Reason
 	return Result{View: latest, Recovery: &record}, nil
 }
+func (s Service) commitRecovery(ctx context.Context, r state.RecoveryRequest, t state.RecoveryTarget, p state.RecoveryProof) (state.RecoveryRecord, error) {
+	if s.ScopedMode {
+		return s.Store.CommitScopedRecovery(ctx, r, t, p)
+	}
+	return s.Store.CommitRecovery(ctx, r, t, p)
+}
+
 func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream string) (View, state.RecoveryProof) {
 	v := base(t, stream)
 	finish := func(kind, reason string) (View, state.RecoveryProof) {

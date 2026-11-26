@@ -255,7 +255,7 @@ func recoverApplyWorker() error {
 	if st := doctorNativeActive(ctx, n); !st.Ready {
 		return state.ErrResourceLocked
 	}
-	svc := recovery.Service{Store: db, Native: n, Layer: a.Project}
+	svc := recovery.Service{Store: db, Native: n, Layer: a.Project, ScopedMode: p.Mode == "SCOPED_V2"}
 	if p.Mode == "SCOPED_V2" {
 		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
 	} else {

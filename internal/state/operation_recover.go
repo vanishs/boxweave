@@ -243,6 +243,16 @@ func validRecoveryDetail(d, reason string) bool {
 // An interrupted observation before commit has no effect; after commit the
 // same key returns exactly the durable result, even if the original changed.
 func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t RecoveryTarget, p RecoveryProof) (RecoveryRecord, error) {
+	return s.commitRecoveryNetworkMode(ctx, r, t, p, false)
+}
+
+// CommitScopedRecovery uses the trusted installation mode for generic
+// originals as well, without changing the original or replay intent.
+func (s *Store) CommitScopedRecovery(ctx context.Context, r RecoveryRequest, t RecoveryTarget, p RecoveryProof) (RecoveryRecord, error) {
+	return s.commitRecoveryNetworkMode(ctx, r, t, p, true)
+}
+
+func (s *Store) commitRecoveryNetworkMode(ctx context.Context, r RecoveryRequest, t RecoveryTarget, p RecoveryProof, scoped bool) (RecoveryRecord, error) {
 	a, e := recoveryAdmission(r)
 	if e != nil {
 		return RecoveryRecord{}, e
@@ -260,15 +270,15 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	} else if !errors.Is(err, ErrNotFound) {
 		return RecoveryRecord{}, err
 	}
-	if e = requireNoIPv4Compaction(ctx, tx, r.Layer); e != nil {
-		return RecoveryRecord{}, e
-	}
 	nowTarget, e := readRecoveryTarget(ctx, tx, r.Layer, r.OriginalID)
 	if e != nil {
 		return RecoveryRecord{}, e
 	}
 	if nowTarget != t {
 		return RecoveryRecord{}, ErrConflict
+	}
+	if e = requireOriginalRecoveryAdmissionTx(ctx, tx, nowTarget, scoped); e != nil {
+		return RecoveryRecord{}, e
 	}
 	if r.Review != nil {
 		if e = checkReviewedRecoveryTx(ctx, tx, r, t, p); e != nil {

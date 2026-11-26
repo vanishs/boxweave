@@ -80,3 +80,30 @@ func TestPR177D3PlanObservationUsesReadOnlyPredicates(t *testing.T) {
 	}
 	t.Log("D3_SHARED_OBSERVER_STALE_AND_PRECONDITION_PASS")
 }
+
+type scopedPlanReadFixture struct {
+	*planReadFixture
+	scopedChecks int
+}
+
+func (f *scopedPlanReadFixture) CheckScopedPlanRecoveryProof(context.Context, state.RecoveryTarget, state.RecoveryProof) error {
+	f.scopedChecks++
+	return nil
+}
+func TestP1ScopedPlanNeverFallsBackToLegacyChecker(t *testing.T) {
+	ctx := context.Background()
+	target := original("box_start")
+	target.LifecyclePinStatus = "LEGACY_UNPINNED"
+	legacy := &planReadFixture{target: target}
+	svc := Service{ReadStore: legacy, Native: known(), Layer: target.Layer, ScopedMode: true}
+	out, e := svc.InspectPlan(ctx, target)
+	if e != nil || out.Kind != state.RecoveryBlocked || legacy.checks != 0 {
+		t.Fatal(out, e, legacy.checks)
+	}
+	scoped := &scopedPlanReadFixture{planReadFixture: &planReadFixture{target: target}}
+	svc.ReadStore = scoped
+	out, e = svc.InspectPlan(ctx, target)
+	if e != nil || out.Kind != state.RecoverySettle || out.ProofSHA256 == "" || scoped.scopedChecks != 1 || scoped.checks != 0 {
+		t.Fatal(out, e, scoped)
+	}
+}

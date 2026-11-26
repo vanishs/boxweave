@@ -14,3 +14,9 @@ func requireNetworkAdmissionTx(ctx context.Context, tx *sql.Tx, project string, 
 	}
 	return requireNoIPv4Compaction(ctx, tx, project)
 }
+
+// The original must be re-read and compared inside this transaction.
+// A durable Scoped Peer or lifecycle original cannot use the Legacy fence.
+func requireOriginalRecoveryAdmissionTx(ctx context.Context, tx *sql.Tx, original RecoveryTarget, scoped bool) error {
+	return requireNetworkAdmissionTx(ctx, tx, original.Layer, scoped || original.ScopedPeer || original.ScopedLifecycle)
+}

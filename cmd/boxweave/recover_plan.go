@@ -85,7 +85,7 @@ func planWitness(ctx context.Context, a doctorArgs, q planWorkerRequest) (recove
 	if st := doctorNativeActive(ctx, r); !st.Ready {
 		return out, state.ErrResourceLocked
 	}
-	svc := recovery.Service{ReadStore: snap, Native: r, Layer: q.Project}
+	svc := recovery.Service{ReadStore: snap, Native: r, Layer: q.Project, ScopedMode: q.Mode == "SCOPED_V2"}
 	if q.Mode == "SCOPED_V2" {
 		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
 	} else {

@@ -150,6 +150,14 @@ func (s *DiagnosticSnapshot) CheckCreatePinRepair(ctx context.Context, t Recover
 // CheckPlanRecoveryProof reuses writer predicates without executing any
 // finalizer, admission, challenge, or audit write, even on the copy.
 func (s *DiagnosticSnapshot) CheckPlanRecoveryProof(ctx context.Context, t RecoveryTarget, p RecoveryProof) error {
+	return s.checkPlanRecoveryNetworkMode(ctx, t, p, false)
+}
+
+func (s *DiagnosticSnapshot) CheckScopedPlanRecoveryProof(ctx context.Context, t RecoveryTarget, p RecoveryProof) error {
+	return s.checkPlanRecoveryNetworkMode(ctx, t, p, true)
+}
+
+func (s *DiagnosticSnapshot) checkPlanRecoveryNetworkMode(ctx context.Context, t RecoveryTarget, p RecoveryProof, scoped bool) error {
 	tx, e := s.store.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if e != nil {
 		return e
@@ -159,7 +167,7 @@ func (s *DiagnosticSnapshot) CheckPlanRecoveryProof(ctx context.Context, t Recov
 	if e != nil || current != t {
 		return ErrConflict
 	}
-	if e = requireNoIPv4Compaction(ctx, tx, t.Layer); e != nil {
+	if e = requireOriginalRecoveryAdmissionTx(ctx, tx, current, scoped); e != nil {
 		return e
 	}
 	if p.Fingerprint == "" {

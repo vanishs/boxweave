@@ -67,7 +67,7 @@ func (s *Service) registerRecoveryTool(server *mcp.Server) {
 // Recovery witnesses are mutually exclusive. A Scoped controller must not
 // fall back to the historical PRS socket for a legacy original.
 func (s *Service) recoveryObserver(layer string) recovery.Service {
-	svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: layer}
+	svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: layer, ScopedMode: s.ScopedPeerFresh}
 	if s.ScopedPeerFresh {
 		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
 		svc.ScopedLifecycleWitness = install.NativeScopedLifecycleRecoverCall

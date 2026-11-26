@@ -40,5 +40,5 @@ func (s Service) ReconcileReviewed(ctx context.Context, r state.RecoveryRequest,
 	if e = recheck(ctx); e != nil {
 		return zero, e
 	}
-	return s.Store.CommitRecovery(ctx, r, o.Target, proof)
+	return s.commitRecovery(ctx, r, o.Target, proof)
 }

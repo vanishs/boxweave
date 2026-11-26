@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vanishs/boxweave/internal/peerscope"
 )
 
 func TestP1ScopedAdmissionMixedHistoryAndOriginalReplay(t *testing.T) {
@@ -59,5 +61,120 @@ func TestP1ScopedAdmissionMixedHistoryAndOriginalReplay(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestP1ScopedOriginalRecoveryMixedHistoryAndReplay(t *testing.T) {
+	ctx := context.Background()
+	for _, table := range []string{"network_ipv4_retirements", "network_ipv4_retirement_queue", "network_ipv4_compactions"} {
+		t.Run(table, func(t *testing.T) {
+			s, orig, in, pin := p1CreateFixture(t, true)
+			pin.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
+			if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, pin); e != nil {
+				t.Fatal(e)
+			}
+			req, target := a4Request(t, s, orig.ID)
+			if !target.ScopedLifecycle {
+				t.Fatal(target)
+			}
+			priorProof := RecoveryProof{Kind: RecoveryNotNeeded, Reason: "ALREADY_TERMINAL"}
+			prior, e := s.CommitRecovery(ctx, req, target, priorProof)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, e = s.db.Exec("DELETE FROM network_address_fences WHERE box_uuid=? AND family='ipv4'", p1UUID); e != nil {
+				t.Fatal(e)
+			}
+			repair := RecoveryProof{Kind: RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED", NativeID: target.NativeID, UUID: p1UUID, Fingerprint: "synthetic-exact-pin", CreateBinding: pin}
+			snap := DiagnosticSnapshot{store: s}
+			if e = snap.CheckPlanRecoveryProof(ctx, target, repair); e != nil {
+				t.Fatal(e)
+			}
+			_, b, _, retired := retireFixture(t, s)
+			switch table {
+			case "network_ipv4_retirements":
+				e = retireWithProof(s, ctx, retired, strings.Repeat("a", 64))
+			case "network_ipv4_retirement_queue":
+				_, e = s.db.Exec("INSERT OR IGNORE INTO network_ipv4_retirement_queue(delete_operation_id,project,attempt_order) VALUES(?,?,1)", retired.DeleteOperationID, b.Project)
+			case "network_ipv4_compactions":
+				_, e = s.db.Exec("INSERT INTO network_ipv4_compactions(project,delete_operation_id,plan_sha256,prepared_at) VALUES(?,?,?,1)", b.Project, retired.DeleteOperationID, strings.Repeat("b", 64))
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			if got, e := s.CommitRecovery(ctx, req, target, priorProof); e != nil || !got.Receipt.Duplicate || got.Receipt.ID != prior.Receipt.ID {
+				t.Fatal(got, e)
+			}
+			req.Key = "p1-fresh-recovery-refused"
+			if _, e = s.CommitRecovery(ctx, req, target, priorProof); !errors.Is(e, ErrResourceLocked) {
+				t.Fatal("mixed observation admission", e)
+			}
+			if e = snap.CheckPlanRecoveryProof(ctx, target, repair); !errors.Is(e, ErrResourceLocked) {
+				t.Fatal("mixed plan", e)
+			}
+			if _, e = s.CommitRecovery(ctx, req, target, repair); !errors.Is(e, ErrResourceLocked) {
+				t.Fatal("mixed repair", e)
+			}
+			if _, e = s.ReplayRecovery(ctx, req); !errors.Is(e, ErrNotFound) {
+				t.Fatal("partial receipt", e)
+			}
+			var n int
+			if e = s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=?", orig.ID).Scan(&n); e != nil || n != 0 {
+				t.Fatal(n, e)
+			}
+			if e = s.db.QueryRow("SELECT count(*) FROM network_address_fences WHERE box_uuid=?", p1UUID).Scan(&n); e != nil || n != 1 {
+				t.Fatal(n, e)
+			}
+			p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
+		})
+	}
+}
+
+func TestP1ScopedModeGenericRecoveryPlanWriterParity(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	req, target := recoveryOriginal(t, s, "box_start", rUUID)
+	if target.ScopedPeer || target.ScopedLifecycle {
+		t.Fatal("not generic", target)
+	}
+	proof := recoverProof(target)
+	snap := DiagnosticSnapshot{store: s}
+	if e := snap.CheckScopedPlanRecoveryProof(ctx, target, proof); e != nil {
+		t.Fatal(e)
+	}
+	blocked := RecoveryProof{Kind: RecoveryBlocked, Reason: "NATIVE_UNVERIFIED"}
+	prior, e := s.CommitScopedRecovery(ctx, req, target, blocked)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, b, _, retired := retireFixture(t, s)
+	if b.Project == target.Layer {
+		t.Fatal("not a distinct Project")
+	}
+	if e = retireWithProof(s, ctx, retired, strings.Repeat("a", 64)); e != nil {
+		t.Fatal(e)
+	}
+	if got, e := s.CommitScopedRecovery(ctx, req, target, blocked); e != nil || !got.Receipt.Duplicate || got.Receipt.ID != prior.Receipt.ID {
+		t.Fatal(got, e)
+	}
+	req.Key = "p1-scoped-generic-recovery-fresh"
+	if e = snap.CheckPlanRecoveryProof(ctx, target, proof); e != nil {
+		t.Fatal("legacy distinct Project fence changed", e)
+	}
+	if e = snap.CheckScopedPlanRecoveryProof(ctx, target, proof); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("scoped plan", e)
+	}
+	if _, e = s.CommitScopedRecovery(ctx, req, target, proof); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("scoped writer", e)
+	}
+	if _, e = s.ReplayRecovery(ctx, req); !errors.Is(e, ErrNotFound) {
+		t.Fatal("partial receipt", e)
+	}
+	if got, e := s.ReadRecoveryTarget(ctx, req.Layer, req.OriginalID); e != nil || got != target {
+		t.Fatal("original changed", got, e)
+	}
+	var n int
+	if e = s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=?", target.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
 	}
 }
