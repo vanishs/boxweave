@@ -397,6 +397,41 @@ No fabricated candidate dispositions in this planning checkpoint.
 Coordinate eventual alignment but do not edit #191 or mark P4 complete
 here. P0 nested native and P1b ACK/WAL gates remain unchanged.
 
+### R5a — discovery and reuse navigation repair (owner authorized)
+
+[Isolated-project retests](https://github.com/vanishs/boxweave/pull/193#issuecomment-7180405247)
+showed actual source test success via direct unittest, not the registered
+helper; prior coached helper use remains valid, not independent discovery.
+Both opportunity reviews found L014 and deferred reasonably using remote
+records; local brief review and fresh material link/recovery remain open.
+The retest restriction on past reports and mixed historical quality guidance
+are confounds, not proof that the helper was inaccessible. W2 retest 13/13,
+9 Box + 11 GitHub reads + one comment; W4 retest 27 GitHub reads + four
+Operation reads + one comment, plus seven schema discovery invocations.
+No comparable end-to-end savings established.
+
+Bounded R5a: prefer the matching existing registered check via short
+routes at task-source AGENTS/bootstrap/index/toolbox; no mandatory full
+plan for focused checks. Separate historical quality-gate witnesses from
+current procedures while retaining all gates and immutable original links.
+Do not change the verification Skill or attached historical asset bytes;
+reuse its guidance and improve navigation instead. No executable change,
+new schema, executor, telemetry, product Tool or asset promotion.
+
+Candidate changes do not activate on canonical v1 until integrated. Fresh
+witness should use the usual canonical project locator, then the exact
+owner-authorized task checkout's rules/index/toolbox; keep control and
+candidate versions distinct. If candidate entry is not reached, report
+that rather than assume activation. Use neutral ordinary prompts without
+helper commands, record incidental historical exposure and chosen route.
+Tiny guidance must stay lightweight; a legitimate manual fallback remains
+allowed. A focused registered check may skip the full plan; actual
+registered helper use is the minimum R2 discovery/use result, not a quota
+for every task. Do not repeat tests solely to get a preferred route.
+R5a technical/docs validation and fresh use are distinct; W1/W3/W5,
+R3 fresh linkage and remaining R4 actual lifecycle use stay open.
+R6/R7 not authorized.
+
 ## 5. Measurement and independent acceptance
 
 Before matched runs fix source, inputs, environment, permitted tools,
@@ -449,7 +484,8 @@ blocker.
 | JS/Node retirement | Complete, Box and exact retirement CI PASS; historical drift retained |
 | R3 | Technical implementation/replay and applicable exact code CI PASS; fresh-use/benefit pending |
 | R4 | Technical implementation/recovery and exact code CI PASS; fresh ordinary use pending |
-| R5 | AUTHORIZED, witness protocol/preflight ready; fresh independent sessions pending |
+| R5 | Actual W2 functional and coached use PASS; independent reuse gap; W4 remote retrieval/assessment PASS, lifecycle partial; W1/W3/W5 open |
+| R5a | Owner-authorized navigation/evidence separation; docs validation and fresh ordinary witness pending |
 | R6 | NOT_STARTED |
 | R7 / original V5 | OPEN |
 | L014 V4e-03/04 | Deferred; REOPEN retained |

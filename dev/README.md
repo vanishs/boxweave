@@ -16,7 +16,11 @@ python3 dev/bwdev --json work check dev/examples/WORK_ENVELOPE.json
 For a verbose material plan on a checkout that supports R2, optionally add
 --brief to work plan (check its help on an older checkout). Small plans may
 already be shorter in full mode because the brief view adds route guidance.
-Do not invoke a plan solely to answer a tiny question. Example for a source check:
+Do not invoke a plan solely to answer a tiny question. For a focused existing
+source check, go directly to `verify plan`; use a matching registered check
+instead of constructing an equivalent command when feasible. A material or
+ambiguous task may benefit from `work plan --brief`, but do not require it
+for every verification. Example for a source check:
 
 ```sh
 python3 dev/bwdev --json work plan --brief --kind development --query 'CI scope test' --path scripts/test_ci_change_scope.py
@@ -27,6 +31,11 @@ python3 dev/bwdev --json verify inspect /tmp/new-scope-evidence
 
 Use a fresh authorized evidence directory and select the applicable
 registered check; the example is not a universal gate or a native test.
+The first (work plan) command is optional for a focused check. A manual
+fallback is valid when the registered route is unavailable, mismatched,
+or disproportionately costly; state the concrete reason and retain actual
+source/exit/output evidence. Do not read prior test outcomes as prerequisites
+for current execution. Count actual helper use, not only discovery.
 The brief view keeps the same asset IDs/paths/status, mandatory context,
 gate, source, feedback guidance, candidate order, review statuses and audit
 findings. It omits descriptions and verbose opportunity evidence/decision

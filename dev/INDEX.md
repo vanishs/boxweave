@@ -2,6 +2,24 @@
 
 Bootstrap registry, read directly by bwdev context. These paths are canonical references, not copies. Start with only the matching row; follow links when needed. Asset lifecycle and future metadata generation: [design](../docs/development/DEVELOPMENT_HARNESS.md). Status "initial" means usable guidance derived from current contracts, not experimentally proven Agent efficacy.
 
+## Short task routes
+
+- **Tiny question:** read the matching knowledge contract; no CLI required.
+- **Run an existing source check:** see [registered verification](README.md#universal-entry).
+  In an authorized Python checkout, `python3 dev/bwdev --json verify plan`
+  lists the available checks. Prefer the matching registered `verify run`
+  and `verify inspect` with a fresh evidence directory. If not applicable
+  or unavailable, use a documented manual command and state why.
+  Read the verification Skill and applicable quality/acceptance rules;
+  do not load historical test reports merely to run a check.
+- **Review improvement opportunities:** see [learning inbox](LEARNING_INBOX.md#deferred-opportunity-review-current-193-plan).
+  Use its existing compact review command where available, or inspect exact
+  records through GitHub without a checkout. No automatic selection.
+- **Other material work:** use the [toolbox](README.md) and matching rows;
+  read only the relevant contracts. Preserve source, authority and evidence.
+
+## Asset registry
+
 | Stable ID | Scope / trigger | Canonical asset | Status |
 | --- | --- | --- | --- |
 | rules.entry | Every task | [AGENTS](../AGENTS.md) | Existing |
