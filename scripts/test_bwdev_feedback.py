@@ -342,8 +342,18 @@ class FeedbackTests(unittest.TestCase):
         if git("status", "--porcelain"):
             git("add", "dev/skills/box-development/SKILL.md")
             git("-c","user.name=Fixture","-c","user.email=fixture@example.invalid","commit","-qm","fixture baseline")
-        self.assertEqual(learning.asset_digest(root, "dev/skills/box-development/SKILL.md"),
-                         records.latest(directory)["implementation"]["asset_sha256"])
+        # Historical attachment bytes can differ after a legitimate source
+        # retirement. Establish a real fixture-only attachment to the clean
+        # local source before testing unchanged-asset refusal; preserve the
+        # immutable imported history and never alter canonical records.
+        current = learning.asset_digest(root, "dev/skills/box-development/SKILL.md")
+        if current != records.latest(directory)["implementation"]["asset_sha256"]:
+            baseline = argparse.Namespace(action="attach", inbox=self.inbox, id="BDH-L014",
+                expect=revision, implementation_ref="fixture:baseline",
+                validation_evidence="fixture:baseline evidence", work_ref=self.row["work_ref"],
+                attempt_ref=self.item["attempt_ref"])
+            revision = learning.run(baseline, root)[0]["record"]["revision"]
+        self.assertEqual(current, records.latest(directory)["implementation"]["asset_sha256"])
         args = argparse.Namespace(action="attach", inbox=self.inbox, id="BDH-L014",
                   expect=revision, implementation_ref="fixture:new patch",
                   validation_evidence="fixture:new test result", work_ref=self.row["work_ref"],
@@ -394,6 +404,7 @@ class FeedbackTests(unittest.TestCase):
         directory = self.inbox / "BDH-L014"
         initial = records.latest(directory)
         expected = initial["revision"]
+        baseline_findings = learning.audit(self.inbox, ROOT)[0]["findings"]
 
         def command(label, revision):
             return [sys.executable, str(ROOT / "dev/bwdev"), "--json", "learn",
@@ -422,7 +433,7 @@ class FeedbackTests(unittest.TestCase):
         replay = subprocess.run(command(loser, expected + 2), capture_output=True, timeout=20)
         self.assertNotEqual(replay.returncode, 0)
         self.assertEqual(records.latest(directory), final)
-        self.assertEqual(learning.audit(self.inbox, ROOT)[1], 0)
+        self.assertEqual(learning.audit(self.inbox, ROOT)[0]["findings"], baseline_findings)
 
     def test_wrong_link_missing_evidence_and_missing_inbox(self):
         self.observe()

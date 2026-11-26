@@ -39,44 +39,16 @@ manual procedure remains the fallback, not authorization to bypass
 admission. The helper is a candidate until independent review and real
 ordinary-task benefit evidence.
 
-## Bounded remote orchestration (candidate)
+## Direct MCP orchestration
 
-On connector scripting surfaces, reduce repeated remote commands with
-the reviewed [remote step template](../../examples/TRANSFER_REMOTE_STEP.js)
-and the existing planner. Read the exact source and copy the function
-verbatim into a supported client scripting surface; no dynamic execution
-of candidate text, guest connector credentials or new MCP Tool.
-The function accepts an already authorized tool-call adapter, explicit
-Box/work/bundle/target/transfer identity and a bounded per-invocation call
-budget. It never installs or discovers permission. Use the exact plan
-rows after independently verifying source identity and bytes. A fresh
-begin with emitted request or advance records durable intent before
-the one explicit transfer effect. Original receipt staging and final
-page verification remain required. Do not reuse old output as a claim.
-Use a new control key for each distinct logical operation; on a lost
-response, stale revision, UNKNOWN, truncated output, budget boundary
-or existing target, preserve the original journal and Operation and
-reconcile read-only. Resume collect only for the exact original file
-dispatch and only if evidence creation is proven not yet attempted.
-No automatic replay or competing writer. See [remote workflow](../../README.md#remote-transfer-composition-candidate).
-Independent utility remains unproven.
-
-### Original admission association (V4c-01)
-
-Keep the complete versioned admission association emitted by the
-reviewed remote template, not just an Operation ID, key, or a fresh
-lookup. It binds the actual admitted Operation and immutable original
-Tracking ID to the exact tool arguments digest, Box/incarnation, work,
-canonical bundle, action, dispatch revision and claim digest. Restore
-only trusted retained caller evidence; never reconstruct an association
-from target bytes or a same-work success. Compare the nested original
-operation.tracking_id, not the read call's outer Tracking ID. A missing
-or contradictory association must stop for original-evidence/manual
-reconciliation. The digest is a consistency check, not authentication.
-For collect and final page staging supply the exact current revision
-from the canonical journal; the template checks the original dispatch
-event and looks for later revisions using a bounded non-snapshot list.
-Maintain the original single-writer assumption and final CAS checks.
-Revalidate both effect and staged receipt association before advance;
-preserve the assembly association for final readback and finish.
-Older template checkpoints without these fields cannot authorize resume.
+Use the authorized MCP calls directly with the existing Python planner.
+Retain the actual admission response, original Operation ID and nested
+Tracking ID, exact request and key, Box/incarnation, work, journal revision
+and claim digest. Do not reconstruct a missing original association from
+matching bytes or a same-work lookup. Stop on missing or inconsistent
+evidence. Use the original journal and manual read-only reconciliation
+before further effects. Never replay an uncertain operation or use an
+old client-template checkpoint as new dispatch permission. Preserve
+independent readback and exclusive create requirements. The former JS
+template is retired; the Python planner is still a candidate, not proof
+of independent utility. See [Python workflow](../../README.md#remote-transfer-composition-candidate).
