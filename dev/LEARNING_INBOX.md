@@ -96,3 +96,5 @@ The original historical report owns actual commands, IDs and results. These obse
 - [BDH-L014 revision 11](learning/BDH-L014/00000011.json): P1b proactive exclusive transfer and exact readback; [append-only corrected work feedback](../docs/development/CONSOLIDATION_P1B_SOURCE_WORK_HISTORY/00000003.json) reconciled. Reuse, no promotion.
 
 - [Bounded Operation observation candidate](../docs/development/BDH_OPERATION_POLLING_CHECKPOINT.md): actual P1 short-wait repetition and budget exhaustion; owner-authorized verification Skill refinement. Candidate, ordinary-task observation pending; no automatic promotion or proven savings.
+
+- [BDH-L012 revision 5](learning/BDH-L012/00000005.json): [consolidated CI observation](../docs/development/BDH_CI_OBSERVATION_CHECKPOINT.md), candidate refinement; independent benefit pending.

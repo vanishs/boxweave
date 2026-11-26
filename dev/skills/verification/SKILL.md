@@ -17,6 +17,38 @@ Historical example: [#188 H5](../../../docs/development/PR188_H5_DELIVERY.md) sh
 When CI overlaps across revisions, separate cancelled/superseded runs from actual failures. Use bwdev ci with the exact PR head, PR number and base SHA, from an authorized GitHub export or gh read. Inspect the specific current run, job and artifact before declaring acceptance. A missing, ambiguous, cancelled or pending current run is not PASS. See [BDH-L012](../../learning/BDH-L012/00000001.json) and the [CLI contract](../../../docs/development/BWDEV_DESIGN.md).
 
 
+## Consolidated CI observation (BDH-L012 candidate refinement)
+
+At a meaningful decision boundary (resume, failure triage, ready-to-submit,
+or closeout), resolve the actual PR head/base once. Request one workflow-run
+list for that exact SHA using the authorized repository-level CI interface.
+Reuse that snapshot for all relevant gates in the current decision; do not
+issue separate status requests per workflow, reread unchanged terminal runs,
+or query every intermediate/superseded commit. Refresh on a new head, when
+a pending result gates work, or when evidence is stale for the next decision.
+Continue independent ready work between observations.
+
+Compare returned rows with the applicable workflow inventory and exact
+candidate. Keep run ID, workflow identity, status/conclusion and observation
+time. Only request job metadata/logs or artifacts when investigating a
+failure, ambiguity, skipped gate, or verifying required acceptance evidence.
+Do not skip mandatory job/artifact proof to save calls.
+
+Prefer the existing bwdev ci adapter with complete raw GitHub run data.
+A connector list scoped by requested SHA may expose only run ID, workflow
+name/ID, status and conclusion (first page). Treat it as navigation/status
+observation, not a full PR/base/attempt-bound snapshot. Do not manufacture
+missing event/path/head/base/association fields or claim completeness; resolve
+missing/duplicate/ambiguous expected rows and exact identity using authorized
+reads before acceptance. The existing bwdev ci full scope is four named
+workflows; include additional task-specific gates independently. No current
+gate is PASS merely because it is absent or an earlier SHA succeeded.
+
+Record sampled list, job, log and retry calls separately; compare only
+equivalent scopes. One list replaces per-workflow status lookups where
+supported, but does not establish whole-task cost savings. No new product
+tool, CI exemption or automatic scheduler.
+
 ## Bounded Operation observation (candidate)
 
 For asynchronous Box work, retain the original receipt and ID. Do not poll
