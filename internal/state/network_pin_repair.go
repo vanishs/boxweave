@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/vanishs/boxweave/internal/peerscope"
 )
 
 // CreatePinRepairStatus is local SQLite evidence, never native authority.
@@ -124,8 +126,29 @@ func (s *Store) ReadOriginalCreatePin(ctx context.Context, t RecoveryTarget) (Ve
 	if status != "PINNED" {
 		return VerifiedCreateBinding{}, ErrResourceLocked
 	}
-	if e = verifyIPv4RetirementHistory(ctx, tx, t.Layer, pin.Bridge, pin.ACL); e != nil {
+	if _, e = checkCreatePinPolicyTx(ctx, tx, t, pin); e != nil {
 		return VerifiedCreateBinding{}, e
 	}
 	return pin, nil
+}
+
+// Select policy from the durable Create intent, not a caller-provided mode.
+// Scoped pins retain all addresses and must match the per-incarnation ACL.
+func checkCreatePinPolicyTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, pin VerifiedCreateBinding) (bool, error) {
+	schema, e := scopedCreateIntentSchema(ctx, tx, t.ID)
+	if e != nil {
+		return false, e
+	}
+	switch schema {
+	case 0:
+		return false, verifyIPv4RetirementHistory(ctx, tx, t.Layer, pin.Bridge, pin.ACL)
+	case 2:
+		acl, e := peerscope.ACLName(t.Layer, pin.Bridge, t.UUID)
+		if e != nil || acl != pin.ACL || t.NativeID == "" {
+			return true, ErrResourceLocked
+		}
+		return true, requireScopedNoLegacyRetirementTx(ctx, tx)
+	default:
+		return false, ErrResourceLocked
+	}
 }

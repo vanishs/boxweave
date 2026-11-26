@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -93,5 +94,67 @@ func TestH1BMaintenanceHistoryWitness(t *testing.T) {
 	after, e := snap.ReadMaintenanceLedger(ctx, b.Project)
 	if e != nil || after.Retired != a.Retired || after.Claims != a.Claims || after.HistorySHA256 == a.HistorySHA256 || after.ObservationDigest() == a.ObservationDigest() {
 		t.Fatal("same-count history drift missed", e)
+	}
+}
+
+// With no Legacy state, the new Scoped reader must preserve the exact
+// schema-6 observation digest used by reviewed maintenance and drain.
+func TestP1ScopedMaintenanceRetainsWitnessDigest(t *testing.T) {
+	ctx := context.Background()
+	s, b, _ := n3RetiredFixture(t)
+	snap := DiagnosticSnapshot{store: s}
+	legacy, e := snap.ReadMaintenanceLedger(ctx, b.Project)
+	if e != nil {
+		t.Fatal(e)
+	}
+	scoped, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || scoped.ObservationDigest() != legacy.ObservationDigest() || scoped.HistorySHA256 != legacy.HistorySHA256 {
+		t.Fatal(scoped, e)
+	}
+	drain, e := s.ReadScopedDrainWitness(ctx, b.Project)
+	if e != nil || drain.ObservationDigest() != scoped.ObservationDigest() {
+		t.Fatal(drain, e)
+	}
+}
+
+func TestP1ScopedMaintenanceRefusesMixedHistory(t *testing.T) {
+	ctx := context.Background()
+	for _, table := range []string{"network_ipv4_retirements", "network_ipv4_retirement_queue", "network_ipv4_compactions"} {
+		t.Run(table, func(t *testing.T) {
+			s, b, del := n3RetiredFixture(t)
+			var e error
+			// Synthetic mixed rows in the same Project; never native effects.
+			switch table {
+			case "network_ipv4_retirements":
+				_, e = s.db.Exec(`INSERT INTO network_ipv4_retirements(project,box_uuid,incarnation,bridge,acl,mac,ipv4,ipv6,create_operation_id,delete_operation_id,native_proof_sha256,retired_at)
+ SELECT n.project,n.box_uuid,n.incarnation,n.bridge,n.acl,n.mac,n.ipv4,n.ipv6,c.id,?,?,1 FROM network_bindings n JOIN operations c ON c.layer=n.project AND c.box_uuid=n.box_uuid AND c.incarnation=n.incarnation AND c.action='box_create' WHERE n.project=? AND n.box_uuid=?`, del.ID, strings.Repeat("a", 64), b.Project, b.UUID)
+			case "network_ipv4_retirement_queue":
+				_, e = s.db.Exec("INSERT INTO network_ipv4_retirement_queue(delete_operation_id,project,attempt_order) VALUES(?,?,1)", del.ID, b.Project)
+			case "network_ipv4_compactions":
+				_, e = s.db.Exec("INSERT INTO network_ipv4_compactions(project,delete_operation_id,plan_sha256,prepared_at) VALUES(?,?,?,1)", b.Project, del.ID, strings.Repeat("a", 64))
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			var n int
+			if e = s.db.QueryRow("SELECT count(*) FROM " + table).Scan(&n); e != nil || n != 1 {
+				t.Fatal(n, e)
+			}
+			snap := DiagnosticSnapshot{store: s}
+			legacy, e := snap.ReadMaintenanceLedger(ctx, b.Project)
+			if e != nil || len(legacy.HistorySHA256) != 64 {
+				t.Fatal(legacy, e)
+			}
+			if l, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project); !errors.Is(e, ErrResourceLocked) || l.HistorySHA256 != "" {
+				t.Fatal("mixed snapshot authorized", l, e)
+			}
+			if l, e := s.ReadScopedDrainWitness(ctx, b.Project); !errors.Is(e, ErrResourceLocked) || l.HistorySHA256 != "" {
+				t.Fatal("mixed drain authorized", l, e)
+			}
+			after, e := snap.ReadMaintenanceLedger(ctx, b.Project)
+			if e != nil || after.ObservationDigest() != legacy.ObservationDigest() {
+				t.Fatal("observation changed", after, e)
+			}
+		})
 	}
 }

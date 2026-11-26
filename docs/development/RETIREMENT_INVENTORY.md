@@ -98,3 +98,5 @@ P1b-06d8: legacy s2_p1_two_controllers.sh / SDK witness mapping: two supported f
 P1b-06d10: see CONSOLIDATION_P1B_WITNESS_CROSSWALK.md; 72 markers mapped, no retirement waiver or deletion.
 
 P1-06d14: [real public WAN and runtime/schema consumer checkpoint](CONSOLIDATION_P1_06D14_CHECKPOINT.md). Actual public IPv4 BOX_VERIFIED at 92ffeda, hosted positive UNVERIFIED; P1c/d source BOX_VERIFIED, CI_PENDING; alternate pool BLOCKED, no waiver.
+
+P1-06d15: [completed-original pin and maintenance separation](CONSOLIDATION_P1_06D15_CHECKPOINT.md). Parent 3df436b 7/7 CI, N2 27/27, all 11 Go race packages PASS. New Delete separation, Scoped pin repair and maintenance snapshot/drain BOX_VERIFIED, native CI_PENDING. Alternate pool remains BLOCKED; no DDL/Legacy runtime removal or gate waiver.

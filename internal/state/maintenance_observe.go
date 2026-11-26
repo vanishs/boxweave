@@ -87,6 +87,16 @@ const maintenanceRowLimit = 8192
 // ReadMaintenanceLedger uses only the private snapshot. No source SQL
 // connections, schema upgrade, credential content or arbitrary intent.
 func (s *DiagnosticSnapshot) ReadMaintenanceLedger(ctx context.Context, project string) (MaintenanceLedger, error) {
+	return s.readMaintenanceLedger(ctx, project, false)
+}
+
+// ReadScopedMaintenanceLedger refuses mixed retirement history. It uses the
+// same snapshot and never treats absence of legacy data as native authority.
+func (s *DiagnosticSnapshot) ReadScopedMaintenanceLedger(ctx context.Context, project string) (MaintenanceLedger, error) {
+	return s.readMaintenanceLedger(ctx, project, true)
+}
+
+func (s *DiagnosticSnapshot) readMaintenanceLedger(ctx context.Context, project string, scoped bool) (MaintenanceLedger, error) {
 	var zero MaintenanceLedger
 	if !SafeDiagnosticProject(project) {
 		return zero, ErrInvalid
@@ -96,7 +106,7 @@ func (s *DiagnosticSnapshot) ReadMaintenanceLedger(ctx context.Context, project 
 		return zero, e
 	}
 	defer tx.Rollback()
-	o, e := readMaintenanceLedger(ctx, tx, project)
+	o, e := readMaintenanceLedger(ctx, tx, project, scoped)
 	if e != nil {
 		return zero, e
 	}
@@ -105,8 +115,13 @@ func (s *DiagnosticSnapshot) ReadMaintenanceLedger(ctx context.Context, project 
 	}
 	return o, nil
 }
-func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (MaintenanceLedger, error) {
+func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string, scoped bool) (MaintenanceLedger, error) {
 	var zero MaintenanceLedger
+	if scoped {
+		if e := requireScopedNoLegacyRetirementTx(ctx, tx); e != nil {
+			return zero, e
+		}
+	}
 	o := MaintenanceLedger{Project: project, LegacyPending: []string{}, LegacyCompactions: []string{}, RetiredBoxes: []MaintenanceRetiredBox{}, Boxes: []MaintenanceBox{}, Originals: []MaintenanceOriginal{}, Peers: []MaintenancePeer{}, Forwards: []MaintenanceForward{}}
 	l, e := readNativeNetworkLedgerTx(ctx, tx, project)
 	if e != nil {
@@ -159,7 +174,7 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 		return zero, e
 	}
 	// Count only: never reveal another Project's identities or intent.
-	for _, q := range []string{
+	foreignQueries := []string{
 		"SELECT count(*) FROM owned_boxes WHERE project!=?",
 		"SELECT count(*) FROM operations WHERE layer!=?",
 		"SELECT count(*) FROM operation_resource_claims WHERE layer!=?",
@@ -167,10 +182,15 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 		"SELECT count(*) FROM network_address_fences WHERE project!=?",
 		"SELECT count(*) FROM peer_grants WHERE project!=?",
 		"SELECT count(*) FROM forward_claims WHERE project!=?",
-		"SELECT count(*) FROM network_ipv4_retirements WHERE project!=?",
-		"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=?",
-		"SELECT count(*) FROM network_ipv4_compactions WHERE project!=?",
-	} {
+	}
+	if !scoped {
+		foreignQueries = append(foreignQueries,
+			"SELECT count(*) FROM network_ipv4_retirements WHERE project!=?",
+			"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=?",
+			"SELECT count(*) FROM network_ipv4_compactions WHERE project!=?",
+		)
+	}
+	for _, q := range foreignQueries {
 		var n int
 		if e = tx.QueryRowContext(ctx, q, project).Scan(&n); e != nil {
 			return zero, e
@@ -280,39 +300,41 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 	if e != nil {
 		return zero, e
 	}
-	for _, q := range []struct {
-		query string
-		dst   *[]string
-	}{
-		{`SELECT delete_operation_id FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyPending},
-		{`SELECT delete_operation_id FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyCompactions},
-	} {
-		rows, e := tx.QueryContext(ctx, q.query, project, maintenanceRowLimit+1)
-		if e != nil {
-			return zero, e
-		}
-		for rows.Next() {
-			var id string
-			if e = rows.Scan(&id); e != nil {
-				break
+	if !scoped {
+		for _, q := range []struct {
+			query string
+			dst   *[]string
+		}{
+			{`SELECT delete_operation_id FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyPending},
+			{`SELECT delete_operation_id FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyCompactions},
+		} {
+			rows, e := tx.QueryContext(ctx, q.query, project, maintenanceRowLimit+1)
+			if e != nil {
+				return zero, e
 			}
-			if len(*q.dst) >= maintenanceRowLimit || !validHexID(id) {
-				e = ErrDiagnosticInvalid
-				break
+			for rows.Next() {
+				var id string
+				if e = rows.Scan(&id); e != nil {
+					break
+				}
+				if len(*q.dst) >= maintenanceRowLimit || !validHexID(id) {
+					e = ErrDiagnosticInvalid
+					break
+				}
+				*q.dst = append(*q.dst, id)
 			}
-			*q.dst = append(*q.dst, id)
-		}
-		if e == nil {
-			e = rows.Err()
-		}
-		if ce := rows.Close(); e == nil {
-			e = ce
-		}
-		if e != nil {
-			return zero, e
+			if e == nil {
+				e = rows.Err()
+			}
+			if ce := rows.Close(); e == nil {
+				e = ce
+			}
+			if e != nil {
+				return zero, e
+			}
 		}
 	}
-	o.HistorySHA256, e = maintenanceHistoryWitness(ctx, tx, project)
+	o.HistorySHA256, e = maintenanceHistoryWitness(ctx, tx, project, scoped)
 	if e != nil {
 		return zero, e
 	}
@@ -321,25 +343,34 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 
 // Bounded digest of exact identity and historical effect records. No raw
 // actor, credential, arbitrary intent, or log content is emitted.
-func maintenanceHistoryWitness(ctx context.Context, tx *sql.Tx, project string) (string, error) {
-	queries := []string{
-		`SELECT id,action,state,updated_at,resource_key,box_uuid,incarnation,native_operation_id,intent_digest,error_class FROM operations WHERE layer=? ORDER BY id`,
-		`SELECT operation_id,resource_key FROM operation_resource_claims WHERE layer=? ORDER BY operation_id,resource_key`,
-		`SELECT * FROM owned_boxes WHERE project=? ORDER BY uuid`,
-		`SELECT * FROM network_bindings WHERE project=? ORDER BY box_uuid,incarnation,nic`,
-		`SELECT * FROM network_address_fences WHERE project=? ORDER BY bridge,family,address`,
-		`SELECT * FROM network_ipv4_retirements WHERE project=? ORDER BY box_uuid,incarnation`,
-		`SELECT * FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id`,
-		`SELECT * FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id`,
-		`SELECT * FROM peer_grants WHERE project=? ORDER BY source_uuid,source_incarnation,target_uuid,target_incarnation`,
-		`SELECT * FROM forward_claims WHERE project=? ORDER BY forward_id`,
-		`SELECT e.seq,e.operation_id,e.at,e.state FROM operation_events e JOIN operations o ON o.id=e.operation_id WHERE o.layer=? ORDER BY e.seq`,
-		`SELECT a.seq,a.operation_id,a.at,a.decision,a.evidence_digest FROM recovery_audit a JOIN operations o ON o.id=a.operation_id WHERE o.layer=? ORDER BY a.seq`,
+func maintenanceHistoryWitness(ctx context.Context, tx *sql.Tx, project string, scoped bool) (string, error) {
+	queries := []struct {
+		sql    string
+		legacy bool
+	}{
+		{`SELECT id,action,state,updated_at,resource_key,box_uuid,incarnation,native_operation_id,intent_digest,error_class FROM operations WHERE layer=? ORDER BY id`, false},
+		{`SELECT operation_id,resource_key FROM operation_resource_claims WHERE layer=? ORDER BY operation_id,resource_key`, false},
+		{`SELECT * FROM owned_boxes WHERE project=? ORDER BY uuid`, false},
+		{`SELECT * FROM network_bindings WHERE project=? ORDER BY box_uuid,incarnation,nic`, false},
+		{`SELECT * FROM network_address_fences WHERE project=? ORDER BY bridge,family,address`, false},
+		{`SELECT * FROM network_ipv4_retirements WHERE project=? ORDER BY box_uuid,incarnation`, true},
+		{`SELECT * FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id`, true},
+		{`SELECT * FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id`, true},
+		{`SELECT * FROM peer_grants WHERE project=? ORDER BY source_uuid,source_incarnation,target_uuid,target_incarnation`, false},
+		{`SELECT * FROM forward_claims WHERE project=? ORDER BY forward_id`, false},
+		{`SELECT e.seq,e.operation_id,e.at,e.state FROM operation_events e JOIN operations o ON o.id=e.operation_id WHERE o.layer=? ORDER BY e.seq`, false},
+		{`SELECT a.seq,a.operation_id,a.at,a.decision,a.evidence_digest FROM recovery_audit a JOIN operations o ON o.id=a.operation_id WHERE o.layer=? ORDER BY a.seq`, false},
 	}
 	h := sha256.New()
 	count, total := 0, 0
 	for _, q := range queries {
-		rows, e := tx.QueryContext(ctx, q, project)
+		// Preserve schema-6 witness bytes for an empty legacy table. The
+		// scoped reader has already proved all three empty in this transaction.
+		h.Write([]byte(q.sql + "\n"))
+		if scoped && q.legacy {
+			continue
+		}
+		rows, e := tx.QueryContext(ctx, q.sql, project)
 		if e != nil {
 			return "", e
 		}
@@ -348,7 +379,6 @@ func maintenanceHistoryWitness(ctx context.Context, tx *sql.Tx, project string) 
 			rows.Close()
 			return "", e
 		}
-		h.Write([]byte(q + "\n"))
 		for rows.Next() {
 			values := make([]any, len(cols))
 			ptrs := make([]any, len(cols))

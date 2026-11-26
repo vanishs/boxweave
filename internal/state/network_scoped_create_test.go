@@ -166,3 +166,77 @@ func TestP1ScopedReservationRefusesLegacyArchiveQueueAndCompaction(t *testing.T)
 		})
 	}
 }
+
+// The completed original still owns the exact pin. Missing ledger records
+// can be repaired, but neither a different ACL nor mixed retirement history
+// can authorize a repair. Fixtures use real SQLite, not native evidence.
+func TestP1ScopedPinRepairRetainsOriginal(t *testing.T) {
+	ctx := context.Background()
+	s, orig, in, pin := p1CreateFixture(t, true)
+	pin.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
+	if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, pin); e != nil {
+		t.Fatal(e)
+	}
+	req, target := a4Request(t, s, orig.ID)
+	if got, e := s.ReadOriginalCreatePin(ctx, target); e != nil || got != pin {
+		t.Fatal(got, e)
+	}
+	if _, e := s.db.Exec("DELETE FROM network_address_fences WHERE box_uuid=? AND family='ipv4'", p1UUID); e != nil {
+		t.Fatal(e)
+	}
+	p := RecoveryProof{Kind: RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED", NativeID: target.NativeID, UUID: p1UUID, Fingerprint: "synthetic-exact-pin", CreateBinding: pin}
+	bad := p
+	bad.CreateBinding.ACL = "bw-peer"
+	if e := s.CheckCreatePinRepair(ctx, target, bad); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("wrong ACL", e)
+	}
+	if e := s.CheckCreatePinRepair(ctx, target, p); e != nil {
+		t.Fatal(e)
+	}
+	rec, e := s.CommitRecovery(ctx, req, target, p)
+	if e != nil || rec.Disposition != "SETTLED" || rec.Receipt.ID == orig.ID {
+		t.Fatal(rec, e)
+	}
+	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
+	if got, e := s.ReadOriginalCreatePin(ctx, target); e != nil || got != pin {
+		t.Fatal(got, e)
+	}
+	if _, e = s.ReadCompleteScopedNetworkAuditLedger(ctx, in.Project, in.Bridge); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestP1ScopedPinRepairRefusesMixedHistory(t *testing.T) {
+	ctx := context.Background()
+	s, orig, in, pin := p1CreateFixture(t, true)
+	pin.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
+	if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, pin); e != nil {
+		t.Fatal(e)
+	}
+	req, target := a4Request(t, s, orig.ID)
+	_, _, _, retired := retireFixture(t, s)
+	if e := retireWithProof(s, ctx, retired, strings.Repeat("a", 64)); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := s.ReadOriginalCreatePin(ctx, target); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("mixed history read", e)
+	}
+	if _, e := s.db.Exec("DELETE FROM network_address_fences WHERE box_uuid=? AND family='ipv4'", p1UUID); e != nil {
+		t.Fatal(e)
+	}
+	p := RecoveryProof{Kind: RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED", NativeID: target.NativeID, UUID: p1UUID, Fingerprint: "synthetic-exact-pin", CreateBinding: pin}
+	if e := s.CheckCreatePinRepair(ctx, target, p); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("mixed history preflight", e)
+	}
+	if _, e := s.CommitRecovery(ctx, req, target, p); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("mixed history repair", e)
+	}
+	var n int
+	if e := s.db.QueryRow("SELECT count(*) FROM network_address_fences WHERE box_uuid=?", p1UUID).Scan(&n); e != nil || n != 1 {
+		t.Fatal(n, e)
+	}
+	if e := s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=?", orig.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
+}

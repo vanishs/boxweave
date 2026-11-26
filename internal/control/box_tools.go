@@ -777,22 +777,9 @@ func (s *Service) operateBoxDelete(ctx context.Context, req *mcp.CallToolRequest
 			return err
 		}
 		if s.ScopedPeerFresh {
-			receipt, e := install.NativeScopedLifecycleCall(ctx, r.ID, "DELETE")
-			if e != nil || receipt.Project != box.Project || receipt.Name != box.Name || receipt.UUID != box.UUID || receipt.NativeID != nativeID {
-				return state.VerificationUncertain{Class: "SCOPED_DELETE_ROOT_ACL_UNVERIFIED"}
-			}
-			if e = s.Store.FinalizeVerifiedScopedDelete(ctx, r.ID, box); e != nil {
-				return state.VerificationUncertain{Class: "SCOPED_DELETE_TOMBSTONE_UNVERIFIED"}
-			}
-			return state.ErrVerifiedDeleteCommitted
+			return s.finalizeScopedDelete(ctx, r.ID, box, nativeID)
 		}
-		if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
-			return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
-		}
-		// The original Delete has already committed. The independent bounded
-		// retirement loop discovers this tombstone; never hold the Delete
-		// worker open for an optional root witness.
-		return state.ErrVerifiedDeleteCommitted
+		return s.finalizeLegacyDelete(ctx, r.ID, box)
 	}
 	r, err = s.submitNative(r, effect, verify)
 	return &mcp.CallToolResult{}, r, err
@@ -910,4 +897,27 @@ func (s *Service) admitLegacyCreate(ctx context.Context, req *mcp.CallToolReques
 	}
 	r, err = s.submitNative(r, effect, verify)
 	return &mcp.CallToolResult{}, r, err
+}
+
+// finalizeScopedDelete verifies the original Root ACL receipt before tombstoning.
+func (s *Service) finalizeScopedDelete(ctx context.Context, originalID string, box state.OwnedBox, nativeID string) error {
+	receipt, e := install.NativeScopedLifecycleCall(ctx, originalID, "DELETE")
+	if e != nil || receipt.Project != box.Project || receipt.Name != box.Name || receipt.UUID != box.UUID || receipt.NativeID != nativeID {
+		return state.VerificationUncertain{Class: "SCOPED_DELETE_ROOT_ACL_UNVERIFIED"}
+	}
+	if e = s.Store.FinalizeVerifiedScopedDelete(ctx, originalID, box); e != nil {
+		return state.VerificationUncertain{Class: "SCOPED_DELETE_TOMBSTONE_UNVERIFIED"}
+	}
+	return state.ErrVerifiedDeleteCommitted
+}
+
+// finalizeLegacyDelete is the old tombstone and asynchronous retirement path.
+func (s *Service) finalizeLegacyDelete(ctx context.Context, originalID string, box state.OwnedBox) error {
+	if err := s.Store.FinalizeVerifiedDelete(ctx, originalID, box); err != nil {
+		return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
+	}
+	// The original Delete has already committed. The independent bounded
+	// retirement loop discovers this tombstone; never hold the Delete
+	// worker open for an optional root witness.
+	return state.ErrVerifiedDeleteCommitted
 }

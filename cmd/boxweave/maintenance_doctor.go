@@ -51,14 +51,18 @@ func maintenanceSelfSHA() string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
-func captureMaintenanceLedger(ctx context.Context, db, project string) (*state.MaintenanceLedger, diagnostic.Source) {
+func captureMaintenanceLedger(ctx context.Context, db, project, mode string) (*state.MaintenanceLedger, diagnostic.Source) {
 	c, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	snap, e := state.OpenDiagnosticSnapshot(c, db)
 	if e != nil {
 		return nil, diagnostic.Source{State: "UNVERIFIED", Reason: diagnostic.DatabaseReason(e)}
 	}
-	l, e := snap.ReadMaintenanceLedger(c, project)
+	read := snap.ReadMaintenanceLedger
+	if mode == "SCOPED_V2" {
+		read = snap.ReadScopedMaintenanceLedger
+	}
+	l, e := read(c, project)
 	ce := snap.Close()
 	if e != nil {
 		return nil, diagnostic.Source{State: "UNVERIFIED", Reason: diagnostic.DatabaseReason(e)}
@@ -85,7 +89,7 @@ func collectMaintenance(ctx context.Context, a doctorArgs) (o maintenanceReport)
 	d := diagnostic.Source{State: "UNVERIFIED", Reason: "LEDGER_ARTIFACT_UNSAFE"}
 	for _, a0 := range o.Installation.ArtifactEvidence {
 		if a0.ID == "ledger" && (a0.Evidence.State == "PRESENT" || a0.Evidence.State == "ABSENT") {
-			l, d = captureMaintenanceLedger(ctx, a.DB, a.Project)
+			l, d = captureMaintenanceLedger(ctx, a.DB, a.Project, o.Installation.Mode)
 		}
 	}
 
@@ -101,7 +105,7 @@ func collectMaintenance(ctx context.Context, a doctorArgs) (o maintenanceReport)
 	if l == nil {
 		return o
 	}
-	after, _ := captureMaintenanceLedger(ctx, a.DB, a.Project)
+	after, _ := captureMaintenanceLedger(ctx, a.DB, a.Project, o.Installation.Mode)
 	if after == nil || after.ObservationDigest() != l.ObservationDigest() {
 		o.Native = install.MaintenanceNative{Evidence: install.MaintenanceEvidence{State: "UNVERIFIED", Reason: "LEDGER_EPOCH_CHANGED_OR_RECHECK_UNAVAILABLE"}}
 		o.Database.State = "PARTIAL"

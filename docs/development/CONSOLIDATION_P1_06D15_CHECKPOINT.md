@@ -1,0 +1,11 @@
+# P1 checkpoint: completed-original pin and maintenance consumers
+
+Exact parent 3df436b14205edaff0c21279d262b046e4592ac8: seven workflows PASS; N2 45880249479 27/27; full Box Go race all 11 packages PASS, original 87b1daf10bc9f608319c81eef9af4d3f exit0. Exact detached clean source. No duplicate native acceptance.
+
+P1c: isolate Scoped and Legacy Delete finalization after unchanged shared native receipt/absence checks. Same Root receipt/project/name/UUID/native ID, same original terminal/error class, no extra dispatch. Control/recovery/diagnostic race and vet 11371403498fa96c35b225247024e280 exit0. Legacy Create/Peer extraction already CI_VERIFIED at parent; no runtime removal yet.
+
+P1d: select completed Create pin read/repair policy from durable original schema. Scoped requires per-incarnation ACL, native ID and no mixed legacy retirement history; collision checks retain all addresses and claims. Legacy retains prior proof and archive exclusion. Real SQLite synthetic fixture regression proves pin repair, wrong ACL/mixed archive refusal, no partial write or audit, original receipt preserved; original legacy recovery tests unchanged. Source race 7 top-level focused tests and subcases c40af9244ecb2a81d3132c6b2fd6ca8b exit0.
+
+Scoped maintenance capture and drain use same snapshot, refuse all three mixed legacy retirement tables before observation, no legacy data queries other than transitional empty-table guard; maintain exact schema-6 digest bytes for proven empty legacy tables. Legacy diagnostic reader retained. New same-Project mixed cases and equal-digest test, existing UNKNOWN/foreign/redaction tests. Final gate 7812ee8cca718d32eab52c6dd28d0c13 exit0: 12 focused state tests with subcases, cmd/recovery/diagnostic race, format1357/YAML48/build/vet. New exact source native CI_PENDING. Synthetic fixtures not native effects.
+
+Remaining: alternate-pool publication blocked, preserve exact original tree; actual native proof absent. Real WAN Box positive at 92ffeda, hosted public positive unverified. No P1b closure; Legacy runtime/DDL retirement still gated. P1c remaining mode selection and root/startup/recovery callers, P1d admission/recovery compaction fences and uninstall/direct versioned schema, P1e final exact regression remain open. Existing learning L014 REVIEW_REQUIRED, no promotion. No merge/release or destructive cleanup.
