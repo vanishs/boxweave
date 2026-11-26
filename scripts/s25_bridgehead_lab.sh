@@ -582,7 +582,9 @@ sudo ip -s link show s25s6host > "$proof/simwan6-l0-veth-packets.txt"
 sudo incus exec bw-s25-mcp-l1 --project "$project" -- ip -s link show s25s6host > "$proof/simwan6-l1-veth-packets.txt"
 sudo incus config show bw-s25-mcp-l1 --project "$project" --expanded > "$proof/simwan6-l0-native-nic.yaml"
 inner_uid="$(sudo incus exec bw-s25-mcp-l1 --project "$project" -- id -u boxweave)"
-sudo incus exec bw-s25-mcp-l1 --project "$project" -- incus config show bw-s25-mcp-l2 --project "user-$inner_uid" --expanded > "$proof/simwan6-l1-native-nic.yaml"
+inner_name=bw-s25-mcp-l2
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then inner_name=bw-s25-mcp-l1; fi
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- incus config show "$inner_name" --project "user-$inner_uid" --expanded > "$proof/simwan6-l1-native-nic.yaml"
 grep -q 'SIM_WAN6_REMOTE=' "$proof/simwan6-l0-upstream.log"
 grep -q 'SIM_WAN6_REMOTE=' "$proof/simwan6-l1-upstream.log"
 echo S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS
@@ -594,7 +596,22 @@ echo S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
 if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
- python3 scripts/s25_independent_verifier.py scoped-layers
+ # Nonsecret IDs are exchanged only between the two independent SDK clients.
+ # The nested invocation uses its own local test credential and loopback MCP.
+ inner_cp="$work/private/dual-inner-original.json"
+ sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-inner-checkpoint.json > "$inner_cp"
+ outer_uuid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["uuid"])' "$BW_S25_CHECKPOINT")"
+ outer_original="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["create_op"])' "$BW_S25_CHECKPOINT")"
+ inner_uuid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["uuid"])' "$inner_cp")"
+ inner_original="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["create_op"])' "$inner_cp")"
+ test "$outer_uuid" != "$inner_uuid"
+ test "$outer_original" != "$inner_original"
+ BW_S25_FOREIGN_UUID="$inner_uuid" BW_S25_FOREIGN_ORIGINAL="$inner_original" "$work/staging/s25-lab-agent" dual-scope
+ sudo incus exec bw-s25-mcp-l1 --project "$project" -- env P1B_S25_SCOPED=1 BW_S25_ALLOWED_NESTED=1 BW_S25_INNER=1 \
+   BW_S25_URL=http://127.0.0.1:18650/mcp BW_S25_ADMIN2_FILE=/root/s25-admin2.secret BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json \
+   BW_S25_FOREIGN_UUID="$outer_uuid" BW_S25_FOREIGN_ORIGINAL="$outer_original" /usr/local/bin/s25-lab-agent dual-scope
+ python3 scripts/s25_dual_auth.py "$project"
+ python3 scripts/s25_independent_verifier.py dual-scope
 fi
 # Additional P0 BH-009/BH-011/BH-015: cross-Project raw IPv4/IPv6
 # packets and parent native Unix-socket isolation. This test uses ONLY

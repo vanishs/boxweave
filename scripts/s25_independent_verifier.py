@@ -89,10 +89,13 @@ def inspect_l1():
     print("S25_V_L0_MCP_CREATED_L1_NATIVE_UUID_SQLITE_ACL=PASS")
     return manifest
 
+def inner_name():
+    return "bw-s25-mcp-l1" if os.environ.get("P1B_S25_SCOPED") == "1" else "bw-s25-mcp-l2"
+
 def inspect_l2():
     inspect_l1()
     data = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
-    require(data.get("name") == "bw-s25-mcp-l2" and data.get("uuid"),
+    require(data.get("name") == inner_name() and data.get("uuid"),
             "inner independent Agent checkpoint missing L2")
     innerproj = inner("sh", "-c", "printf user-; id -u boxweave")
     child_list = as_json(inner("incus", "list", "--project",
@@ -143,7 +146,7 @@ def inspect_l2():
         last_error=""
         while True:
             try:
-                inner("incus","exec","bw-s25-mcp-l2","--project",innerproj,
+                inner("incus","exec",inner_name(),"--project",innerproj,
                       "--","ping",family,"-c","1","-W","2",gateway)
                 break
             except (RuntimeError, subprocess.TimeoutExpired) as exc:
@@ -152,7 +155,7 @@ def inspect_l2():
                     # Safe, non-mutating guest network facts for the red
                     # artifact, without confusing L1 bridge with L2 route.
                     try:
-                        routes=inner("incus","exec","bw-s25-mcp-l2",
+                        routes=inner("incus","exec",inner_name(),
                                      "--project",innerproj,
                                      "--","ip",family,"route","show")
                     except Exception as route_exc:
@@ -180,7 +183,7 @@ def inspect_simwan6(inner_layer=False, cleaned=False):
     if inner_layer:
         data = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
         project = inner("sh", "-c", "printf user-; id -u boxweave")
-        name = "bw-s25-mcp-l2"
+        name = inner_name()
         instances = as_json(inner("incus", "list", "--project", project, "--format", "json"))
         cert_path = "/root/s25simwan6/simwan6.crt"
         log = inner("cat", "/root/s25simwan6/server.log")
@@ -362,7 +365,7 @@ def nested_cleaned():
             "inner original MCP delete receipt missing")
     innerproj = inner("sh","-c","printf user-; id -u boxweave")
     child_list = as_json(inner("incus","list","--project",innerproj,"--format","json"))
-    require(not any(x.get("name")=="bw-s25-mcp-l2" for x in child_list),
+    require(not any(x.get("name")==inner_name() for x in child_list),
             "inner MCP-deleted L2 still exists")
     code = ("import sqlite3,sys;"
             "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
@@ -494,7 +497,7 @@ def verify_r12_foreign_clean():
     require(not names.strip(), "foreign native Guest leaked")
     inner_project = inner("sh", "-c", "printf user-; id -u boxweave") if os.environ.get("P1B_S25_SCOPED")=="1" else "user-1001"
     owned_id = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
-                   project, "--", "incus", "config", "get", "bw-s25-mcp-l2",
+                   project, "--", "incus", "config", "get", inner_name(),
                    "volatile.uuid", "--project", inner_project)
     require(owned_id.strip() == data["evidence"]["owned_uuid"],
             "foreign fixture cleanup changed original nested UUID")
@@ -527,7 +530,7 @@ def verify_scoped_layers():
     commit = os.environ["P1B_S25_EXACT_HEAD"]
     for runner, project, checkpoint, name, actor in (
         (lambda *args: cli("sudo", *args), outer_project, m, "bw-s25-mcp-l1", "agent-outer-alpha"),
-        (inner, inner_project, inner_cp, "bw-s25-mcp-l2", "agent-inner-alpha"),
+        (inner, inner_project, inner_cp, inner_name(), "agent-inner-alpha"),
     ):
         status = as_json(runner("/usr/local/bin/boxweave", "install-status", "-project", project))
         require(status.get("scoped_peer_mode") == "SCOPED_PEER_FRESH_V2" and
@@ -565,6 +568,26 @@ def verify_scoped_layers():
     inner_socket = inner("stat", "-c", "%d:%i", "/var/lib/incus/unix.socket.user")
     require(outer_socket != inner_socket, "parent native socket unexpectedly inherited")
     print("P1B_S25_SCOPED_TWO_LAYER_FIXED_LEDGER_ACL_GUARD=PASS")
+
+
+def verify_dual_scope():
+    require(os.environ.get("P1B_S25_SCOPED") == "1", "dual-scope installed lane only")
+    outer = inspect_l1()
+    nested = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
+    require(outer["name"] == nested["name"] == "bw-s25-mcp-l1", "same-name witness absent")
+    require(outer["uuid"] != nested["uuid"] and outer["create_op"] != nested["create_op"],
+            "independent original identity collapsed")
+    query = (
+        "import sqlite3,sys;"
+        "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+        "u,o=sys.argv[1:];"
+        "assert not c.execute('SELECT id FROM operations WHERE work_ref=? OR box_uuid=? OR id=?',"
+        "('lab/s25/dual-refused',u,o)).fetchall();"
+    )
+    cli("sudo","python3","-c",query,nested["uuid"],nested["create_op"])
+    inner("python3","-c",query,outer["uuid"],outer["create_op"])
+    verify_scoped_layers()
+    print("P1B_S25_SCOPED_SAME_NAME_DISTINCT_NATIVE_NO_CROSS_ADMISSION=PASS")
 
 
 def maintenance_snapshot():
@@ -623,6 +646,8 @@ if __name__ == "__main__":
         inspect_l2()
     elif sys.argv[1] == "scoped-layers":
         verify_scoped_layers()
+    elif sys.argv[1] == "dual-scope":
+        verify_dual_scope()
     elif sys.argv[1] == "wan6outer":
         inspect_simwan6(False)
     elif sys.argv[1] == "wan6outerclean":

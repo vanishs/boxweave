@@ -238,7 +238,7 @@ func connectActor(ctx context.Context, actor string) *mcp.ClientSession {
 }
 func isInner() bool { return os.Getenv("BW_S25_INNER") == "1" }
 func boxName() string {
-	if isInner() {
+	if isInner() && os.Getenv("P1B_S25_SCOPED") != "1" {
 		return "bw-s25-mcp-l2"
 	}
 	return "bw-s25-mcp-l1"
@@ -801,6 +801,56 @@ func guestGitWorkflow(ctx context.Context) {
 	fmt.Println("S25_MCP_GUEST_GIT_FIX_AND_RETEST=PASS")
 }
 
+// Same-name fixtures are independently admitted in separate installed
+// controllers. Foreign identity calls must produce typed absence, not
+// merely a transport failure. The read-only verifier checks no admission.
+func dualScope(ctx context.Context) {
+	must(os.Getenv("P1B_S25_SCOPED") == "1", "Scoped installed lane only")
+	m := readCheckpoint()
+	foreign, original := environmental("BW_S25_FOREIGN_UUID"), environmental("BW_S25_FOREIGN_ORIGINAL")
+	must(len(foreign) == 36 && len(original) == 32 && m["uuid"] != foreign &&
+		m["create_op"] != original && m["name"] == "bw-s25-mcp-l1", "independent same-name fixtures")
+	c := connectActor(ctx, "b")
+	defer c.Close()
+	check := func() {
+		boxes, ok := request(ctx, c, "box_list", map[string]any{})["boxes"].([]any)
+		expected := map[string]bool{m["uuid"]: true}
+		// Inner WAN6 peer is intentionally still live until its original cleanup.
+		if isInner() {
+			must(m["wan6_peer_uuid"] != "", "original inner WAN6 peer missing")
+			expected[m["wan6_peer_uuid"]] = true
+		}
+		must(ok && len(boxes) == len(expected), "independent controller list scope")
+		for _, item := range boxes {
+			box, ok := item.(map[string]any)
+			must(ok && expected[str(box, "box_id")], "unexpected UUID in own controller")
+			delete(expected, str(box, "box_id"))
+		}
+		must(len(expected) == 0, "own scoped inventory incomplete")
+		own := child(request(ctx, c, "box_get", map[string]any{"box_id": m["uuid"]}), "box")
+		must(str(own, "box_id") == m["uuid"], "own UUID missing")
+		op := child(request(ctx, c, "operation_get", map[string]any{"operation_id": m["create_op"]}), "operation")
+		must(str(op, "operation_id") == m["create_op"] && str(op, "state") == "SUCCEEDED", "own original missing")
+	}
+	refuse := func(name, code string, args map[string]any) {
+		r, err := c.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		must(err == nil && r != nil && r.IsError && len(r.Content) == 1, "expected typed cross-controller refusal")
+		part, ok := r.Content[0].(*mcp.TextContent)
+		var f map[string]any
+		must(ok && json.Unmarshal([]byte(part.Text), &f) == nil && str(f, "code") == code &&
+			str(f, "category") == "AUTHORIZATION_OR_ABSENCE" &&
+			str(child(f, "next_action"), "kind") == "CHECK_AUTHORIZED_SCOPE" &&
+			str(child(f, "next_action"), "operation_id") == "" && str(f, "original_state") == "", "foreign scope error leaked identity")
+	}
+	check()
+	refuse("box_get", "BOX_NOT_FOUND_OR_NOT_OWNED", map[string]any{"box_id": foreign})
+	refuse("box_delete", "BOX_NOT_FOUND_OR_NOT_OWNED", map[string]any{"box_id": foreign,
+		"idempotency_key": "s25-cross-controller-delete-refusal", "work_ref": "lab/s25/dual-refused"})
+	refuse("operation_get", "RESOURCE_NOT_FOUND_OR_NOT_OWNED", map[string]any{"operation_id": original})
+	check()
+	fmt.Printf("P1B_S25_SCOPED_CROSS_ID_REFUSED=%s:PASS\n", m["layer"])
+}
+
 func cleanup(ctx context.Context) {
 	m := readCheckpoint()
 	must(m["uuid"] != "", "original Box missing")
@@ -864,6 +914,8 @@ func main() {
 		simulatedWan6(ctx)
 	case "wan6-clean":
 		simulatedWan6Clean(ctx)
+	case "dual-scope":
+		dualScope(ctx)
 	case "cleanup":
 		cleanup(ctx)
 	case "inner-clean":

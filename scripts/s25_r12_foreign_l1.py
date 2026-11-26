@@ -18,7 +18,7 @@ import time
 
 OWNED_PROJECT = "user-1001"
 SCOPED = os.environ.get("P1B_S25_SCOPED") == "1"
-OWNED = "bw-s25-mcp-l2"
+OWNED = "bw-s25-mcp-l1" if SCOPED else "bw-s25-mcp-l2"
 FOREIGN_PROJECT = "default"
 FOREIGN = "bw-s25-r12-foreign"
 STATE = Path("/root/s25-r12-foreign-state.json")
@@ -45,7 +45,7 @@ def assert_environment():
         assert status["native_project"] == OWNED_PROJECT and status["service_active"]
     assert run("incus", "project", "show", OWNED_PROJECT).returncode == 0
     assert run("incus", "project", "show", FOREIGN_PROJECT).returncode == 0
-    assert "bw-s25-mcp-l2" in run("incus", "list", "--project", OWNED_PROJECT, "-f", "csv", "-c", "n").stdout
+    assert OWNED in run("incus", "list", "--project", OWNED_PROJECT, "-f", "csv", "-c", "n").stdout
     assert run("incus", "info", OWNED, "--project", OWNED_PROJECT).returncode == 0
     assert run("systemctl", "is-active", "boxweave.service").stdout.strip() == "active"
 
