@@ -3,7 +3,7 @@ import hashlib
 import sqlite3
 import unittest
 
-from pr191_scoped_s2_native import KEYS, MAIN, verify_history, verify_originals
+from pr191_scoped_s2_native import KEYS, MAIN, verify_history, verify_originals, verify_public_wan, by_key
 
 
 class ScopedS2OracleTests(unittest.TestCase):
@@ -74,6 +74,35 @@ class ScopedS2OracleTests(unittest.TestCase):
         self.db.execute("UPDATE owned_boxes SET deleted_by_operation_id='wrong'")
         with self.assertRaises(AssertionError):
             verify_originals(self.read, self.project, self.actor, self.actor2)
+
+    def wan_record(self,key,code,status):
+        self.add(key,"box_exec")
+        r=by_key(self.read,key)[0]
+        self.db.execute("UPDATE exec_outputs SET exit_code=? WHERE operation_id=?",(code,r[0]))
+        return "S2_NATIVE_PUBLIC_IPV4_ORIGINAL "+" ".join((key,r[0],r[9],r[1],r[7],str(code),status))
+
+    def test_wan_positive_negative_and_missing_positive_control(self):
+        prefix="native-s2-wan-"
+        records=[self.wan_record(prefix+"curl-available-01",0,"CLIENT"),
+                 self.wan_record(prefix+"online-before-01",0,"200"),
+                 self.wan_record(prefix+"offline-01",28,"000"),
+                 self.wan_record(prefix+"online-after-01",0,"204")]
+        log="\n".join(records+["S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS"])
+        self.assertEqual(verify_public_wan(self.read,self.project,self.actor,self.uuid,log),"PASS")
+        with self.assertRaises(AssertionError):
+            verify_public_wan(self.read,self.project,self.actor,self.uuid,log.replace("28 000","28 403"))
+        with self.assertRaises(AssertionError):
+            verify_public_wan(self.read,self.project,self.actor,self.uuid,log.replace("0 204","0 404"))
+        with self.assertRaises(AssertionError):
+            verify_public_wan(self.read,self.project,self.actor,self.uuid,log.replace(records[2],""))
+        self.db.execute("DELETE FROM operations")
+        self.db.execute("DELETE FROM exec_outputs")
+        records=[self.wan_record(prefix+"curl-available-01",0,"CLIENT")]
+        records.extend(self.wan_record(prefix+f"online-before-{i:02d}",28,"000") for i in range(1,5))
+        log="\n".join(records+["S2_NATIVE_EXTERNAL_IPV4_WAN_BASELINE=UNVERIFIED","P1B_SCOPED_PUBLIC_IPV4_TLS=UNVERIFIED"])
+        self.assertEqual(verify_public_wan(self.read,self.project,self.actor,self.uuid,log),"UNVERIFIED")
+        with self.assertRaises(AssertionError):
+            verify_public_wan(self.read,self.project,self.actor,self.uuid,log.replace("P1B_SCOPED_PUBLIC_IPV4_TLS=UNVERIFIED","S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS"))
 
     def test_history_count_and_original_cancel(self):
         for i in range(132):

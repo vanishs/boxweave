@@ -88,6 +88,54 @@ def verify_originals(read, project, actor, actor2):
     return out + cross
 
 
+def verify_public_wan(read, project, actor, uuid, log):
+    prefix="native-s2-wan-"
+    client=prefix+"curl-available-01"
+    online=[prefix+f"online-before-{i:02d}" for i in range(1,5)]
+    offline=prefix+"offline-01"
+    restored=prefix+"online-after-01"
+    keys=[client,*online,offline,restored]
+    records={}
+    for line in log.splitlines():
+        if not line.startswith("S2_NATIVE_PUBLIC_IPV4_ORIGINAL "):
+            continue
+        _,key,oid,native,tracking,box,exit_text,status=line.split()
+        assert key in keys and key not in records
+        code=int(exit_text)
+        assert re.fullmatch(r"[0-9]{3}|CLIENT|UNREADABLE",status)
+        row=by_key(read,key)
+        assert len(row)==1
+        assert row[0][:10]==(oid,tracking,actor,actor,project,"box_exec","SUCCEEDED",uuid,uuid,native)
+        assert box==uuid and native and tracking
+        assert read("SELECT exit_code FROM exec_outputs WHERE operation_id=?",(oid,))==[(code,)]
+        records[key]=(code,status)
+    assert set(records)=={k for k in keys if by_key(read,k)}
+    assert client in records and records[client][1]=="CLIENT"
+    def positive(key):
+        code,status=records[key]
+        return code==0 and bool(re.fullmatch(r"2[0-9]{2}",status))
+    tested=[k for k in online if k in records]
+    assert tested==online[:len(tested)]
+    if records[client][0]!=0:
+        assert not tested and "S2_NATIVE_EXTERNAL_IPV4_WAN_CURL=UNVERIFIED_MISSING_CLIENT" in log.splitlines()
+        success=False
+    else:
+        assert tested
+        success=positive(tested[-1])
+        assert not any(positive(k) for k in tested[:-1])
+        assert success or len(tested)==len(online)
+    if success:
+        assert records.get(offline, (0,""))[0]!=0 and records[offline][1]=="000"
+        assert restored in records and positive(restored)
+        assert "S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS" in log.splitlines()
+        assert "P1B_SCOPED_PUBLIC_IPV4_TLS=UNVERIFIED" not in log.splitlines()
+        return "PASS"
+    assert offline not in records and restored not in records
+    assert "S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS" not in log.splitlines()
+    assert "P1B_SCOPED_PUBLIC_IPV4_TLS=UNVERIFIED" in log.splitlines()
+    return "UNVERIFIED"
+
+
 def main(project, candidate_sha, phase, *args):
     assert os.geteuid() == 0 and os.environ.get("GITHUB_ACTIONS") == "true"
     assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
@@ -110,6 +158,15 @@ def main(project, candidate_sha, phase, *args):
         assert not args
         for r in rows("SELECT id,tracking_id,action,state,native_operation_id,error_class FROM operations WHERE state='UNKNOWN' ORDER BY id"):
             print("P1B_SCOPED_S2_UNKNOWN", *r)
+        return
+    if phase == "wan":
+        assert len(args)==2
+        actor,logpath=args
+        original=by_key(rows,KEYS[0][0])
+        assert len(original)==1
+        result=verify_public_wan(rows,project,actor,original[0][7],Path(logpath).read_text())
+        print("P1B_SCOPED_PUBLIC_IPV4_TLS_INDEPENDENT="+result)
+        print("P1B_SCOPED_PUBLIC_IPV4_TLS_ORIGINAL_EVIDENCE=PASS")
         return
     if phase == "foreign":
         assert len(args) == 2 and native_names() == [MAIN]

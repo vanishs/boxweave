@@ -12,7 +12,7 @@ class QuotaBoundaryTests(unittest.TestCase):
         env = dict(os.environ, GITHUB_ACTIONS="false", RUNNER_ENVIRONMENT="local")
         for name in ("s2_ext4_quota_pool_lab.sh", "s2_mcp_quota_witness.sh",
                      "pr191_scoped_s2_quota.sh", "pr191_scoped_s2_direct_quota.sh",
-                     "s2_native_guest_quota_witness.sh"):
+                     "s2_native_guest_quota_witness.sh", "pr191_scoped_noquota_lab.sh"):
             with self.subTest(name=name):
                 result = subprocess.run(["sh", "-e", str(ROOT / "scripts" / name)],
                                         env=env, capture_output=True, timeout=5)
@@ -42,6 +42,16 @@ class QuotaBoundaryTests(unittest.TestCase):
         self.assertIn("P1B_SCOPED_DIRECT_NATIVE_NO_SYNTHETIC_MCP_RECEIPTS=PASS", direct)
         self.assertNotIn("incus delete", direct)
         self.assertIn("quota_mcp cleanup", direct)
+        noquota=(ROOT/"scripts/pr191_scoped_noquota_lab.sh").read_text()
+        self.assertIn("-O ^quota,^project",noquota)
+        self.assertIn("P1B_SCOPED_NOQUOTA_SEPARATE_EXT4_NO_PROJECT_QUOTA=PASS",noquota)
+        self.assertLess(n2.index(". scripts/pr191_scoped_noquota_lab.sh"),n2.index("sudo sh install.sh --plan --scoped-peer-fresh"))
+        self.assertIn("P1B_SCOPED_NOQUOTA_INSTALLED_ROOT_AND_RESTRICTED_WARNING=PASS",n2)
+        self.assertIn("P1B_SCOPED_INDEPENDENT_EDQUOT_REAL_KERNEL_REFUSAL=PASS",native)
+        self.assertIn("Disk quota exceeded",native)
+        self.assertIn("setpriv --bounding-set=-sys_resource --nnp",native)
+        self.assertIn('test "$physical_available" -gt',native)
+
 
 
 if __name__ == "__main__":

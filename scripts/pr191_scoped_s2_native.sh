@@ -64,6 +64,12 @@ test -z "$(sudo incus list --all-projects -c n -f csv)"
 (umask 022; sh scripts/s2_p1_simulated_wan_lab.sh setup "$work" "$project")
 ca="$(base64 -w0 "$work/s2-simwan-cert.pem")"
 test -n "$ca"
+# Host direct TLS is a separate environment control, never Guest PASS.
+host_status=UNVERIFIED
+if host_code="$(curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -fsS --connect-timeout 4 --max-time 8 -o /dev/null -w '%{http_code}' https://example.com)" && printf '%s\n' "$host_code" | grep -Ex '2[0-9]{2}' >/dev/null; then
+  host_status=PASS
+fi
+echo "P1B_SCOPED_PUBLIC_IPV4_TLS_HOST_CONTROL=$host_status"
 start_log="$(date --iso-8601=seconds)"
 BW_S2_INSTALLED_SCOPED_NATIVE=1 BW_S2_MCP_URL=http://127.0.0.1:18650/mcp \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_PEER_TOKEN="$peer" BW_S2_ADMIN2_TOKEN="$admin2" \
@@ -118,6 +124,7 @@ if ! wait "$probe_pid"; then
 fi
 cat "$work/probe.log"
 grep -Fxq P1B_SCOPED_S2_NATIVE_PROBE=PASS "$work/probe.log"
+sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_scoped_s2_native.py "$project" "$candidate_sha" wan "$admin_id" "$work/probe.log"
 sh scripts/s2_p1_simulated_wan_lab.sh verify-scoped "$work" "$project"
 sh scripts/s2_p1_simulated_wan_lab.sh cleanup "$work" "$project"
 sudo journalctl --unit boxweave.service --since "$start_log" --no-pager > "$work/service.redacted.log"

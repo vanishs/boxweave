@@ -124,3 +124,37 @@ PY
 )"
 test "$quota_used_reclaimed" -lt $((quota_used_output - quota_fill_bytes / 2))
 test "$(sudo incus config get "$quota_name" volatile.uuid --project "$project")" = "$quota_uuid"
+# Independent kernel refusal on the same exact owned volume after reclaim.
+# The legacy 3GiB probe remains unchanged. Only the installed one-use
+# Scoped runner executes this additional oracle, with physical headroom.
+if [ "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1 ]; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  test "$(sudo incus config device get "$quota_name" root size --project "$project")" = 2GiB
+  test "$(sudo stat -Lc '%d' "$native_quota_spool")" = "$(sudo stat -Lc '%d' "$work/mounted/native-pool")"
+  edquot_bytes=$((quota_limit + 4194304))
+  physical_available="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
+  host_available="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+  test "$physical_available" -gt $((edquot_bytes + 268435456))
+  test "$host_available" -gt $((edquot_bytes + 4294967296))
+  edquot_file="$native_quota_spool/.boxweave-p1b-independent-edquot"
+  sudo test ! -e "$edquot_file"
+  sudo test ! -L "$edquot_file"
+  edquot_rc=0
+  sudo env LC_ALL=C timeout 40s setpriv --bounding-set=-sys_resource --nnp -- fallocate -l "$edquot_bytes" "$edquot_file" > "$work/direct-edquot.log" 2>&1 || edquot_rc=$?
+  if [ "$edquot_rc" -eq 0 ] || ! grep -Fq 'Disk quota exceeded' "$work/direct-edquot.log"; then
+    echo P1B_SCOPED_INDEPENDENT_EDQUOT_NOT_PROVED >&2
+    exit 106
+  fi
+  sudo rm -- "$edquot_file"
+  sudo test ! -e "$edquot_file"
+  sudo incus query "$quota_state_url" > "$work/direct-edquot-after.json"
+  python3 - "$work/direct-edquot-after.json" "$quota_limit" "$quota_used_reclaimed" <<'EDQUOT'
+import json,sys
+v=json.load(open(sys.argv[1]))
+u=v.get("metadata",v)["usage"]
+assert int(u["total"])==int(sys.argv[2])
+assert int(u["used"])<=int(sys.argv[2])
+assert int(u["used"])<=int(sys.argv[3])+1048576
+print("P1B_SCOPED_INDEPENDENT_EDQUOT_REAL_KERNEL_REFUSAL=PASS")
+EDQUOT
+fi

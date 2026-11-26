@@ -110,7 +110,7 @@ func guestRead(ctx context.Context, session *mcp.ClientSession, uuid, key, comma
 		"idempotency_key": key,
 	})
 	opID := id(request)
-	wait(ctx, session, opID)
+	final := wait(ctx, session, opID)
 	result := call(ctx, session, "operation_output_get", map[string]any{
 		"operation_id": opID, "stream": "stdout", "limit": 4096,
 	})
@@ -121,7 +121,25 @@ func guestRead(ctx context.Context, session *mcp.ClientSession, uuid, key, comma
 	}
 	exit, ok := result["exit_code"].(float64)
 	check(ok, "native guest network probe returned no actual exit code")
+	if strings.HasPrefix(key, "native-s2-wan-") {
+		check(field(final, "box_uuid") == uuid && field(final, "incarnation") == uuid &&
+			len(field(final, "native_operation_id")) == 36 && len(field(final, "tracking_id")) == 32,
+			"public WAN probe lacks exact original/native/Box identity")
+		status := strings.TrimSpace(string(body))
+		if key == "native-s2-wan-curl-available-01" {
+			status = "CLIENT"
+		} else if len(status) != 3 || strings.Trim(status, "0123456789") != "" {
+			status = "UNREADABLE"
+		}
+		fmt.Println("S2_NATIVE_PUBLIC_IPV4_ORIGINAL", key, opID, field(final, "native_operation_id"), field(final, "tracking_id"), uuid, int(exit), status)
+	}
 	return strings.TrimSpace(string(body)), int(exit)
+}
+
+// Count only a complete successful HTTPS status, never a prefix or proxy.
+func publicHTTP2xx(body string) bool {
+	body = strings.TrimSpace(body)
+	return len(body) == 3 && body[0] == '2' && body[1] >= '0' && body[1] <= '9' && body[2] >= '0' && body[2] <= '9'
 }
 
 // Wait for guest DHCP/RA to converge after native Running. This is a LAB
@@ -1216,8 +1234,8 @@ func main() {
 		} {
 			body, status := guestRead(ctx, admin, uuid,
 				fmt.Sprintf("native-s2-wan-online-before-%02d", i+1),
-				"curl -4 -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+candidate)
-			if status == 0 && strings.HasPrefix(strings.TrimSpace(body), "2") {
+				"curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+candidate)
+			if status == 0 && publicHTTP2xx(body) {
 				externalURL = candidate
 				externalSupported = true
 				break
@@ -1293,10 +1311,10 @@ func main() {
 		"isolated HTTPS destination reachable with the Box's internet=false")
 	fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED=PASS")
 	if externalSupported {
-		_, publicOfflineExit := guestRead(ctx, admin, uuid,
+		publicOffline, publicOfflineExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-offline-01",
-			"curl -4 -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
-		check(publicOfflineExit != 0, "public HTTPS reached WAN despite internet=false")
+			"curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
+		check(publicOfflineExit != 0 && strings.TrimSpace(publicOffline) == "000", "public HTTPS received response despite internet=false")
 	}
 	online := call(ctx, admin, "box_update", map[string]any{
 		"box_id": uuid, "internet": true,
@@ -1332,8 +1350,8 @@ func main() {
 	if externalSupported {
 		publicOnline, publicExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-online-after-01",
-			"curl -4 -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
-		check(publicExit == 0 && strings.HasPrefix(strings.TrimSpace(publicOnline), "2"),
+			"curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
+		check(publicExit == 0 && publicHTTP2xx(publicOnline),
 			"public WAN did not recover after internet=true")
 		fmt.Println("S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS")
 	}

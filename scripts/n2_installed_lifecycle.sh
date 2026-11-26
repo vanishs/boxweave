@@ -69,6 +69,10 @@ project="user-$uid"
 bridge="incusbr-$uid"
 test "$(sudo incus project get "$project" restricted)" = true
 test -z "$(sudo incus list --all-projects -c n -f csv)"
+if test "${P1B_S2_NOQUOTA:-0}" = 1; then
+  test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 0
+  . scripts/pr191_scoped_noquota_lab.sh
+fi
 if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   # Select the original independent quota fixture before the fresh review,
@@ -207,6 +211,25 @@ print("PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS",flush=True)
 D1CHECK
 test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
 echo PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS
+if test "${P1B_S2_NOQUOTA:-0}" = 1; then
+  test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-noquota-pool
+  test "$(sudo incus storage get bw-s2-noquota-pool source)" = "$work/noquota-mounted/native-pool"
+  test "$(findmnt -n -o SOURCE --mountpoint "$work/noquota-mounted")" = "$noquota_loop"
+  test "$(stat -Lc '%d' "$work/noquota-mounted/native-pool")" != "$(stat -Lc '%d' /)"
+  python3 - "$work/d1-root.json" "$work/d1-boxweave.json" "$first" "$commit" <<'NOQUOTA'
+import json,sys
+for path in sys.argv[1:3]:
+    d=json.load(open(path))
+    n=d["native"]
+    assert d["ready"] is True and n["ready"] is True
+    assert d["commit"]==sys.argv[4]
+    assert n["selected_storage_pool_ready"] is True and n["selected_storage_quota_verified"] is False
+    assert any("STORAGE_QUOTA_UNVERIFIED" in w for w in n["warnings"])
+print("P1B_SCOPED_NOQUOTA_INSTALLED_ROOT_AND_RESTRICTED_WARNING=PASS")
+NOQUOTA
+  test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$first"
+  test -z "$(sudo incus list --all-projects -c n -f csv)"
+fi
 d3_absent="d1-$(printf '%064d' 0)"
 d3_rc=0
 sudo "$installed" recover --plan --issue "$d3_absent" -project "$project" > "$work/d3-absent.json" || d3_rc=$?
@@ -232,6 +255,13 @@ sudo systemctl is-active --quiet boxweave.service
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
 sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test "${P1B_S2_NOQUOTA:-0}" = 1; then
+  test -z "$(sudo incus list --all-projects -c n -f csv)"
+  test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-noquota-pool
+  sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service
+  echo P1B_SCOPED_NOQUOTA_INSTALLED_LIFECYCLE_NATIVE_ABSENCE=PASS
+  exit 0
+fi
 if test "${P1B_S2_AUTH_RACES:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/s2_p1_operation_list_boundary_probe.go
