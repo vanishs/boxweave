@@ -82,6 +82,11 @@ setup)
   sudo truncate -s 0 "$log"
   echo "S2_NATIVE_SIMULATED_WAN_NAMESPACE_ROUTE_VERIFIED_TLS=PASS"
   ;;
+verify-scoped)
+  test -f "$log"
+  test ! -s "$log"
+  echo "P1B_SCOPED_RESERVED_WAN_INDEPENDENT_ZERO_HITS=PASS"
+  ;;
 verify)
   test -f "$log"
   test "$(wc -l < "$log")" -eq 2

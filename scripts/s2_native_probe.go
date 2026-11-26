@@ -1251,21 +1251,28 @@ func main() {
 		"--connect-timeout 3 --max-time 8 https://s2-wan.example.test:18443/s2-probe"
 	simulatedBefore, simulatedBeforeExit := guestRead(ctx, admin, uuid,
 		"native-s2-simulated-wan-online-before-01", simulatedWANRequest+" 2>&1")
-	if simulatedBeforeExit != 0 || simulatedBefore != "S2_SIMULATED_WAN_HTTPS_OK" {
-		route, _ := guestRead(ctx, admin, uuid, "native-s2-simulated-wan-routed-guest-diag-01",
-			"ip -4 route get 198.18.0.2; ip -4 route show default; ip -4 addr show dev eth0")
-		if len(route) > 700 {
-			route = route[:700]
+	if installed {
+		// The benchmark subnet is deliberately forbidden by Scoped ACL.
+		check(simulatedBeforeExit != 0 && simulatedBefore != "S2_SIMULATED_WAN_HTTPS_OK",
+			"Scoped internet=true reached reserved IPv4 destination")
+		fmt.Println("P1B_SCOPED_RESERVED_WAN_TLS_ON_DENIED=PASS")
+	} else {
+		if simulatedBeforeExit != 0 || simulatedBefore != "S2_SIMULATED_WAN_HTTPS_OK" {
+			route, _ := guestRead(ctx, admin, uuid, "native-s2-simulated-wan-routed-guest-diag-01",
+				"ip -4 route get 198.18.0.2; ip -4 route show default; ip -4 addr show dev eth0")
+			if len(route) > 700 {
+				route = route[:700]
+			}
+			if len(simulatedBefore) > 700 {
+				simulatedBefore = simulatedBefore[:700]
+			}
+			fmt.Fprintf(os.Stderr, "S2_P1_SIMULATED_WAN_GUEST_DIAG: exit=%d curl=%q route=%q\\n",
+				simulatedBeforeExit, simulatedBefore, route)
 		}
-		if len(simulatedBefore) > 700 {
-			simulatedBefore = simulatedBefore[:700]
-		}
-		fmt.Fprintf(os.Stderr, "S2_P1_SIMULATED_WAN_GUEST_DIAG: exit=%d curl=%q route=%q\\n",
-			simulatedBeforeExit, simulatedBefore, route)
+		check(simulatedBeforeExit == 0 && simulatedBefore == "S2_SIMULATED_WAN_HTTPS_OK",
+			"isolated routed HTTPS WAN emulator has no independent positive TLS baseline")
+		fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_POSITIVE_TLS_BEFORE=PASS")
 	}
-	check(simulatedBeforeExit == 0 && simulatedBefore == "S2_SIMULATED_WAN_HTTPS_OK",
-		"isolated routed HTTPS WAN emulator has no independent positive TLS baseline")
-	fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_POSITIVE_TLS_BEFORE=PASS")
 
 	// Real IPv4 traffic must change with the per-Box internet flag, while
 	// the separate private-peer default ingress denial remains unchanged.
@@ -1310,9 +1317,18 @@ func main() {
 	fmt.Println("S2_NATIVE_PACKET_INTERNET_ON_DOES_NOT_UNBLOCK_PEERS=PASS")
 	simulatedAfter, simulatedAfterExit := guestRead(ctx, admin, uuid,
 		"native-s2-simulated-wan-online-after-01", simulatedWANRequest)
-	check(simulatedAfterExit == 0 && simulatedAfter == "S2_SIMULATED_WAN_HTTPS_OK",
-		"isolated routed HTTPS WAN failed to recover after re-enabling Internet")
-	fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST=PASS")
+	if installed {
+		check(simulatedAfterExit != 0 && simulatedAfter != "S2_SIMULATED_WAN_HTTPS_OK",
+			"Scoped internet re-enable reached reserved IPv4 destination")
+		fmt.Println("P1B_SCOPED_RESERVED_WAN_TLS_OFF_ON_DENIED=PASS")
+		if !externalSupported {
+			fmt.Println("P1B_SCOPED_PUBLIC_IPV4_TLS=UNVERIFIED")
+		}
+	} else {
+		check(simulatedAfterExit == 0 && simulatedAfter == "S2_SIMULATED_WAN_HTTPS_OK",
+			"isolated routed HTTPS WAN failed to recover after re-enabling Internet")
+		fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST=PASS")
+	}
 	if externalSupported {
 		publicOnline, publicExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-online-after-01",
@@ -1569,8 +1585,9 @@ func main() {
 	check(nativeProgressNotifications.Load() == 0,
 		"native async operation emitted unexpected MCP progress notification")
 	fmt.Println("S2_NATIVE_ASYNC_PROGRESS_OPTIONAL_NO_FAKE_EVENTS=PASS")
-	fmt.Println("S2_NATIVE_END_TO_END=PASS")
 	if installed {
 		fmt.Println("P1B_SCOPED_S2_NATIVE_PROBE=PASS")
+	} else {
+		fmt.Println("S2_NATIVE_END_TO_END=PASS")
 	}
 }

@@ -118,7 +118,7 @@ if ! wait "$probe_pid"; then
 fi
 cat "$work/probe.log"
 grep -Fxq P1B_SCOPED_S2_NATIVE_PROBE=PASS "$work/probe.log"
-sh scripts/s2_p1_simulated_wan_lab.sh verify "$work" "$project"
+sh scripts/s2_p1_simulated_wan_lab.sh verify-scoped "$work" "$project"
 sh scripts/s2_p1_simulated_wan_lab.sh cleanup "$work" "$project"
 sudo journalctl --unit boxweave.service --since "$start_log" --no-pager > "$work/service.redacted.log"
 if grep -Fq S2_P1_META_REDACTION_SENTINEL_110 "$work/service.redacted.log"; then

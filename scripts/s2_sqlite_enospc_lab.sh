@@ -25,6 +25,8 @@ sqlite_full_loop="$(sudo losetup --find --show "$sqlite_full_backing")"
 sudo mkfs.ext4 -F -q "$sqlite_full_loop"
 sqlite_full_dir="$work/sqlite-full/fsync-ledger"
 mkdir -p "$sqlite_full_dir"
+# The caller uses umask 077; traverse only this test-specific parent.
+chmod 0711 "$work/sqlite-full"
 sudo mount -t ext4 -o nodev,nosuid "$sqlite_full_loop" "$sqlite_full_dir"
 sudo chown boxweave:incus "$sqlite_full_dir"
 sudo chmod 0700 "$sqlite_full_dir"
