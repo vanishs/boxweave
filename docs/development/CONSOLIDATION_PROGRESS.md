@@ -512,3 +512,5 @@ P1-06d19: [source separation checkpoint](CONSOLIDATION_P1_06D19_CHECKPOINT.md). 
 P1-06d20: [source separation checkpoint](CONSOLIDATION_P1_06D20_CHECKPOINT.md). See exact evidence and remaining gates; no phase closure.
 
 P1-06d21: [source separation checkpoint](CONSOLIDATION_P1_06D21_CHECKPOINT.md). See exact evidence and remaining gates; no phase closure.
+
+P1b alternate-pool: [integration checkpoint](CONSOLIDATION_P1B_ALTPOOL_CHECKPOINT.md). Recovered original source; Box-verified candidate, installed CI pending. C03/C05/C11 retained. No waiver.

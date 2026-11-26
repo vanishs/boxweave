@@ -60,6 +60,10 @@ on:
       - scripts/pr191_scoped_s2_retention.sh
       - scripts/pr191_scoped_s2_quota.sh
       - scripts/pr191_scoped_noquota_lab.sh
+      - scripts/pr191_scoped_altpool.py
+      - scripts/s2_p2_alternate_pool_setup.sh
+      - scripts/s2_p2_alternate_pool_probe.go
+      - scripts/test_pr191_scoped_altpool.py
       - scripts/pr191_scoped_s2_direct_quota.sh
       - scripts/s2_native_guest_quota_witness.sh
       - scripts/s2_native_guest_quota_probe.go
@@ -134,7 +138,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-update-ack-wal-before, scoped-update-ack-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec, scoped-stop-ack, scoped-overlap]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-update-ack-wal-before, scoped-update-ack-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec, scoped-stop-ack, scoped-overlap, scoped-altpool]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
@@ -150,6 +154,7 @@ jobs:
       P1B_S2_AUTH_RACES: ${{ matrix.mode == 'scoped-auth-races' && '1' || '0' }}
       P1B_S2_PHYSICAL_QUOTA: ${{ matrix.mode == 'scoped-physical-quota' && '1' || '0' }}
       P1B_S2_NOQUOTA: ${{ matrix.mode == 'scoped-noquota' && '1' || '0' }}
+      P1B_S2_ALTPOOL: ${{ matrix.mode == 'scoped-altpool' && '1' || '0' }}
       P1B_S2_UPDATE_TRANSPORT: ${{ matrix.mode == 'scoped-update-transport' && '1' || '0' }}
       P1B_S2_RETENTION: ${{ matrix.mode == 'scoped-exec-retention' && '1' || '0' }}
       P1B_S2_NATIVE: ${{ matrix.mode == 'scoped-s2-native' && '1' || '0' }}
@@ -188,6 +193,12 @@ jobs:
           for marker in ACTIVE_EMPTY OFFLINE_EMPTY UNTRUSTED_OBSERVER_NONROOT UNSAFE_STATE_STALE NEGATIVE_NO_EFFECT; do
             grep -Fxq "PR188_H1B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
           done
+          if test "$P1B_S2_ALTPOOL" = 1; then
+            for marker in PR178_N2_INSTALL PR178_N2_FRESH_ONLY S2_NATIVE_EXT4_PROJECT_QUOTA_BACKING_CONFIGURED S2_P2_ALTERNATE_MOUNTED_EXT4_QUOTA_PROFILE_SELECTED S2_P2_ALTERNATE_SELECTED_PROFILE_POOL_DEFAULT_TEN_GIB S2_P2_ALTERNATE_POOL_LIVE_EXPANDED_ROOT_MATCHES_UUID_POOL_QUOTA S2_P2_ALTERNATE_POOL_NO_EXPLICIT_SELECTION_NO_RESIDUAL_BOX P1B_SCOPED_ALTPOOL_FIXED_LEDGER_AND_NO_RESIDUAL_VOLUME; do
+              grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            exit 0
+          fi
           if test "$P1B_S2_AUTH_RACES" = 1; then
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"

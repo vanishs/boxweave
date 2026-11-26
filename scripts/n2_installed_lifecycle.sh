@@ -71,15 +71,24 @@ test "$(sudo incus project get "$project" restricted)" = true
 test -z "$(sudo incus list --all-projects -c n -f csv)"
 if test "${P1B_S2_NOQUOTA:-0}" = 1; then
   test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 0
+  test "${P1B_S2_ALTPOOL:-0}" = 0
   . scripts/pr191_scoped_noquota_lab.sh
 fi
-if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1; then
+if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1 || test "${P1B_S2_ALTPOOL:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
+  test "${P1B_S2_NOQUOTA:-0}" = 0
+  if test "${P1B_S2_ALTPOOL:-0}" = 1; then
+    test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 0
+  fi
   # Select the original independent quota fixture before the fresh review,
   # never alter an installed or populated Scoped Project.
   . scripts/s2_ext4_quota_pool_lab.sh
   sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
   test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-native-pool
+  if test "${P1B_S2_ALTPOOL:-0}" = 1; then
+    test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 0
+    . scripts/s2_p2_alternate_pool_setup.sh
+  fi
 fi
 if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$work/candidate-a" --sha256 "$first" > "$work/scoped-plan.txt"
@@ -260,6 +269,11 @@ if test "${P1B_S2_NOQUOTA:-0}" = 1; then
   test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-noquota-pool
   sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service
   echo P1B_SCOPED_NOQUOTA_INSTALLED_LIFECYCLE_NATIVE_ABSENCE=PASS
+  exit 0
+fi
+if test "${P1B_S2_ALTPOOL:-0}" = 1; then
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-altpool-probe" ./scripts/s2_p2_alternate_pool_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_altpool.py "$project" "$work/actor.receipt" "$first"
   exit 0
 fi
 if test "${P1B_S2_AUTH_RACES:-0}" = 1; then

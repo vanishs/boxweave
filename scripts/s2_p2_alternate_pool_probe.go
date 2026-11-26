@@ -65,21 +65,32 @@ func main() {
 	dir := os.Getenv("BW_S2_ALT_LAB")
 	token := os.Getenv("BW_S2_ALT_TOKEN")
 	project := os.Getenv("BW_S2_ALT_PROJECT")
+	scoped := os.Getenv("BW_S2_ALT_SCOPED") == "1"
+	endpoint := "http://127.0.0.1:18666/mcp"
+	prefix := "/tmp/bw-v1-s2-ghci."
+	if scoped {
+		prefix = "/tmp/bw-n2-installed."
+		endpoint = "http://127.0.0.1:18650/mcp"
+		assert(project == fmt.Sprintf("user-%d", os.Geteuid()), "restricted project UID mismatch")
+	}
 	assert(os.Geteuid() != 0 && os.Getenv("GITHUB_ACTIONS") == "true" &&
 		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" &&
-		filepath.Base(dir) == "p2-alt-pool" && strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci.") &&
+		filepath.Base(dir) == "p2-alt-pool" && strings.HasPrefix(dir, prefix) &&
 		strings.HasPrefix(project, "user-") && strings.HasPrefix(token, "bw1_"),
 		"only single-use restricted CI")
 	ctx, cancel := context.WithTimeout(context.Background(), 170*time.Second)
 	defer cancel()
 	cli := mcp.NewClient(&mcp.Implementation{Name: "s2-p2-alternate-root-profile", Version: "1"}, nil)
-	s, e := cli.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "http://127.0.0.1:18666/mcp",
+	s, e := cli.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint,
 		HTTPClient:           &http.Client{Transport: tokenTransport{token}},
 		DisableStandaloneSSE: true, MaxRetries: -1}, nil)
 	assert(e == nil && s != nil, "independent MCP connection failed")
 	defer s.Close()
 	status, e := call(ctx, s, "host_status", map[string]any{})
 	assert(e == nil, "alternate pool host status inaccessible")
+	if scoped {
+		assert(status["peer_mode"] == "SCOPED_V2", "not installed Scoped runtime")
+	}
 	native := child(status, "native")
 	// Only Incus/native evidence (checked separately by this test) can prove
 	// quota enforcement. The MCP readiness result is deliberately neutral.
@@ -114,7 +125,13 @@ func main() {
 		field(box, "native_state") == "Stopped" &&
 		field(box, "root_disk_size") == "10GiB",
 		"omitted disk default not observed as exact 10GiB native root")
-	data, e := json.Marshal(map[string]string{"box_id": uuid, "create_id": field(receipt, "operation_id")})
+	original := map[string]string{"box_id": uuid, "create_id": field(receipt, "operation_id")}
+	if scoped {
+		assert(field(created, "incarnation") == uuid && len(field(created, "native_operation_id")) == 36 && len(field(created, "tracking_id")) == 32, "exact Create identity")
+		original["create_native"] = field(created, "native_operation_id")
+		original["create_tracking"] = field(created, "tracking_id")
+	}
+	data, e := json.Marshal(original)
 	assert(e == nil && os.WriteFile(filepath.Join(dir, "original.json"), data, 0600) == nil, "save exact native witness")
 	// Retain the *live* instance until an independent Incus administrator
 	// confirms expanded root device, actual UUID and selected pool, rather
@@ -134,7 +151,15 @@ func main() {
 	del, e := call(ctx, s, "box_delete", map[string]any{
 		"box_id": uuid, "idempotency_key": "s2-altpool-original-delete"})
 	assert(e == nil && len(field(del, "operation_id")) == 32, "exact owned alt Box not deletable")
-	completed(ctx, s, field(del, "operation_id"))
+	deleted := completed(ctx, s, field(del, "operation_id"))
+	if scoped {
+		assert(field(deleted, "box_uuid") == uuid && field(deleted, "incarnation") == uuid && len(field(deleted, "native_operation_id")) == 36 && len(field(deleted, "tracking_id")) == 32, "exact Delete identity")
+		original["delete_id"] = field(del, "operation_id")
+		original["delete_native"] = field(deleted, "native_operation_id")
+		original["delete_tracking"] = field(deleted, "tracking_id")
+		data, e = json.Marshal(original)
+		assert(e == nil && os.WriteFile(filepath.Join(dir, "final.json"), data, 0600) == nil, "save Delete original")
+	}
 	empty, e := call(ctx, s, "box_list", map[string]any{})
 	boxes, _ := empty["boxes"].([]any)
 	assert(e == nil && len(boxes) == 0, "owned Box left after exact deletion")
