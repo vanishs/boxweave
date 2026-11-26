@@ -50,10 +50,22 @@ func call(ctx context.Context, s *mcp.ClientSession, n string, args map[string]a
 		// An independently known native UUID is not locally owned before
 		// the atomic claim+terminal commit. Require this exact refusal;
 		// transport/internal failures cannot count as ownership safety.
-		encoded, encodeErr := json.Marshal(r.Content)
-		must(encodeErr == nil && strings.Contains(string(encoded),
-			state.ErrNotFound.Error()),
-			"unexpected error instead of unbound-UUID refusal on "+n)
+		// Match the public redacted ToolFailure, not the private store's
+		// ErrNotFound string. The independent ledger check below still
+		// requires zero Delete admissions and the unchanged original.
+		must(len(r.Content) == 1, "unexpected refusal content count on "+n)
+		part, ok := r.Content[0].(*mcp.TextContent)
+		var refusal struct {
+			Code      string `json:"code"`
+			Category  string `json:"category"`
+			Admission string `json:"admission"`
+		}
+		must(ok && json.Unmarshal([]byte(part.Text), &refusal) == nil,
+			"missing typed ownership refusal on "+n)
+		must(refusal.Code == "BOX_NOT_FOUND_OR_NOT_OWNED" &&
+			refusal.Category == "AUTHORIZATION_OR_ABSENCE" &&
+			refusal.Admission == "UNVERIFIED",
+			"unexpected typed refusal instead of unbound-UUID refusal on "+n)
 		return nil, false
 	}
 	b, e := json.Marshal(r.StructuredContent)

@@ -170,3 +170,37 @@ func TestRC8PeerScopeRefusalPreservesFailClosedClass(t *testing.T) {
 		t.Fatalf("invalid arguments were misclassified as peer-scope lock: %v", got)
 	}
 }
+
+// The S2 native overlap probe consumes the public error envelope rather than
+// the private SQLite error. This source-only case exercises the real SDK.
+func TestRC8DeleteUnownedUUIDPublicRefusal(t *testing.T) {
+	_, server, admin, _ := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	client := mcp.NewClient(&mcp.Implementation{Name: "rc8-delete-refusal", Version: "1"}, nil)
+	sess, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint: server.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{
+			base: http.DefaultTransport, token: admin,
+		}}, DisableStandaloneSSE: true, MaxRetries: -1,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+	result, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: "box_delete", Arguments: map[string]any{
+		"box_id":          "00000000-0000-4000-8000-000000000001",
+		"idempotency_key": "rc8-unowned-delete-refusal",
+	}})
+	if err != nil || result == nil || !result.IsError || len(result.Content) != 1 {
+		t.Fatal("missing public ownership refusal", err)
+	}
+	part, ok := result.Content[0].(*mcp.TextContent)
+	var f ToolFailure
+	if !ok || json.Unmarshal([]byte(part.Text), &f) != nil {
+		t.Fatal("missing typed failure")
+	}
+	if f.Code != "BOX_NOT_FOUND_OR_NOT_OWNED" || f.Category != "AUTHORIZATION_OR_ABSENCE" ||
+		f.Admission != "UNVERIFIED" || f.Next.Kind != "CHECK_AUTHORIZED_SCOPE" {
+		t.Fatalf("unexpected refusal contract: %s", f.Code)
+	}
+}
