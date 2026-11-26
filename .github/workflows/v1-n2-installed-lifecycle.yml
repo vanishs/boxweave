@@ -54,6 +54,8 @@ on:
       - scripts/pr178_n2_scoped_lifecycle.py
       - scripts/pr191_scoped_lifecycle_recovery.py
       - scripts/pr191_scoped_ack_loss.py
+      - scripts/pr191_scoped_wal_cut.*
+      - scripts/test_pr191_scoped_wal_cut.py
       - scripts/pr182_scoped_retirement.py
       - scripts/pr188_scoped_roundtrip.py
       - scripts/test_scoped_roundtrip.py
@@ -71,13 +73,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
       PR188_OFFLINE_RETIREMENT: ${{ matrix.mode == 'legacy-offline' && '1' || '0' }}
       PR182_SCOPED_RETIREMENT: ${{ matrix.mode == 'scoped-retirement' && '1' || '0' }}
       P1B_ACK_CUT: ${{ matrix.mode == 'scoped-create-ack' && 'create' || matrix.mode == 'scoped-delete-ack' && 'delete' || '' }}
+      P1B_WAL_CUT: ${{ matrix.mode == 'scoped-create-wal-before' && 'create-before' || matrix.mode == 'scoped-create-wal-after' && 'create-after' || matrix.mode == 'scoped-delete-wal-before' && 'delete-before' || matrix.mode == 'scoped-delete-wal-after' && 'delete-after' || '' }}
       N2_EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -112,6 +115,14 @@ jobs:
           for marker in ACTIVE_EMPTY OFFLINE_EMPTY UNTRUSTED_OBSERVER_NONROOT UNSAFE_STATE_STALE NEGATIVE_NO_EFFECT; do
             grep -Fxq "PR188_H1B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
           done
+          if test -n "$P1B_WAL_CUT"; then
+            grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fq "P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS $P1B_WAL_CUT " "$RUNNER_TEMP/n2-installed.log"
+            grep -Fq "P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS $P1B_WAL_CUT " "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq "P1B_SCOPED_INSTALLED_WAL_CUT=PASS $P1B_WAL_CUT" "$RUNNER_TEMP/n2-installed.log"
+            exit 0
+          fi
           if test -n "$P1B_ACK_CUT"; then
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"

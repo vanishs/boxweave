@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""One-use installed Scoped lifecycle WAL sync process-cut acceptance.
+
+Only the exact CI installation is instrumented. A transaction-local marker
+is written by the original terminal event, with no production hook or
+alternate ledger. The Root service, Incus and guard are never restarted.
+"""
+import hashlib
+import os
+from pathlib import Path
+import pwd
+import re
+import secrets
+import sqlite3
+import subprocess
+import sys
+import time
+
+from mcp_testkit import LoopbackMCP
+from n2_installed_lifecycle import op, pid, token
+from pr177_d4_installed_recovery import wait_mcp_listener
+from pr178_n2_scoped_lifecycle import acls, binding, instance, verify
+from pr191_scoped_ack_loss import guard_identity, native_idle, native_names, wait_poststate
+from pr191_scoped_lifecycle_recovery import journal, rows, settle
+
+CTL = "boxweave.service"
+BIN = Path("/usr/local/bin/boxweave")
+LIB = Path("/usr/local/lib/boxweave-p1b-wal-cut.so")
+DROP = Path("/etc/systemd/system/boxweave.service.d")
+CONF = DROP / "90-pr191-one-use-wal-cut.conf"
+ARM = Path("/var/lib/boxweave/p1b-wal-cut-arm")
+WITNESS = Path("/var/lib/boxweave/p1b-wal-cut-witness")
+NAME = "p1b-wal-original"
+WORK = "p1b/installed-wal-cut"
+TABLE = "p1b_test_wal_marker"
+TRIGGER = "p1b_test_wal_terminal"
+QUARANTINE = "bw-peer-quarantine"
+ARGS = {"name": NAME, "cpu": 1, "memory_mib": 256, "disk_gib": 2,
+        "image": "local:boxweave-ubuntu-24.04", "internet": True, "start": True}
+
+
+def systemctl(*args):
+    return subprocess.check_output(["systemctl", *args], text=True, timeout=60).strip()
+
+
+def marker_setup(action, nonce):
+    # Install the test-only DDL AFTER clean startup, as in the existing
+    # ACK/final-commit fixtures. Never relax the product schema validator.
+    detail = {"box_create": "ORIGINAL_CREATE_UUID_ATOMIC",
+              "box_delete": "SCOPED_DELETE_ACL_ABSENT_ATOMIC"}[action]
+    script = """import sqlite3, sys
+db = sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=rw', uri=True, timeout=10)
+action, detail, work, nonce = sys.argv[1:]
+assert db.execute('PRAGMA journal_mode').fetchone() == ('wal',)
+assert not db.execute("SELECT name FROM sqlite_master WHERE name IN ('p1b_test_wal_marker','p1b_test_wal_terminal')").fetchall()
+assert not db.execute("SELECT id FROM operations WHERE work_ref=?", (work,)).fetchall()
+assert all(v.isascii() and all(c.isalnum() or c in '_/-' for c in v) for v in sys.argv[1:])
+with db:
+    db.execute('CREATE TABLE p1b_test_wal_marker (nonce TEXT NOT NULL, original TEXT NOT NULL)')
+    db.execute("CREATE TRIGGER p1b_test_wal_terminal AFTER INSERT ON operation_events "
+               "WHEN NEW.state='SUCCEEDED' AND NEW.safe_detail='" + detail +
+               "' AND EXISTS(SELECT 1 FROM operations WHERE id=NEW.operation_id AND action='" + action +
+               "' AND work_ref='" + work + "') BEGIN INSERT INTO p1b_test_wal_marker VALUES ('" +
+               nonce + "', NEW.operation_id); END")
+assert db.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone() == (0, 0, 0)
+print(db.execute("SELECT rootpage FROM sqlite_master WHERE name='p1b_test_wal_marker'").fetchone()[0])
+db.close()
+"""
+    page = subprocess.check_output(["runuser", "-u", "boxweave", "--", "python3", "-c", script,
+                                    action, detail, WORK, nonce], text=True, timeout=30).strip()
+    assert page.isdecimal() and int(page) > 0
+    return page
+
+
+def assert_poststate(project, action, oid, uuid, acl):
+    if action == "box_create":
+        assert native_names() == [NAME]
+        raw = instance(project, NAME)
+        assert raw["config"]["volatile.uuid"] == uuid
+        assert raw["config"]["user.boxweave.create_operation"] == oid
+        assert raw["status"] == "Running" and raw["config"]["boot.autostart"] == "true"
+        assert raw["expanded_devices"]["eth0"]["security.acls"] == acl
+        assert acls() == {QUARANTINE, acl}
+    else:
+        assert not native_names() and acls() == {QUARANTINE}
+    assert native_idle(project)
+
+
+def assert_ledger(action, state, oid, uuid, acl, nonce=None):
+    terminal = state == "SUCCEEDED"
+    assert rows("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED'", (oid,)) == [(int(terminal),)]
+    if nonce is not None:
+        assert rows("SELECT nonce,original FROM " + TABLE) == ([(nonce, oid)] if terminal else [])
+    else:
+        assert not rows("SELECT name FROM sqlite_master WHERE name IN (?,?)", (TABLE, TRIGGER))
+    if action == "box_create":
+        assert rows("SELECT state FROM owned_boxes WHERE uuid=?", (uuid,)) == ([("OWNED",)] if terminal else [])
+        assert rows("SELECT state,acl FROM network_bindings WHERE box_uuid=?", (uuid,)) == ([("PINNED", acl)] if terminal else [])
+        assert rows("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family", (uuid,)) == ([("RESERVED", oid)] * 2 if terminal else [])
+        if not terminal:
+            assert rows("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", (oid,)) == [(5,)]
+    else:
+        assert rows("SELECT state FROM owned_boxes WHERE uuid=?", (uuid,)) == [("DELETED" if terminal else "OWNED",)]
+        assert binding(uuid)["state"] == ("RELEASED" if terminal else "PINNED")
+        fences = rows("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family", (uuid,))
+        assert len(fences) == 2 and all(f[0] == ("RELEASED" if terminal else "RESERVED") for f in fences)
+        if terminal:
+            assert all(f[1] == oid for f in fences)
+        else:
+            assert rows("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", (oid,))[0][0] > 0
+
+
+def main(project, receipt, candidate_sha, case):
+    assert os.geteuid() == 0 and os.environ.get("GITHUB_ACTIONS") == "true"
+    assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+    kind, phase = case.split("-")
+    assert kind in ("create", "delete") and phase in ("before", "after")
+    assert project == "user-" + str(pwd.getpwnam("boxweave").pw_uid)
+    assert hashlib.sha256(BIN.read_bytes()).hexdigest() == candidate_sha
+    assert not any(os.path.lexists(p) for p in (DROP, LIB, ARM, WITNESS))
+    assert not systemctl("show", CTL, "-p", "DropInPaths", "--value")
+    assert not native_names() and acls() == {QUARANTINE}
+    assert rows("SELECT COUNT(*) FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')") == [(0,)]
+    action = "box_" + kind
+    units = ("incus.service", "boxweave-scoped-lifecycle.service")
+    pids = [pid(u) for u in units]
+    guard = guard_identity()
+    with LoopbackMCP(token=token(receipt), allow_mutations=True, timeout=60) as c:
+        assert c.host_status()["peer_mode"] == "SCOPED_V2"
+        if kind == "delete":
+            uuid = op(c, "box_create", ARGS, "p1b-wal-seed")["box_uuid"]
+            acl = verify(project, NAME, uuid, "true")
+            op(c, "box_stop", {"box_id": uuid}, "p1b-wal-stop")
+            assert instance(project, NAME)["status"] == "Stopped"
+            args = {"box_id": uuid}
+        else:
+            uuid, acl, args = None, None, ARGS
+    request = dict(args, idempotency_key="pr191-wal-" + case, work_ref=WORK)
+    nonce = secrets.token_hex(16)
+    systemctl("stop", CTL)
+    subprocess.run(["cc", "-shared", "-fPIC", "-O2", "-std=gnu11", "-Wall", "-Wextra", "-Werror",
+                    "-o", str(LIB), "scripts/pr191_scoped_wal_cut.c", "-ldl"], check=True, timeout=30)
+    LIB.chmod(0o755)
+    assert LIB.stat().st_uid == 0
+    DROP.mkdir(mode=0o755)
+    with CONF.open("x") as f:
+        f.write("[Service]\nRestart=no\n"
+                "Environment=GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted\n"
+                f"Environment=LD_PRELOAD={LIB} BW_P1B_WAL_NONCE={nonce} BW_P1B_WAL_PHASE={phase}\n")
+    systemctl("daemon-reload")
+    systemctl("start", CTL)
+    wait_mcp_listener()
+    controller = pid(CTL)
+    assert os.path.samefile("/proc/" + str(controller) + "/exe", BIN)
+    assert str(LIB) in Path("/proc/" + str(controller) + "/maps").read_text()
+    page = marker_setup(action, nonce)
+    with ARM.open("x") as f:
+        f.write(page)
+    ARM.chmod(0o644)
+    # The admitted operation is asynchronous. Never reissue an ambiguous
+    # admission; any missing receipt is a failure and original is retained.
+    with LoopbackMCP(token=token(receipt), allow_mutations=True, timeout=60) as c:
+        accepted = c.call(action, request).structured
+    oid = accepted["operation_id"]
+    assert re.fullmatch("[0-9a-f]{32}", oid)
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline and not WITNESS.exists():
+        time.sleep(.2)
+    assert WITNESS.read_text() == f"P1B_EXACT_WAL_COMMIT_SYNC_CUT {phase} {controller}\n"
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and systemctl("show", CTL, "-p", "MainPID", "--value") != "0":
+        time.sleep(.1)
+    assert systemctl("show", CTL, "-p", "MainPID", "--value") == "0"
+    assert systemctl("show", CTL, "-p", "ExecMainCode", "--value") == "2"
+    assert systemctl("show", CTL, "-p", "ExecMainStatus", "--value") == "9"
+    assert [pid(u) for u in units] == pids and guard_identity() == guard
+    print("P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS", case, oid, controller, flush=True)
+    # Independent read-only oracle before restart. SIGKILL before fsync is
+    # not power loss: SQLite may recover a complete commit or none of it.
+    assert rows("PRAGMA integrity_check") == [("ok",)]
+    original = rows("SELECT id,tracking_id,state,native_operation_id FROM operations WHERE work_ref=? AND action=?", (WORK, action))
+    assert len(original) == 1 and original[0][:2] == (oid, accepted["tracking_id"])
+    _, _, pre, native_id = original[0]
+    assert pre in ("VERIFYING", "SUCCEEDED") and native_id
+    assert phase != "after" or pre == "SUCCEEDED"
+    rec, hashes = journal(oid, kind.upper(), native_id)
+    if kind == "create":
+        uuid, acl = rec["UUID"], rec["Binding"]["ACL"]
+    else:
+        assert rec["UUID"] == uuid and rec["Binding"]["ACL"] == acl
+    wait_poststate(lambda: native_idle(project))
+    assert_poststate(project, action, oid, uuid, acl)
+    assert_ledger(action, pre, oid, uuid, acl, nonce)
+    print("P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS", case, pre, oid, native_id, uuid, flush=True)
+    # The schema validator must still refuse unexpected tables/triggers.
+    # The controller is dead. Preserve marker proof above and remove ONLY
+    # the exact test-owned objects before starting the original clean unit.
+    ARM.unlink()
+    script = """import sqlite3, sys
+db = sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=rw', uri=True, timeout=10)
+nonce, oid, state = sys.argv[1:]
+assert db.execute('SELECT nonce,original FROM p1b_test_wal_marker').fetchall() == ([(nonce, oid)] if state == 'SUCCEEDED' else [])
+with db:
+    db.execute('DROP TRIGGER p1b_test_wal_terminal')
+    db.execute('DROP TABLE p1b_test_wal_marker')
+db.close()
+"""
+    subprocess.run(["runuser", "-u", "boxweave", "--", "python3", "-c", script, nonce, oid, pre],
+                   check=True, timeout=30)
+    assert_ledger(action, pre, oid, uuid, acl)
+    # No native or original-ledger data cleanup.
+    CONF.unlink()
+    DROP.rmdir()
+    LIB.unlink()
+    systemctl("daemon-reload")
+    systemctl("start", CTL)
+    wait_mcp_listener()
+    assert pid(CTL) != controller and [pid(u) for u in units] == pids and guard_identity() == guard
+    assert not systemctl("show", CTL, "-p", "DropInPaths", "--value")
+    with LoopbackMCP(token=token(receipt), allow_mutations=True, timeout=60) as c:
+        final = c.operation_get(oid)
+        assert final["tracking_id"] == accepted["tracking_id"] and final["native_operation_id"] == native_id
+        assert final["state"] == ("UNKNOWN" if pre == "VERIFYING" else "SUCCEEDED")
+        assert_ledger(action, final["state"], oid, uuid, acl)
+        replay = c.call(action, request).structured
+        assert replay["operation_id"] == oid and replay["tracking_id"] == final["tracking_id"] and replay["duplicate"]
+        assert replay["state"] == final["state"]
+        if final["state"] == "UNKNOWN":
+            # Recovery is separately journaled and never redispatches the effect.
+            settle(c, final, kind.upper(), uuid, "p1b-wal-" + case + "-reconcile")
+        assert c.operation_get(oid)["state"] == "SUCCEEDED"
+        assert_ledger(action, "SUCCEEDED", oid, uuid, acl)
+        assert journal(oid, kind.upper(), native_id) == (rec, hashes)
+        assert_poststate(project, action, oid, uuid, acl)
+        assert rows("SELECT id FROM operations WHERE work_ref=? AND action=?", (WORK, action)) == [(oid,)]
+        assert c.host_status()["peer_mode"] == "SCOPED_V2"
+    print("P1B_SCOPED_INSTALLED_WAL_CUT=PASS", case, flush=True)
+
+
+if __name__ == "__main__":
+    main(*sys.argv[1:])

@@ -224,6 +224,11 @@ sudo systemctl is-active --quiet boxweave.service
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
 sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test -n "${P1B_WAL_CUT:-}"; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_wal_cut.py "$project" "$work/actor.receipt" "$first" "$P1B_WAL_CUT"
+  exit 0
+fi
 if test -n "${P1B_ACK_CUT:-}"; then
   test "${PR178_SCOPED_N2:-0}" = 1
   sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_ack_loss.py "$project" "$work/actor.receipt" "$first" "$P1B_ACK_CUT"
