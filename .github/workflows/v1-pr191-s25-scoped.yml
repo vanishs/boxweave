@@ -44,6 +44,7 @@ jobs:
           sh -n scripts/pr191_s25_scoped_setup.sh
           python3 scripts/test_pr191_s25_scoped_setup.py
           python3 scripts/test_pr191_s25_dual_auth.py
+          python3 scripts/test_pr191_s25_apt_refresh.py
           python3 -m py_compile scripts/s25_independent_verifier.py
           python3 -m py_compile scripts/s25_simwan6.py
           python3 -m py_compile scripts/s25_r12_foreign_l1.py scripts/s25_dual_auth.py

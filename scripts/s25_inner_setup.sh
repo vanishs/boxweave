@@ -73,7 +73,31 @@ if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list
  exit 63
 fi
 echo S25_INNER_HTTPS_ONLY_APT_SOURCES=PASS
-apt-get update -qq
+# Retry only the signed index refresh, not package installation, bootstrap,
+# or the enclosing original Exec. Mirror publication can race Release.
+# APT must reject every failed index refresh, including partial updates.
+s25_update_indices() {
+    log="$(mktemp /tmp/s25-apt-index.XXXXXX)"
+    attempt=1
+    while :; do
+        if LC_ALL=C apt-get -o APT::Update::Error-Mode=any -o Acquire::By-Hash=true -o Acquire::Retries=2 update -qq >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            echo "S25_INNER_SIGNED_INDEX_REFRESH=PASS attempt=$attempt"
+            return 0
+        fi
+        cat "$log" >&2
+        if [ "$attempt" -ge 3 ] || ! grep -Eq 'File has unexpected size|Hash Sum mismatch' "$log" ||
+           grep -Eiq 'NO_PUBKEY|EXPKEYSIG|BADSIG|not signed|signature verification|invalid signature|certificate verification' "$log"; then
+            rm -f "$log"
+            return 1
+        fi
+        echo "S25_INNER_SIGNED_INDEX_MIRROR_RACE attempt=$attempt" >&2
+        attempt=$((attempt+1))
+        sleep 10
+    done
+}
+s25_update_indices
 apt-get install -y --no-install-recommends ca-certificates curl gpg git openssl iproute2 python3 nftables conntrack dnsmasq-base >/dev/null
 curl -fsSL --retry 2 --max-time 40 https://pkgs.zabbly.com/key.asc -o /tmp/s25-zabbly.asc
 fingerprint="$(gpg --show-keys --with-colons /tmp/s25-zabbly.asc | awk -F: '$1=="fpr"{print $10;exit}')"
@@ -89,7 +113,7 @@ Components: main
 Architectures: amd64
 Signed-By: /etc/apt/keyrings/s25-zabbly.asc
 S25_SIGNED_APT
-apt-get update -qq
+s25_update_indices
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
 if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
