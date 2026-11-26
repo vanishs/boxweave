@@ -56,6 +56,7 @@ on:
       - scripts/pr191_scoped_ack_loss.py
       - scripts/pr191_scoped_wal_cut.*
       - scripts/test_pr191_scoped_wal_cut.py
+      - scripts/test_pr191_scoped_exec_wal_oracle.py
       - scripts/pr191_scoped_exec_crash.py
       - scripts/s2_crash_probe.go
       - scripts/s2_legacy_sdk_probe.go
@@ -79,14 +80,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-crash, scoped-sdk-compat]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-exec-crash, scoped-sdk-compat]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
       PR188_OFFLINE_RETIREMENT: ${{ matrix.mode == 'legacy-offline' && '1' || '0' }}
       PR182_SCOPED_RETIREMENT: ${{ matrix.mode == 'scoped-retirement' && '1' || '0' }}
       P1B_ACK_CUT: ${{ matrix.mode == 'scoped-create-ack' && 'create' || matrix.mode == 'scoped-delete-ack' && 'delete' || '' }}
-      P1B_WAL_CUT: ${{ matrix.mode == 'scoped-create-wal-before' && 'create-before' || matrix.mode == 'scoped-create-wal-after' && 'create-after' || matrix.mode == 'scoped-delete-wal-before' && 'delete-before' || matrix.mode == 'scoped-delete-wal-after' && 'delete-after' || '' }}
+      P1B_WAL_CUT: ${{ matrix.mode == 'scoped-create-wal-before' && 'create-before' || matrix.mode == 'scoped-create-wal-after' && 'create-after' || matrix.mode == 'scoped-delete-wal-before' && 'delete-before' || matrix.mode == 'scoped-delete-wal-after' && 'delete-after' || matrix.mode == 'scoped-exec-wal-before' && 'exec-before' || matrix.mode == 'scoped-exec-wal-after' && 'exec-after' || '' }}
       P1B_S2_EXEC_CRASH: ${{ matrix.mode == 'scoped-exec-crash' && '1' || '0' }}
       P1B_S2_OLD_SDK: ${{ matrix.mode == 'scoped-sdk-compat' && '1' || '0' }}
       N2_EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -155,6 +156,11 @@ jobs:
             grep -Fq "P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS $P1B_WAL_CUT " "$RUNNER_TEMP/n2-installed.log"
             grep -Fq "P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS $P1B_WAL_CUT " "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "P1B_SCOPED_INSTALLED_WAL_CUT=PASS $P1B_WAL_CUT" "$RUNNER_TEMP/n2-installed.log"
+            if test "$P1B_WAL_CUT" = exec-before; then
+              grep -Eq '^P1B_SCOPED_EXEC_WAL_ATOMIC=PASS exec-before (SUCCEEDED|UNKNOWN) [a-f0-9]{32} ' "$RUNNER_TEMP/n2-installed.log"
+            elif test "$P1B_WAL_CUT" = exec-after; then
+              grep -Eq '^P1B_SCOPED_EXEC_WAL_ATOMIC=PASS exec-after SUCCEEDED [a-f0-9]{32} ' "$RUNNER_TEMP/n2-installed.log"
+            fi
             exit 0
           fi
           if test -n "$P1B_ACK_CUT"; then
