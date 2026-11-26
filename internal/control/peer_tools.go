@@ -87,6 +87,12 @@ func (s *Service) operatePeerSet(ctx context.Context, req *mcp.CallToolRequest, 
 		}
 		return &mcp.CallToolResult{}, r, nil
 	}
+	return s.admitLegacyPeerSet(ctx, req, in, principal, work, agent)
+}
+
+// admitLegacyPeerSet retains the old local-review original. Authentication,
+// validation and labels are resolved by operatePeerSet before either path.
+func (s *Service) admitLegacyPeerSet(ctx context.Context, req *mcp.CallToolRequest, in peerSetInput, principal RequestPrincipal, work, agent string) (*mcp.CallToolResult, state.Receipt, error) {
 	previous, already, err := s.Store.ReplayPeerSet(ctx, principal.Layer, principal.ActorID, principal.TokenID,
 		in.IdempotencyKey, in.SourceBoxID, in.TargetBoxID, in.Allow, work, agent)
 	if err != nil {

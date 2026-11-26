@@ -93,9 +93,6 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 		"SELECT count(*) FROM peer_grants WHERE project!=? OR status!='REVOKED'",
 		"SELECT count(*) FROM forward_claims WHERE project!=? OR state!='REVOKED'",
 		"SELECT count(*) FROM operation_resource_claims c LEFT JOIN operations o ON o.id=c.operation_id WHERE c.layer!=? OR o.id IS NULL OR o.layer!=c.layer OR o.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','TIMED_OUT')",
-		"SELECT count(*) FROM network_ipv4_compactions WHERE project!=? OR 1=1",
-		"SELECT count(*) FROM network_ipv4_retirements WHERE project!=? OR 1=1",
-		"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=? OR 1=1",
 	} {
 		var n int
 		if err = tx.QueryRowContext(ctx, q, project).Scan(&n); err != nil {
@@ -122,16 +119,11 @@ func readCompleteScopedNetworkAuditLedgerModeTx(ctx context.Context, tx *sql.Tx,
 		return zero, ErrInvalid
 	}
 
-	// A migration cannot silently proceed past deleted or archived
-	// historical leases whose ACL shape has not been separately proved.
-	var retired int
-	if err := tx.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM network_ipv4_retirements WHERE project=? AND bridge=?", project, bridge,
-	).Scan(&retired); err != nil {
+	// A Scoped ledger may never borrow Legacy retirement or compaction
+	// history. The transitional guard refuses any mixed state before
+	// ordinary live audit as well as retirement.
+	if err := requireScopedNoLegacyRetirementTx(ctx, tx); err != nil {
 		return zero, err
-	}
-	if retired != 0 {
-		return zero, ErrResourceLocked
 	}
 
 	rows, err := tx.QueryContext(ctx,

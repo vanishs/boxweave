@@ -164,7 +164,11 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.AddressRetirementPolicy = "LEGACY_IPV4_RETIREMENT"
 	}
 	if out.Ready {
-		if capacity, e := s.Native.ReadCreateAddressCapacity(ctx, s.Store.ReadCreateAddressHolds); e == nil {
+		holds := s.Store.ReadCreateAddressHolds
+		if s.ScopedPeerFresh {
+			holds = s.Store.ReadScopedCreateAddressHolds
+		}
+		if capacity, e := s.Native.ReadCreateAddressCapacity(ctx, holds); e == nil {
 			out.AddressCapacity = &capacity
 			out.AddressCapacityStatus = "OBSERVED"
 			if capacity.RemainingIPv4UpperBound == 0 {

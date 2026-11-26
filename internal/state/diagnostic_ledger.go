@@ -397,7 +397,7 @@ func readDiagnosticLedgerTx(ctx context.Context, tx *sql.Tx, project, mode, brid
 		out.NetworkObserved = true
 	}
 	if bridge != "" {
-		if h, e := readCreateAddressHoldsTx(ctx, tx, project, bridge); e == nil {
+		if h, e := readCreateAddressHoldsModeTx(ctx, tx, project, bridge, mode == "SCOPED_V2"); e == nil {
 			out.HoldsObserved = true
 			out.HeldMAC = len(h.MACs)
 			raw, _ := json.Marshal(h)

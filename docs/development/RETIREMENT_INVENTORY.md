@@ -96,3 +96,5 @@ P1b-06d6: REPLACE_TEST candidate original s2_p1_bound_create_receipt_fault.sh us
 P1b-06d8: legacy s2_p1_two_controllers.sh / SDK witness mapping: two supported fixed installed Scoped controllers in nested independent native daemons, same-name distinct UUID/original, independent ACLs/ledger/socket, cross-token and typed foreign Get/Delete/OperationGet denial, no admission, existing cleanup and same-daemon foreign Project witness retained. Source verified, installed CI pending; old gate not removed.
 
 P1b-06d10: see CONSOLIDATION_P1B_WITNESS_CROSSWALK.md; 72 markers mapped, no retirement waiver or deletion.
+
+P1-06d14: [real public WAN and runtime/schema consumer checkpoint](CONSOLIDATION_P1_06D14_CHECKPOINT.md). Actual public IPv4 BOX_VERIFIED at 92ffeda, hosted positive UNVERIFIED; P1c/d source BOX_VERIFIED, CI_PENDING; alternate pool BLOCKED, no waiver.

@@ -14,6 +14,17 @@ import (
 // In particular, all RELEASED/UNKNOWN reservations remain blocked. This
 // snapshot only skips candidates; it never authorizes a new reservation.
 func (s *Store) ReadCreateAddressHolds(ctx context.Context, project, bridge string) (networklimits.AddressHolds, error) {
+	return s.readCreateAddressHolds(ctx, project, bridge, false)
+}
+
+// ReadScopedCreateAddressHolds never credits any Legacy retirement as free
+// capacity. During consolidation the old tables still exist; refuse mixed
+// history before a Scoped reservation or capacity observation.
+func (s *Store) ReadScopedCreateAddressHolds(ctx context.Context, project, bridge string) (networklimits.AddressHolds, error) {
+	return s.readCreateAddressHolds(ctx, project, bridge, true)
+}
+
+func (s *Store) readCreateAddressHolds(ctx context.Context, project, bridge string, scoped bool) (networklimits.AddressHolds, error) {
 	zero := networklimits.AddressHolds{}
 	if s == nil || s.db == nil || !auditName(project) || project == "default" || !auditName(bridge) {
 		return zero, ErrInvalid
@@ -23,16 +34,42 @@ func (s *Store) ReadCreateAddressHolds(ctx context.Context, project, bridge stri
 		return zero, e
 	}
 	defer tx.Rollback()
-	out, e := readCreateAddressHoldsTx(ctx, tx, project, bridge)
+	out, e := readCreateAddressHoldsModeTx(ctx, tx, project, bridge, scoped)
 	if e != nil {
 		return zero, e
 	}
 	return out, tx.Commit()
 }
-func readCreateAddressHoldsTx(ctx context.Context, tx *sql.Tx, project, bridge string) (networklimits.AddressHolds, error) {
+
+// Transitional refusal only. These legacy tables are not a source of
+// Scoped allocations or capacity. Remove this check only together with
+// the exact schema-version transition and old-state refusal.
+func requireScopedNoLegacyRetirementTx(ctx context.Context, tx *sql.Tx) error {
+	for _, q := range []string{
+		"SELECT EXISTS(SELECT 1 FROM network_ipv4_retirements)",
+		"SELECT EXISTS(SELECT 1 FROM network_ipv4_retirement_queue)",
+		"SELECT EXISTS(SELECT 1 FROM network_ipv4_compactions)",
+	} {
+		var present bool
+		if e := tx.QueryRowContext(ctx, q).Scan(&present); e != nil {
+			return e
+		}
+		if present {
+			return ErrResourceLocked
+		}
+	}
+	return nil
+}
+
+func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, bridge string, scoped bool) (networklimits.AddressHolds, error) {
 	zero := networklimits.AddressHolds{}
 	var e error
-	if e = verifyIPv4RetirementHistory(ctx, tx, project, bridge, ""); e != nil {
+	if scoped {
+		e = requireScopedNoLegacyRetirementTx(ctx, tx)
+	} else {
+		e = verifyIPv4RetirementHistory(ctx, tx, project, bridge, "")
+	}
+	if e != nil {
 		return zero, e
 	}
 	holds := networklimits.NewAddressHolds()
@@ -60,7 +97,13 @@ func readCreateAddressHoldsTx(ctx context.Context, tx *sql.Tx, project, bridge s
 		}
 		return nil
 	}
-	rows, e := tx.QueryContext(ctx, "SELECT project,ipv4,ipv6,mac,state FROM network_bindings n WHERE bridge=? AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation)", bridge, project)
+	bindingsQuery := "SELECT project,ipv4,ipv6,mac,state FROM network_bindings n WHERE bridge=?"
+	bindingsArgs := []any{bridge}
+	if !scoped {
+		bindingsQuery += " AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation)"
+		bindingsArgs = append(bindingsArgs, project)
+	}
+	rows, e := tx.QueryContext(ctx, bindingsQuery, bindingsArgs...)
 	if e != nil {
 		return zero, e
 	}
@@ -126,7 +169,13 @@ func readCreateAddressHoldsTx(ctx context.Context, tx *sql.Tx, project, bridge s
 		return zero, e
 	}
 	prefix := "create-pin:" + bridge + ":"
-	rows, e = tx.QueryContext(ctx, "SELECT resource_key FROM operation_resource_claims c WHERE substr(resource_key,1,?)=? AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.bridge=? AND r.create_operation_id=c.operation_id AND r.project=c.layer)", len(prefix), prefix, project, bridge)
+	claimsQuery := "SELECT resource_key FROM operation_resource_claims c WHERE substr(resource_key,1,?)=?"
+	claimsArgs := []any{len(prefix), prefix}
+	if !scoped {
+		claimsQuery += " AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.bridge=? AND r.create_operation_id=c.operation_id AND r.project=c.layer)"
+		claimsArgs = append(claimsArgs, project, bridge)
+	}
+	rows, e = tx.QueryContext(ctx, claimsQuery, claimsArgs...)
 	if e != nil {
 		return zero, e
 	}

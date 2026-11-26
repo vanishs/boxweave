@@ -38,7 +38,7 @@ func (s *Service) admitScopedCreate(ctx context.Context, req *mcp.CallToolReques
 					reserved = state.VerifiedCreateBinding(b)
 				}
 				return ok, e
-			}, s.Store.ReadCreateAddressHolds)
+			}, s.Store.ReadScopedCreateAddressHolds)
 		nativeID = id
 		return id, preflightNative(e)
 	}
