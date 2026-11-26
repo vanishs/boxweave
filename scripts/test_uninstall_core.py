@@ -125,6 +125,46 @@ class FakeHost(unittest.TestCase):
         self.paths["STATE"].joinpath("install-manifest.json").chmod(0o600)
         self.box = "11111111-2222-3333-4444-555555555555"
 
+    def test_scoped_sqlite_refuses_old_schema_and_mixed_history(self):
+        self.db.parent.chmod(0o700)
+        for cold in (False, True):
+            before = self.db.read_bytes()
+            with self.assertRaisesRegex(u.UninstallError, "SCOPED_LEDGER_SCHEMA_UNVERIFIED"):
+                u.inspect_sqlite(self.db, guided=True, cold=cold, scoped=True)
+            self.assertEqual(self.db.read_bytes(), before)
+        tables = ("network_ipv4_retirements", "network_ipv4_retirement_queue",
+                  "network_ipv4_compactions")
+        with sqlite3.connect(str(self.db)) as db:
+            db.execute("UPDATE schema_version SET version=6")
+            for table in tables:
+                db.execute("CREATE TABLE " + table + "(project TEXT)")
+        for cold in (False, True):
+            before = self.db.read_bytes()
+            self.assertEqual(u.inspect_sqlite(self.db, guided=True, cold=cold, scoped=True),
+                             u.inspect_sqlite(self.db, guided=True, cold=cold))
+            self.assertEqual(self.db.read_bytes(), before)
+            for table in tables:
+                with self.subTest(cold=cold, table=table):
+                    with sqlite3.connect(str(self.db)) as db:
+                        db.execute("INSERT INTO " + table + " VALUES('foreign-project')")
+                    before = self.db.read_bytes()
+                    with self.assertRaisesRegex(u.UninstallError, "SCOPED_LEGACY_RETIREMENT_PRESENT:" + table):
+                        u.inspect_sqlite(self.db, guided=True, cold=cold, scoped=True)
+                    if table == "network_ipv4_compactions":
+                        self.assertIn("IPV4_COMPACTION_PROTECTED:1",
+                                      u.inspect_sqlite(self.db, guided=True)["blockers"])
+                    self.assertEqual(self.db.read_bytes(), before)
+                    with sqlite3.connect(str(self.db)) as db:
+                        db.execute("DELETE FROM " + table)
+        with sqlite3.connect(str(self.db)) as db:
+            db.execute("DROP TABLE network_ipv4_retirement_queue")
+        before = self.db.read_bytes()
+        for cold in (False, True):
+            with self.assertRaisesRegex(u.UninstallError, "SQLite snapshot cannot be verified"):
+                u.inspect_sqlite(self.db, guided=True, cold=cold, scoped=True)
+        self.assertEqual(self.db.read_bytes(), before)
+        self.assertEqual(self.cmds, [])
+
     def test_scoped_journal_blocks_every_legacy_retirement_entry(self):
         plan = self.plan()
         u.SCOPED_JOURNAL.mkdir()

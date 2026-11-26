@@ -275,7 +275,7 @@ def cold_sqlite_copy(dbpath):
         raise UninstallError("OFFLINE_SQLITE_EPOCH_CHANGED")
 
 
-def inspect_sqlite(dbpath, guided=False, cold=False):
+def inspect_sqlite(dbpath, guided=False, cold=False, *, scoped=False):
     """A read-only snapshot; never import a v4/v5 DB into a new controller."""
     if checked_file(dbpath, "file") is None:
         raise UninstallError("no readable controller SQLite evidence")
@@ -289,7 +289,7 @@ def inspect_sqlite(dbpath, guided=False, cold=False):
                 raise UninstallError("OFFLINE_SQLITE_PRIVATE_INTEGRITY_UNVERIFIED") from exc
             finally:
                 conn.close()
-            return inspect_sqlite(copy, guided=guided)
+            return inspect_sqlite(copy, guided=guided, scoped=scoped)
     conn = sqlite3.connect("file:" + str(dbpath) + "?mode=ro", uri=True, timeout=5)
     try:
         conn.execute("PRAGMA query_only=ON")
@@ -297,6 +297,14 @@ def inspect_sqlite(dbpath, guided=False, cold=False):
         version = [x[0] for x in conn.execute("SELECT version FROM schema_version")]
         if len(version) != 1 or version[0] not in (4, 5, 6):
             raise UninstallError("unrecognized controller database schema")
+        if scoped:
+            if version != [6]:
+                raise UninstallError("SCOPED_LEDGER_SCHEMA_UNVERIFIED")
+            # Same transitional global refusal as the Go admission guard.
+            for table in ("network_ipv4_retirements", "network_ipv4_retirement_queue",
+                          "network_ipv4_compactions"):
+                if conn.execute("SELECT EXISTS(SELECT 1 FROM " + table + ")").fetchone() != (0,):
+                    raise UninstallError("SCOPED_LEGACY_RETIREMENT_PRESENT:" + table)
         operation_hash = hashlib.sha256()
         operation_count = 0
         blockers = []
@@ -352,7 +360,7 @@ def inspect_sqlite(dbpath, guided=False, cold=False):
             count = conn.execute("SELECT count(*) FROM " + table + " WHERE " + condition).fetchone()[0]
             if count:
                 blockers.append(table + "_NOT_RELEASED:" + str(count))
-        if version[0] == 6:
+        if not scoped and version[0] == 6:
             # An uncertain root ACL update is not an ordinary terminal Delete.
             # Its project fence must survive; do not uninstall away recovery evidence.
             count = conn.execute("SELECT count(*) FROM network_ipv4_compactions").fetchone()[0]
@@ -870,7 +878,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False, scoped=False, o
         if stat.S_IMODE(info.st_mode) & 0o077:
             raise UninstallError("controller state file has unsafe permissions: " + entry.name)
         files.append({"name": entry.name, "info": file_fingerprint(entry)})
-    snapshot = inspect_sqlite(STATE / "ledger.sqlite", guided=guided, cold=True) if offline else inspect_sqlite(STATE / "ledger.sqlite", guided=guided)
+    snapshot = inspect_sqlite(STATE / "ledger.sqlite", guided=guided, cold=offline, scoped=scoped)
     if any(x["project"] != project for x in snapshot["boxes"]):
         raise UninstallError("foreign Layer in owned Box inventory")
     native = prepare_record()
@@ -1687,7 +1695,7 @@ def scoped_verify_original(plan):
     scoped_verify_effective_reviews(plan)
     if scoped_units(allow_empty_lxc=bool(plan.get("scoped_effective_reviews"))) != plan["scoped_units"] or scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"]:
         raise UninstallError("original scoped Root journal or unit drift")
-    if inspect_sqlite(STATE / "ledger.sqlite", guided=True) != plan["sqlite"] or plan["sqlite"]["blockers"]:
+    if inspect_sqlite(STATE / "ledger.sqlite", guided=True, scoped=True) != plan["sqlite"] or plan["sqlite"]["blockers"]:
         raise UninstallError("original scoped ledger changed; preserve protected work")
     if native_instances(plan["project"], guided=True):
         raise UninstallError("scoped native consumers remain")
@@ -1968,7 +1976,7 @@ def scoped_continue(record):
         lockplan["state_files"] = []
     with hold_stopped_serve_lock(lockplan):
         if record["phase"] != "CLEANUP_STARTED":
-            if scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"] or inspect_sqlite(STATE / "ledger.sqlite", guided=True) != plan["sqlite"]:
+            if scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"] or inspect_sqlite(STATE / "ledger.sqlite", guided=True, scoped=True) != plan["sqlite"]:
                 raise UninstallError("original scoped journal or ledger changed after archive")
             if file_fingerprint(BINARY) != plan["binary"] or file_fingerprint(UNIT) != plan["unit"]:
                 raise UninstallError("original scoped installed identity changed after archive")
@@ -3137,7 +3145,7 @@ def scoped_drain_capture(project, active, observer=None, observer_sha=None, allo
             # handled by the exact normal drain, not ignored by retirement.
             db = STATE / "ledger.sqlite"
             cold = not active and not any(os.path.lexists(str(db) + x) for x in ("-wal", "-shm", "-journal"))
-            sql = inspect_sqlite(db, guided=True, cold=True) if cold else inspect_sqlite(db, guided=True)
+            sql = inspect_sqlite(db, guided=True, cold=cold, scoped=True)
             allowed = ("peer_grants_NOT_RELEASED:", "forward_claims_NOT_RELEASED:",
                        "network_address_fences_NOT_RELEASED:")
             blockers.extend("DRAIN_" + b for b in sql["blockers"] if not b.startswith(allowed))
