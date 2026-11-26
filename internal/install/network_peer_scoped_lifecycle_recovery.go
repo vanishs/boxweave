@@ -139,8 +139,19 @@ func nativeScopedCompletedCreateRead(ctx context.Context, c incus.InstanceServer
 	if e != nil || actual == nil || at == "" || actual.Project != "default" || !reflect.DeepEqual(actual.Writable(), want.NetworkACLPut) || len(actual.UsedBy) != 1 || !nativePeerGuardOwnedURL(actual.UsedBy[0], "instances", rec.Name, r.Project) {
 		return errors.New("completed Create ACL unverified")
 	}
-	if e = nativeScopedCreateLeaseCheck(c, r.Bridge, rec.Name, rec.Binding, !rec.Start); e != nil {
+	if e = nativeScopedCompletedCreateLeaseCheck(c, r.Project, rec); e != nil {
 		return e
 	}
 	return nativeScopedLifecycleInventory(ctx, c, db, r, nw, rec.Name, rec.Binding.ACL, "")
+}
+
+// The bridge lives in the default Project, but Incus GetNetworkLeases is
+// Project-filtered. Read the owned instance Project, as the existing global
+// Scoped Peer provenance check does. The remaining inventory/ACL checks
+// deliberately retain their default/all-project Root scope.
+func nativeScopedCompletedCreateLeaseCheck(c incus.InstanceServer, project string, rec scopedLifecycleRecord) error {
+	if project == "" || project == "default" || rec.Project != project {
+		return errors.New("scoped Create lease project mismatch")
+	}
+	return nativeScopedCreateLeaseCheck(c.UseProject(project), rec.Binding.Bridge, rec.Name, rec.Binding, !rec.Start)
 }
