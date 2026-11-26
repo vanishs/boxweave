@@ -267,3 +267,45 @@ func TestP1ScopedPinRepairRefusesMixedHistory(t *testing.T) {
 	}
 	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
 }
+
+func TestP1ScopedPinRepairRefusesDuplicateTerminalClaim(t *testing.T) {
+	ctx := context.Background()
+	s, orig, in, pin := p1CreateFixture(t, true)
+	pin.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
+	if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, pin); e != nil {
+		t.Fatal(e)
+	}
+	req, target := a4Request(t, s, orig.ID)
+	if _, e := s.db.Exec("DELETE FROM network_address_fences WHERE box_uuid=? AND family='ipv4'", p1UUID); e != nil {
+		t.Fatal(e)
+	}
+	_, actor, e := s.IssueToken(ctx, time.Hour)
+	if e != nil {
+		t.Fatal(e)
+	}
+	other, e := s.AdmitScoped(ctx, Admission{Layer: in.Project, ActorID: actor.ID, TokenID: actor.ID, Key: "p1-scoped-pin-repair-duplicate", RequestID: "fixture", Action: "box_create", ResourceKey: "box:other", SafeIntent: []byte("{}")})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.CancelQueued(ctx, in.Project, other.ID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec("INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES(?,?,?)", other.ID, in.Project, pin.reservationKeys()[0]); e != nil {
+		t.Fatal(e)
+	}
+	proof := RecoveryProof{Kind: RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED", NativeID: target.NativeID, UUID: p1UUID, Fingerprint: "synthetic-exact-pin", CreateBinding: pin}
+	if e = s.CheckCreatePinRepair(ctx, target, proof); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("duplicate retained claim preflight accepted", e)
+	}
+	if _, e = s.CommitRecovery(ctx, req, target, proof); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("duplicate retained claim repair accepted", e)
+	}
+	var n int
+	if e = s.db.QueryRow("SELECT count(*) FROM network_address_fences WHERE box_uuid=?", p1UUID).Scan(&n); e != nil || n != 1 {
+		t.Fatal(n, e)
+	}
+	if e = s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=?", orig.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
+}

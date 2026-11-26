@@ -21,6 +21,8 @@ func TestIncompatibleSchemaPreservesOriginalAcrossEntryPoints(t *testing.T) {
 		{"ambiguous-version", fmt.Sprintf("INSERT INTO schema_version VALUES(%d)", SchemaVersion)},
 		{"foreign-table", "CREATE TABLE old_runtime_shadow (id TEXT)"},
 		{"missing-declared-index", "DROP INDEX operations_work_time"},
+		{"missing-retirement-table", "DROP TABLE network_ipv4_retirements"},
+		{"changed-retirement-index", "DROP INDEX network_ipv4_retirement_queue_order; CREATE INDEX network_ipv4_retirement_queue_order ON network_ipv4_retirement_queue(attempt_order,project)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()

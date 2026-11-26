@@ -104,3 +104,5 @@ P1-06d15: [completed-original pin and maintenance separation](CONSOLIDATION_P1_0
 P1-06d15b: [exclusive recovery observers and installed pin witness](CONSOLIDATION_P1_06D15B_CHECKPOINT.md). Scoped PRS callback removed; actual completed-original pin repair witness added to existing N2 lane. Source verified, native CI_PENDING. No retirement waiver.
 
 P1-06d25/d26: [controller status and Legacy lifecycle isolation](CONSOLIDATION_P1_06D25_D26_CHECKPOINT.md). Box verified; independent CI pending. Legacy bodies retained, not yet retired.
+
+P1-06d27/d28: [pin repair and exact schema DDL isolation](CONSOLIDATION_P1_06D27_D28_CHECKPOINT.md). Box verification PASS, independent CI pending. Schema 6 unchanged. No retirement waiver.
