@@ -98,3 +98,5 @@ The original historical report owns actual commands, IDs and results. These obse
 - [Bounded Operation observation candidate](../docs/development/BDH_OPERATION_POLLING_CHECKPOINT.md): actual P1 short-wait repetition and budget exhaustion; owner-authorized verification Skill refinement. Candidate, ordinary-task observation pending; no automatic promotion or proven savings.
 
 - [BDH-L012 revision 5](learning/BDH-L012/00000005.json): [consolidated CI observation](../docs/development/BDH_CI_OBSERVATION_CHECKPOINT.md), candidate refinement; independent benefit pending.
+
+- [Early checkpoint candidate](../docs/development/BDH_EARLY_CHECKPOINT.md): actual P1 interruption and reuse; candidate refinement of existing resume Skill and template. Observe overhead and actual recovery; no proven benefit yet.
