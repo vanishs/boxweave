@@ -134,3 +134,5 @@ P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transp
 - 2026-11-26: #191 [P1b-06d2](CONSOLIDATION_PROGRESS.md#p1b-06d2---held-operation_get-and-changing-signed-cursor): 333b6b5 seven CI workflows all PASS, N2 22/22. Separate Box worktree held-read/cursor conversion, typed auth refusal and no-native-effect independent oracle source tests PASS; original blocked alternate-pool stage preserved, native acceptance pending publication and CI. No policy relaxation, merge or release.
 
 - 2026-11-26: #191 [P1b-06d3](CONSOLIDATION_PROGRESS.md#p1b-06d3---real-malformed-terminal-exec) candidate source proof PASS, five independent oracle regressions and two native/state tests. Real malformed Exec/UNKNOWN and restart evidence requires new independent CI. Prior alternate-pool staged tree unchanged. No merge/release.
+
+- 2026-11-26: #191 [P1b-06d4](CONSOLIDATION_PROGRESS.md#p1b-06d4---standalone-stop-accepted-ack-loss): auth/cursor a11ce61 installed CI PASS. Standalone Stop ACK-loss candidate SDK/proxy and six independent oracle tests PASS in Box, real installed acceptance pending. No merge/release; prior alternate-pool staged tree untouched.

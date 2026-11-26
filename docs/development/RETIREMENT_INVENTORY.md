@@ -86,3 +86,5 @@ P1b-06c6: C03/C05/C11 independent noquota Doctor/mount and physical EDQUOT repla
 P1b-06d2: REPLACE_TEST candidate for original s2_p1_token_inflight.sh and s2_p1_token_inflight_probe.go. Preserve held read auth and signed-cursor filter change on installed Scoped, exact independent ledger and no native effect. Legacy original unchanged in coverage; replacement BOX_VERIFIED, installed CI_PENDING. Prior staged alternate-pool tree separate; no runtime/test retirement.
 
 P1b-06d3: REPLACE_TEST candidate s2_p2_malformed_exec_fault.sh with installed fixed-ledger Scoped transport witness, original proxy/SDK retained. No native teardown of UNKNOWN in replacement; deliberate disposable runner retention. BOX_VERIFIED, CI_PENDING. No runtime removal.
+
+P1b-06d4: REPLACE_TEST standalone Stop portion of original s2_p1_stop_delete_fault.sh with restricted native 202/ACK-loss and exact fixed Scoped ledger; original SDK/proxy retained and old Stop/Delete gate unchanged. BOX_VERIFIED, CI_PENDING. Held operation_get/cursor replacement CI_VERIFIED; no retirement waiver.

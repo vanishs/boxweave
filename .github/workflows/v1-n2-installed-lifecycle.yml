@@ -92,6 +92,10 @@ on:
       - scripts/test_pr191_scoped_wal_cut.py
       - scripts/test_pr191_scoped_exec_wal_oracle.py
       - scripts/pr191_scoped_exec_crash.py
+      - scripts/pr191_scoped_stop_ack.py
+      - scripts/test_pr191_scoped_stop_ack.py
+      - scripts/s2_p1_stop_delete_probe.go
+      - scripts/s2_p1_stop_delete_proxy.go
       - scripts/pr191_scoped_malformed_exec.py
       - scripts/test_pr191_scoped_malformed_exec.py
       - scripts/s2_p2_malformed_exec_probe.go
@@ -118,7 +122,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec, scoped-stop-ack]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
@@ -127,6 +131,7 @@ jobs:
       P1B_ACK_CUT: ${{ matrix.mode == 'scoped-create-ack' && 'create' || matrix.mode == 'scoped-delete-ack' && 'delete' || matrix.mode == 'scoped-update-ack' && 'update' || matrix.mode == 'scoped-update-ack-receipt' && 'update-receipt' || '' }}
       P1B_WAL_CUT: ${{ matrix.mode == 'scoped-create-wal-before' && 'create-before' || matrix.mode == 'scoped-create-wal-after' && 'create-after' || matrix.mode == 'scoped-delete-wal-before' && 'delete-before' || matrix.mode == 'scoped-delete-wal-after' && 'delete-after' || matrix.mode == 'scoped-exec-wal-before' && 'exec-before' || matrix.mode == 'scoped-exec-wal-after' && 'exec-after' || '' }}
       P1B_S2_EXEC_CRASH: ${{ matrix.mode == 'scoped-exec-crash' && '1' || '0' }}
+      P1B_S2_STOP_ACK: ${{ matrix.mode == 'scoped-stop-ack' && '1' || '0' }}
       P1B_S2_MALFORMED_EXEC: ${{ matrix.mode == 'scoped-malformed-exec' && '1' || '0' }}
       P1B_S2_AUTH_RACES: ${{ matrix.mode == 'scoped-auth-races' && '1' || '0' }}
       P1B_S2_PHYSICAL_QUOTA: ${{ matrix.mode == 'scoped-physical-quota' && '1' || '0' }}
@@ -255,6 +260,13 @@ jobs:
               grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             grep -Eq '^P1B_SCOPED_MALFORMED_EXEC_ORIGINAL [0-9a-f]{32} [0-9a-f-]{36} [0-9a-f]{32} [0-9a-f-]{36}$' "$RUNNER_TEMP/n2-installed.log"
+            exit 0
+          fi
+          if test "$P1B_S2_STOP_ACK" = 1; then
+            for marker in PR178_N2_INSTALL PR178_N2_FRESH_ONLY S2_P1_STOP_DELETE_NATIVE_OWNED_REAL_UUID_SEEDED S2_P1_STOP_DELETE_ORIGINAL_MUTATION_ADMITTED S2_P1_NATIVE_STOP_LOST_ACK_BEFORE_RESTART_UNKNOWN P1B_SCOPED_STOP_202_NATIVE_STOPPED_EXACT_UUID S2_P1_NATIVE_STOP_LOST_ACK_RESTART_UNKNOWN_NO_REPLAY P1B_SCOPED_STOP_ACK_FIXED_LEDGER_RESTART_RETAINED_UNKNOWN; do
+              grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            grep -Eq '^P1B_SCOPED_STOP_ACK_ORIGINAL [0-9a-f]{32} [0-9a-f-]{36} [0-9a-f]{32} [0-9a-f-]{36}$' "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
           if test "$P1B_S2_EXEC_CRASH" = 1; then

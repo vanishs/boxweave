@@ -17,9 +17,12 @@ import (
 )
 
 type original struct {
-	BoxID    string `json:"box_id"`
-	CreateID string `json:"create_id"`
-	ActionID string `json:"action_id"`
+	BoxID          string `json:"box_id"`
+	CreateID       string `json:"create_id"`
+	ActionID       string `json:"action_id"`
+	CreateNative   string `json:"create_native,omitempty"`
+	CreateTracking string `json:"create_tracking,omitempty"`
+	ActionTracking string `json:"action_tracking,omitempty"`
 }
 type bearer struct{ token string }
 
@@ -33,9 +36,9 @@ func require(b bool, s string) {
 		panic("S2_P1_STOP_DELETE_ACK_LOSS_FAIL: " + s)
 	}
 }
-func connect(ctx context.Context, token string) *mcp.ClientSession {
+func connect(ctx context.Context, token, endpoint string) *mcp.ClientSession {
 	client := mcp.NewClient(&mcp.Implementation{Name: "s2-p1-stop-delete-loss", Version: "1"}, nil)
-	s, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "http://127.0.0.1:18658/mcp",
+	s, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint,
 		HTTPClient: &http.Client{Transport: bearer{token}}, DisableStandaloneSSE: true, MaxRetries: -1}, nil)
 	if err != nil {
 		panic(err)
@@ -99,7 +102,15 @@ func main() {
 	path := filepath.Join(dir, "original.json")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s := connect(ctx, token)
+	scoped := os.Getenv("BW_S2_P1_SCOPED") == "1"
+	endpoint := "http://127.0.0.1:18658/mcp"
+	if scoped {
+		require(phase == "stop" && project == fmt.Sprintf("user-%d", os.Geteuid()), "exact scoped Stop fixture")
+		if mode == "seed" || mode == "resume" {
+			endpoint = "http://127.0.0.1:18650/mcp"
+		}
+	}
+	s := connect(ctx, token, endpoint)
 	defer s.Close()
 	switch mode {
 	case "seed":
@@ -114,6 +125,11 @@ func main() {
 			op := child(res, "operation")
 			if field(op, "state") == "SUCCEEDED" {
 				x.BoxID = field(op, "box_uuid")
+				x.CreateNative = field(op, "native_operation_id")
+				x.CreateTracking = field(op, "tracking_id")
+				if scoped {
+					require(len(x.CreateNative) == 36 && len(x.CreateTracking) == 32, "seed exact native and tracking")
+				}
 				break
 			}
 			require(field(op, "state") != "FAILED" && field(op, "state") != "CANCELLED" && field(op, "state") != "UNKNOWN",
@@ -128,6 +144,10 @@ func main() {
 		res, err := invoke(ctx, s, "box_"+phase, actionArgs(phase, x.BoxID))
 		require(err == nil && field(res, "operation_id") != "", "original native Stop/Delete not admitted")
 		x.ActionID = field(res, "operation_id")
+		x.ActionTracking = field(res, "tracking_id")
+		if scoped {
+			require(len(x.ActionTracking) == 32, "action tracking missing")
+		}
 		write(path, x)
 		fmt.Println("S2_P1_STOP_DELETE_ORIGINAL_MUTATION_ADMITTED=PASS")
 	case "poll", "resume":
@@ -147,14 +167,25 @@ func main() {
 		require(field(op, "state") == "UNKNOWN" && field(op, "box_uuid") == x.BoxID &&
 			field(op, "native_operation_id") == "" && field(child(op, "next_action"), "kind") == "HOST_LOCAL_REVIEW",
 			"lost native ACK did not persist original UNKNOWN/box identity")
+		if scoped {
+			require(field(op, "tracking_id") == x.ActionTracking, "tracking changed")
+		}
 		if mode == "resume" {
 			again, err := invoke(ctx, s, "box_"+phase, actionArgs(phase, x.BoxID))
 			require(err == nil && field(again, "operation_id") == x.ActionID && again["duplicate"] == true,
 				"same-key Stop/Delete replay lost immutable original receipt")
 			newArgs := actionArgs(phase, x.BoxID)
 			newArgs["idempotency_key"] = "s2-p1-" + phase + "-new-key-must-not-dispatch"
-			_, err = invoke(ctx, s, "box_"+phase, newArgs)
-			require(err != nil, "new-key Stop/Delete bypassed original UNKNOWN lock")
+			if scoped {
+				require(field(again, "tracking_id") == x.ActionTracking && field(again, "state") == "UNKNOWN" && field(again, "native_operation_id") == "", "replay changed original")
+				denied, e := s.CallTool(ctx, &mcp.CallToolParams{Name: "box_" + phase, Arguments: newArgs})
+				require(e == nil && denied != nil && denied.IsError, "new-key request must be typed refusal")
+				raw, e := json.Marshal(denied)
+				require(e == nil && strings.Contains(string(raw), "UNKNOWN_BLOCKER") && strings.Contains(string(raw), x.ActionID), "exact original blocker required")
+			} else {
+				_, err = invoke(ctx, s, "box_"+phase, newArgs)
+				require(err != nil, "new-key Stop/Delete bypassed original UNKNOWN lock")
+			}
 			fmt.Println("S2_P1_NATIVE_" + strings.ToUpper(phase) + "_LOST_ACK_RESTART_UNKNOWN_NO_REPLAY=PASS")
 		} else {
 			fmt.Println("S2_P1_NATIVE_" + strings.ToUpper(phase) + "_LOST_ACK_BEFORE_RESTART_UNKNOWN=PASS")
