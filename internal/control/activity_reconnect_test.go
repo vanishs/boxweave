@@ -43,7 +43,7 @@ func (t *activityLostReplyTransport) RoundTrip(req *http.Request) (*http.Respons
 }
 
 func activityMCPServer(st *state.Store) *httptest.Server {
-	svc := &Service{Store: st, Native: native.Reader{
+	svc := &Service{ScopedPeerFresh: true, Store: st, Native: native.Reader{
 		Socket: "/nonexistent", Project: "bw-test",
 	}, BuildVersion: "reconnect-test", BuildCommit: "reconnect-test", Listener: "127.0.0.1:18650"}
 	return httptest.NewServer(svc.Handler())
@@ -74,7 +74,7 @@ func TestActivityRealHTTPReplyLossReopenControllerFreshActorFindsExactUnknown(t 
 		t.Fatal(err)
 	}
 	work := "a2/recover-20261119"
-	rec, err := st.Admit(ctx, state.Admission{
+	rec, err := st.AdmitScoped(ctx, state.Admission{
 		Layer: "bw-test", ActorID: first.ActorID, TokenID: first.ID,
 		Key: "a2-reconnect-lost-native-reply-001", RequestID: "lost-reply-first-client",
 		Action: "box_exec", SafeIntent: []byte("{}"),
@@ -164,7 +164,7 @@ func TestActivityRealHTTPReplyLossReopenControllerFreshActorFindsExactUnknown(t 
 	}
 	// A different Actor cannot bypass an UNKNOWN original by minting a new
 	// idempotency key for the same Box. Do not dispatch another native effect.
-	_, replayErr := reopened.Admit(ctx, state.Admission{
+	_, replayErr := reopened.AdmitScoped(ctx, state.Admission{
 		Layer: "bw-test", ActorID: second.ActorID, TokenID: second.ID,
 		Key: "a2-forbidden-new-key-after-unknown-001", RequestID: "second-agent-replay",
 		Action: "box_exec", SafeIntent: []byte("{}"),

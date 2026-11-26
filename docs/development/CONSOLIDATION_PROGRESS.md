@@ -522,3 +522,5 @@ P1-06d24: [retained-address reader separation](CONSOLIDATION_P1_06D24_CHECKPOINT
 P1-06d25/d26: [controller status and Legacy lifecycle isolation](CONSOLIDATION_P1_06D25_D26_CHECKPOINT.md). Box verified; independent CI pending. Legacy bodies retained, not yet retired.
 
 P1-06d27/d28: [pin repair and exact schema DDL isolation](CONSOLIDATION_P1_06D27_D28_CHECKPOINT.md). Box verification PASS, independent CI pending. Schema 6 unchanged. No retirement waiver.
+
+P1-06d29: [Scoped protocol fixtures and alternate-pool proof](CONSOLIDATION_P1_06D29_CHECKPOINT.md). Alternate pool exact 738b269 native CI_VERIFIED job 140222397266; supersedes earlier BLOCKED/PENDING. Hosted public WAN and final exact-head gates remain OPEN. Fixture conversion Box PASS; independent CI pending.

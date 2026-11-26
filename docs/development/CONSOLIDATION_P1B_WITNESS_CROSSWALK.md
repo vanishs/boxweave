@@ -134,3 +134,5 @@ P1b-06d13: 3cebdb6 exact-head all seven workflows PASS, N2 45809383716 27/27. Ac
 P1-06d14: [real public WAN and runtime/schema consumer checkpoint](CONSOLIDATION_P1_06D14_CHECKPOINT.md). Actual public IPv4 BOX_VERIFIED at 92ffeda, hosted positive UNVERIFIED; P1c/d source BOX_VERIFIED, CI_PENDING; alternate pool BLOCKED, no waiver.
 
 Alternate-pool publication update: 738b269d5ae5d7de13dec002405ac7a439a08bc8 integrates the preserved candidate, superseding publication BLOCKED. Actual N2 45912024502 pending; no installed PASS yet. See CONSOLIDATION_P1B_ALTPOOL_CHECKPOINT.md.
+
+P1-06d29: [Scoped protocol fixtures and alternate-pool proof](CONSOLIDATION_P1_06D29_CHECKPOINT.md). Alternate pool exact 738b269 native CI_VERIFIED job 140222397266; supersedes earlier BLOCKED/PENDING. Hosted public WAN and final exact-head gates remain OPEN. Fixture conversion Box PASS; independent CI pending.
