@@ -20,7 +20,8 @@ from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import pid, token
 from pr178_n2_scoped_lifecycle import acls, binding, instance
 from pr191_scoped_ack_loss import (CTL, QUARANTINE, guard_identity,
-                                   native_idle, native_names, snapshot)
+                                   native_idle, native_names, snapshot,
+                                   wait_poststate)
 from pr191_scoped_lifecycle_recovery import rows
 from pr191_scoped_update_transport import (BIN, DB, SOCKET, command,
                                           http_status, restricted,
@@ -82,7 +83,15 @@ def main(project, receipt, candidate_sha):
     raw = instance(project, NAME)
     assert raw["config"]["volatile.uuid"] == uuid and raw["status"] == "Running"
     assert raw["expanded_devices"]["eth0"]["security.acls"] == pin["acl"]
-    assert native_names() == [NAME] and native_idle(project)
+    # A completed native receipt can precede Incus removal of its operation
+    # from the live inventory. Never redispatch the seed; poll only the
+    # native observer and fail on persistent operations or inventory drift.
+    assert native_names() == [NAME], "unexpected native seed inventory"
+    wait_poststate(lambda: native_idle(project))
+    assert native_names() == [NAME] and native_idle(project), "seed did not quiesce"
+    assert instance(project, NAME)["config"]["volatile.uuid"] == uuid
+    assert binding(uuid) == pin
+    print("P1B_SCOPED_PRIVATE_READ_SEED_IDLE=PASS", flush=True)
     assert acls() == {QUARANTINE, pin["acl"]}
     before = snapshot(oid)
     all_before = rows("SELECT id,state,native_operation_id,updated_at FROM operations ORDER BY id")
