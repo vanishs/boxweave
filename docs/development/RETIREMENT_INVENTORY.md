@@ -52,3 +52,5 @@ See [P1a progress](CONSOLIDATION_PROGRESS.md#p1a--shared-native-helpers-box-veri
 ### P1b source fixture checkpoint
 
 Common source MCP fixture converted to Scoped; retained missing-peer classification, exact replay and actor/ownership denial. Real native ACK/WAL fixtures and Scoped read-only recovery proof remain OPEN; do not remove legacy recovery/dispatch/SQL until equivalent assertions are proven. See [P1b progress](CONSOLIDATION_PROGRESS.md#p1b--scoped-common-source-fixture-and-replay-checkpoint).
+
+P1b follow-up: exact `d1f4d305c1e552d6723abdb5a68dae39917334b2` first ACK loss and completed-journal native recovery CI_VERIFIED; real SQLite child-process cuts BOX_VERIFIED with synthetic native receipts. Actual installed native WAL and generic S2/S2.5 conversion remain OPEN. Retain all existing original fault witnesses and Legacy paths until equivalent assertions pass. See [progress](CONSOLIDATION_PROGRESS.md#p1b--first-ackfinal-commit-native-ci-pass-sqlite-process-cut-source-verified).
