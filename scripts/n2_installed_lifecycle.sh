@@ -243,6 +243,7 @@ fi
 if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
   sh scripts/pr191_scoped_s2_quota.sh "$project" "$work/actor.receipt" "$first"
   exit 0
 fi

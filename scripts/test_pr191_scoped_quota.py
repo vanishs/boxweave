@@ -11,7 +11,8 @@ class QuotaBoundaryTests(unittest.TestCase):
     def test_non_hosted_environment_refuses(self):
         env = dict(os.environ, GITHUB_ACTIONS="false", RUNNER_ENVIRONMENT="local")
         for name in ("s2_ext4_quota_pool_lab.sh", "s2_mcp_quota_witness.sh",
-                     "pr191_scoped_s2_quota.sh"):
+                     "pr191_scoped_s2_quota.sh", "pr191_scoped_s2_direct_quota.sh",
+                     "s2_native_guest_quota_witness.sh"):
             with self.subTest(name=name):
                 result = subprocess.run(["sh", "-e", str(ROOT / "scripts" / name)],
                                         env=env, capture_output=True, timeout=5)
@@ -32,6 +33,15 @@ class QuotaBoundaryTests(unittest.TestCase):
         self.assertLess(n2.index(". scripts/s2_ext4_quota_pool_lab.sh"),
                         n2.index("sudo sh install.sh --plan --scoped-peer-fresh"))
         self.assertIn("P1B_SCOPED_QUOTA_FIXED_LEDGER_AND_NATIVE_ABSENCE=PASS", installed)
+        direct = (ROOT / "scripts/pr191_scoped_s2_direct_quota.sh").read_text()
+        native = (ROOT / "scripts/s2_native_guest_quota_witness.sh").read_text()
+        self.assertIn(". scripts/s2_native_guest_quota_witness.sh", old)
+        self.assertIn(". scripts/s2_native_guest_quota_witness.sh", direct)
+        self.assertIn(". scripts/pr191_scoped_s2_direct_quota.sh", installed)
+        self.assertIn("S2_NATIVE_REAL_GUEST_RECORDED_EXEC_QUOTA_PARTIAL_OUTPUT=PASS", native)
+        self.assertIn("P1B_SCOPED_DIRECT_NATIVE_NO_SYNTHETIC_MCP_RECEIPTS=PASS", direct)
+        self.assertNotIn("incus delete", direct)
+        self.assertIn("quota_mcp cleanup", direct)
 
 
 if __name__ == "__main__":

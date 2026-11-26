@@ -57,6 +57,9 @@ on:
       - scripts/pr191_scoped_s2_native.sh
       - scripts/pr191_scoped_s2_retention.sh
       - scripts/pr191_scoped_s2_quota.sh
+      - scripts/pr191_scoped_s2_direct_quota.sh
+      - scripts/s2_native_guest_quota_witness.sh
+      - scripts/s2_native_guest_quota_probe.go
       - scripts/pr191_scoped_auth_races.sh
       - scripts/pr191_scoped_private_reads.py
       - scripts/s2_p1_operation_list_boundary.sh
@@ -176,7 +179,7 @@ jobs:
           if test "$P1B_S2_PHYSICAL_QUOTA" = 1; then
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
-            for marker in S2_NATIVE_EXT4_PROJECT_QUOTA_BACKING_CONFIGURED S2_MCP_QUOTA_NEAR_LIMIT_SAFE_MOUNT S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX S2_MCP_NATIVE_OUTPUT_404_TYPED_WITHOUT_FALSE_EXPIRY P1B_SCOPED_QUOTA_FIXED_LEDGER_AND_NATIVE_ABSENCE; do
+            for marker in S2_NATIVE_EXT4_PROJECT_QUOTA_BACKING_CONFIGURED S2_MCP_QUOTA_NEAR_LIMIT_SAFE_MOUNT S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX S2_MCP_NATIVE_OUTPUT_404_TYPED_WITHOUT_FALSE_EXPIRY P1B_SCOPED_QUOTA_FIXED_LEDGER_AND_NATIVE_ABSENCE P1B_SCOPED_DIRECT_QUOTA_OWNERSHIP_PINNED S2_NATIVE_REAL_GUEST_RECORDED_EXEC_QUOTA_PARTIAL_OUTPUT P1B_SCOPED_DIRECT_NATIVE_NO_SYNTHETIC_MCP_RECEIPTS P1B_SCOPED_DIRECT_QUOTA_FIXED_LEDGER_AND_NATIVE_ABSENCE S2_NATIVE_GUEST_QUOTA_SPACE_RECOVERED_AND_FIXTURE_REMOVED; do
               grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             exit 0

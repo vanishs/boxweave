@@ -54,11 +54,28 @@ func invoke(ctx context.Context, s *mcp.ClientSession, name string, args map[str
 }
 func stringField(m map[string]any, name string) string { v, _ := m[name].(string); return v }
 
-func refused(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any, expected error) {
+func refused(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any, code, category, admission, originalID string) {
 	r, err := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	ensure(err == nil && r != nil && r.IsError, "negative request was not a structured MCP refusal")
-	content, err := json.Marshal(r.Content)
-	ensure(err == nil && strings.Contains(string(content), expected.Error()), "negative request had unexpected refusal class")
+	ensure(err == nil && r != nil && r.IsError && len(r.Content) == 1, "negative request was not a structured MCP refusal")
+	part, ok := r.Content[0].(*mcp.TextContent)
+	var failure struct {
+		Code          string           `json:"code"`
+		Category      string           `json:"category"`
+		Admission     string           `json:"admission"`
+		OriginalState string           `json:"original_state"`
+		Next          state.NextAction `json:"next_action"`
+	}
+	ensure(ok && json.Unmarshal([]byte(part.Text), &failure) == nil, "negative request missing typed refusal")
+	ensure(failure.Code == code && failure.Category == category && failure.Admission == admission,
+		"negative request had unexpected refusal class: "+name+" "+failure.Code)
+	if originalID != "" {
+		ensure(failure.OriginalState == "UNKNOWN" && failure.Next.Tool == "operation_recover" &&
+			failure.Next.Kind == "INSPECT_RECOVERY" && failure.Next.Mode == "inspect" &&
+			failure.Next.OperationID == originalID, "refusal lost exact UNKNOWN recovery navigation")
+	} else {
+		ensure(failure.Next.OperationID == "" && failure.OriginalState == "" &&
+			failure.Next.Kind == "CHECK_AUTHORIZED_SCOPE", "unowned refusal exposed original identity")
+	}
 }
 
 func main() {
@@ -145,11 +162,11 @@ func main() {
 		otherCreate[k] = v
 	}
 	otherCreate["idempotency_key"] = "s2-bound-final-different-create"
-	refused(ctx, session, "box_create", otherCreate, state.ErrResourceLocked)
+	refused(ctx, session, "box_create", otherCreate, "UNKNOWN_BLOCKER", "EFFECT_UNVERIFIED", "NOT_ADMITTED", originalID)
 	refused(ctx, session, "box_delete", map[string]any{
 		"box_id": uuid, "idempotency_key": "s2-bound-final-different-delete",
-	}, state.ErrNotFound)
-	refused(ctx, session, "box_get", map[string]any{"box_id": uuid}, state.ErrNotFound)
+	}, "BOX_NOT_FOUND_OR_NOT_OWNED", "AUTHORIZATION_OR_ABSENCE", "UNVERIFIED", "")
+	refused(ctx, session, "box_get", map[string]any{"box_id": uuid}, "BOX_NOT_FOUND_OR_NOT_OWNED", "AUTHORIZATION_OR_ABSENCE", "UNVERIFIED", "")
 	after, err := reader.ObserveCreatedByOperation(ctx, name, originalID)
 	ensure(err == nil && after.UUID == uuid && after.NativeState == "Stopped",
 		"original native UUID changed after refused Delete")

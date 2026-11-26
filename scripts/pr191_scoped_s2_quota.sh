@@ -64,3 +64,6 @@ with sqlite3.connect("file:"+db+"?mode=ro",uri=True) as c:
     assert not c.execute("SELECT id FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')").fetchall()
 print("P1B_SCOPED_QUOTA_FIXED_LEDGER_AND_NATIVE_ABSENCE=PASS")
 CHECK
+
+# Second independent fixture: direct native SDK recording, MCP ownership.
+. scripts/pr191_scoped_s2_direct_quota.sh

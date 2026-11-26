@@ -10,6 +10,9 @@ on:
       - .github/workflows/v1-s2-native.yml
       - scripts/s2_p1_operation_list_boundary.sh
       - scripts/s2_p1_operation_list_boundary_probe.go
+      - scripts/s2_p1_bound_create_receipt_fault_probe.go
+      - scripts/s2_native_guest_quota_witness.sh
+      - scripts/accept_s2_native.sh
   workflow_dispatch:
 
 permissions:

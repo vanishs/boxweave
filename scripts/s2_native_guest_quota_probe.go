@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,11 @@ func main() {
 	if !strings.HasPrefix(project, "user-") || len(project) > 64 ||
 		socket != "/var/lib/incus/unix.socket.user" {
 		panic("invalid restricted quota lab")
+	}
+	if os.Getenv("BW_S2_QUOTA_SCOPED") == "1" {
+		if os.Args[1] == "create" || project != "user-"+strconv.Itoa(os.Geteuid()) || len(uuid) != 36 {
+			panic("Scoped witness requires exact existing MCP-owned quota Box")
+		}
 	}
 	r := native.Reader{Socket: socket, Project: project}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
