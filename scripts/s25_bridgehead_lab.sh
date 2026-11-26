@@ -85,6 +85,26 @@ if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONF
 fi
 echo S25_LAB_FOREIGN_NATIVE_PROJECT_DENIED=PASS
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ # Reuse the exact image already acquired by the authorized disposable L0.
+ # No new CONNECT hosts, parent socket, image server or production capability.
+ image_fingerprint="$(sudo incus query "/1.0/images/aliases/boxweave-ubuntu-24.04?project=$project" | python3 -c 'import json,sys;print(json.load(sys.stdin)["target"])')"
+ printf '%s\n' "$image_fingerprint" | grep -Ex '[0-9a-f]{64}' >/dev/null
+ test ! -e "$work/staging/s25-ubuntu.meta"
+ test ! -e "$work/staging/s25-ubuntu.meta.root"
+ # Incus 7.6 split-image export to explicit nonexistent file writes
+ # metadata and <file>.root. Refuse a different format rather than guessing.
+ sudo incus image export "$image_fingerprint" "$work/staging/s25-ubuntu.meta" --project "$project" --quiet
+ sudo test -s "$work/staging/s25-ubuntu.meta"
+ sudo test -s "$work/staging/s25-ubuntu.meta.root"
+ sudo chown "$(id -u):$(id -g)" "$work/staging/s25-ubuntu.meta" "$work/staging/s25-ubuntu.meta.root"
+ chmod 0600 "$work/staging/s25-ubuntu.meta" "$work/staging/s25-ubuntu.meta.root"
+ image_meta_sha="$(sha256sum "$work/staging/s25-ubuntu.meta" | cut -d' ' -f1)"
+ image_root_sha="$(sha256sum "$work/staging/s25-ubuntu.meta.root" | cut -d' ' -f1)"
+ test "$(cat "$work/staging/s25-ubuntu.meta" "$work/staging/s25-ubuntu.meta.root" | sha256sum | cut -d' ' -f1)" = "$image_fingerprint"
+ printf 'image_fingerprint=%s\nimage_metadata_sha256=%s\nimage_rootfs_sha256=%s\n' "$image_fingerprint" "$image_meta_sha" "$image_root_sha" > "$proof/image-identity.txt"
+ echo P1B_S25_OUTER_EXACT_IMAGE_EXPORTED=PASS
+fi
 
 net="incusbr-$uid"
 acl="bw-s25-standalone-owned"
@@ -422,6 +442,7 @@ echo S25_L0_SIMWAN6_TLS_NAMESPACE_READY=PASS
 
 if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  export P1B_S25_SCOPED=1 BW_S25_SCOPED_HELPER_SHA="$setup_helper_sha" BW_S25_INSTALL_SHA="$install_sha"
+ export BW_S25_IMAGE_FINGERPRINT="$image_fingerprint" BW_S25_IMAGE_META_SHA="$image_meta_sha" BW_S25_IMAGE_ROOT_SHA="$image_root_sha"
 fi
 export BW_S25_URL=http://127.0.0.1:18650/mcp
 export BW_S25_PROJECT="$project"

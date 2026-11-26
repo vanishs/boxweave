@@ -10,7 +10,7 @@ test ! -e /var/lib/incus
 test ! -e /var/lib/boxweave
 case "${P1B_S25_SCOPED:-0}" in 0|1) ;; *) exit 88 ;; esac
 if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
- test "$#" = 7
+ test "$#" = 10
  test "$(hostname)" = bw-s25-mcp-l1
  awk '$5 ~ /^\/(var\/lib|run)\/incus(\/|$)/ {bad=1} END {exit bad}' /proc/self/mountinfo
  curl -fsSL --max-time 60 "$stage/pr191_s25_scoped_setup.sh" -o /root/pr191_s25_scoped_setup.sh
@@ -125,8 +125,26 @@ if runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HO
  exit 51
 fi
 echo S25_INNER_FOREIGN_PROJECT_DENIED=PASS
-incus image copy images:ubuntu/24.04 local: --target-project "$project" \
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ image_fingerprint="$8"; meta_sha="$9"; root_sha="${10}"
+ for digest in "$image_fingerprint" "$meta_sha" "$root_sha"; do
+   printf '%s\n' "$digest" | grep -Ex '[0-9a-f]{64}' >/dev/null
+ done
+ mkdir -m 0700 /root/s25-image
+ curl -fsSL --noproxy '*' --max-time 120 "$stage/s25-ubuntu.meta" -o /root/s25-image/meta
+ curl -fsSL --noproxy '*' --max-time 240 "$stage/s25-ubuntu.meta.root" -o /root/s25-image/rootfs
+ printf '%s  %s\n' "$meta_sha" /root/s25-image/meta "$root_sha" /root/s25-image/rootfs | sha256sum -c -
+ test "$(cat /root/s25-image/meta /root/s25-image/rootfs | sha256sum | cut -d' ' -f1)" = "$image_fingerprint"
+ test "$(incus image list --project "$project" --format csv -c F)" = ""
+ incus image import /root/s25-image/meta /root/s25-image/rootfs --project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
+ actual="$(incus query "/1.0/images/aliases/boxweave-ubuntu-24.04?project=$project" | python3 -c 'import json,sys;print(json.load(sys.stdin)["target"])')"
+ test "$actual" = "$image_fingerprint"
+ printf '%s\n' "$image_fingerprint" > /root/s25-image/fingerprint
+ echo P1B_S25_INNER_EXACT_IMAGE_IMPORTED=PASS
+else
+ incus image copy images:ubuntu/24.04 local: --target-project "$project" \
   --alias boxweave-ubuntu-24.04 >/dev/null
+fi
 echo S25_INNER_IMAGE_READY=PASS
 net="incusbr-$uid"
 incus network show "$net" >/dev/null

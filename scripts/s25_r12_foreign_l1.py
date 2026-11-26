@@ -211,7 +211,21 @@ def setup():
         os.fsync(out.fileno())
     # Foreign guest is created by INDEPENDENT native root in the disposable
     # inner daemon, not by the v1 project-confined service or shared incus.
-    run("incus", "launch", "images:ubuntu/24.04", FOREIGN, "--project", FOREIGN_PROJECT, timeout=270)
+    image="images:ubuntu/24.04"
+    if SCOPED:
+        image=Path("/root/s25-image/fingerprint").read_text().strip()
+        assert re.fullmatch(r"[0-9a-f]{64}",image)
+        h=hashlib.sha256()
+        for path in ("/root/s25-image/meta","/root/s25-image/rootfs"):
+            with open(path,"rb") as f:
+                for data in iter(lambda:f.read(1024*1024),b""):
+                    h.update(data)
+        assert h.hexdigest()==image
+        assert not run("incus","image","list","--project",FOREIGN_PROJECT,"-f","csv","-c","F").stdout.strip()
+        run("incus","image","import","/root/s25-image/meta","/root/s25-image/rootfs",
+            "--project",FOREIGN_PROJECT,timeout=180)
+        assert run("incus","image","list","--project",FOREIGN_PROJECT,"-f","csv","-c","F").stdout.strip()==image
+    run("incus", "launch", image, FOREIGN, "--project", FOREIGN_PROJECT, timeout=270)
     for _ in range(85):
         try:
             attr(FOREIGN, FOREIGN_PROJECT, 4)

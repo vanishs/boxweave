@@ -40,6 +40,23 @@ class ScopedMountOracle(unittest.TestCase):
                 self.assertNotEqual(result(rule,path),0)
 
 
+class ScopedImageWitness(unittest.TestCase):
+    def test_exact_source_image_transfer_not_proxy_expansion(self):
+        root=Path(__file__).resolve().parent
+        outer=(root/"s25_bridgehead_lab.sh").read_text()
+        inner=(root/"s25_inner_setup.sh").read_text()
+        foreign=(root/"s25_r12_foreign_l1.py").read_text()
+        self.assertIn('image export "$image_fingerprint"',outer)
+        self.assertIn('cat "$work/staging/s25-ubuntu.meta" "$work/staging/s25-ubuntu.meta.root" | sha256sum',outer)
+        self.assertIn('test "$#" = 10',inner)
+        self.assertIn("cat /root/s25-image/meta /root/s25-image/rootfs | sha256sum",inner)
+        self.assertLess(inner.index("sha256sum -c -",inner.index("mkdir -m 0700 /root/s25-image")),inner.index("incus image import /root/s25-image/meta"))
+        self.assertIn('test "$actual" = "$image_fingerprint"',inner)
+        self.assertIn('assert h.hexdigest()==image',foreign)
+        self.assertIn('"--project",FOREIGN_PROJECT,timeout=180',foreign)
+        self.assertIn('"-c","F"',foreign)
+
+
 class ScopedPolicyOracle(unittest.TestCase):
     def test_exact_gateway_exclusion_not_subnet_exclusion(self):
         for blocked, gateway, peers, permitted in (

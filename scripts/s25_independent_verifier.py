@@ -518,6 +518,12 @@ def verify_scoped_layers():
     outer_project = os.environ["BW_S25_PROJECT"]
     inner_project = inner("sh", "-c", "printf user-; id -u boxweave")
     expected = os.environ["BW_S25_BINARY_SHA256"]
+    image=os.environ["BW_S25_IMAGE_FINGERPRINT"]
+    require(inner("cat","/root/s25-image/fingerprint")==image, "inner image fingerprint drifted")
+    for runner,project in ((native,outer_project),(lambda *args:inner("incus",*args),inner_project)):
+        alias=as_json(runner("query","/1.0/images/aliases/boxweave-ubuntu-24.04?project="+project))
+        require(alias["target"]==image, "independent exact image identity mismatch")
+    print("P1B_S25_V_TWO_LAYER_IMAGE_IDENTITY=PASS")
     commit = os.environ["P1B_S25_EXACT_HEAD"]
     for runner, project, checkpoint, name, actor in (
         (lambda *args: cli("sudo", *args), outer_project, m, "bw-s25-mcp-l1", "agent-outer-alpha"),

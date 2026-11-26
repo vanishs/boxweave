@@ -85,7 +85,9 @@ jobs:
               grep -Fxq "P1B_S25_SCOPED_${marker}=${layer}:PASS" "$RUNNER_TEMP/s25-evidence/console.log"
             done
           done
-          grep -Fxq P1B_S25_INNER_LOCAL_DAEMON_SOCKET_BOUNDARY=PASS "$RUNNER_TEMP/s25-evidence/console.log"
+          for marker in P1B_S25_OUTER_EXACT_IMAGE_EXPORTED P1B_S25_INNER_EXACT_IMAGE_IMPORTED P1B_S25_V_TWO_LAYER_IMAGE_IDENTITY P1B_S25_INNER_LOCAL_DAEMON_SOCKET_BOUNDARY; do
+            grep -Fxq "$marker=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          done
           test "$(grep -c '^P1B_S25_SCOPED_ORIGINAL ' "$RUNNER_TEMP/s25-evidence/console.log")" = 2
           for marker in P1B_S25_SCOPED_TWO_LAYER_FIXED_LEDGER_ACL_GUARD P1B_S25_SCOPED_STARTUP_LIFECYCLE S25_V_INNER_ORIGINAL_MCP_L2_DELETE_NATIVE_ABSENCE S25_V_EXACT_NATIVE_L0_CLEANUP_ORIGINAL_SQLITE; do
             grep -Fxq "$marker=PASS" "$RUNNER_TEMP/s25-evidence/console.log"

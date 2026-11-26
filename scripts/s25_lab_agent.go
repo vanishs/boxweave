@@ -378,7 +378,8 @@ func bootstrap(ctx context.Context) {
 	extra := ""
 	if os.Getenv("P1B_S25_SCOPED") == "1" {
 		mode = "P1B_S25_SCOPED=1 "
-		extra = " '" + environmental("BW_S25_SCOPED_HELPER_SHA") + "' '" + environmental("BW_S25_INSTALL_SHA") + "'"
+		extra = " '" + environmental("BW_S25_SCOPED_HELPER_SHA") + "' '" + environmental("BW_S25_INSTALL_SHA") + "'" +
+			" '" + environmental("BW_S25_IMAGE_FINGERPRINT") + "' '" + environmental("BW_S25_IMAGE_META_SHA") + "' '" + environmental("BW_S25_IMAGE_ROOT_SHA") + "'"
 	}
 	cmd := "set -eu; curl -fsSL --max-time 45 " + stage + "/s25_inner_setup.sh -o /tmp/s25_inner_setup.sh; " +
 		"printf '%s  %s\\n' '" + sha + "' /tmp/s25_inner_setup.sh | sha256sum -c -; " +
@@ -395,7 +396,7 @@ func bootstrap(ctx context.Context) {
 		"nested independent routed IPv6 HTTPS SDK proof missing")
 	fmt.Println("S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS")
 	if os.Getenv("P1B_S25_SCOPED") == "1" {
-		for _, marker := range []string{"P1B_S25_SCOPED_NATIVE_BOOTSTRAP=inner:PASS", "P1B_S25_INNER_LOCAL_DAEMON_SOCKET_BOUNDARY=PASS", "P1B_S25_SCOPED_STALE_REVIEW_REFUSED=inner:PASS", "P1B_S25_SCOPED_FRESH_INSTALL=inner:PASS"} {
+		for _, marker := range []string{"P1B_S25_SCOPED_NATIVE_BOOTSTRAP=inner:PASS", "P1B_S25_INNER_EXACT_IMAGE_IMPORTED=PASS", "P1B_S25_INNER_LOCAL_DAEMON_SOCKET_BOUNDARY=PASS", "P1B_S25_SCOPED_STALE_REVIEW_REFUSED=inner:PASS", "P1B_S25_SCOPED_FRESH_INSTALL=inner:PASS"} {
 			must(strings.Contains(out, marker), "nested Scoped installation evidence missing")
 			fmt.Println(marker)
 		}
