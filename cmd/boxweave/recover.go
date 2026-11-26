@@ -25,6 +25,7 @@ type recoverArgs struct {
 	DB, Socket, Project, ServiceUser, Action, Operation, Reviewer, Stream string
 	Challenge, ConfirmUUID, Reason, RecoveryKey                           string
 	Approved, Acknowledge                                                 bool
+	ScopedGCManifest                                                      *install.Manifest // private root-to-worker evidence; never a CLI argument
 }
 
 func recoveryPlan(a recoverArgs) install.Plan {
@@ -50,8 +51,32 @@ func recoverLocal(a recoverArgs) error {
 		a.Action != "delete-inspect" && a.Action != "delete-challenge" && a.Action != "delete-confirm" {
 		return errors.New("recovery action must be diagnose/reconcile, inspect/challenge/release, create-*, delete-* or gc-*")
 	}
-	if _, err := install.Status(p); err != nil {
+	// The existing local root review must cover the Root-only fresh journal.
+	// Hold the existing maintenance lock until the restricted GC worker exits.
+	a.ScopedGCManifest = nil
+	if gcReviewAction(a.Action) {
+		release, err := acquireMaintenanceLock()
+		if err != nil {
+			return err
+		}
+		defer release()
+		if err = gcRecoveryFences(); err != nil {
+			return err
+		}
+	}
+	m, err := install.Status(p)
+	if err != nil {
 		return fmt.Errorf("installed identity unverified: %w", err)
+	}
+	if m.ScopedPeerMode != "" {
+		// Do not widen the obsolete generic UNKNOWN release/bind paths.
+		if !gcReviewAction(a.Action) {
+			return errors.New("scoped original requires the reviewed recovery route")
+		}
+		if err := install.VerifyScopedGCReviewIdentity(p, m); err != nil {
+			return err
+		}
+		a.ScopedGCManifest = &m
 	}
 	uid, gid, err := install.ServiceIdentity(p)
 	if err != nil {
@@ -145,10 +170,25 @@ func performRecovery(a recoverArgs) error {
 	if a.DB != filepath.Join(p.StateDir, "ledger.sqlite") || a.Operation == "" || a.Reviewer == "" {
 		return errors.New("invalid reviewed recovery target")
 	}
-	if _, err := install.Status(p); err != nil {
-		return err
+	var store *state.Store
+	var err error
+	if a.ScopedGCManifest != nil {
+		if !gcReviewAction(a.Action) {
+			return state.ErrInvalid
+		}
+		if err = gcRecoveryFences(); err != nil {
+			return err
+		}
+		if err = install.VerifyScopedGCReviewIdentity(p, *a.ScopedGCManifest); err != nil {
+			return err
+		}
+		store, err = state.OpenExistingRecovery(a.DB)
+	} else {
+		if _, err = install.Status(p); err != nil {
+			return err
+		}
+		store, err = state.Open(a.DB)
 	}
-	store, err := state.Open(a.DB)
 	if err != nil {
 		return err
 	}
@@ -238,6 +278,19 @@ func performRecovery(a recoverArgs) error {
 		}{r.OperationID, "UNKNOWN", true, false})
 	}
 	return errors.New("unsupported recovery mode")
+}
+
+func gcReviewAction(action string) bool {
+	return action == "gc-inspect" || action == "gc-challenge" || action == "gc-release"
+}
+
+func gcRecoveryFences() error {
+	for _, check := range []func() error{install.CheckScopedDrainFence, install.CheckOfflineRetirementFence, install.CheckScopedRetirementFence} {
+		if err := check(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // performGCRecovery is reachable ONLY through the existing root-reviewed
