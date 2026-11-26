@@ -152,7 +152,7 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 			return nil, state.Receipt{}, errors.New("TRACKING_UNAVAILABLE")
 		}
 		a.RequestID = reqID
-		r, err := s.Store.Admit(ctx, a)
+		r, err := s.admitNetwork(ctx, a)
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}
@@ -241,7 +241,7 @@ func (s *Service) operateForwardDelete(ctx context.Context, req *mcp.CallToolReq
 		return nil, state.Receipt{}, errors.New("TRACKING_UNAVAILABLE")
 	}
 	a.RequestID = reqID
-	r, err := s.Store.Admit(ctx, a)
+	r, err := s.admitNetwork(ctx, a)
 	if err != nil {
 		return nil, state.Receipt{}, err
 	}

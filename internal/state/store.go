@@ -552,6 +552,16 @@ func activeCredentialForActor(ctx context.Context, q credentialRowQuery, actorID
 // Admit persists the original immutable intent hash and sanitized replay payload.
 // Concurrent equal requests must return exactly the original IDs and cause no native effect.
 func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
+	return s.admitNetworkMode(ctx, a, false)
+}
+
+// AdmitScoped selects the installed Scoped policy from the trusted controller,
+// not from an MCP field. Exact replay still precedes all fresh-work fences.
+func (s *Store) AdmitScoped(ctx context.Context, a Admission) (Receipt, error) {
+	return s.admitNetworkMode(ctx, a, true)
+}
+
+func (s *Store) admitNetworkMode(ctx context.Context, a Admission, scoped bool) (Receipt, error) {
 	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
 		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 || a.RequestID == "" ||
 		!validRef(a.WorkRef) || !validRef(a.AgentRef) || len(a.ResourceKey) > 192 ||
@@ -599,7 +609,7 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	}
 	// Even a lost root ACL acknowledgement cannot reopen the Project. Exact
 	// idempotent receipt replay above remains available.
-	if e := requireNoIPv4Compaction(ctx, tx, a.Layer); e != nil {
+	if e := requireNetworkAdmissionTx(ctx, tx, a.Layer, scoped); e != nil {
 		return Receipt{}, e
 	}
 	if err = scopedCreateAdmissionBarrier(ctx, tx, a); err != nil {

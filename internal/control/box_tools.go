@@ -204,11 +204,19 @@ func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 	if err != nil {
 		return state.Receipt{}, err
 	}
-	return s.Store.Admit(ctx, state.Admission{
+	return s.admitNetwork(ctx, state.Admission{
 		Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID, Key: key, Action: action,
 		BoxUUID: boxUUID, Incarnation: incarnation, ResourceKey: resourceKey,
 		WorkRef: work, AgentRef: agent, SafeIntent: b, RequestID: requestID, CleanupDependencies: action == "box_delete",
 	})
+}
+
+// The mode is installation-selected, never an input field.
+func (s *Service) admitNetwork(ctx context.Context, a state.Admission) (state.Receipt, error) {
+	if s.ScopedPeerFresh {
+		return s.Store.AdmitScoped(ctx, a)
+	}
+	return s.Store.Admit(ctx, a)
 }
 
 func (s *Service) worker() state.Worker {

@@ -1,0 +1,9 @@
+# P1-06d17 - mode-selected transactional admission guard
+
+Parent 6b97b4406c2836dab1ed9d94070031f7a7f2af30, exact clean Box sync c1ac8093f2135f358231268580229b92 exit0. Its seven CI workflows observed queued/running; no new CI result inferred. Previous e922bb2 installed pin witness remains applicable to that source.
+
+C02/C03/C05/C10: installed controller selects Scoped or Legacy admission internally; no new MCP input or intent hash change. All fresh ordinary Box/Exec/file/readiness and Forward admissions through the existing Service helper, plus the typed Scoped Peer admission, now select Scoped's global mixed-retirement refusal inside the admission writer transaction, after exact original replay. Legacy retains the existing Project compaction fence. Preserve all downstream capacity/ownership/auth/native barriers; no old table or fallback removed yet. The transitional global empty-table guard is removed only in the exact schema transition with old-layout refusal.
+
+Box edits 0c656cfb71d5fa17827cab67a277aac4 exit0. Regression a9148701a1557b5de8f9409d9a8afa0f exit0: three mixed history cases (archive, queue, compaction) in a distinct Project, exact original receipt and tracking replay, no admitted operation or claim in refused fresh Project; existing legacy compaction and scoped staged reservation regressions, all control package tests (17.120s), state/control vet. Source evidence only, not installed-native acceptance. Race/build before checkpoint publication.
+
+Next: same verified-mode guard for live and reviewed recovery, with original target re-read inside transaction and read-only plan parity; retain exact replay. Then remaining legacy query branches, root/startup and schema transition. Alternate pool remains BLOCKED (preserved original staged tree); hosted public positive remains UNVERIFIED, independent Box WAN proof retained. L014 review due, existing learning reused; no new asset promotion. No merge, release, cleanup or P1 completion.

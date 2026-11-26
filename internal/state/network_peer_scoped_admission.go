@@ -82,5 +82,5 @@ func (s *Store) AdmitScopedPeerSet(ctx context.Context, a Admission, src, dst st
 	if e != nil {
 		return Receipt{}, e
 	}
-	return s.Admit(ctx, a)
+	return s.AdmitScoped(ctx, a)
 }
