@@ -69,6 +69,14 @@ project="user-$uid"
 bridge="incusbr-$uid"
 test "$(sudo incus project get "$project" restricted)" = true
 test -z "$(sudo incus list --all-projects -c n -f csv)"
+if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  # Select the original independent quota fixture before the fresh review,
+  # never alter an installed or populated Scoped Project.
+  . scripts/s2_ext4_quota_pool_lab.sh
+  sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
+  test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-native-pool
+fi
 if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$work/candidate-a" --sha256 "$first" > "$work/scoped-plan.txt"
   grep -Eq '^scoped_fresh_review_sha256=[a-f0-9]{64}$' "$work/scoped-plan.txt"
@@ -224,6 +232,12 @@ sudo systemctl is-active --quiet boxweave.service
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
 sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
+  sh scripts/pr191_scoped_s2_quota.sh "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
 if test "${P1B_S2_UPDATE_TRANSPORT:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go

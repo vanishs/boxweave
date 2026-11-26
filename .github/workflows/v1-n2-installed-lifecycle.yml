@@ -56,6 +56,10 @@ on:
       - scripts/pr191_scoped_ack_loss.py
       - scripts/pr191_scoped_s2_native.sh
       - scripts/pr191_scoped_s2_retention.sh
+      - scripts/pr191_scoped_s2_quota.sh
+      - scripts/s2_ext4_quota_pool_lab.sh
+      - scripts/s2_mcp_quota_witness.sh
+      - scripts/test_pr191_scoped_quota.py
       - scripts/pr191_scoped_update_transport.py
       - scripts/s2_ack_loss_proxy.go
       - scripts/s2_ack_loss_probe.go
@@ -97,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
@@ -106,6 +110,7 @@ jobs:
       P1B_ACK_CUT: ${{ matrix.mode == 'scoped-create-ack' && 'create' || matrix.mode == 'scoped-delete-ack' && 'delete' || matrix.mode == 'scoped-update-ack' && 'update' || matrix.mode == 'scoped-update-ack-receipt' && 'update-receipt' || '' }}
       P1B_WAL_CUT: ${{ matrix.mode == 'scoped-create-wal-before' && 'create-before' || matrix.mode == 'scoped-create-wal-after' && 'create-after' || matrix.mode == 'scoped-delete-wal-before' && 'delete-before' || matrix.mode == 'scoped-delete-wal-after' && 'delete-after' || matrix.mode == 'scoped-exec-wal-before' && 'exec-before' || matrix.mode == 'scoped-exec-wal-after' && 'exec-after' || '' }}
       P1B_S2_EXEC_CRASH: ${{ matrix.mode == 'scoped-exec-crash' && '1' || '0' }}
+      P1B_S2_PHYSICAL_QUOTA: ${{ matrix.mode == 'scoped-physical-quota' && '1' || '0' }}
       P1B_S2_UPDATE_TRANSPORT: ${{ matrix.mode == 'scoped-update-transport' && '1' || '0' }}
       P1B_S2_RETENTION: ${{ matrix.mode == 'scoped-exec-retention' && '1' || '0' }}
       P1B_S2_NATIVE: ${{ matrix.mode == 'scoped-s2-native' && '1' || '0' }}
@@ -144,6 +149,14 @@ jobs:
           for marker in ACTIVE_EMPTY OFFLINE_EMPTY UNTRUSTED_OBSERVER_NONROOT UNSAFE_STATE_STALE NEGATIVE_NO_EFFECT; do
             grep -Fxq "PR188_H1B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
           done
+          if test "$P1B_S2_PHYSICAL_QUOTA" = 1; then
+            grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
+            for marker in S2_NATIVE_EXT4_PROJECT_QUOTA_BACKING_CONFIGURED S2_MCP_QUOTA_NEAR_LIMIT_SAFE_MOUNT S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX S2_MCP_NATIVE_OUTPUT_404_TYPED_WITHOUT_FALSE_EXPIRY P1B_SCOPED_QUOTA_FIXED_LEDGER_AND_NATIVE_ABSENCE; do
+              grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            exit 0
+          fi
           if test "$P1B_S2_UPDATE_TRANSPORT" = 1; then
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
