@@ -232,6 +232,14 @@ sudo systemctl is-active --quiet boxweave.service
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
 sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test "${P1B_S2_AUTH_RACES:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/s2_p1_operation_list_boundary_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-private-read-probe" ./scripts/s2_p1_private_read_inflight_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-private-read-proxy" ./scripts/s2_p1_private_read_delay_proxy.go
+  sh scripts/pr191_scoped_auth_races.sh "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
 if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go

@@ -66,6 +66,14 @@ func runCase(ctx context.Context, st *state.Store, project, dir, mode string) {
 		WorkRef: "lab/p1-debugger-list-" + mode, AgentRef: "source-boundary",
 	})
 	must(e == nil && rec.State == "ADMITTED", "original scoped list fixture not admitted")
+	expectedState := "ADMITTED"
+	if os.Getenv("BW_S2_INSTALLED_SCOPED_AUTH") == "1" {
+		// The fixed installed ledger must contain a terminal synthetic read
+		// witness, never an outstanding synthetic native dispatch.
+		must(rec.NativeOperationID == "" && st.CancelQueued(ctx, project, rec.ID) == nil, "could not settle read-only fixture")
+		expectedState = "CANCELLED"
+		fmt.Printf("P1B_SCOPED_LIST_AUTH_ORIGINAL %s %s %s\n", mode, rec.ID, rec.TrackingID)
+	}
 	cli := mcp.NewClient(&mcp.Implementation{Name: "s2-p1-real-list-boundary", Version: "1"}, nil)
 	s, e := cli.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint:             "http://127.0.0.1:18667/mcp",
@@ -135,7 +143,7 @@ func runCase(ctx context.Context, st *state.Store, project, dir, mode string) {
 		must(e == nil && !strings.Contains(string(b), rec.ID), "scoped private original disclosed after auth loss")
 	}
 	original, e := st.Get(ctx, rec.ID)
-	must(e == nil && original.State == "ADMITTED" && original.NativeOperationID == "",
+	must(e == nil && original.State == expectedState && original.NativeOperationID == "",
 		"read-disconnect changed original operation or dispatched native effect")
 	for _, p := range []string{arm, held, release} {
 		must(os.Remove(p) == nil, "debugger source-boundary signal was not cleared")
@@ -154,7 +162,15 @@ func main() {
 		project == "user-"+os.Getenv("BW_S2_TEST_UID"), "only real disposable restricted CI")
 	ctx, cancel := context.WithTimeout(context.Background(), 115*time.Second)
 	defer cancel()
-	st, e := state.Open(filepath.Join(dir, "ledger.sqlite"))
+	db := filepath.Join(dir, "ledger.sqlite")
+	var st *state.Store
+	var e error
+	if os.Getenv("BW_S2_INSTALLED_SCOPED_AUTH") == "1" {
+		must(project == fmt.Sprintf("user-%d", os.Geteuid()), "fixed restricted UID mismatch")
+		st, e = state.OpenExistingRecovery("/var/lib/boxweave/ledger.sqlite")
+	} else {
+		st, e = state.Open(db)
+	}
 	must(e == nil, "cannot open service's exact disposable ledger")
 	defer st.Close()
 	runCase(ctx, st, project, dir, mode)

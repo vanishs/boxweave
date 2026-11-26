@@ -12,6 +12,18 @@ case "$work" in /tmp/bw-v1-s2-ghci.*) ;; *) exit 92 ;; esac
 test "$project" = "user-$(id -u boxweave)"
 test "$socket" = /var/lib/incus/unix.socket.user
 test -z "$(sudo incus list --all-projects --format csv -c n)"
+if test "${BW_S2_INSTALLED_SCOPED_AUTH:-0}" = 1; then
+  test -n "${N2_EXACT_HEAD:?}"
+  test "$(git rev-parse HEAD)" = "$N2_EXACT_HEAD"
+  test "$(sudo sha256sum /usr/local/bin/boxweave | cut -d' ' -f1)" = "${BW_S2_AUTH_CANDIDATE_SHA:?}"
+  test "$(sudo systemctl show boxweave.service -p MainPID --value)" = 0
+  sudo systemctl is-active --quiet boxweave-scoped-lifecycle.service boxweave-scoped-guard.service
+  binary=/usr/local/bin/boxweave
+  scoped_flag=-scoped-peer-fresh
+else
+  binary="$work/boxweave"
+  scoped_flag=""
+fi
 if ! command -v gdb >/dev/null 2>&1; then
  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gdb >/dev/null
 fi
@@ -19,6 +31,7 @@ command -v gdb >/dev/null 2>&1
 actor() {
  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+   BW_S2_INSTALLED_SCOPED_AUTH="${BW_S2_INSTALLED_SCOPED_AUTH:-0}" \
    BW_S2_TEST_UID="$(id -u boxweave)" \
    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
@@ -47,9 +60,9 @@ echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_LINE=$boundary_line"
 # Source-line PCs may still be ambiguous under Go optimization.
 # Stop at the unique actual privateReadReply CALL in the installed bytes,
 # after successful ListOperations, before the final credential recheck.
-go tool objdump -s 'registerOperationReadTools\.func2$' "$work/boxweave" \
+go tool objdump -s 'registerOperationReadTools\.func2$' "$binary" \
   > "$work/p1-list-boundary.disassembly"
-boundary_pc="$(python3 - "$work/boxweave" "$work/p1-list-boundary.disassembly" "$boundary_line" <<'PY_LIST_PC'
+boundary_pc="$(python3 - "$binary" "$work/p1-list-boundary.disassembly" "$boundary_line" <<'PY_LIST_PC'
 from pathlib import Path
 import re,struct,sys
 binary=Path(sys.argv[1]).read_bytes()
@@ -102,7 +115,7 @@ chmod 0644 "$work/p1-list-boundary-hook.sh"
 debug_pid=""
 cleanup() {
  if [ -n "$debug_pid" ]; then
-  sudo pkill -TERM -u boxweave -f "^$work/boxweave serve -db $db" || :
+  sudo pkill -TERM -u boxweave -f "^$binary serve -db $db -incus-socket $socket -project $project -listen 127.0.0.1:18667" || :
   kill "$debug_pid" 2>/dev/null || :
   wait "$debug_pid" 2>/dev/null || :
   debug_pid=""
@@ -129,6 +142,7 @@ run_case() {
  case "$mode" in revoke|expire) ;; *) exit 93 ;; esac
  lab="$work/p1-list-boundary-$mode"
  db="$lab/ledger.sqlite"
+ if test -n "$scoped_flag"; then db=/var/lib/boxweave/ledger.sqlite; fi
  log="$work/p1-list-debugger-$mode.redacted.log"
  results="$work/p1-list-boundary-$mode-results.txt"
  gdb_script="$work/p1-list-boundary-$mode.gdb"
@@ -138,8 +152,10 @@ run_case() {
  sudo chown boxweave:incus "$lab"
  trap report_exit EXIT
  # Seed only this mode's ledger. No native mutation or shared credential.
- actor "$work/boxweave" token-create -db "$db" > "$work/p1-list-debugger-$mode-admin.secret"
- chmod 0600 "$work/p1-list-debugger-$mode-admin.secret"
+ if test -z "$scoped_flag"; then
+   actor "$binary" token-create -db "$db" > "$work/p1-list-debugger-$mode-admin.secret"
+   chmod 0600 "$work/p1-list-debugger-$mode-admin.secret"
+ fi
  cat > "$gdb_script" <<EOF
 set pagination off
 set confirm off
@@ -159,8 +175,8 @@ run
 EOF
  sudo chown boxweave:incus "$gdb_script"
  actor gdb -nx -q --batch -x "$gdb_script" --args \
-  "$work/boxweave" serve -db "$db" -incus-socket "$socket" \
-  -project "$project" -listen 127.0.0.1:18667 > "$log" 2>&1 &
+  "$binary" serve -db "$db" -incus-socket "$socket" \
+  -project "$project" -listen 127.0.0.1:18667 $scoped_flag > "$log" 2>&1 &
  debug_pid=$!
  attempt=0
  until [ "$attempt" -ge 60 ]; do

@@ -57,6 +57,12 @@ on:
       - scripts/pr191_scoped_s2_native.sh
       - scripts/pr191_scoped_s2_retention.sh
       - scripts/pr191_scoped_s2_quota.sh
+      - scripts/pr191_scoped_auth_races.sh
+      - scripts/pr191_scoped_private_reads.py
+      - scripts/s2_p1_operation_list_boundary.sh
+      - scripts/s2_p1_operation_list_boundary_probe.go
+      - scripts/s2_p1_private_read_inflight_probe.go
+      - scripts/s2_p1_private_read_delay_proxy.go
       - scripts/s2_ext4_quota_pool_lab.sh
       - scripts/s2_mcp_quota_witness.sh
       - scripts/test_pr191_scoped_quota.py
@@ -101,7 +107,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
@@ -110,6 +116,7 @@ jobs:
       P1B_ACK_CUT: ${{ matrix.mode == 'scoped-create-ack' && 'create' || matrix.mode == 'scoped-delete-ack' && 'delete' || matrix.mode == 'scoped-update-ack' && 'update' || matrix.mode == 'scoped-update-ack-receipt' && 'update-receipt' || '' }}
       P1B_WAL_CUT: ${{ matrix.mode == 'scoped-create-wal-before' && 'create-before' || matrix.mode == 'scoped-create-wal-after' && 'create-after' || matrix.mode == 'scoped-delete-wal-before' && 'delete-before' || matrix.mode == 'scoped-delete-wal-after' && 'delete-after' || matrix.mode == 'scoped-exec-wal-before' && 'exec-before' || matrix.mode == 'scoped-exec-wal-after' && 'exec-after' || '' }}
       P1B_S2_EXEC_CRASH: ${{ matrix.mode == 'scoped-exec-crash' && '1' || '0' }}
+      P1B_S2_AUTH_RACES: ${{ matrix.mode == 'scoped-auth-races' && '1' || '0' }}
       P1B_S2_PHYSICAL_QUOTA: ${{ matrix.mode == 'scoped-physical-quota' && '1' || '0' }}
       P1B_S2_UPDATE_TRANSPORT: ${{ matrix.mode == 'scoped-update-transport' && '1' || '0' }}
       P1B_S2_RETENTION: ${{ matrix.mode == 'scoped-exec-retention' && '1' || '0' }}
@@ -149,6 +156,22 @@ jobs:
           for marker in ACTIVE_EMPTY OFFLINE_EMPTY UNTRUSTED_OBSERVER_NONROOT UNSAFE_STATE_STALE NEGATIVE_NO_EFFECT; do
             grep -Fxq "PR188_H1B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
           done
+          if test "$P1B_S2_AUTH_RACES" = 1; then
+            grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
+            for marker in S2_P1_REAL_INSTALLED_OPERATION_LIST_INFLIGHT_REVOCATION_AND_EXPIRY_NO_LEAK S4_A_OPERATION_LIST_COMPILED_CALL_TWO_INDEPENDENT_AUTH_CUTS S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_REVOKE_NO_LEAK S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_EXPIRY_NO_LEAK S2_P2_STALLED_NATIVE_OUTPUT_CANCEL_NO_NATIVE_CHANGE P1B_SCOPED_AUTH_FIXED_LEDGER_NATIVE_ABSENCE; do
+              grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            test "$(grep -c '^P1B_SCOPED_LIST_AUTH_ORIGINAL ' "$RUNNER_TEMP/n2-installed.log")" = 2
+            test "$(grep -c '^P1B_SCOPED_PRIVATE_READ_ORIGINAL ' "$RUNNER_TEMP/n2-installed.log")" = 1
+            grep -Fxq S2_P2_REAL_NATIVE_RECORDED_STDOUT_STALLED_CLIENT_DISCONNECT_RECOVER=PASS "$RUNNER_TEMP/n2-installed.log"
+            for auth in REVOKED EXPIRED; do
+              for method in HOST_STATUS BOX_LIST BOX_GET OPERATION_OUTPUT_GET; do
+                grep -Fxq "S2_P1_PRIVATE_READ_${auth}_AFTER_REAL_NATIVE_HTTP_200_${method}=PASS" "$RUNNER_TEMP/n2-installed.log"
+              done
+            done
+            exit 0
+          fi
           if test "$P1B_S2_PHYSICAL_QUOTA" = 1; then
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"

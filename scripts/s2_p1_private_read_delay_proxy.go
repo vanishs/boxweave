@@ -64,6 +64,13 @@ func main() {
 		http.Error(w, "disposable native read unavailable", http.StatusBadGateway)
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Scoped mode is used only for the held read phase. All actual
+		// Create/Exec/Stop/Delete operations use the normal installed unit.
+		if os.Getenv("BW_S2_INSTALLED_SCOPED_AUTH") == "1" && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			log.Print("SCOPED_PRIVATE_READ_UNEXPECTED_MUTATION_REFUSED")
+			http.Error(w, "read-only test transport", http.StatusConflict)
+			return
+		}
 		mode := ""
 		if r.Method == http.MethodGet {
 			// A separate P2 scenario holds the actual native recorded-output

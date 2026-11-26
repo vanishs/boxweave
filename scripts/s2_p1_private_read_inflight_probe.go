@@ -33,8 +33,12 @@ func check(ok bool, reason string) {
 }
 func connected(ctx context.Context, token string) *mcp.ClientSession {
 	c := mcp.NewClient(&mcp.Implementation{Name: "s2-private-inflight-sdk", Version: "1"}, nil)
+	endpoint := "http://127.0.0.1:18662/mcp"
+	if os.Getenv("BW_S2_INSTALLED_SCOPED_AUTH") == "1" && len(os.Args) == 2 && (os.Args[1] == "seed" || os.Args[1] == "cleanup") {
+		endpoint = "http://127.0.0.1:18650/mcp"
+	}
 	s, e := c.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:             "http://127.0.0.1:18662/mcp",
+		Endpoint:             endpoint,
 		HTTPClient:           &http.Client{Transport: bearer{token}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
@@ -189,7 +193,14 @@ func invalidate(ctx context.Context, st *state.Store, dir, method string, args m
 	fmt.Println("S2_P1_PRIVATE_READ_" + mode + "_AFTER_REAL_NATIVE_HTTP_200_" + strings.ToUpper(method) + "=PASS")
 }
 func read(ctx context.Context, dir, project string) {
-	st, e := state.Open(filepath.Join(dir, "ledger.sqlite"))
+	var st *state.Store
+	var e error
+	if os.Getenv("BW_S2_INSTALLED_SCOPED_AUTH") == "1" {
+		check(project == fmt.Sprintf("user-%d", os.Geteuid()), "fixed restricted UID mismatch")
+		st, e = state.OpenExistingRecovery("/var/lib/boxweave/ledger.sqlite")
+	} else {
+		st, e = state.Open(filepath.Join(dir, "ledger.sqlite"))
+	}
 	check(e == nil, "installed SQLite inaccessible to test actor")
 	defer st.Close()
 	o := saved(dir)
@@ -308,6 +319,10 @@ func main() {
 		strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci.") &&
 		filepath.Base(dir) == "p1-private-read" && strings.HasPrefix(project, "user-") &&
 		token != "", "test cannot run outside one-use restricted CI")
+	check(len(os.Args) == 2, "exact fixture action required")
+	if os.Getenv("BW_S2_INSTALLED_SCOPED_AUTH") == "1" {
+		check(project == fmt.Sprintf("user-%d", os.Geteuid()), "fixed installed identity mismatch")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 260*time.Second)
 	defer cancel()
 	switch os.Args[1] {

@@ -71,3 +71,5 @@ P1b-06b8: exact 5d513eb installed S2 subset and physical 16MiB spool CI_VERIFIED
 P1b-06b9: See CONSOLIDATION_PROGRESS.md exact c237e78 retention failure and single-lock correction, plus actual native Update transport trio source-verified / CI_PENDING. Prior ENOSPC, two-stream GC removal and lost ACK evidence retained; reviewed GC release/restart, physical quota, public WAN and nested S2.5 remain open. No retirement waiver.
 
 P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transport faults CI_VERIFIED; shared original physical quota/SDK/archive witness BOX_VERIFIED, new Scoped native CI_PENDING. Original S2 direct-native quota and remaining fault/consumer mapping retained. See CONSOLIDATION_PROGRESS.md; no retirement waiver.
+
+P1b-06b11: exact f193161 N2 20/20 including actual ext4 MCP quota, guest exit-one, archive/native-missing and cleanup witness CI_VERIFIED (job 139761484820). C03/C05/C11 installed Scoped private-read/auth races source-verified; new independent lane CI_PENDING. Original direct native quota, public WAN, S2.5 and remaining witness mapping retained. No retirement waiver.
