@@ -19,6 +19,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -31,6 +34,8 @@ func main() {
 	upstreamPath := flag.String("upstream", "", "restricted Incus Unix socket")
 	marker := flag.String("marker", "", "test-only observed upstream acceptance")
 	project := flag.String("project", "", "exact disposable restricted native Project")
+	scopedFixture := flag.String("scoped-update-fixture", "", "exact previously owned one-use Update fixture only")
+	scopedUUID := flag.String("scoped-update-uuid", "", "independently observed original fixture UUID")
 	flag.Parse()
 	if os.Geteuid() == 0 || os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
@@ -40,6 +45,23 @@ func main() {
 		*upstreamPath != "/var/lib/incus/unix.socket.user" ||
 		!strings.HasPrefix(*project, "user-") {
 		log.Fatal("S2 ACK injection only permitted for the one-use restricted GitHub VM")
+	}
+	scoped := *scopedFixture != ""
+	uuidPattern := regexp.MustCompile("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+	if scoped {
+		if (*scopedFixture != "bw-s2-etag-native-110e" && *scopedFixture != "bw-s2-update-ack-native-110f" && *scopedFixture != "bw-s2-update-postread-native-110g") ||
+			!uuidPattern.MatchString(*scopedUUID) || *project != "user-"+strconv.Itoa(os.Geteuid()) ||
+			filepath.Clean(*proxyPath) != *proxyPath || filepath.Base(*proxyPath) != "ack-proxy.sock" ||
+			filepath.Base(filepath.Dir(*proxyPath)) != "ledger" ||
+			*marker != filepath.Join(filepath.Dir(*proxyPath), "native-ack.txt") {
+			log.Fatal("exact confined pre-created scoped Update fixture required")
+		}
+		info, e := os.Lstat(*marker)
+		if e != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() != 0 {
+			log.Fatal("new private Update witness required")
+		}
+	} else if *scopedUUID != "" {
+		log.Fatal("unexpected scoped fixture UUID")
 	}
 	if _, err := os.Lstat(*proxyPath); !errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("refusing preexisting listener: %v", err)
@@ -73,7 +95,51 @@ func main() {
 		_, err = f.WriteString(line + "\n")
 		return err
 	}
+	// In the installed Scoped test, only the exact previously created
+	// fixture's single CPU Update can mutate. Never expose an arbitrary
+	// native write or allow a second Create through this test proxy.
+	recordScopedNativeID := func(body []byte) error {
+		if !scoped {
+			return nil
+		}
+		var reply struct {
+			Operation string `json:"operation"`
+		}
+		if json.Unmarshal(body, &reply) != nil {
+			return errors.New("exact upstream native operation missing")
+		}
+		nativeURL, e := url.Parse(reply.Operation)
+		if e != nil || nativeURL == nil || nativeURL.IsAbs() || !strings.HasPrefix(nativeURL.Path, "/1.0/operations/") || (nativeURL.Query().Get("project") != "" && nativeURL.Query().Get("project") != *project) {
+			return errors.New("native operation scope unverified")
+		}
+		id := strings.TrimPrefix(nativeURL.Path, "/1.0/operations/")
+		if !uuidPattern.MatchString(id) {
+			return errors.New("unverified native operation ID")
+		}
+		return record("SCOPED_UPDATE_NATIVE_ID=" + id)
+	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if scoped && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			if r.Method != http.MethodPut || r.URL.Path != "/1.0/instances/"+*scopedFixture ||
+				r.URL.Query().Get("project") != *project || r.Header.Get("If-Match") == "" {
+				_ = record("SCOPED_UNEXPECTED_NATIVE_MUTATION_REFUSED")
+				http.Error(w, "outside exact one-use Update", http.StatusConflict)
+				return
+			}
+			raw, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
+			_ = r.Body.Close()
+			var intent struct {
+				Config map[string]string `json:"config"`
+			}
+			if err != nil || len(raw) > 1<<20 || json.Unmarshal(raw, &intent) != nil ||
+				intent.Config["limits.cpu"] != "2" || intent.Config["volatile.uuid"] != *scopedUUID {
+				_ = record("SCOPED_UNEXPECTED_UPDATE_INTENT_REFUSED")
+				http.Error(w, "outside exact Update intent", http.StatusConflict)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+		}
+
 		// After an Incus 202 for this exact ETag-protected Update was delivered
 		// to BoxWeave, corrupt exactly ONE later native instance readback.
 		// The original native ID was already acknowledged in SQLite; a lost
@@ -127,6 +193,10 @@ func main() {
 			if err != nil || res.StatusCode != http.StatusAccepted ||
 				!strings.Contains(string(accepted), "\"operation\"") {
 				http.Error(w, fmt.Sprintf("native Update not accepted (%d)", res.StatusCode), http.StatusBadGateway)
+				return
+			}
+			if err := recordScopedNativeID(accepted); err != nil {
+				http.Error(w, "native witness unavailable", http.StatusBadGateway)
 				return
 			}
 			if err := record("POSTREAD_NATIVE_UPDATE_202_ACK_DELIVERED"); err != nil {
@@ -190,6 +260,10 @@ func main() {
 					http.StatusBadGateway)
 				return
 			}
+			if err := recordScopedNativeID(body); err != nil {
+				http.Error(w, "native witness unavailable", http.StatusBadGateway)
+				return
+			}
 			if err := record("UPDATE_ACK_NATIVE_ACCEPTED_ONCE_AND_ACK_SUPPRESSED"); err != nil {
 				http.Error(w, "native Update marker failure", http.StatusBadGateway)
 				return
@@ -219,6 +293,10 @@ func main() {
 			}
 			if !etagUsed.CompareAndSwap(false, true) {
 				_ = record("UNEXPECTED_SECOND_ETAG_PUT")
+				if scoped {
+					http.Error(w, "original Update cannot redispatch", http.StatusConflict)
+					return
+				}
 				reverse.ServeHTTP(w, r)
 				return
 			}
@@ -231,6 +309,10 @@ func main() {
 			inst, originalTag, err := d.GetInstance("bw-s2-etag-native-110e")
 			if err != nil {
 				http.Error(w, "owned instance missing", 502)
+				return
+			}
+			if scoped && inst.Config["volatile.uuid"] != *scopedUUID {
+				http.Error(w, "native fixture UUID changed", http.StatusConflict)
 				return
 			}
 			if originalTag == "" {

@@ -51,16 +51,12 @@ func recoverLocal(a recoverArgs) error {
 		a.Action != "delete-inspect" && a.Action != "delete-challenge" && a.Action != "delete-confirm" {
 		return errors.New("recovery action must be diagnose/reconcile, inspect/challenge/release, create-*, delete-* or gc-*")
 	}
-	// The existing local root review must cover the Root-only fresh journal.
-	// Hold the existing maintenance lock until the restricted GC worker exits.
+	// main.run already holds the fixed maintenance lock across recoverLocal
+	// and its worker. Do not reacquire the same non-reentrant flock here.
+	// The local Root review still covers the protected fresh journal.
 	a.ScopedGCManifest = nil
 	if gcReviewAction(a.Action) {
-		release, err := acquireMaintenanceLock()
-		if err != nil {
-			return err
-		}
-		defer release()
-		if err = gcRecoveryFences(); err != nil {
+		if err := gcRecoveryFences(); err != nil {
 			return err
 		}
 	}

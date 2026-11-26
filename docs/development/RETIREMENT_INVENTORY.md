@@ -76,3 +76,5 @@ P1b-06b5a: c843166 installed S2 protocol/history partial actual PASS, foreign in
 P1b-06b6: original S2 private SQLite FULL producer extracted and reused; installed Scoped GC replacement candidate BOX_VERIFIED, native CI_PENDING. No old witness retirement or runtime deletion. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b6--installed-scoped-exec-retention-and-private-sqlite-enospc).
 
 P1b-06b8: exact 5d513eb installed S2 subset and physical 16MiB spool CI_VERIFIED; isolated ENOSPC CI_VERIFIED; actual GC deletion/ACK-loss partial CI_VERIFIED; restricted review identity correction BOX_VERIFIED, complete installed GC CI_PENDING. Public WAN, physical quota, native transport and S2.5 remain open; [checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b8--independent-s2-and-physical-spool-pass-scoped-gc-review-correction).
+
+P1b-06b9: See CONSOLIDATION_PROGRESS.md exact c237e78 retention failure and single-lock correction, plus actual native Update transport trio source-verified / CI_PENDING. Prior ENOSPC, two-stream GC removal and lost ACK evidence retained; reviewed GC release/restart, physical quota, public WAN and nested S2.5 remain open. No retirement waiver.
