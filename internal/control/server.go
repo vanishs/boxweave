@@ -144,24 +144,10 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.ReadinessClass = "NATIVE_PREREQUISITE_UNVERIFIED"
 		out.Navigation = issuesNext()
 	}
-	if out.MCPReady && !s.ScopedPeerFresh {
-		if retirement, e := s.Store.ReadIPv4RetirementStatus(ctx, s.Native.Project); e == nil {
-			if retirement.Pending > 0 && !install.NativeRetirementSocketPresent() {
-				retirement.LastDeferredReason = "RETIREMENT_HELPER_NOT_CONFIGURED"
-			}
-			out.AddressRetirement = &retirement
-		}
-	}
 	if s.ScopedPeerFresh {
-		out.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
-		if cap, e := s.Store.ReadScopedIdentityCapacity(ctx, s.Native.Project); e == nil {
-			out.ScopedIdentityCapacity = &cap
-		}
-		if cap, e := s.Store.ReadDiagnosticPeerCapacity(ctx, s.Native.Project); e == nil {
-			out.ScopedPeerCapacity = &cap
-		}
+		s.observeScopedCapacity(ctx, &out)
 	} else {
-		out.AddressRetirementPolicy = "LEGACY_IPV4_RETIREMENT"
+		s.observeLegacyRetirement(ctx, &out)
 	}
 	if out.Ready {
 		holds := s.Store.ReadCreateAddressHolds
@@ -180,6 +166,18 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 	}
 	return out
 }
+
+// Scoped capacity is advisory and never credits Legacy retirement.
+func (s *Service) observeScopedCapacity(ctx context.Context, out *HostStatus) {
+	out.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
+	if cap, e := s.Store.ReadScopedIdentityCapacity(ctx, s.Native.Project); e == nil {
+		out.ScopedIdentityCapacity = &cap
+	}
+	if cap, e := s.Store.ReadDiagnosticPeerCapacity(ctx, s.Native.Project); e == nil {
+		out.ScopedPeerCapacity = &cap
+	}
+}
+
 func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request) (*auth.TokenInfo, error) {
 	t, err := s.Store.VerifyToken(ctx, raw)
 	if err != nil {

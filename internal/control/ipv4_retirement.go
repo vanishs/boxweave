@@ -157,3 +157,17 @@ func (l *retirementLogLimiter) clear(id string) int {
 	delete(l.entries, id)
 	return n
 }
+
+// Legacy-only status observation; keep the same readiness guard and
+// missing-helper classification until Legacy retirement is removed.
+func (s *Service) observeLegacyRetirement(ctx context.Context, out *HostStatus) {
+	if out.MCPReady {
+		if retirement, e := s.Store.ReadIPv4RetirementStatus(ctx, s.Native.Project); e == nil {
+			if retirement.Pending > 0 && !install.NativeRetirementSocketPresent() {
+				retirement.LastDeferredReason = "RETIREMENT_HELPER_NOT_CONFIGURED"
+			}
+			out.AddressRetirement = &retirement
+		}
+	}
+	out.AddressRetirementPolicy = "LEGACY_IPV4_RETIREMENT"
+}

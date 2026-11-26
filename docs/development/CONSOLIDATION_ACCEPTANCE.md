@@ -117,3 +117,5 @@ P1b alternate-pool: [integration checkpoint](CONSOLIDATION_P1B_ALTPOOL_CHECKPOIN
 P1-06d23: [Create availability separation](CONSOLIDATION_P1_06D23_CHECKPOINT.md). Full state/control/recovery Box PASS, independent CI pending. No P1 closure.
 
 P1-06d24: [retained-address reader separation](CONSOLIDATION_P1_06D24_CHECKPOINT.md). Box regression PASS, independent CI pending. No retirement waiver.
+
+P1-06d25/d26: [controller status and Legacy lifecycle isolation](CONSOLIDATION_P1_06D25_D26_CHECKPOINT.md). Box verified; independent CI pending. Legacy bodies retained, not yet retired.

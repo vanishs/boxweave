@@ -102,3 +102,5 @@ P1-06d14: [real public WAN and runtime/schema consumer checkpoint](CONSOLIDATION
 P1-06d15: [completed-original pin and maintenance separation](CONSOLIDATION_P1_06D15_CHECKPOINT.md). Parent 3df436b 7/7 CI, N2 27/27, all 11 Go race packages PASS. New Delete separation, Scoped pin repair and maintenance snapshot/drain BOX_VERIFIED, native CI_PENDING. Alternate pool remains BLOCKED; no DDL/Legacy runtime removal or gate waiver.
 
 P1-06d15b: [exclusive recovery observers and installed pin witness](CONSOLIDATION_P1_06D15B_CHECKPOINT.md). Scoped PRS callback removed; actual completed-original pin repair witness added to existing N2 lane. Source verified, native CI_PENDING. No retirement waiver.
+
+P1-06d25/d26: [controller status and Legacy lifecycle isolation](CONSOLIDATION_P1_06D25_D26_CHECKPOINT.md). Box verified; independent CI pending. Legacy bodies retained, not yet retired.
