@@ -59,6 +59,7 @@ on:
       - scripts/pr191_scoped_exec_crash.py
       - scripts/s2_crash_probe.go
       - scripts/s2_legacy_sdk_probe.go
+      - scripts/s2_native_probe.go
       - scripts/pr191_scoped_sdk_compat.py
       - scripts/test_pr191_scoped_sdk_compat.py
       - scripts/pr182_scoped_retirement.py
@@ -129,6 +130,13 @@ jobs:
               grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
             test "$(grep -c '^P1B_SCOPED_OLD_SDK_ORIGINAL ' "$RUNNER_TEMP/n2-installed.log")" = 6
+            for marker in MCP_DISCOVERY_23_OF_23 MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED EXEC_RECONNECT_EXIT_7_STDOUT_STDERR NOISY_EXEC_PAGINATION_70K DUAL_STREAM_16M_OUTPUT_READ_BUDGET DELAYED_EXEC_TIMEOUT_BUDGET QUIET_EXEC_RECORDED_ZERO_EXIT CANCELLED_LONG_POLL_IS_READ_ONLY EXEC_UNSUPPORTED_CANCEL_TRUTHFUL; do
+              grep -Fxq "S2_NATIVE_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+            done
+            grep -Fxq S2_P2_REAL_CONTINUOUS_STDOUT_GUEST_TIMEOUT_NOT_MCP_CANCELLATION=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fq 'P1B_SCOPED_CURRENT_SDK_OUTPUT_SUBSET=PASS ' "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq P1B_SCOPED_CURRENT_SDK_OUTPUT_FIXED_LEDGER=PASS "$RUNNER_TEMP/n2-installed.log"
+            test "$(grep -c '^P1B_SCOPED_CURRENT_SDK_ORIGINAL ' "$RUNNER_TEMP/n2-installed.log")" = 10
             exit 0
           fi
           if test "$P1B_S2_EXEC_CRASH" = 1; then

@@ -55,3 +55,5 @@ P1b WAL remediation: parent a3cef61 installed ACK/final-commit, WAL-before and S
 P1b WAL revalidation: c3dcc9d four actual installed WAL modes and Legacy reviewed recovery PASS, no weakened assertions. Generic S2/S2.5 and remaining phase gates open. [Evidence and BDH feedback](CONSOLIDATION_PROGRESS.md#p1b-wal-remediation--exact-candidate-independent-revalidation).
 
 P1b-06b1: C03/C11 previous official SDK native protocol/lifecycle witness retained; new fixed installed Scoped candidate uses unchanged v1.6.1 probe and independent original receipt/retirement witness. Local build and private regression PASS, native CI_PENDING. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b1--pinned-previous-official-sdk-on-installed-scoped). No retirement waiver.
+
+P1b-06b2: C03/C05/C11 current SDK shared catalog and output/reconnect/cancel assertions reused unchanged in installed Scoped subset; private fixed-ledger witness and exact Go build verified. Independent installed CI_PENDING; actual storage/GC, full S2 and S2.5 gates retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b2--current-official-sdk-shared-output-and-catalog-assertions).

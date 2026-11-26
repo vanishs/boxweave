@@ -3,7 +3,8 @@ import hashlib
 import sqlite3
 import unittest
 
-from pr191_scoped_sdk_compat import ACTIONS, NAME, originals, verify_originals
+from pr191_scoped_sdk_compat import (ACTIONS, NAME, OUTPUT_KEYS, originals,
+                                    verify_current_outputs, verify_originals)
 
 
 class OldSDKOriginalsTests(unittest.TestCase):
@@ -62,6 +63,30 @@ class OldSDKOriginalsTests(unittest.TestCase):
                 finally:
                     self.db.execute("ROLLBACK TO bad")
                     self.db.execute("RELEASE bad")
+
+    def test_current_outputs_exact_and_wrong_exit(self):
+        self.db.execute("DELETE FROM operations")
+        self.db.execute("DELETE FROM owned_boxes")
+        self.db.execute("DELETE FROM exec_outputs")
+        for i, (key, action, exit_code) in enumerate(OUTPUT_KEYS, 1):
+            digest = hashlib.sha256(key.encode()).hexdigest()
+            oid = f"{i:032x}"
+            self.db.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (oid, f"{i+20:032x}", "actor", "token", "layer",
+                             action, "SUCCEEDED", "uuid", "uuid", f"native-{i}", digest))
+            if exit_code is not None:
+                self.db.execute("INSERT INTO exec_outputs VALUES (?,?)", (exit_code, oid))
+        self.db.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        ("f"*32, "e"*32, "actor", "token", "layer", "operation_cancel",
+                         "FAILED", "", "", "",
+                         hashlib.sha256(b"native-s2-exec-late-cancel-01").hexdigest()))
+        self.db.execute("INSERT INTO owned_boxes VALUES (?,?,?,?,?,?)",
+                        ("uuid", "uuid", "DELETED", f"{len(OUTPUT_KEYS):032x}",
+                         "project", "bw-s2-scoped-sdk-output"))
+        self.assertEqual(len(verify_current_outputs(self.read, "project")), len(OUTPUT_KEYS))
+        self.db.execute("UPDATE exec_outputs SET exit_code=0 WHERE exit_code=7")
+        with self.assertRaises(AssertionError):
+            verify_current_outputs(self.read, "project")
 
 
 if __name__ == "__main__":

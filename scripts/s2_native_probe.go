@@ -385,28 +385,9 @@ func privateHTTPMCPResponse(ctx context.Context, endpoint, token string) {
 	fmt.Println("S2_P1_REAL_AUTHENTICATED_HTTP_PRIVATE_ZERO_TTL_CACHE_CONTROL=PASS")
 }
 
-func main() {
-	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
-	peer := os.Getenv("BW_S2_PEER_TOKEN")
-	admin2Token := os.Getenv("BW_S2_ADMIN2_TOKEN")
-	admin1ID := os.Getenv("BW_S2_ADMIN1_ID")
-	admin2ID := os.Getenv("BW_S2_ADMIN2_ID")
-	expiredToken := os.Getenv("BW_S2_EXPIRED_TOKEN")
-	revokedToken := os.Getenv("BW_S2_REVOKED_TOKEN")
-	foreignLayerID := os.Getenv("BW_S2_FOREIGN_LAYER_OPID")
-	check(strings.HasPrefix(url, "http://127.0.0.1:"), "MCP must be loopback")
-	check(token != "" && peer != "" && admin2Token != "" && len(admin1ID) == 32 &&
-		len(admin2ID) == 32 && admin1ID != admin2ID &&
-		expiredToken != "" && revokedToken != "" && len(foreignLayerID) == 32,
-		"independent credential/layer identities required")
-	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute)
-	defer cancel()
-	admin := connect(ctx, url, token)
-	defer admin.Close()
-	admin2 := connect(ctx, url, admin2Token)
-	defer admin2.Close()
-	peerSession := connect(ctx, url, peer)
-	defer peerSession.Close()
+// The original full native probe and installed Scoped subset share the exact
+// discovery and Exec assertions; a subset never emits the full S2 verdict.
+func verifyToolCatalog(ctx context.Context, admin *mcp.ClientSession) {
 	inv, err := admin.ListTools(ctx, nil)
 	if err != nil {
 		panic(err)
@@ -445,6 +426,279 @@ func main() {
 	}
 	fmt.Println("S2_NATIVE_MCP_DISCOVERY_23_OF_23=PASS")
 	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
+}
+
+func verifyExecOutputs(ctx context.Context, admin *mcp.ClientSession, url, token, uuid string) *mcp.ClientSession {
+	cmd := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf s2-out; printf s2-err >&2; exit 7"},
+		"idempotency_key": "native-s2-exec-nonzero-001",
+		"work_ref":        "lab/s2", "agent_ref": "prober-02"})
+	execID := id(cmd)
+	er := wait(ctx, admin, execID)
+	check(field(er, "state") == "SUCCEEDED", "guest command execution not recorded")
+	admin.Close()
+	admin = connect(ctx, url, token)
+	for _, mode := range []struct{ name, want string }{{"stdout", "s2-out"}, {"stderr", "s2-err"}} {
+		stream := call(ctx, admin, "operation_output_get", map[string]any{
+			"operation_id": execID, "stream": mode.name, "limit": 4096})
+		raw, err := base64.StdEncoding.DecodeString(field(stream, "content_base64"))
+		if err != nil {
+			panic(err)
+		}
+		check(strings.Contains(string(raw), mode.want), mode.name+" recorded output mismatch")
+		check(stream["exit_code"] == float64(7), mode.name+" did not retain observed guest exit 7")
+		check(stream["command_success"] == false, mode.name+" falsely marked guest exit 7 as success")
+	}
+	fmt.Println("S2_NATIVE_EXEC_RECONNECT_EXIT_7_STDOUT_STDERR=PASS")
+
+	noisy := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "yes x | head -c 70000"},
+		"idempotency_key": "native-s2-noisy-paginated-exec-001"})
+	noisyID := id(noisy)
+	wait(ctx, admin, noisyID)
+	firstPage := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": noisyID, "stream": "stdout", "offset": 0, "limit": 65536})
+	firstBytes, err := base64.StdEncoding.DecodeString(field(firstPage, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	check(len(firstBytes) == 65536 && firstPage["ended"] == false,
+		"noisy output first page must be bounded, not silently truncated")
+	secondPage := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": noisyID, "stream": "stdout", "offset": 65536, "limit": 65536})
+	secondBytes, err := base64.StdEncoding.DecodeString(field(secondPage, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	check(len(firstBytes)+len(secondBytes) == 70000 && secondPage["ended"] == true,
+		"noisy output second page did not resume original native evidence")
+	fmt.Println("S2_NATIVE_NOISY_EXEC_PAGINATION_70K=PASS")
+
+	// Read cap is a public API budget, not proof that Incus truncated its
+	// underlying recorded files. Produce >16MiB on each real guest stream,
+	// then demand an exactly bounded page and explicit truncation marker.
+	large := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
+			"head -c 16777220 /dev/zero | tr '\\000' Z; head -c 16777220 /dev/zero | tr '\\000' Z >&2"},
+		"idempotency_key": "native-s2-dual-stream-over-16m-001",
+	})
+	largeID := id(large)
+	largeFinal := wait(ctx, admin, largeID)
+	for _, stream := range []string{"stdout", "stderr"} {
+		bounded := call(ctx, admin, "operation_output_get", map[string]any{
+			"operation_id": largeID, "stream": stream,
+			"offset": 16777200, "limit": 65536,
+		})
+		chunk, e := base64.StdEncoding.DecodeString(field(bounded, "content_base64"))
+		if e != nil {
+			panic(e)
+		}
+		fmt.Printf("S2_NATIVE_DUAL_STREAM_META stream=%s got=%d ended=%v truncated=%v next=%v exit=%v\n",
+			stream, len(chunk), bounded["ended"], bounded["truncated"], bounded["next_offset"], bounded["exit_code"])
+		check(len(chunk) == 16 && strings.Trim(string(chunk), "Z") == "" &&
+			bounded["ended"] == true && bounded["truncated"] == true &&
+			bounded["next_offset"] == float64(16777216),
+			"real recorded "+stream+" breached 16MiB public read cap or hid truncation")
+	}
+	tooLarge, tooLargeErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_output_get", Arguments: map[string]any{
+			"operation_id": largeID, "stream": "stdout",
+			"offset": 16777217, "limit": 1,
+		}})
+	check(tooLargeErr != nil || tooLarge != nil && tooLarge.IsError,
+		"oversized native recorded output offset unexpectedly accepted")
+	fmt.Println("S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET=PASS")
+
+	// Only the single-use CI test harness requests this rendezvous. Keep the
+	// original completed native Exec logs present until an *independent* host
+	// witness has measured the actual spool files and backing filesystem.
+	// The MCP byte cap alone cannot establish any physical storage bound.
+	if dir := os.Getenv("BW_S2_OUTPUT_WITNESS_DIR"); dir != "" {
+		check(strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci."),
+			"native output witness requires the disposable GitHub CI workspace")
+		nativeID := field(largeFinal, "native_operation_id")
+		check(nativeID != "", "completed large Exec has no original native operation ID")
+		if err := os.WriteFile(dir+"/output-witness.ready", []byte(nativeID), 0600); err != nil {
+			panic(err)
+		}
+		released := false
+		for n := 0; n < 180; n++ {
+			if _, err := os.Stat(dir + "/output-witness.release"); err == nil {
+				released = true
+				break
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		check(released, "independent native disk witness did not release the original completed Exec")
+	}
+
+	delayed := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 1; printf delayed-ok"},
+		"timeout_ms": 5000, "idempotency_key": "native-s2-delayed-time-bounded-exec-01"})
+	delayedID := id(delayed)
+	wait(ctx, admin, delayedID)
+	delayedOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": delayedID, "stream": "stdout"})
+	delayedData, err := base64.StdEncoding.DecodeString(field(delayedOut, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	check(string(delayedData) == "delayed-ok" && delayedOut["exit_code"] == float64(0) &&
+		delayedOut["command_success"] == true, "bounded delayed Exec lost exit/output")
+	fmt.Println("S2_NATIVE_DELAYED_EXEC_TIMEOUT_BUDGET=PASS")
+
+	quiet := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/true"},
+		"idempotency_key": "native-s2-quiet-exec-zero-001"})
+	quietID := id(quiet)
+	wait(ctx, admin, quietID)
+	quietOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": quietID, "stream": "stdout"})
+	check(field(quietOut, "content_base64") == "" && quietOut["ended"] == true &&
+		quietOut["exit_code"] == float64(0), "quiet Exec fabricated output or lost return")
+	fmt.Println("S2_NATIVE_QUIET_EXEC_RECORDED_ZERO_EXIT=PASS")
+
+	// A command that emits continuously for far longer than its admitted
+	// timeout must stop on the guest budget, not on the MCP request lifetime.
+	// The guest command also has a finite outer loop so a broken timeout yields
+	// an explicit failed assertion rather than trapping the disposable runner.
+	// The native Operation can finish successfully while the guest command
+	// has the distinct nonzero timeout exit and bounded recorded stdout.
+	continuous := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
+			"i=0; while [ \"$i\" -lt 200 ]; do printf 'continuous-guest-stdout-110x\\n'; i=$((i+1)); sleep 0.05; done"},
+		"timeout_ms":      1600,
+		"idempotency_key": "native-s2-continuous-output-timeout-01",
+	})
+	continuousID := id(continuous)
+	continuousFinal := wait(ctx, admin, continuousID)
+	check(field(continuousFinal, "state") == "SUCCEEDED",
+		"guest timeout falsely marked native Operation as unknown or failed")
+	continuousOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": continuousID, "stream": "stdout", "offset": 0, "limit": 65536,
+	})
+	continuousBytes, continuousErr := base64.StdEncoding.DecodeString(field(continuousOut, "content_base64"))
+	check(continuousErr == nil && len(continuousBytes) > 0 &&
+		len(continuousBytes) <= 65536 &&
+		strings.Contains(string(continuousBytes), "continuous-guest-stdout-110x") &&
+		continuousOut["command_success"] == false &&
+		continuousOut["exit_code"] == float64(124),
+		"bounded continuously emitting guest did not stop with GNU timeout exit 124")
+	fmt.Println("S2_P2_REAL_CONTINUOUS_STDOUT_GUEST_TIMEOUT_NOT_MCP_CANCELLATION=PASS")
+
+	// A deliberately cancelled read-side long poll cannot cancel or undo
+	// the already accepted native Exec. Use a fresh client for the broken
+	// HTTP request so the original actor session remains independent.
+	slow := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 3; printf still-ran"},
+		"idempotency_key": "native-s2-cancel-only-read-poll-001"})
+	slowID := id(slow)
+	poller := connect(ctx, url, token)
+	readCtx, stopReading := context.WithTimeout(ctx, 250*time.Millisecond)
+	_, waitErr := poller.CallTool(readCtx, &mcp.CallToolParams{Name: "operation_get",
+		Arguments: map[string]any{"operation_id": slowID, "wait_ms": 20000}})
+	stopReading()
+	_ = poller.Close()
+	check(waitErr != nil, "canceled long read unexpectedly claimed native completion")
+	finished := wait(ctx, admin, slowID)
+	check(field(finished, "state") == "SUCCEEDED",
+		"canceled read-side poll changed original native execution")
+	pollOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": slowID, "stream": "stdout"})
+	pollBytes, pollErr := base64.StdEncoding.DecodeString(field(pollOut, "content_base64"))
+	if pollErr != nil {
+		panic(pollErr)
+	}
+	check(string(pollBytes) == "still-ran" && pollOut["exit_code"] == float64(0),
+		"client read cancellation propagated to guest Exec")
+	fmt.Println("S2_NATIVE_CANCELLED_LONG_POLL_IS_READ_ONLY=PASS")
+
+	// Native detached/recorded Exec cannot be cancelled after it finishes.
+	// The cancellation request has its own failed receipt and must not
+	// retroactively change the original verified guest completion.
+	cancelled := call(ctx, admin, "operation_cancel", map[string]any{
+		"target_operation_id": execID, "idempotency_key": "native-s2-exec-late-cancel-01"})
+	cancelReceipt := child(cancelled, "cancel_operation")
+	cancelID := field(cancelReceipt, "operation_id")
+	check(cancelID != "" && cancelID != execID, "cancellation forged original operation ID")
+	var cancelState string
+	for i := 0; i < 30; i++ {
+		cancelState = field(child(call(ctx, admin, "operation_get", map[string]any{
+			"operation_id": cancelID, "wait_ms": 300}), "operation"), "state")
+		if cancelState == "FAILED" || cancelState == "UNKNOWN" || cancelState == "SUCCEEDED" {
+			break
+		}
+	}
+	check(cancelState == "FAILED", "detached Exec cancellation lied: "+cancelState)
+	execAgain := child(call(ctx, admin, "operation_get", map[string]any{"operation_id": execID}), "operation")
+	check(field(execAgain, "state") == "SUCCEEDED",
+		"unsupported cancellation rewrote original Exec")
+	fmt.Println("S2_NATIVE_EXEC_UNSUPPORTED_CANCEL_TRUTHFUL=PASS")
+
+	return admin
+}
+
+// Only the guarded one-use installed CI fixture runs this subset.
+func installedExecOutputOnly() {
+	check(os.Getenv("GITHUB_ACTIONS") == "true" &&
+		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted", "one-use hosted CI required")
+	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
+	check(url == "http://127.0.0.1:18650/mcp" && token != "", "installed loopback actor required")
+	check(os.Getenv("BW_S2_OUTPUT_WITNESS_DIR") == "", "full S2 physical spool witness uses original lane")
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	defer cancel()
+	admin := connect(ctx, url, token)
+	defer admin.Close()
+	status := call(ctx, admin, "host_status", map[string]any{})
+	check(field(status, "peer_mode") == "SCOPED_V2", "installed Scoped service required")
+	verifyToolCatalog(ctx, admin)
+	check(len(call(ctx, admin, "box_list", map[string]any{})["boxes"].([]any)) == 0,
+		"installed subset requires empty native inventory")
+	created := call(ctx, admin, "box_create", map[string]any{
+		"name": "bw-s2-scoped-sdk-output", "cpu": 1, "memory_mib": 512, "disk_gib": 2,
+		"start": true, "internet": false, "idempotency_key": "pr191-sdk-output-create-01"})
+	uuid := field(wait(ctx, admin, id(created)), "box_uuid")
+	check(uuid != "", "missing exact created UUID")
+	admin = verifyExecOutputs(ctx, admin, url, token, uuid)
+	defer admin.Close()
+	stopped := call(ctx, admin, "box_stop", map[string]any{
+		"box_id": uuid, "idempotency_key": "pr191-sdk-output-stop-01"})
+	wait(ctx, admin, id(stopped))
+	deleted := call(ctx, admin, "box_delete", map[string]any{
+		"box_id": uuid, "idempotency_key": "pr191-sdk-output-delete-01"})
+	wait(ctx, admin, id(deleted))
+	check(len(call(ctx, admin, "box_list", map[string]any{})["boxes"].([]any)) == 0,
+		"installed subset left an owned Box")
+	fmt.Printf("P1B_SCOPED_CURRENT_SDK_OUTPUT_SUBSET=PASS %s %s %s\n", uuid, id(created), id(deleted))
+}
+
+func main() {
+	if os.Getenv("BW_S2_INSTALLED_EXEC_OUTPUT_ONLY") == "1" {
+		installedExecOutputOnly()
+		return
+	}
+	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
+	peer := os.Getenv("BW_S2_PEER_TOKEN")
+	admin2Token := os.Getenv("BW_S2_ADMIN2_TOKEN")
+	admin1ID := os.Getenv("BW_S2_ADMIN1_ID")
+	admin2ID := os.Getenv("BW_S2_ADMIN2_ID")
+	expiredToken := os.Getenv("BW_S2_EXPIRED_TOKEN")
+	revokedToken := os.Getenv("BW_S2_REVOKED_TOKEN")
+	foreignLayerID := os.Getenv("BW_S2_FOREIGN_LAYER_OPID")
+	check(strings.HasPrefix(url, "http://127.0.0.1:"), "MCP must be loopback")
+	check(token != "" && peer != "" && admin2Token != "" && len(admin1ID) == 32 &&
+		len(admin2ID) == 32 && admin1ID != admin2ID &&
+		expiredToken != "" && revokedToken != "" && len(foreignLayerID) == 32,
+		"independent credential/layer identities required")
+	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute)
+	defer cancel()
+	admin := connect(ctx, url, token)
+	defer admin.Close()
+	admin2 := connect(ctx, url, admin2Token)
+	defer admin2.Close()
+	peerSession := connect(ctx, url, peer)
+	defer peerSession.Close()
+	verifyToolCatalog(ctx, admin)
 	hostileProtocolMatrix(ctx, admin, peerSession)
 	hostileTypedToolMatrix(ctx, admin)
 	privateHTTPMCPResponse(ctx, url, token)
@@ -1183,212 +1437,8 @@ func main() {
 	}
 	fmt.Println("S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL=PASS")
 
-	cmd := call(ctx, admin, "box_exec", map[string]any{
-		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf s2-out; printf s2-err >&2; exit 7"},
-		"idempotency_key": "native-s2-exec-nonzero-001",
-		"work_ref":        "lab/s2", "agent_ref": "prober-02"})
-	execID := id(cmd)
-	er := wait(ctx, admin, execID)
-	check(field(er, "state") == "SUCCEEDED", "guest command execution not recorded")
-	admin.Close()
-	admin = connect(ctx, url, token)
+	admin = verifyExecOutputs(ctx, admin, url, token, uuid)
 	defer admin.Close()
-	for _, mode := range []struct{ name, want string }{{"stdout", "s2-out"}, {"stderr", "s2-err"}} {
-		stream := call(ctx, admin, "operation_output_get", map[string]any{
-			"operation_id": execID, "stream": mode.name, "limit": 4096})
-		raw, err := base64.StdEncoding.DecodeString(field(stream, "content_base64"))
-		if err != nil {
-			panic(err)
-		}
-		check(strings.Contains(string(raw), mode.want), mode.name+" recorded output mismatch")
-		check(stream["exit_code"] == float64(7), mode.name+" did not retain observed guest exit 7")
-		check(stream["command_success"] == false, mode.name+" falsely marked guest exit 7 as success")
-	}
-	fmt.Println("S2_NATIVE_EXEC_RECONNECT_EXIT_7_STDOUT_STDERR=PASS")
-
-	noisy := call(ctx, admin, "box_exec", map[string]any{
-		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "yes x | head -c 70000"},
-		"idempotency_key": "native-s2-noisy-paginated-exec-001"})
-	noisyID := id(noisy)
-	wait(ctx, admin, noisyID)
-	firstPage := call(ctx, admin, "operation_output_get", map[string]any{
-		"operation_id": noisyID, "stream": "stdout", "offset": 0, "limit": 65536})
-	firstBytes, err := base64.StdEncoding.DecodeString(field(firstPage, "content_base64"))
-	if err != nil {
-		panic(err)
-	}
-	check(len(firstBytes) == 65536 && firstPage["ended"] == false,
-		"noisy output first page must be bounded, not silently truncated")
-	secondPage := call(ctx, admin, "operation_output_get", map[string]any{
-		"operation_id": noisyID, "stream": "stdout", "offset": 65536, "limit": 65536})
-	secondBytes, err := base64.StdEncoding.DecodeString(field(secondPage, "content_base64"))
-	if err != nil {
-		panic(err)
-	}
-	check(len(firstBytes)+len(secondBytes) == 70000 && secondPage["ended"] == true,
-		"noisy output second page did not resume original native evidence")
-	fmt.Println("S2_NATIVE_NOISY_EXEC_PAGINATION_70K=PASS")
-
-	// Read cap is a public API budget, not proof that Incus truncated its
-	// underlying recorded files. Produce >16MiB on each real guest stream,
-	// then demand an exactly bounded page and explicit truncation marker.
-	large := call(ctx, admin, "box_exec", map[string]any{
-		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
-			"head -c 16777220 /dev/zero | tr '\\000' Z; head -c 16777220 /dev/zero | tr '\\000' Z >&2"},
-		"idempotency_key": "native-s2-dual-stream-over-16m-001",
-	})
-	largeID := id(large)
-	largeFinal := wait(ctx, admin, largeID)
-	for _, stream := range []string{"stdout", "stderr"} {
-		bounded := call(ctx, admin, "operation_output_get", map[string]any{
-			"operation_id": largeID, "stream": stream,
-			"offset": 16777200, "limit": 65536,
-		})
-		chunk, e := base64.StdEncoding.DecodeString(field(bounded, "content_base64"))
-		if e != nil {
-			panic(e)
-		}
-		fmt.Printf("S2_NATIVE_DUAL_STREAM_META stream=%s got=%d ended=%v truncated=%v next=%v exit=%v\n",
-			stream, len(chunk), bounded["ended"], bounded["truncated"], bounded["next_offset"], bounded["exit_code"])
-		check(len(chunk) == 16 && strings.Trim(string(chunk), "Z") == "" &&
-			bounded["ended"] == true && bounded["truncated"] == true &&
-			bounded["next_offset"] == float64(16777216),
-			"real recorded "+stream+" breached 16MiB public read cap or hid truncation")
-	}
-	tooLarge, tooLargeErr := admin.CallTool(ctx, &mcp.CallToolParams{
-		Name: "operation_output_get", Arguments: map[string]any{
-			"operation_id": largeID, "stream": "stdout",
-			"offset": 16777217, "limit": 1,
-		}})
-	check(tooLargeErr != nil || tooLarge != nil && tooLarge.IsError,
-		"oversized native recorded output offset unexpectedly accepted")
-	fmt.Println("S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET=PASS")
-
-	// Only the single-use CI test harness requests this rendezvous. Keep the
-	// original completed native Exec logs present until an *independent* host
-	// witness has measured the actual spool files and backing filesystem.
-	// The MCP byte cap alone cannot establish any physical storage bound.
-	if dir := os.Getenv("BW_S2_OUTPUT_WITNESS_DIR"); dir != "" {
-		check(strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci."),
-			"native output witness requires the disposable GitHub CI workspace")
-		nativeID := field(largeFinal, "native_operation_id")
-		check(nativeID != "", "completed large Exec has no original native operation ID")
-		if err := os.WriteFile(dir+"/output-witness.ready", []byte(nativeID), 0600); err != nil {
-			panic(err)
-		}
-		released := false
-		for n := 0; n < 180; n++ {
-			if _, err := os.Stat(dir + "/output-witness.release"); err == nil {
-				released = true
-				break
-			}
-			time.Sleep(250 * time.Millisecond)
-		}
-		check(released, "independent native disk witness did not release the original completed Exec")
-	}
-
-	delayed := call(ctx, admin, "box_exec", map[string]any{
-		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 1; printf delayed-ok"},
-		"timeout_ms": 5000, "idempotency_key": "native-s2-delayed-time-bounded-exec-01"})
-	delayedID := id(delayed)
-	wait(ctx, admin, delayedID)
-	delayedOut := call(ctx, admin, "operation_output_get", map[string]any{
-		"operation_id": delayedID, "stream": "stdout"})
-	delayedData, err := base64.StdEncoding.DecodeString(field(delayedOut, "content_base64"))
-	if err != nil {
-		panic(err)
-	}
-	check(string(delayedData) == "delayed-ok" && delayedOut["exit_code"] == float64(0) &&
-		delayedOut["command_success"] == true, "bounded delayed Exec lost exit/output")
-	fmt.Println("S2_NATIVE_DELAYED_EXEC_TIMEOUT_BUDGET=PASS")
-
-	quiet := call(ctx, admin, "box_exec", map[string]any{
-		"box_id": uuid, "argv": []string{"/bin/true"},
-		"idempotency_key": "native-s2-quiet-exec-zero-001"})
-	quietID := id(quiet)
-	wait(ctx, admin, quietID)
-	quietOut := call(ctx, admin, "operation_output_get", map[string]any{
-		"operation_id": quietID, "stream": "stdout"})
-	check(field(quietOut, "content_base64") == "" && quietOut["ended"] == true &&
-		quietOut["exit_code"] == float64(0), "quiet Exec fabricated output or lost return")
-	fmt.Println("S2_NATIVE_QUIET_EXEC_RECORDED_ZERO_EXIT=PASS")
-
-	// A command that emits continuously for far longer than its admitted
-	// timeout must stop on the guest budget, not on the MCP request lifetime.
-	// The guest command also has a finite outer loop so a broken timeout yields
-	// an explicit failed assertion rather than trapping the disposable runner.
-	// The native Operation can finish successfully while the guest command
-	// has the distinct nonzero timeout exit and bounded recorded stdout.
-	continuous := call(ctx, admin, "box_exec", map[string]any{
-		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
-			"i=0; while [ \"$i\" -lt 200 ]; do printf 'continuous-guest-stdout-110x\\n'; i=$((i+1)); sleep 0.05; done"},
-		"timeout_ms":      1600,
-		"idempotency_key": "native-s2-continuous-output-timeout-01",
-	})
-	continuousID := id(continuous)
-	continuousFinal := wait(ctx, admin, continuousID)
-	check(field(continuousFinal, "state") == "SUCCEEDED",
-		"guest timeout falsely marked native Operation as unknown or failed")
-	continuousOut := call(ctx, admin, "operation_output_get", map[string]any{
-		"operation_id": continuousID, "stream": "stdout", "offset": 0, "limit": 65536,
-	})
-	continuousBytes, continuousErr := base64.StdEncoding.DecodeString(field(continuousOut, "content_base64"))
-	check(continuousErr == nil && len(continuousBytes) > 0 &&
-		len(continuousBytes) <= 65536 &&
-		strings.Contains(string(continuousBytes), "continuous-guest-stdout-110x") &&
-		continuousOut["command_success"] == false &&
-		continuousOut["exit_code"] == float64(124),
-		"bounded continuously emitting guest did not stop with GNU timeout exit 124")
-	fmt.Println("S2_P2_REAL_CONTINUOUS_STDOUT_GUEST_TIMEOUT_NOT_MCP_CANCELLATION=PASS")
-
-	// A deliberately cancelled read-side long poll cannot cancel or undo
-	// the already accepted native Exec. Use a fresh client for the broken
-	// HTTP request so the original actor session remains independent.
-	slow := call(ctx, admin, "box_exec", map[string]any{
-		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 3; printf still-ran"},
-		"idempotency_key": "native-s2-cancel-only-read-poll-001"})
-	slowID := id(slow)
-	poller := connect(ctx, url, token)
-	readCtx, stopReading := context.WithTimeout(ctx, 250*time.Millisecond)
-	_, waitErr := poller.CallTool(readCtx, &mcp.CallToolParams{Name: "operation_get",
-		Arguments: map[string]any{"operation_id": slowID, "wait_ms": 20000}})
-	stopReading()
-	_ = poller.Close()
-	check(waitErr != nil, "canceled long read unexpectedly claimed native completion")
-	finished := wait(ctx, admin, slowID)
-	check(field(finished, "state") == "SUCCEEDED",
-		"canceled read-side poll changed original native execution")
-	pollOut := call(ctx, admin, "operation_output_get", map[string]any{
-		"operation_id": slowID, "stream": "stdout"})
-	pollBytes, pollErr := base64.StdEncoding.DecodeString(field(pollOut, "content_base64"))
-	if pollErr != nil {
-		panic(pollErr)
-	}
-	check(string(pollBytes) == "still-ran" && pollOut["exit_code"] == float64(0),
-		"client read cancellation propagated to guest Exec")
-	fmt.Println("S2_NATIVE_CANCELLED_LONG_POLL_IS_READ_ONLY=PASS")
-
-	// Native detached/recorded Exec cannot be cancelled after it finishes.
-	// The cancellation request has its own failed receipt and must not
-	// retroactively change the original verified guest completion.
-	cancelled := call(ctx, admin, "operation_cancel", map[string]any{
-		"target_operation_id": execID, "idempotency_key": "native-s2-exec-late-cancel-01"})
-	cancelReceipt := child(cancelled, "cancel_operation")
-	cancelID := field(cancelReceipt, "operation_id")
-	check(cancelID != "" && cancelID != execID, "cancellation forged original operation ID")
-	var cancelState string
-	for i := 0; i < 30; i++ {
-		cancelState = field(child(call(ctx, admin, "operation_get", map[string]any{
-			"operation_id": cancelID, "wait_ms": 300}), "operation"), "state")
-		if cancelState == "FAILED" || cancelState == "UNKNOWN" || cancelState == "SUCCEEDED" {
-			break
-		}
-	}
-	check(cancelState == "FAILED", "detached Exec cancellation lied: "+cancelState)
-	execAgain := child(call(ctx, admin, "operation_get", map[string]any{"operation_id": execID}), "operation")
-	check(field(execAgain, "state") == "SUCCEEDED",
-		"unsupported cancellation rewrote original Exec")
-	fmt.Println("S2_NATIVE_EXEC_UNSUPPORTED_CANCEL_TRUTHFUL=PASS")
 
 	stop := call(ctx, admin, "box_stop", map[string]any{"box_id": uuid,
 		"idempotency_key": "native-s2-stop-0000000001"})

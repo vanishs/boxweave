@@ -25,15 +25,19 @@ NAME = "bw-s2-legacy-compat-110e"
 ACTIONS = ("create", "update", "start", "exec", "stop", "delete")
 
 
+def original_for_key(read, key):
+    digest = hashlib.sha256(key.encode()).hexdigest()
+    found = read("SELECT id,tracking_id,actor_id,token_id,layer,action,state,"
+                 "box_uuid,incarnation,native_operation_id FROM operations WHERE key_digest=?",
+                 (digest,))
+    assert len(found) <= 1, key
+    return found
+
+
 def originals(read):
     result = []
     for action in ACTIONS:
-        key = hashlib.sha256(("s2-old-sdk-positive-" + action).encode()).hexdigest()
-        found = read("SELECT id,tracking_id,actor_id,token_id,layer,action,state,"
-                     "box_uuid,incarnation,native_operation_id FROM operations WHERE key_digest=?",
-                     (key,))
-        assert len(found) <= 1, action
-        result.extend(found)
+        result.extend(original_for_key(read, "s2-old-sdk-positive-" + action))
     return result
 
 
@@ -59,7 +63,51 @@ def verify_originals(read, project):
     return result
 
 
-def main(project, receipt, candidate_sha, probe):
+OUTPUT_KEYS = (
+    ("pr191-sdk-output-create-01", "box_create", None),
+    ("native-s2-exec-nonzero-001", "box_exec", 7),
+    ("native-s2-noisy-paginated-exec-001", "box_exec", 0),
+    ("native-s2-dual-stream-over-16m-001", "box_exec", 0),
+    ("native-s2-delayed-time-bounded-exec-01", "box_exec", 0),
+    ("native-s2-quiet-exec-zero-001", "box_exec", 0),
+    ("native-s2-continuous-output-timeout-01", "box_exec", 124),
+    ("native-s2-cancel-only-read-poll-001", "box_exec", 0),
+    ("pr191-sdk-output-stop-01", "box_stop", None),
+    ("pr191-sdk-output-delete-01", "box_delete", None),
+)
+
+
+def verify_current_outputs(read, project):
+    result = []
+    for key, action, exit_code in OUTPUT_KEYS:
+        found = original_for_key(read, key)
+        assert len(found) == 1, key
+        row = found[0]
+        assert row[5:7] == (action, "SUCCEEDED"), key
+        assert row[9], key
+        if exit_code is not None:
+            assert read("SELECT exit_code FROM exec_outputs WHERE operation_id=?",
+                        (row[0],)) == [(exit_code,)], key
+        result.append(row)
+    uuid = result[0][7]
+    assert uuid and all(r[7] == r[8] == uuid and r[2:5] == result[0][2:5] for r in result)
+    assert all(result[0][2:5])
+    assert all(re.fullmatch(r"[0-9a-f]{32}", r[i]) for r in result for i in (0, 1))
+    assert len({r[0] for r in result}) == len(result)
+    assert len({r[1] for r in result}) == len(result)
+    assert len({r[9] for r in result}) == len(result)
+    cancel = original_for_key(read, "native-s2-exec-late-cancel-01")
+    assert len(cancel) == 1 and cancel[0][5:7] == ("operation_cancel", "FAILED")
+    assert cancel[0][0] not in {r[0] for r in result}
+    assert read("SELECT uuid,incarnation,state,deleted_by_operation_id FROM owned_boxes "
+                "WHERE project=? AND name=?", (project, "bw-s2-scoped-sdk-output")) == [
+                    (uuid, uuid, "DELETED", result[-1][0])]
+    assert read("SELECT state FROM network_bindings WHERE project=? AND box_uuid=? AND nic='eth0'",
+                (project, uuid)) == [("RELEASED",)]
+    return result
+
+
+def main(project, receipt, candidate_sha, probe, current_probe):
     assert os.geteuid() == 0 and os.environ.get("GITHUB_ACTIONS") == "true"
     assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
     assert project == "user-" + str(pwd.getpwnam("boxweave").pw_uid)
@@ -87,6 +135,22 @@ def main(project, receipt, candidate_sha, probe):
     for r in result:
         print("P1B_SCOPED_OLD_SDK_ORIGINAL", r[5], r[0], r[9], r[1], r[7], flush=True)
     print("P1B_SCOPED_OLD_SDK_FIXED_LEDGER_NATIVE_ABSENCE=PASS", flush=True)
+    assert Path(current_probe).is_file()
+    for key, _, _ in OUTPUT_KEYS:
+        assert not original_for_key(rows, key)
+    assert not original_for_key(rows, "native-s2-exec-late-cancel-01")
+    env = dict(os.environ, BW_S2_MCP_URL="http://127.0.0.1:18650/mcp",
+               BW_S2_ADMIN_TOKEN=secret, BW_S2_INSTALLED_EXEC_OUTPUT_ONLY="1")
+    env.pop("BW_S2_OUTPUT_WITNESS_DIR", None)
+    subprocess.run([current_probe], env=env, check=True, timeout=510)
+    result = verify_current_outputs(rows, project)
+    assert not native_names() and acls() == {"bw-peer-quarantine"}
+    assert [pid(u) for u in units] == pids and guard_identity() == guard
+    assert rows("SELECT count(*) FROM operations WHERE state IN "
+                "('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')") == [(0,)]
+    for r in result:
+        print("P1B_SCOPED_CURRENT_SDK_ORIGINAL", r[5], r[0], r[9], r[1], r[7], flush=True)
+    print("P1B_SCOPED_CURRENT_SDK_OUTPUT_FIXED_LEDGER=PASS", flush=True)
 
 
 if __name__ == "__main__":
