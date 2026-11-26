@@ -13,8 +13,10 @@ python3 dev/bwdev --json work plan --kind operations --query 'install migration'
 python3 dev/bwdev --json work check dev/examples/WORK_ENVELOPE.json
 ```
 
-For a concise first read on a checkout that supports R2, add --brief to
-work plan (check its help on an older checkout). Example for a source check:
+For a verbose material plan on a checkout that supports R2, optionally add
+--brief to work plan (check its help on an older checkout). Small plans may
+already be shorter in full mode because the brief view adds route guidance.
+Do not invoke a plan solely to answer a tiny question. Example for a source check:
 
 ```sh
 python3 dev/bwdev --json work plan --brief --kind development --query 'CI scope test' --path scripts/test_ci_change_scope.py

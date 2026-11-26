@@ -183,7 +183,28 @@ HANDOFF with FEEDBACK_RECORDED, Evolve PENDING. Isolated observations L013
 rev3 and L014 rev40 are exported evidence only; canonical histories remain
 unchanged. Recommend reuse-only R2 first, narrow reference-derived R3 if
 authorized, reuse existing R4 pending handoff; no new architecture.
-R2-R4 await owner scope approval, not automatic execution.
+R2 was subsequently authorized; R3-R4 remain subject to owner approval.
+
+R2 checkpoint (2026-11-25): [technical delivery and original evidence](https://github.com/vanishs/boxweave/pull/193#issuecomment-7179312167).
+Code b66d64eba21872e3139434cf32cc1f38e34b82de adds an opt-in brief projection
+of existing work plan, retaining required context, gates, source, candidate
+order/review statuses and audit findings; no new executor or selection.
+Box 116 tests passed (4 unrelated Node skips), Eval14 PASS, audit clear;
+fresh exact checkout 13/13 scope check with matching source/output evidence.
+Same R1 query: 6720 -> 4513 output bytes (32.8% less), not measured Agent
+productivity. Short plans may be longer; use full mode or no plan for tiny
+guidance. Full mode unchanged. Exact code push quality job 139617173782 in
+run 45732347009 SUCCESS; candidate 45732346982 SUCCESS (native and release
+skipped). The previous empty PR-only CI list was not an absence of push CI:
+stacked PR base is not v1. Public read-only exact-head push run lookup plus
+existing connector job verification recovered the actual runs without
+credentials; see original operation dd5a5f1fdb46b2bcdb9e0173d5090335 for
+prior 69a3ac9 and 2fc49ee successful workflow pairs. Do not use push as
+proof of PR/base association or release acceptance. No CI workflow change.
+R2 technical delivery complete; independent fresh ordinary Agent discovery
+and use is still pending because the implementer cannot initiate a separate
+session in this surface. Do not label this smoke independent or waive the
+minimum exit. R3-R7 not started.
 
 ### R0 — research and reuse gate (research recorded; owner decision pending)
 
@@ -323,7 +344,8 @@ blocker.
 | Planning and historical navigation | Prepared, docs-only |
 | R0 | Research recorded; owner review/scope decision pending |
 | R1 | Baseline and narrow scope recommendation recorded; owner decision pending |
-| R2-R4 | NOT_STARTED; implementation awaits approved scope |
+| R2 | Technical delivery PASS and code CI PASS; fresh ordinary Agent use pending |
+| R3-R4 | NOT_STARTED; implementation awaits approved scope |
 | R5-R6 | NOT_STARTED |
 | R7 / original V5 | OPEN |
 | L014 V4e-03/04 | Deferred; REOPEN retained |
@@ -332,6 +354,8 @@ blocker.
 Reusable handoff: read canonical bootstrap and this plan in #193, reconcile
 latest progress and wait for the owner's instruction. R0 research is recorded in [the reuse research note](BDH_R0_REUSE_RESEARCH.md).
 R1 baseline is recorded in [the baseline note](BDH_R1_BASELINE.md).
-Await the owner's explicit R2-R4 scope authorization;
-do not repeat R0/R1 without a material change in evidence. On later resumptions continue the next authorized
-unfinished slice, not the first stage.
+R2 technical delivery and neutral witness instructions are in the linked PR
+record above. Complete the fresh ordinary Agent discovery/use gate without
+repeating valid Box or CI evidence. R3-R4 require explicit owner authorization.
+Do not repeat R0/R1 without a material change in evidence. On later resumptions
+continue the next authorized unfinished slice, not the first stage.
