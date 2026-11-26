@@ -67,41 +67,16 @@ func (s *Store) StageCreateBinding(ctx context.Context, id, project, name string
 	if schema != 0 && schema != 2 || schema == 2 && b.ACL != peerscope.QuarantineACL || schema == 0 && b.ACL == peerscope.QuarantineACL {
 		return false, ErrResourceLocked
 	}
+	var clear bool
 	if schema == 2 {
-		if err = requireScopedNoLegacyRetirementTx(ctx, tx); err != nil {
-			return false, err
-		}
-		if err = tx.QueryRowContext(ctx, `SELECT
-  (SELECT COUNT(*) FROM network_address_fences WHERE bridge=? AND ((family='ipv4' AND address=?) OR (family='ipv6' AND address=?) OR (project!=? AND state!='RELEASED')))+
-  (SELECT COUNT(*) FROM network_bindings WHERE bridge=? AND (mac=? OR ipv4=? OR ipv6=? OR (project!=? AND state!='RELEASED')))`, b.Bridge, b.IPv4, b.IPv6, project, b.Bridge, b.MAC, b.IPv4, b.IPv6, project).Scan(&n); err != nil {
-			return false, err
-		}
+		clear, err = scopedCreateBindingAvailableTx(ctx, tx, project, b)
 	} else {
-		if err = verifyIPv4RetirementHistory(ctx, tx, project, b.Bridge, b.ACL); err != nil {
-			return false, err
-		}
-		if err = tx.QueryRowContext(ctx, legacyCreateBindingCollisionQuery, b.Bridge, b.IPv4, b.IPv6, project, b.Bridge, b.MAC, b.IPv4, project, b.IPv6, project).Scan(&n); err != nil {
-			return false, err
-		}
+		clear, err = legacyCreateBindingAvailableTx(ctx, tx, project, b)
 	}
-	if n != 0 {
-		return false, nil
+	if err != nil || !clear {
+		return false, err
 	}
 	keys := b.reservationKeys()
-	for i, key := range keys[:3] {
-		query := "SELECT COUNT(*) FROM operation_resource_claims WHERE resource_key=?"
-		args := []any{key}
-		if i == 0 && schema == 0 {
-			query = legacyCreateClaimCollisionQuery
-			args = append(args, project, b.Bridge, b.IPv4)
-		}
-		if err = tx.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
-			return false, err
-		}
-		if n != 0 {
-			return false, nil
-		}
-	}
 	for _, key := range keys {
 		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES(?,?,?)", id, project, key); err != nil {
 			return false, err

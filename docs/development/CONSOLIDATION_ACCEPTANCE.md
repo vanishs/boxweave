@@ -113,3 +113,5 @@ P1-06d15: [completed-original pin and maintenance separation](CONSOLIDATION_P1_0
 P1-06d15b: [exclusive recovery observers and installed pin witness](CONSOLIDATION_P1_06D15B_CHECKPOINT.md). Scoped PRS callback removed; actual completed-original pin repair witness added to existing N2 lane. Source verified, native CI_PENDING. No retirement waiver.
 
 P1b alternate-pool: [integration checkpoint](CONSOLIDATION_P1B_ALTPOOL_CHECKPOINT.md). Recovered original source; Box-verified candidate, installed CI pending. C03/C05/C11 retained. No waiver.
+
+P1-06d23: [Create availability separation](CONSOLIDATION_P1_06D23_CHECKPOINT.md). Full state/control/recovery Box PASS, independent CI pending. No P1 closure.
