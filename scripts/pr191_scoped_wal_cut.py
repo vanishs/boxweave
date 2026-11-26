@@ -5,21 +5,24 @@ Only the exact CI installation is instrumented. A transaction-local marker
 is written by the original terminal event, with no production hook or
 alternate ledger. The Root service, Incus and guard are never restarted.
 """
+from contextlib import closing, contextmanager
 import hashlib
 import os
 from pathlib import Path
 import pwd
 import re
 import secrets
+import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 
 from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import op, pid, token
 from pr177_d4_installed_recovery import wait_mcp_listener
-from pr178_n2_scoped_lifecycle import acls, binding, instance, verify
+from pr178_n2_scoped_lifecycle import acls, instance, verify
 from pr191_scoped_ack_loss import guard_identity, native_idle, native_names, wait_poststate
 from pr191_scoped_lifecycle_recovery import journal, rows, settle
 
@@ -86,28 +89,57 @@ def assert_poststate(project, action, oid, uuid, acl):
     assert native_idle(project)
 
 
-def assert_ledger(action, state, oid, uuid, acl, nonce=None):
+@contextmanager
+def cold_ledger_rows(source):
+    """Observe a stable private database/WAL copy without its shared index.
+
+    Only call with an independently quiescent writer. The copy is never
+    installed, exported, or used to recover the original.
+    """
+    source = Path(source)
+    wal = Path(str(source) + "-wal")
+    paths = (source, wal)
+    assert all(p.is_file() and not p.is_symlink() for p in paths)
+
+    def digests():
+        return tuple(hashlib.sha256(p.read_bytes()).digest() for p in paths)
+
+    before = digests()
+    with tempfile.TemporaryDirectory(prefix="p1b-cold-ledger-") as tmp:
+        target = Path(tmp) / "ledger.sqlite"
+        copies = (target, Path(str(target) + "-wal"))
+        for original, copy in zip(paths, copies):
+            shutil.copyfile(original, copy)
+            copy.chmod(0o600)
+        assert before == digests() == tuple(hashlib.sha256(p.read_bytes()).digest() for p in copies)
+        with closing(sqlite3.connect(target)) as db:
+            db.execute("PRAGMA query_only=ON")
+            yield lambda sql, params=(): db.execute(sql, params).fetchall()
+        assert before == digests()
+
+
+def assert_ledger(action, state, oid, uuid, acl, nonce=None, query=rows):
     terminal = state == "SUCCEEDED"
-    assert rows("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED'", (oid,)) == [(int(terminal),)]
+    assert query("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED'", (oid,)) == [(int(terminal),)]
     if nonce is not None:
-        assert rows("SELECT nonce,original FROM " + TABLE) == ([(nonce, oid)] if terminal else [])
+        assert query("SELECT nonce,original FROM " + TABLE) == ([(nonce, oid)] if terminal else [])
     else:
-        assert not rows("SELECT name FROM sqlite_master WHERE name IN (?,?)", (TABLE, TRIGGER))
+        assert not query("SELECT name FROM sqlite_master WHERE name IN (?,?)", (TABLE, TRIGGER))
     if action == "box_create":
-        assert rows("SELECT state FROM owned_boxes WHERE uuid=?", (uuid,)) == ([("OWNED",)] if terminal else [])
-        assert rows("SELECT state,acl FROM network_bindings WHERE box_uuid=?", (uuid,)) == ([("PINNED", acl)] if terminal else [])
-        assert rows("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family", (uuid,)) == ([("RESERVED", oid)] * 2 if terminal else [])
+        assert query("SELECT state FROM owned_boxes WHERE uuid=?", (uuid,)) == ([("OWNED",)] if terminal else [])
+        assert query("SELECT state,acl FROM network_bindings WHERE box_uuid=?", (uuid,)) == ([("PINNED", acl)] if terminal else [])
+        assert query("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family", (uuid,)) == ([("RESERVED", oid)] * 2 if terminal else [])
         if not terminal:
-            assert rows("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", (oid,)) == [(5,)]
+            assert query("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", (oid,)) == [(5,)]
     else:
-        assert rows("SELECT state FROM owned_boxes WHERE uuid=?", (uuid,)) == [("DELETED" if terminal else "OWNED",)]
-        assert binding(uuid)["state"] == ("RELEASED" if terminal else "PINNED")
-        fences = rows("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family", (uuid,))
+        assert query("SELECT state FROM owned_boxes WHERE uuid=?", (uuid,)) == [("DELETED" if terminal else "OWNED",)]
+        assert query("SELECT state FROM network_bindings WHERE box_uuid=?", (uuid,)) == [("RELEASED" if terminal else "PINNED",)]
+        fences = query("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family", (uuid,))
         assert len(fences) == 2 and all(f[0] == ("RELEASED" if terminal else "RESERVED") for f in fences)
         if terminal:
             assert all(f[1] == oid for f in fences)
         else:
-            assert rows("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", (oid,))[0][0] > 0
+            assert query("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", (oid,))[0][0] > 0
 
 
 def main(project, receipt, candidate_sha, case):
@@ -182,7 +214,6 @@ def main(project, receipt, candidate_sha, case):
     assert len(original) == 1 and original[0][:2] == (oid, accepted["tracking_id"])
     _, _, pre, native_id = original[0]
     assert pre in ("VERIFYING", "SUCCEEDED") and native_id
-    assert phase != "after" or pre == "SUCCEEDED"
     rec, hashes = journal(oid, kind.upper(), native_id)
     if kind == "create":
         uuid, acl = rec["UUID"], rec["Binding"]["ACL"]
@@ -191,6 +222,22 @@ def main(project, receipt, candidate_sha, case):
     wait_poststate(lambda: native_idle(project))
     assert_poststate(project, action, oid, uuid, acl)
     assert_ledger(action, pre, oid, uuid, acl, nonce)
+    if phase == "after":
+        # A sync is not the WAL-index publication. Independently rebuild the
+        # index from copied bytes to distinguish durable data from live visibility.
+        # No installed ledger writes, no recovery of the copy.
+        with cold_ledger_rows(Path("/var/lib/boxweave/ledger.sqlite")) as cold:
+            assert cold("PRAGMA integrity_check") == [("ok",)]
+            durable = cold("SELECT id,tracking_id,state,native_operation_id FROM operations WHERE work_ref=? AND action=?", (WORK, action))
+            assert len(durable) == 1 and durable[0][:2] == original[0][:2] and durable[0][3] == native_id
+            disk_state = durable[0][2]
+            assert disk_state in ("VERIFYING", "SUCCEEDED")
+            assert_ledger(action, disk_state, oid, uuid, acl, nonce, query=cold)
+            print("P1B_SCOPED_WAL_VISIBILITY", case, "live=" + pre, "cold=" + disk_state, oid, flush=True)
+            assert disk_state == "SUCCEEDED", "post-sync WAL lacks complete durable commit"
+        # Do not write test DDL or restart over divergent live/cold evidence.
+        # The existing post-sync acceptance remains strict.
+        assert pre == "SUCCEEDED", "live/cold visibility differs; original retained"
     print("P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS", case, pre, oid, native_id, uuid, flush=True)
     # The schema validator must still refuse unexpected tables/triggers.
     # The controller is dead. Preserve marker proof above and remove ONLY

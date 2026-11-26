@@ -227,6 +227,19 @@ def main(project, receipt, testbin, mode):
             assert p["original_id"]==original
             print("PR188_H3B_GUIDED_APPLY=PASS",mode,flush=True)
         else:
+            # The negative checks and guided decline use the earlier review.
+            # For the positive machine apply explicitly review fresh evidence;
+            # never retry a failed apply or approve a changed original/ledger.
+            fresh=run([BIN,"recover","--plan","--issue",issue,"-project",project],capture_output=True,text=True)
+            q=json.loads(fresh.stdout)
+            assert q["status"]=="REVIEW_READY" and q["apply_available"] and not q["native_retried"]
+            stable=("issue_id","scope","mode","original_id","original_action","original_state","original_revision","original_sha256","ledger_sha256","installation_sha256","leaf")
+            assert all(q[k]==p[k] for k in stable),"reviewed original, ledger or installation changed"
+            assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
+            print("P1B_LEGACY_FRESH_EXACT_REVIEW", "witness_changed="+str(q["witness"]!=p["witness"]),flush=True)
+            p=q
+            base[-1]=p["review_sha256"]
+            planned.stdout=fresh.stdout
             result=json.loads(run(base,input=planned.stdout,text=True,capture_output=True).stdout)
         rec=result["recovery"]
         assert rec["original_operation_id"]==original and rec["disposition"]=="SETTLED" and rec["operation"]["state"]=="SUCCEEDED",result

@@ -132,3 +132,62 @@ func TestS4B2ReadOnlyAuditSeesLiveWALAndRefusesSchemaDrift(t *testing.T) {
 		t.Fatal("foreign schema accepted")
 	}
 }
+
+func TestAuditReaderReleasesIdleAndRejectsReplacement(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "ledger.sqlite")
+	rw, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = rw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ro, err := OpenNetworkAuditReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ro.Close()
+	assertIdle := func() {
+		t.Helper()
+		if got := ro.db.Stats(); got.OpenConnections != 0 || got.InUse != 0 || got.Idle != 0 {
+			t.Fatalf("audit reader retained physical connection: %+v", got)
+		}
+	}
+	assertIdle()
+	if v, err := ro.Schema(context.Background()); err != nil || v != SchemaVersion {
+		t.Fatal(v, err)
+	}
+	assertIdle()
+	// The original inode must remain pinned after unlink, without a SQLite
+	// connection. A valid replacement at the same path must not be adopted.
+	if err = os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = replacement.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ro.Schema(context.Background()); err == nil {
+		t.Fatal("audit reader adopted replacement database")
+	}
+	assertIdle()
+	if _, err := ro.auditConnector.fileAnchor.Stat(); err != nil {
+		t.Fatal("lost inode anchor", err)
+	}
+	if err := ro.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ro.auditConnector.fileAnchor.Stat(); err == nil {
+		t.Fatal("leaked file anchor")
+	}
+	if _, err := ro.auditConnector.parentAnchor.Stat(); err == nil {
+		t.Fatal("leaked parent anchor")
+	}
+}

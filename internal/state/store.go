@@ -96,7 +96,8 @@ type Store struct {
 	execArchiveDir string
 	// auditReadOnly is set only by the validated existing-owner,
 	// SQLite mode=ro / query_only root-side audit constructor.
-	auditReadOnly bool
+	auditReadOnly  bool
+	auditConnector *networkAuditConnector
 }
 
 // IsNetworkAuditReadOnly distinguishes a protected root witness handle from
@@ -249,7 +250,13 @@ func (s *Store) ExecArchiveDir() string {
 	}
 	return s.execArchiveDir
 }
-func (s *Store) Close() error { return s.db.Close() }
+func (s *Store) Close() error {
+	err := s.db.Close()
+	if s.auditConnector != nil {
+		return errors.Join(err, s.auditConnector.close())
+	}
+	return err
+}
 
 func (s *Store) validateExistingSchema() error {
 	return s.validateExistingSchemaContext(context.Background())

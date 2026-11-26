@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 import unittest
 
+from pr191_scoped_wal_cut import cold_ledger_rows
+
 
 class ScopedWALMarkerTest(unittest.TestCase):
     @classmethod
@@ -78,6 +80,20 @@ class ScopedWALMarkerTest(unittest.TestCase):
             with self.subTest(label=label):
                 copy.write_bytes(raw)
                 self.assertFalse(self.has(path=copy))
+
+    def test_cold_ledger_observer_preserves_source(self):
+        with self.db:
+            self.db.execute("INSERT INTO marker VALUES (?,?)", (self.nonce, "committed"))
+        self.db.execute("INSERT INTO marker VALUES (?,?)", ("0" * 32, "uncommitted"))
+        source = (self.db_path.read_bytes(), self.wal.read_bytes())
+        with cold_ledger_rows(self.db_path) as query:
+            self.assertEqual(query("PRAGMA integrity_check"), [("ok",)])
+            self.assertEqual(query("SELECT nonce,original FROM marker"), [(self.nonce, "committed")])
+            with self.assertRaises(sqlite3.OperationalError):
+                query("DELETE FROM marker")
+        self.assertEqual(source, (self.db_path.read_bytes(), self.wal.read_bytes()))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM marker").fetchone(), (2,))
+        self.db.rollback()
 
     def test_checkpoint_generation_and_new_nonce(self):
         with self.db:
