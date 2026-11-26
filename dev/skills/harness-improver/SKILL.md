@@ -12,9 +12,13 @@ The Solve Loop continues independently unless the gap blocks it.
 1. Read original evidence and the existing asset. Link a new distinct
    observation with learn observe, not a duplicate candidate. Distinguish
    fact, hypothesis, task-local preference and durable owner policy.
-2. Choose fix now, flag, defer, review an attached implementation or no
-   change. Prioritize real impact and recurrence, expected benefit and
-   effort. A work reference is not independent proof.
+2. In ordinary work, flag or defer nonblocking BDH gaps and continue the
+   requested task. If blocked, use an authorized safe fallback or stop the
+   affected action. On request, review the inbox and recommend reuse,
+   creation, optimization, adjustment, repair or continued deferral.
+   Explicit owner scope authorization is required before selection or
+   implementation of BDH changes. Prioritize observed impact, recurrence,
+   expected benefit and effort; a work reference is not independent proof.
 3. Reopen DEFERRED explicitly through review to CANDIDATE. Improve a
    small existing asset; link a separate authorized PR/issue for larger
    unrelated work. Preserve deferral reason and condition.

@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-v1a",
+  "authority": "Owner authorized child PR development in an isolated owned Box; no parent change, host change, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Reconcile exact tested changes and record residual evidence",
+  "objective": "Implement and verify V1a typed residual evidence and advisory review readiness",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "c57c9900a00cfdf1ccd3214ca58b90a0ad8cea69",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [],
+  "work_ref": "pr193/v1"
+}

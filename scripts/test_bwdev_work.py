@@ -28,6 +28,71 @@ class WorkTests(unittest.TestCase):
         self.assertEqual(result["assets"][0]["id"], "knowledge.index")
         self.assertLessEqual(len(result["assets"]), 7)
 
+    def test_brief_preserves_selection_gates_and_findings(self):
+        full = work.plan(ROOT, "development", "CI scope classification test",
+                         paths=["scripts/test_ci_change_scope.py"])
+        full["learning"]["findings"].append({"issue": "TEST_FINDING"})
+        before = json.dumps(full, sort_keys=True)
+        brief = work.brief_plan(full)
+        self.assertEqual(json.dumps(full, sort_keys=True), before)
+        for key in ("status", "task_kind", "required", "outcome_gate",
+                    "control_source", "feedback", "note"):
+            self.assertEqual(brief[key], full[key])
+        self.assertEqual(brief["learning"]["status"], full["learning"]["status"])
+        self.assertEqual(brief["learning"]["findings"], full["learning"]["findings"])
+        self.assertEqual(brief["assets"], [
+            {key: row[key] for key in ("id", "paths", "status")}
+            for row in full["assets"]])
+        self.assertEqual(len(brief["learning"]["related"]), len(full["learning"]["related"]))
+        for short, original in zip(brief["learning"]["related"], full["learning"]["related"]):
+            self.assertEqual({k: v for k, v in short.items() if k != "opportunity"},
+                             {k: v for k, v in original.items() if k != "opportunity"})
+            opportunity = original["opportunity"]
+            self.assertEqual(short["opportunity"]["status"], opportunity["status"])
+            self.assertEqual(short["opportunity"]["reasons"], opportunity["reasons"])
+            self.assertEqual(short["opportunity"]["evidence_count"], len(opportunity["evidence"]))
+            self.assertNotIn("evidence", short["opportunity"])
+            self.assertNotIn("basis", short["opportunity"])
+        self.assertIn("verify run CHECK FRESH_DIRECTORY", brief["next_action"])
+        self.assertIn("not proof", brief["execution_route"])
+        self.assertIn("owner authorization", brief["detail"])
+
+    def test_brief_retains_pending_selection_without_proposal_or_authority(self):
+        full = work.plan(ROOT, "guidance", "what is box")
+        full["learning"]["related"] = [{
+            "id": "fixture", "asset": "fixture", "state": "CANDIDATE",
+            "next_action": "reconcile selected improvement episode; no dispatch",
+            "match_reasons": ["asset"], "recorded_work_refs": 1,
+            "reconsider": None, "opportunity": {
+                "status": "SELECTION_RECORDED", "reasons": ["explicit-residual"],
+                "observation_count": 1, "evidence": ["original"],
+                "decision": {"decision": "select", "proposal": {"authority_ref": "fixture"}},
+            },
+        }]
+        brief = work.brief_plan(full)
+        row = brief["learning"]["related"][0]
+        self.assertEqual(row["opportunity"], {
+            "status": "SELECTION_RECORDED", "reasons": ["explicit-residual"],
+            "observation_count": 1, "evidence_count": 1, "decision": "select",
+        })
+        self.assertIn("no dispatch", row["next_action"])
+        self.assertNotIn("verify run", brief["next_action"])
+
+    def test_brief_cli_opt_in_and_missing_inbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "missing")
+            cmd = [sys.executable, str(ROOT / "dev/bwdev"), "--json", "work",
+                   "plan", "--kind", "guidance", "--query", "what is box",
+                   "--inbox", missing]
+            full = subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, check=True)
+            brief = subprocess.run([*cmd, "--brief"], cwd=tmp, capture_output=True,
+                                   text=True, check=True)
+            full_result, brief_result = json.loads(full.stdout), json.loads(brief.stdout)
+            self.assertNotIn("view", full_result)
+            self.assertEqual(brief_result, work.brief_plan(full_result))
+            self.assertEqual(brief_result["learning"]["status"], "UNAVAILABLE")
+            self.assertFalse(Path(missing).exists())
+
     def test_unknown_target_is_not_completion(self):
         self.data.update(state="RECORDED", evidence=["example"], learning={"kind":"none","ref":"No change"})
         with self.assertRaises(HarnessError):

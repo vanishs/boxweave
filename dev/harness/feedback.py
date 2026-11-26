@@ -1,4 +1,5 @@
 """Audit material asset feedback without granting authority or executing it."""
+import re
 from pathlib import Path
 
 from . import context, evolution, learning
@@ -57,7 +58,8 @@ def asset_paths(root, asset, registry):
 def matching_observation(candidate, row, item):
     expected = {key: item[key] for key in ("attempt_ref", "evidence", "observation", "outcome")}
     expected["work_ref"] = row["work_ref"]
-    if expected in candidate.get("observations", []):
+    if any(all(observed.get(key) == value for key, value in expected.items())
+           for observed in candidate.get("observations", [])):
         return "OBSERVATION"
     # Older captures contain no attempt/outcome. Do not call them later reuse.
     if (candidate["work_ref"] == row["work_ref"]
@@ -67,17 +69,93 @@ def matching_observation(candidate, row, item):
     return None
 
 
+def derive_links(row, root, inbox, links):
+    """Copy exact observed facts into a boundary; never choose candidates."""
+    if (row.get("feedback_protocol") != PROTOCOL or not row.get("boundary")
+            or row.get("revision") is not None or row["state"] == "UNKNOWN"):
+        raise HarnessError("Reference links require a new protocol-1 boundary with a known outcome")
+    if not 1 <= len(links) <= 32:
+        raise HarnessError("Invalid reference link count")
+    inbox = Path(inbox) if inbox else root / "dev/learning"
+    audit, _ = learning.audit(inbox, root)
+    candidates = {candidate["id"]: candidate for candidate in audit["records"]}
+    duplicates = {key for finding in audit["findings"] if finding["issue"] == "DUPLICATE"
+                  for key in (finding["id"], finding["other"])}
+    registry = {asset["id"]: asset["paths"] for asset in context.assets(root)}
+    items = list(row.get("asset_feedback", []))
+    linked = list(row.get("learning_links", []))
+    expected = {}
+    seen = set()
+    for key, revision, reason in links:
+        learning.safe_id(key)
+        if not isinstance(revision, str) or not re.fullmatch(r"[1-9][0-9]{0,7}", revision):
+            raise HarnessError("Invalid expected learning revision")
+        revision = int(revision)
+        evolution.bounded(reason, "feedback reason")
+        if key in seen:
+            raise HarnessError("Duplicate reference link: " + key)
+        seen.add(key)
+        candidate = candidates.get(key)
+        if candidate is None or candidate["revision"] != revision:
+            raise HarnessError("Missing candidate or learning revision conflict: " + key)
+        if candidate["state"] in ("DEPRECATED", "REJECTED") or key in duplicates:
+            raise HarnessError("Closed or duplicate candidate requires explicit review: " + key)
+        observations = [item for item in candidate.get("observations", [])
+                        if item["work_ref"] == row["work_ref"]
+                        and item["attempt_ref"] == row["attempt_ref"]]
+        if len(observations) != 1:
+            raise HarnessError("Missing or ambiguous exact work/attempt observation: " + key)
+        observation = observations[0]
+        if observation["outcome"] == "uncertain":
+            raise HarnessError("Uncertain observation requires explicit review: " + key)
+        if observation["evidence"] not in row["evidence"]:
+            raise HarnessError("Recorded observation evidence absent from boundary: " + key)
+        assets = [asset for asset in row["used_assets"]
+                  if candidate["asset"] in asset_paths(root, asset, registry)]
+        if len(assets) != 1:
+            raise HarnessError("Missing or ambiguous used asset for observation: " + key)
+        item = {field: observation[field] for field in ("attempt_ref", "evidence", "observation", "outcome")}
+        item.update(asset=assets[0], decision="linked", candidate=key, reason=reason)
+        validate_item(item)
+        paths = set(asset_paths(root, item["asset"], registry))
+        if any(old["evidence"] == item["evidence"]
+               and paths.intersection(asset_paths(root, old["asset"], registry)) for old in items):
+            raise HarnessError("Existing or aliased feedback for observation; reconcile explicitly: " + key)
+        matches = [other["id"] for other in candidates.values()
+                   if other["asset"] in paths and matching_observation(other, row, item)]
+        if matches != [key]:
+            raise HarnessError("Conflicting recorded observation associations: " + key)
+        items.append(item)
+        if key not in linked:
+            linked.append(key)
+        expected[(item["asset"], item["evidence"], key)] = revision
+    return dict(row, asset_feedback=items, learning_links=linked), expected
+
+
+def check_derived_links(reviewed, expected):
+    """The existing second audit must still validate every requested link."""
+    matches = {(item["asset"], item["evidence"], item["candidate"]): item
+               for item in reviewed["items"]}
+    for key, revision in expected.items():
+        item = matches.get(key, {})
+        if (item.get("status") != "RECORDED" or item.get("match") != "OBSERVATION"
+                or item.get("candidate_revision") != revision):
+            raise HarnessError("Derived link changed or needs reconciliation: " + key[2])
+
+
 def _review(row, root, inbox=None):
     """Read-only local reconciliation of caller records, not proof of effects."""
     issues = []
     results = []
     if row.get("feedback_protocol") != PROTOCOL:
         return {"status": "REVIEW_REQUIRED", "issues": ["Feedback protocol not declared; review legacy record explicitly"],
-                "items": [], "note": "No automatic migration or closure."}, 1
+                "items": [], "evolve": {"status": "UNRESOLVED", "items": []},
+                "note": "No automatic migration or closure."}, 1
     disposition = row.get("learning")
     items = row.get("asset_feedback", [])
     if row["state"] == "ACTIVE" and not row.get("boundary") and not disposition and not items:
         return {"status": "NOT_DUE", "issues": [], "items": [],
+                "evolve": {"status": "NOT_DUE", "items": []},
                 "note": "No material boundary recorded yet."}, 0
     if not disposition:
         issues.append("Missing learning disposition")
@@ -99,10 +177,12 @@ def _review(row, root, inbox=None):
     inbox = Path(inbox) if inbox else root / "dev/learning"
     candidates = []
     findings = []
+    review_context = {}
     if inbox.is_dir() and not inbox.is_symlink():
         audit, _ = learning.audit(inbox, root)
         candidates = audit["records"]
         findings = audit["findings"]
+        review_context = audit["review_context"]
     known = {candidate["id"]: candidate for candidate in candidates}
     duplicate_ids = {key for finding in findings if finding["issue"] == "DUPLICATE"
                      for key in (finding["id"], finding["other"])}
@@ -126,7 +206,8 @@ def _review(row, root, inbox=None):
     for item in items:
         validate_item(item)
         paths = asset_paths(root, item["asset"], registry)
-        suggestions = [{"id": candidate["id"], "revision": candidate["revision"], "state": candidate["state"]}
+        suggestions = [{"id": candidate["id"], "revision": candidate["revision"], "state": candidate["state"],
+                        "opportunity": evolution.opportunity(candidate, review_context.get(candidate["id"]))}
                        for candidate in candidates if candidate["asset"] in paths
                        and candidate["state"] not in ("DEPRECATED", "REJECTED")]
         result = {"asset": item["asset"], "evidence": item["evidence"], "decision": item["decision"],
@@ -211,7 +292,23 @@ def _review(row, root, inbox=None):
         result["status"] = "REVIEW_REQUIRED" if problems else "RECORDED"
         results.append(result)
         issues.extend(item["asset"] + ": " + problem for problem in problems)
+    pending = {}
+    for item in results:
+        for candidate in item["related"]:
+            opportunity = candidate["opportunity"]
+            if opportunity["status"] not in ("REVIEW_DUE", "SELECTION_RECORDED"):
+                continue
+            if item.get("match") and item["candidate"] == candidate["id"]:
+                if opportunity["status"] == "SELECTION_RECORDED" or item["evidence"] in opportunity["evidence"]:
+                    pending[candidate["id"]] = {"id": candidate["id"], "revision": candidate["revision"],
+                        "status": opportunity["status"], "basis": opportunity["basis"],
+                        "next_safe_action": ("Reconcile selected episode; preserve pending work"
+                            if opportunity["status"] == "SELECTION_RECORDED"
+                            else "Record explicit review or handoff; do not infer closure")}
     return {"status": "REVIEW_REQUIRED" if issues else "FEEDBACK_RECORDED",
+            "evolve": {"status": "PENDING" if pending else ("UNRESOLVED" if issues else "NO_MATCHED_PENDING"),
+                       "items": list(pending.values()),
+                       "note": "Separate from ordinary task feedback; does not claim complete Evolve Loop."},
             "issues": issues, "items": results,
             "note": "Checks supplied local records only. No proof of omitted observations, remote persistence, independent recurrence, promotion or product acceptance."}, 1 if issues else 0
 
@@ -221,4 +318,5 @@ def review(row, root, inbox=None):
         return _review(row, root, inbox)
     except (HarnessError, OSError, UnicodeError, KeyError, TypeError, ValueError) as exc:
         return {"status": "REVIEW_REQUIRED", "issues": ["Feedback inputs need review: " + str(exc)],
-                "items": [], "note": "Preserve the original work and reconcile local inputs."}, 1
+                "items": [], "evolve": {"status": "UNRESOLVED", "items": []},
+                "note": "Preserve the original work and reconcile local inputs."}, 1

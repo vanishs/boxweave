@@ -1,0 +1,106 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-v1b-v2b",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Six exclusive source-script transfers ce15bee21e9e15f4a3a0ffec2f4c3436, 43276538c357c1a33fb6aa5e7a0c1cdb, 41f306f44ad79e2fde23682fc02eeac7, d37b14384ee0a15954e631e7a8215172, 888579d4b5dc6d14bc16dabf8d1bbf5e, 74e37b1088c5ca9eaecfd63cb09a0ce2; Box regression c81bdbab5592723ce82431638e49ca24 exit 0",
+      "observation": "Existing exclusive-file Skill enabled six manually prepared source-script payloads during V1b/V2 development, with separate terminal receipts and readbacks. The repeatable preparation cost remains; no new transfer helper or independent benefit established.",
+      "outcome": "helped",
+      "reason": "Existing Skill reused; select a bounded planner only after clean source publication"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-v1b-v2b",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "61408c4a0799d8cdef3876b75d4be13e exit 0",
+      "observation": "Reconciled exact child checkout, canonical v1, parent and previous CI",
+      "outcome": "helped",
+      "reason": "Existing resume guidance adequate"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-v1b-v2b",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "a755b341d6907b420a3008b5868942c1 exit 0; c81bdbab5592723ce82431638e49ca24 exit 0",
+      "observation": "18 targeted and 87 full tests, 14 Eval, audit and prior CI passed",
+      "outcome": "helped",
+      "reason": "L012 concerns superseded or cancelled CI; prior V1a completed successfully"
+    },
+    {
+      "asset": "skill.harness-improver",
+      "attempt_ref": "20261125-v1b-v2b",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "13df9eebd8da5e501346f3b4360cf875 exit 0; a755b341d6907b420a3008b5868942c1 exit 0",
+      "observation": "Implemented and tested opportunity decisions, ready DAG and guarded local transitions",
+      "outcome": "helped",
+      "reason": "Planned harness changes are not a completed selected L014 improvement"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-v1b-v2b",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "6dc46971384db06ab6e10e35bf01616a exit 0",
+      "observation": "Actual L014 review basis and residual evidence remained available",
+      "outcome": "helped",
+      "reason": "Use clean exact source and explicit selected proposal"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-v1b-v2b",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 rev14; c81bdbab5592723ce82431638e49ca24 exit 0",
+      "observation": "Appended actual additional manual-payload evidence without rewriting prior history",
+      "outcome": "helped",
+      "reason": "No promotion or independent witness claimed"
+    }
+  ],
+  "attempt_ref": "20261125-v1b-v2b",
+  "authority": "Owner authorized child PR development in an isolated owned Box; no parent change, host change, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "Six exclusive source-script transfers ce15bee21e9e15f4a3a0ffec2f4c3436, 43276538c357c1a33fb6aa5e7a0c1cdb, 41f306f44ad79e2fde23682fc02eeac7, d37b14384ee0a15954e631e7a8215172, 888579d4b5dc6d14bc16dabf8d1bbf5e, 74e37b1088c5ca9eaecfd63cb09a0ce2; Box regression c81bdbab5592723ce82431638e49ca24 exit 0",
+    "61408c4a0799d8cdef3876b75d4be13e exit 0",
+    "a755b341d6907b420a3008b5868942c1 exit 0; c81bdbab5592723ce82431638e49ca24 exit 0",
+    "13df9eebd8da5e501346f3b4360cf875 exit 0; a755b341d6907b420a3008b5868942c1 exit 0",
+    "6dc46971384db06ab6e10e35bf01616a exit 0",
+    "L014 rev14; c81bdbab5592723ce82431638e49ca24 exit 0"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Publish tested V1b/V2a/V2b source; select real bounded episode on clean source; finish terminal resolution and integration gates before full V2 closure",
+  "objective": "Implement durable opportunity decisions and bounded improvement task lifecycle with exact evidence and source association",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "eb5ea275251a08219a0b5f5adff23b25e426a438",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [
+    "skill.box-development",
+    "skill.task-resume",
+    "skill.verification",
+    "skill.harness-improver",
+    "tool.bwdev",
+    "skill.continuous-learning"
+  ],
+  "work_ref": "pr193/v2b"
+}

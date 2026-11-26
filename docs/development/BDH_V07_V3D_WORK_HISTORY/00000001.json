@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "pr193-v3d-deliver-20261125",
+  "authority": "Owner PR193 continuation: bounded harness-only development in owned isolated Box; no parent, runtime, host, merge or release",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Verify independently reviewed child source and fresh checkout",
+  "objective": "Verify authorized durable delivery of independently reviewed V3 improvement",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "fcceaf11ec271a6ed7662580f65c59e8c8f164dd",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [],
+  "work_ref": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0"
+}

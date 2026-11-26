@@ -28,6 +28,31 @@ when available; retain the canonical safety and acceptance requirements.
    current canonical instructions are inaccessible, report the limitation
    and do not assume stale rules, permissions or acceptance.
 
+## Choose the shortest applicable route
+
+Use the authorized task checkout's [short task routes](INDEX.md#short-task-routes)
+and actual capabilities; a candidate checkout does not replace canonical
+v1 authority. This is a choice, not an extra mandatory workflow.
+
+- Tiny read-only question: read the relevant contract and answer. No Box,
+  plan, work envelope or learning write solely for BDH.
+- Existing source check in a Python checkout: start with
+  `python3 dev/bwdev --json verify plan`; if a registered check matches,
+  use `verify run` and `verify inspect` as described in the toolbox.
+  A separate work plan is useful for material or ambiguous work, not a
+  prerequisite for a focused check. Use `--brief` only where supported.
+- Owner-requested improvement review: start at the learning inbox; use
+  the compact existing review view where available, then exact current
+  records and original evidence. No implementation without owner scope.
+- No usable matching helper or local route: use the authorized manual
+  route, record the reason and actual evidence. Do not install a new
+  runner or invent a remote executor just for BDH.
+
+Current procedures and historical results are separate: load applicable
+rules and execution guidance before tests; consult historical evidence for
+recovery, review or comparison, not as a new result. Do not omit required
+safety or acceptance guidance to avoid historical exposure.
+
 ## Solve Loop and Evolve Loop
 
 3. Discover and reuse relevant knowledge, Skills, tools and workflows.

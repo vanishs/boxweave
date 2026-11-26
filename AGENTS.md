@@ -21,9 +21,13 @@ For every BoxWeave task, follow the [canonical BDH startup entry](dev/BOOTSTRAP.
 It defines task activation, proportional Solve/Evolve Loops, continuity and
 learning; the [toolbox](dev/README.md) and [asset index](dev/INDEX.md) provide
 the applicable capabilities. If this file was loaded via BOOTSTRAP, continue
-that entry without restarting it. Script First for development tools;
-existing tools remain usable and automation is incremental. No new
-permission, product boundary or CI exemption is granted by BDH.
+that entry without restarting it. For an authorized task checkout, use its
+[short task routes](dev/INDEX.md#short-task-routes) and actual local toolbox
+in addition to canonical v1 rules. Prefer a matching existing registered
+check before constructing a manual command; keep tiny questions lightweight.
+Use a safe manual fallback when the matching route is unsuitable or absent,
+and report the reason. Script First; no new permission, product boundary
+or CI exemption is granted by BDH.
 
 ## Work, checks and handoff
 

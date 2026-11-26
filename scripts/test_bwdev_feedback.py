@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dev"))
@@ -22,6 +23,8 @@ class FeedbackTests(unittest.TestCase):
         self.inbox = self.base / "inbox"
         self.inbox.mkdir()
         shutil.copytree(ROOT / "dev/learning/BDH-L014", self.inbox / "BDH-L014")
+        # A resolved learning history requires its paired canonical episode records.
+        shutil.copytree(ROOT / "docs/development/BDH_V07_EPISODES", self.base / "episodes")
         self.item = {"asset": "skill.box-development", "outcome": "helped",
                      "evidence": "fixture operation 123", "attempt_ref": "second",
                      "observation": "Verified short command transfer",
@@ -40,22 +43,162 @@ class FeedbackTests(unittest.TestCase):
     def review(self, row=None):
         return feedback.review(work.validate(row or self.row), ROOT, self.inbox)
 
-    def observe(self):
+    def use_history_prefix(self, revision):
+        # Pin lifecycle-sensitive cases to immutable learning revisions, not
+        # the moving current candidate. The canonical histories are untouched.
+        source = ROOT / "dev/learning/BDH-L014"
+        self.inbox = self.base / f"inbox-{revision}"
+        target = self.inbox / "BDH-L014"
+        target.mkdir(parents=True)
+        for number in range(1, revision + 1):
+            name = f"{number:08d}.json"
+            shutil.copyfile(source / name, target / name)
+
+    def observe(self, residual=None):
         args = argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
                 expect=records.latest(self.inbox / "BDH-L014")["revision"], work_ref=self.row["work_ref"],
                 attempt_ref=self.item["attempt_ref"], evidence=self.item["evidence"],
                 observation=self.item["observation"], outcome=self.item["outcome"])
+        if residual is not None:
+            file = self.base / "residual.json"
+            file.write_text(json.dumps(residual))
+            args.residual_file = file
         learning.run(args, ROOT)
 
     def test_actual_link_required_and_exact_match(self):
+        # Revision 33 has an outstanding second selection.
+        self.use_history_prefix(33)
         result, code = self.review()
         self.assertEqual(code, 1)
         self.assertEqual(result["items"][0]["related"][0]["id"], "BDH-L014")
         self.observe()
         self.assertEqual(self.review()[0]["status"], "FEEDBACK_RECORDED")
+        evolve = self.review()[0]["evolve"]
+        self.assertEqual(evolve["status"], "PENDING")
+        self.assertEqual(evolve["items"][0]["id"], "BDH-L014")
         for key, value in (("attempt_ref", "other"), ("observation", "changed"), ("outcome", "misled")):
             changed = dict(self.row, asset_feedback=[dict(self.item, **{key: value})])
             self.assertEqual(self.review(changed)[1], 1)
+
+    def reference_fixture(self):
+        self.observe()
+        revision = records.latest(self.inbox / "BDH-L014")["revision"]
+        draft = dict(self.row, asset_feedback=[], learning_links=[])
+        return draft, ["BDH-L014", str(revision), self.item["reason"]]
+
+    def reference_boundary(self, draft, links):
+        history = self.base / "reference-work"
+        initial = dict(self.row, state="ACTIVE", asset_feedback=[], learning_links=[], learning=None)
+        initial.pop("boundary")
+        records.publish(history, 0, initial)
+        file = self.base / "reference-boundary.json"
+        file.write_text(json.dumps(draft), encoding="utf-8")
+        return argparse.Namespace(action="boundary", directory=history, file=file,
+                                  expect=1, inbox=self.inbox, link_observation=links)
+
+    def test_reference_link_records_existing_exact_observation(self):
+        draft, link = self.reference_fixture()
+        args = self.reference_boundary(draft, [link])
+        before = records.latest(self.inbox / "BDH-L014")
+        result, code = work.run(args, ROOT)
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["record"]["asset_feedback"], [self.item])
+        self.assertEqual(result["record"]["learning_links"], ["BDH-L014"])
+        self.assertEqual(result["feedback"]["status"], "FEEDBACK_RECORDED")
+        self.assertEqual(work.read_history(args.directory)["revision"], 2)
+        self.assertEqual(records.latest(self.inbox / "BDH-L014"), before)
+        self.assertEqual(records.read_json(args.file), draft)
+        with self.assertRaises(HarnessError):
+            work.run(args, ROOT)
+
+    def test_reference_rejects_stale_missing_or_ambiguous_identity(self):
+        draft, link = self.reference_fixture()
+        for change, links in (
+                ({}, [[link[0], str(int(link[1])-1), link[2]]]),
+                ({}, [["absent", link[1], link[2]]]),
+                ({"work_ref": "different"}, [link]),
+                ({"attempt_ref": "different"}, [link]),
+                ({"evidence": []}, [link]),
+                ({"used_assets": []}, [link]),
+                ({"used_assets": [self.item["asset"], "dev/skills/box-development/SKILL.md"]}, [link]),
+                ({"state": "UNKNOWN"}, [link]),
+                ({}, [link, link]),
+                ({"asset_feedback": [self.item]}, [link])):
+            with self.subTest(change=change, links=links):
+                row = dict(draft, **change)
+                with self.assertRaises(HarnessError):
+                    feedback.derive_links(work.validate(row), ROOT, self.inbox, links)
+        with self.assertRaises(HarnessError):
+            feedback.derive_links(draft, ROOT, self.base / "absent", [link])
+        args = self.reference_boundary(dict(draft, evidence=[]), [link])
+        with self.assertRaises(HarnessError):
+            work.run(args, ROOT)
+        self.assertEqual(records.latest(args.directory)["revision"], 1)
+
+    def test_reference_refuses_changed_target_even_with_new_evidence(self):
+        draft, link = self.reference_fixture()
+        changed = dict(draft, target=dict(draft["target"], source_sha="a"*40),
+                       evidence=[*draft["evidence"], "new source evidence"])
+        args = self.reference_boundary(changed, [link])
+        # The ordinary explicit transition can bind a newly observed source;
+        # the derivation cannot infer that old observation facts match it.
+        work.advance(work.read_history(args.directory), changed, 1)
+        with self.assertRaisesRegex(HarnessError, "Changed target/source"):
+            work.run(args, ROOT)
+        self.assertEqual(records.latest(args.directory)["revision"], 1)
+
+    def test_reference_refuses_conflicting_candidate_and_duplicate_capture(self):
+        draft, link = self.reference_fixture()
+        original = records.read_json(self.inbox / "BDH-L014" / "00000001.json")
+        duplicate = dict(original, id="fixture-duplicate")
+        records.publish(self.inbox / "fixture-duplicate", 0, duplicate)
+        with self.assertRaises(HarnessError):
+            feedback.derive_links(draft, ROOT, self.inbox, [link])
+        # Use a different fingerprint and the exact same observed fact.
+        other = dict(original, id="fixture-conflict", observation="Different original capture",
+                     fingerprint=learning.fingerprint("Different original capture", original["asset"]))
+        records.publish(self.inbox / "fixture-conflict", 0, other)
+        # Remove only the isolated duplicate fixture, not canonical history.
+        shutil.rmtree(self.inbox / "fixture-duplicate")
+        learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="fixture-conflict",
+                     expect=1, work_ref=draft["work_ref"], attempt_ref=draft["attempt_ref"],
+                     evidence=self.item["evidence"], observation=self.item["observation"],
+                     outcome=self.item["outcome"]), ROOT)
+        with self.assertRaisesRegex(HarnessError, "Conflicting recorded"):
+            feedback.derive_links(draft, ROOT, self.inbox, [link])
+
+    def test_reference_rejects_uncertain_or_multiple_observations(self):
+        draft, link = self.reference_fixture()
+        directory = self.inbox / "BDH-L014"
+        learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
+                     expect=int(link[1]), work_ref=draft["work_ref"], attempt_ref=draft["attempt_ref"],
+                     evidence="different evidence", observation="Another observation",
+                     outcome="uncertain"), ROOT)
+        newer = [link[0], str(int(link[1])+1), link[2]]
+        with self.assertRaisesRegex(HarnessError, "ambiguous"):
+            feedback.derive_links(draft, ROOT, self.inbox, [newer])
+        learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
+                     expect=int(newer[1]), work_ref=draft["work_ref"], attempt_ref="uncertain attempt",
+                     evidence="uncertain evidence", observation="Unproved effect", outcome="uncertain"), ROOT)
+        last = [link[0], str(int(newer[1])+1), link[2]]
+        with self.assertRaisesRegex(HarnessError, "Uncertain observation"):
+            feedback.derive_links(dict(draft, attempt_ref="uncertain attempt", evidence=["uncertain evidence"]),
+                                  ROOT, self.inbox, [last])
+
+    def test_reference_rechecks_revision_before_boundary_publication(self):
+        draft, link = self.reference_fixture()
+        args = self.reference_boundary(draft, [link])
+        review = feedback.review
+        def changed(row, root, inbox):
+            learning.run(argparse.Namespace(action="observe", inbox=self.inbox, id="BDH-L014",
+                         expect=int(link[1]), work_ref="another work", attempt_ref="one",
+                         evidence="new observation evidence", observation="New observation",
+                         outcome="helped"), ROOT)
+            return review(row, root, inbox)
+        with patch.object(feedback, "review", side_effect=changed):
+            with self.assertRaisesRegex(HarnessError, "Derived link changed"):
+                work.run(args, ROOT)
+        self.assertEqual(records.latest(args.directory)["revision"], 1)
 
     def test_related_no_change_and_explicit_not_applicable(self):
         row = dict(self.row, asset_feedback=[dict(self.item, decision="no-change", candidate=None)])
@@ -90,6 +233,7 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(work.advance(old, updated, 1)["state"], "HANDOFF")
 
     def test_boundary_keeps_pending_but_refuses_false_completion(self):
+        self.use_history_prefix(33)
         history = self.base / "history"
         initial = dict(self.row, state="ACTIVE", asset_feedback=[], learning=None)
         initial.pop("boundary")
@@ -113,6 +257,33 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(result["feedback"]["status"], "FEEDBACK_RECORDED")
         self.assertEqual(records.latest(history)["revision"], 3)
+        handoff = records.latest(history)["evolve_handoff"]
+        self.assertEqual(handoff["status"], "PENDING")
+        self.assertEqual(handoff["items"][0]["status"], "SELECTION_RECORDED")
+        self.assertEqual(work.read_history(history)["state"], "RECORDED")
+
+    def test_reopened_history_unrelated_helped_is_not_pending(self):
+        # Revision 38 includes the second independent REOPEN.
+        self.use_history_prefix(38)
+        self.observe()
+        result, code = self.review()
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["status"], "FEEDBACK_RECORDED")
+        self.assertEqual(result["items"][0]["related"][0]["opportunity"]["status"],
+                         "REVIEW_DUE")
+        self.assertEqual(result["evolve"]["status"], "NO_MATCHED_PENDING")
+        self.assertEqual(result["evolve"]["items"], [])
+
+    def test_reopened_history_matching_residual_is_pending(self):
+        self.use_history_prefix(38)
+        self.observe({"signature": "fixture-residual", "impact": "friction",
+                      "environment": None, "cost": None, "uncertainty": "fixture"})
+        result, code = self.review()
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["status"], "FEEDBACK_RECORDED")
+        self.assertEqual(result["evolve"]["status"], "PENDING")
+        self.assertEqual(result["evolve"]["items"][0]["status"], "REVIEW_DUE")
+        self.assertEqual(result["evolve"]["items"][0]["id"], "BDH-L014")
 
     def test_unaccounted_unknown_and_alias_feedback(self):
         self.observe()
@@ -194,14 +365,25 @@ class FeedbackTests(unittest.TestCase):
         self.observe()
         directory = self.inbox / "BDH-L014"
         original = records.latest(directory)
-        records.publish(directory, original["revision"],
-                        dict(original, implementation=dict(original["implementation"], asset_sha256="0"*64)))
+        # Exercise actual asset drift without forging a new attachment event.
+        # A current bound implementation has immutable event identity.
+        root = self.base / "drift-repo"
+        subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(root)],
+                       check=True, capture_output=True)
+        asset = root / original["asset"]
+        asset.write_bytes((ROOT / original["asset"]).read_bytes() + b"\nFixture asset drift.\n")
         row = dict(self.row, learning={"kind": "improved", "ref": "BDH-L014"})
-        result, code = self.review(row)
+        result, code = feedback.review(work.validate(row), root, self.inbox)
         self.assertEqual(code, 1)
         self.assertIn("Attached implementation drifted", " ".join(result["issues"]))
         # A historic observation remains a fact even if the implementation later changes.
-        self.assertEqual(self.review()[1], 0)
+        self.assertEqual(feedback.review(work.validate(self.row), root, self.inbox)[1], 0)
+        if "binding" in original["implementation"]:
+            records.publish(directory, original["revision"],
+                            dict(original, implementation=dict(original["implementation"], asset_sha256="0"*64)))
+            result, code = self.review(row)
+            self.assertEqual(code, 1)
+            self.assertIn("Implementation binding does not identify its attachment event", " ".join(result["issues"]))
 
     def test_real_witness_cannot_be_relabelled_or_unlinked(self):
         original = json.loads((ROOT / "docs/development/BDH_V06_INDEPENDENT_TRANSFER_FEEDBACK.json").read_text())
@@ -274,6 +456,25 @@ class FeedbackTests(unittest.TestCase):
             return subprocess.check_output(["git","-C",str(root),*args],text=True).strip()
         directory = self.inbox / "BDH-L014"
         revision = records.latest(directory)["revision"]
+        # The fixture starts at the same asset bytes as the copied learning
+        # history, even when the source under test is an edited worktree.
+        asset = root / "dev/skills/box-development/SKILL.md"
+        asset.write_bytes((ROOT / "dev/skills/box-development/SKILL.md").read_bytes())
+        if git("status", "--porcelain"):
+            git("add", "dev/skills/box-development/SKILL.md")
+            git("-c","user.name=Fixture","-c","user.email=fixture@example.invalid","commit","-qm","fixture baseline")
+        # Historical attachment bytes can differ after a legitimate source
+        # retirement. Establish a real fixture-only attachment to the clean
+        # local source before testing unchanged-asset refusal; preserve the
+        # immutable imported history and never alter canonical records.
+        current = learning.asset_digest(root, "dev/skills/box-development/SKILL.md")
+        if current != records.latest(directory)["implementation"]["asset_sha256"]:
+            baseline = argparse.Namespace(action="attach", inbox=self.inbox, id="BDH-L014",
+                expect=revision, implementation_ref="fixture:baseline",
+                validation_evidence="fixture:baseline evidence", work_ref=self.row["work_ref"],
+                attempt_ref=self.item["attempt_ref"])
+            revision = learning.run(baseline, root)[0]["record"]["revision"]
+        self.assertEqual(current, records.latest(directory)["implementation"]["asset_sha256"])
         args = argparse.Namespace(action="attach", inbox=self.inbox, id="BDH-L014",
                   expect=revision, implementation_ref="fixture:new patch",
                   validation_evidence="fixture:new test result", work_ref=self.row["work_ref"],
@@ -324,6 +525,7 @@ class FeedbackTests(unittest.TestCase):
         directory = self.inbox / "BDH-L014"
         initial = records.latest(directory)
         expected = initial["revision"]
+        baseline_findings = learning.audit(self.inbox, ROOT)[0]["findings"]
 
         def command(label, revision):
             return [sys.executable, str(ROOT / "dev/bwdev"), "--json", "learn",
@@ -352,7 +554,7 @@ class FeedbackTests(unittest.TestCase):
         replay = subprocess.run(command(loser, expected + 2), capture_output=True, timeout=20)
         self.assertNotEqual(replay.returncode, 0)
         self.assertEqual(records.latest(directory), final)
-        self.assertEqual(learning.audit(self.inbox, ROOT)[1], 0)
+        self.assertEqual(learning.audit(self.inbox, ROOT)[0]["findings"], baseline_findings)
 
     def test_wrong_link_missing_evidence_and_missing_inbox(self):
         self.observe()

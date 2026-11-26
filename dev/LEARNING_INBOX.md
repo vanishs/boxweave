@@ -1,5 +1,33 @@
 # Learning inbox
 
+## Deferred opportunity review (current #193 plan)
+
+See the [active BDH plan](../docs/development/BDH_DEVELOPMENT_PLAN.md#find-deferred-opportunities-again)
+for the owner-authorized improvement policy. This is the existing navigation
+entry for later review of observations, linked evidence and deferred work;
+canonical candidate histories remain under [learning](learning/), with
+original work and PR evidence linked from those records. Review current
+revisions rather than relying on historical entries below. For example,
+[L014 revision 39](learning/BDH-L014/00000039.json) retains the latest
+recorded transfer residual; further transfer-specific development is
+currently deferred, with REOPEN preserved.
+
+During normal work, capture material facts and defer nonblocking BDH
+improvements. On request, review the current evidence and propose reuse,
+creation, optimization, adjustment, repair or continued deferral. An
+opportunity or review is not authority to select or implement a new BDH
+change. Use the existing commands and durable histories. On request, use:
+
+    python3 dev/bwdev --json learn next dev/learning --all --brief
+
+For a relevant ordinary task, use the existing filters rather than --all.
+The brief view retains audit findings (including nonzero exit), candidate
+identity, original evidence, latest matching observation, recorded cost
+when present and review/reconsideration information. Read the full view
+and learn opportunity before deciding; historical reconsideration is not
+a current decision. Without a checkout, read the linked current records
+through authorized GitHub tools. No separate queue or background scheduler.
+
 Manual bootstrap queue and conventions. An active PR/issue may hold the canonical candidate instead of editing this file; add a link here only when useful for discovery after the task. Do not duplicate the full observation. At each material failure, correction, handoff or completion, check for reusable value. Record one disposition even if no asset is needed.
 
 Candidate fields: stable ID, work ref and source/evidence link, bounded observation, cause (or hypothesis), affected versions/environment, proposed asset or existing asset to update, validation plan, risk/change class, status and next step. Dispositions: candidate, verified, active, deferred, stale, deprecated, rejected, no-new-asset. A verified historical fact is not a verified new procedure. Larger unrelated improvements are separate tasks; no need to block product delivery for them. Use [learning skill](skills/continuous-learning/SKILL.md).

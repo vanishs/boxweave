@@ -1,5 +1,7 @@
 # BoxWeave Development Harness (BDH)
 
+**Scope update (2026-11-25):** The [active BDH development plan](BDH_DEVELOPMENT_PLAN.md) is the current implementation roadmap for #193. This original design remains the architecture reference; its early implementation status and rollout increments are historical.
+
 **Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [canonical bootstrap](../../dev/BOOTSTRAP.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.5.1](BWDEV_DESIGN.md) capabilities in the [developer toolbox](../../dev/README.md) are implemented. No change to product runtime or its tool catalog.
 
 ## Universal activation and dual loops

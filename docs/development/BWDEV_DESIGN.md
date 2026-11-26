@@ -1,5 +1,7 @@
 # bwdev: script-first development toolbox
 
+**Scope update (2026-11-25):** The [active BDH development plan](BDH_DEVELOPMENT_PLAN.md) governs #193. Earlier status/version sections describe their original increments; consult the current checkout and toolbox for actual commands.
+
 Status: v0.6 candidate in stacked PR #192; source-tree CLI, no runtime or service change. Earlier version sections are historical where superseded by the protocol below.
 Read [BDH design](DEVELOPMENT_HARNESS.md) for the approved full framework and
 [developer entry](../../dev/README.md) for the currently usable subset.

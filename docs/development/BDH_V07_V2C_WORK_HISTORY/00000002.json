@@ -1,0 +1,82 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-v2c",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Three manually prepared source payloads f4a0c38706367f5cc2973185154d9d6a, decb4bb2a546358cdd74c086eeb0f103, 55fb64e1fc5fcb6dc12ff0a46313e252; V2c targeted and full regression bdef17233c901802dacbc5ece9cb75a2 exit 0",
+      "observation": "Existing exclusive-create source transfer guidance enabled three more source scripts with manual Base64 construction and separate receipt/readback coordination. A bounded transfer planner is already selected; additional actual residual evidence does not create another episode.",
+      "outcome": "helped",
+      "reason": "Selected episode already pending; retain residual evidence without duplicate selection"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-v2c",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "87d8581f6a23ec0f403cc04f885c4ae2, 2d90d29f17837807dbb97d42423d1042 and bdef17233c901802dacbc5ece9cb75a2 exit 0",
+      "observation": "Terminal review, local contention, feedback and full regression passed; latest prior exact CI success",
+      "outcome": "helped",
+      "reason": "Prior CI candidate history is not a new CI failure"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-v2c",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "b2800901aaaf0d93296617691377c371 exit 0",
+      "observation": "Reconciled actual selected episode, child and parent heads and CI",
+      "outcome": "helped",
+      "reason": "Existing plan and episode discovery used successfully"
+    }
+  ],
+  "attempt_ref": "20261125-v2c",
+  "authority": "Owner authorized child PR development in isolated owned Box; no parent, host, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "Three manually prepared source payloads f4a0c38706367f5cc2973185154d9d6a, decb4bb2a546358cdd74c086eeb0f103, 55fb64e1fc5fcb6dc12ff0a46313e252; V2c targeted and full regression bdef17233c901802dacbc5ece9cb75a2 exit 0",
+    "87d8581f6a23ec0f403cc04f885c4ae2, 2d90d29f17837807dbb97d42423d1042 and bdef17233c901802dacbc5ece9cb75a2 exit 0",
+    "b2800901aaaf0d93296617691377c371 exit 0"
+  ],
+  "evolve_handoff": {
+    "items": [
+      {
+        "basis": "12033625a6e71c73e380454fcbfd330e895b3ee9f6eec25c2186de9a5a9fc9d5",
+        "id": "BDH-L014",
+        "next_safe_action": "Reconcile selected episode; preserve pending work",
+        "revision": 16,
+        "status": "SELECTION_RECORDED"
+      }
+    ],
+    "status": "PENDING"
+  },
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Publish V2c source, claim selected implementation on separate exact-source worktree and validate; independent witness still pending",
+  "objective": "Implement terminal episode review, durable opportunity handoff and local contention checks",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "6f79c7cd62a200b5861c09b814aca384fe69ab24",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "tool.bwdev"
+  ],
+  "work_ref": "pr193/v2c"
+}

@@ -22,13 +22,13 @@ def start(args, root):
         learned, _ = learning.audit(inbox, root)
         relevant = {p for row in selected["assets"] for p in row["paths"]}
         candidates = [row for row in learned["records"] if row["state"] in evolution.OPEN]
-        related = evolution.select(candidates, task_kind="development", query=args.query,
+        related = evolution.select(learned["records"], task_kind="development", query=args.query,
             paths=sorted(relevant | set(args.path)), domains=getattr(args, "domain", []),
-            signals=getattr(args, "signal", []))
+            signals=getattr(args, "signal", []), review_context=learned["review_context"])
         data["learning"] = {
             "pending_count": len(candidates),
             "related": [{key: row.get(key) for key in ("id", "asset", "state", "next_action",
-                "match_reasons", "recorded_work_refs", "reconsider")} for row in related],
+                "match_reasons", "recorded_work_refs", "reconsider", "opportunity")} for row in related],
             "findings": learned["findings"],
         }
     else:

@@ -1,0 +1,118 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-baseline",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "File operations 7da5282027a13219934f80f3eb91e7fc and cc1ef4255df09131dcc93a037e948892; readbacks d74ea906f53deff08ce24bc3547e901e and 2138f22accb65f36d9b1b4ea68499139; assembly 9496e3878b0d140f63fd4f2c2456bf2b exit 0",
+      "observation": "Existing exclusive-file Skill enabled verified 81920-byte transfer; two manually prepared chunks, two explicit readbacks, and a bespoke assembly/negative-control program were needed. Missing, reordered and colliding files were refused. Residual planning and assembly effort is observed; new tool benefit not yet measured.",
+      "outcome": "helped",
+      "reason": "Measured residual effort while reusing existing exclusive-file guidance; review new episode after V1/V2"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-baseline",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "ea972ea529af116e360afa0ff47066bc; 3e654547c120697cb5486df55bc13373 exit 0",
+      "observation": "Verified existing parent and cloned exact child in a distinct checkout",
+      "outcome": "helped",
+      "reason": "Resume guidance adequate"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-baseline",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "7f6213b85c1fdaee10eefaf11829c04b exit 0; ccc405decef6bb45d8142a17f6ebe3b0 exit 0",
+      "observation": "73 focused tests, 14 Eval cases, audit and explicit exit checks completed",
+      "outcome": "helped",
+      "reason": "L012 concerns superseded/cancelled CI; no such child run observed"
+    },
+    {
+      "asset": "skill.harness-improver",
+      "attempt_ref": "20261125-baseline",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "b8ac84ee5a6f70507f129b8d9f949846 exit 0",
+      "observation": "Actual candidate and copied state variants reproduce attachment precedence and inactive review gap",
+      "outcome": "helped",
+      "reason": "Existing guidance supports investigation; V1/V2 change remains pending"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-baseline",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "7af2ea3ae3645c3bfc3a91009d77c09a exit 0",
+      "observation": "Recorded new distinct actual baseline observation in L014 rev12 without promotion",
+      "outcome": "helped",
+      "reason": "Existing learning capture adequate; implementation not claimed"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-baseline",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "069801d2a4344d19abc0a45d6ab7127e exit 0",
+      "observation": "Actual historical P1b feedback passed while opportunity review remained separate",
+      "outcome": "helped",
+      "reason": "V0 reproduced gap; plan tracks change rather than claiming completed improvement"
+    },
+    {
+      "asset": "dev/harness/check_runner.py",
+      "attempt_ref": "20261125-baseline",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "7f6213b85c1fdaee10eefaf11829c04b exit 0",
+      "observation": "Explicit nonempty runner discovered and passed 73 tests including zero discovery refusal regression",
+      "outcome": "helped",
+      "reason": "L013 concerns zero-test discovery; actual focused run nonempty, no new failure or gap"
+    }
+  ],
+  "attempt_ref": "20261125-baseline",
+  "authority": "Owner authorized child PR development in an isolated owned Box; no parent change, host change, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "File operations 7da5282027a13219934f80f3eb91e7fc and cc1ef4255df09131dcc93a037e948892; readbacks d74ea906f53deff08ce24bc3547e901e and 2138f22accb65f36d9b1b4ea68499139; assembly 9496e3878b0d140f63fd4f2c2456bf2b exit 0",
+    "ea972ea529af116e360afa0ff47066bc; 3e654547c120697cb5486df55bc13373 exit 0",
+    "7f6213b85c1fdaee10eefaf11829c04b exit 0; ccc405decef6bb45d8142a17f6ebe3b0 exit 0",
+    "b8ac84ee5a6f70507f129b8d9f949846 exit 0",
+    "7af2ea3ae3645c3bfc3a91009d77c09a exit 0",
+    "069801d2a4344d19abc0a45d6ab7127e exit 0",
+    "7f6213b85c1fdaee10eefaf11829c04b exit 0"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Implement V1 typed residual evidence and review readiness; do not promote or count investigation as independent witness",
+  "objective": "Reconcile exact child source, reproduce v0.6 improvement gap and measure manual transfer baseline",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "4e75b78b8451574d1faeabb17673c5e03021b5ee",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [
+    "skill.box-development",
+    "skill.task-resume",
+    "skill.verification",
+    "skill.harness-improver",
+    "skill.continuous-learning",
+    "tool.bwdev",
+    "dev/harness/check_runner.py"
+  ],
+  "work_ref": "pr193/v0"
+}

@@ -22,7 +22,7 @@ STATES = ("ACTIVE", "BLOCKED", "UNKNOWN", "HANDOFF", "ANSWERED", "RECORDED")
 DISPOSITIONS = ("none", "reuse", "candidate", "deferred", "improved", "pending")
 FIELDS = {"kind", "schema_version", "revision", "work_ref", "attempt_ref", "task_kind",
           "objective", "risk", "authority", "target", "state", "next_safe_action",
-          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links", "feedback_protocol", "implementation_claim"}
+          "evidence", "learning", "used_assets", "original_operations", "asset_feedback", "boundary", "related_work", "learning_links", "feedback_protocol", "implementation_claim", "evolve_handoff"}
 
 
 def string(value, field, limit=512):
@@ -117,6 +117,26 @@ def validate(data):
         if data["task_kind"] in ("operations", "diagnosis", "development", "release", "harness"):
             if target["kind"] in ("unknown", "none") or not target["ref"]:
                 raise HarnessError("Recorded material outcome requires observed target reference")
+    handoff = data.get("evolve_handoff")
+    if handoff is not None:
+        if (not data.get("boundary") or not isinstance(handoff, dict)
+                or set(handoff) != {"status", "items"}
+                or handoff["status"] not in ("PENDING", "UNRESOLVED", "NO_MATCHED_PENDING")
+                or not isinstance(handoff["items"], list) or len(handoff["items"]) > 200):
+            raise HarnessError("Invalid Evolve boundary snapshot")
+        ids = set()
+        for item in handoff["items"]:
+            if (not isinstance(item, dict) or set(item) != {"id", "revision", "status", "basis", "next_safe_action"}
+                    or item["status"] not in ("REVIEW_DUE", "SELECTION_RECORDED")
+                    or type(item["revision"]) is not int or item["revision"] < 1):
+                raise HarnessError("Invalid pending opportunity reference")
+            for key in ("id", "basis", "next_safe_action"):
+                string(item[key], "Evolve " + key)
+            if item["id"] in ids:
+                raise HarnessError("Duplicate pending opportunity")
+            ids.add(item["id"])
+        if (handoff["status"] == "PENDING") != bool(handoff["items"]):
+            raise HarnessError("Inconsistent Evolve boundary snapshot")
     if data.get("boundary") and disposition is None:
         raise HarnessError("Material boundary requires learning disposition")
     if "revision" in data and (type(data["revision"]) is not int or data["revision"] < 1):
@@ -210,17 +230,60 @@ def plan(root, task_kind, query, paths=(), domains=(), signals=(), inbox=None):
         learning_status = audit["status"]
         selected_learning = evolution.select(audit["records"], task_kind=task_kind, query=query,
             paths=list(paths) if task_kind == "guidance" else [*paths, *(p for row in items for p in row["paths"])],
-            domains=domains, signals=signals)
+            domains=domains, signals=signals, review_context=audit["review_context"])
         findings = audit["findings"]
     return {"status": "PLAN_ONLY", "task_kind": task_kind,
             "learning": {"status": learning_status, "related": [{key: row.get(key) for key in ("id", "asset", "state", "next_action",
-                          "match_reasons", "recorded_work_refs", "reconsider")} for row in selected_learning],
+                          "match_reasons", "recorded_work_refs", "reconsider", "opportunity")} for row in selected_learning],
                          "findings": findings},
             "required": ["dev/BOOTSTRAP.md", "AGENTS.md", "dev/INDEX.md"],
             "assets": items[:7], "outcome_gate": gate,
             "control_source": observe(root),
             "feedback": {"protocol": feedback.PROTOCOL, "next": "For material work, begin an envelope; record feedback at boundaries and reconcile before closing."},
             "note": "Control checkout is not target identity. No effect, permission, or record created. Guidance may use manual GitHub-only entry."}
+
+
+def brief_plan(result):
+    """Project the existing advisory plan, never change selection or gates."""
+    related = []
+    for row in result["learning"]["related"]:
+        opportunity = row["opportunity"]
+        decision = opportunity["decision"]
+        related.append({
+            **row,
+            "opportunity": {
+                "status": opportunity["status"],
+                "reasons": opportunity["reasons"],
+                "observation_count": opportunity["observation_count"],
+                "evidence_count": len(opportunity["evidence"]),
+                "decision": decision["decision"] if decision else None,
+            },
+        })
+    return {
+        **result,
+        "view": "BRIEF",
+        "assets": [{key: row[key] for key in ("id", "paths", "status")}
+                   for row in result["assets"]],
+        "learning": {**result["learning"], "related": related},
+        "next_action": (
+            "Read applicable contracts/local AGENTS.md; use verify plan, then "
+            "verify run CHECK FRESH_DIRECTORY and verify inspect for selected "
+            "registered source checks."
+            if result["task_kind"] in ("development", "harness") else
+            "Read applicable contracts/local AGENTS.md and use the smallest safe task workflow."
+        ),
+        "execution_route": (
+            "Local bwdev plan executed in this checkout. Asset paths are discovery, "
+            "not proof of executable or connector availability. Use authorized "
+            "connectors directly or the documented manual fallback; no new authority."
+        ),
+        "detail": (
+            "Same selection and audit findings as the full plan. For evidence, "
+            "review basis, decisions or asset descriptions, rerun without --brief "
+            "using the same inputs and reconcile current records. No BDH "
+            "implementation or selection without explicit owner authorization."
+        ),
+    }
 
 
 def register(parser):
@@ -232,6 +295,7 @@ def register(parser):
     p.add_argument("--domain", action="append", default=[])
     p.add_argument("--signal", action="append", default=[])
     p.add_argument("--inbox")
+    p.add_argument("--brief", action="store_true", help="Compact advisory view; omit evidence detail, not warnings")
     v = sub.add_parser("check", help="Validate a portable envelope without writing")
     v.add_argument("file")
     f = sub.add_parser("feedback", help="Reconcile material feedback with the learning inbox (read-only)")
@@ -249,6 +313,9 @@ def register(parser):
     a.add_argument("file")
     a.add_argument("--expect", required=True, type=int)
     a.add_argument("--inbox")
+    a.add_argument("--link-observation", nargs=3, action="append", default=[],
+                   metavar=("ID", "REVISION", "REASON"),
+                   help="Derive one explicitly linked exact observation; repeat for distinct candidates")
     r = sub.add_parser("resume", help="Read original envelope and reconciliation requirements")
     r.add_argument("directory")
     r.add_argument("--inbox")
@@ -259,7 +326,8 @@ def register(parser):
 
 def run(args, root):
     if args.action == "plan":
-        return plan(root, args.kind, args.query, args.path, args.domain, args.signal, args.inbox), 0
+        result = plan(root, args.kind, args.query, args.path, args.domain, args.signal, args.inbox)
+        return (brief_plan(result) if getattr(args, "brief", False) else result), 0
     inbox = getattr(args, "inbox", None)
     if args.action == "feedback":
         return feedback.review(validate(read_json(args.file)), root, inbox)
@@ -274,13 +342,29 @@ def run(args, root):
     else:
         row = read_history(args.directory)
         if args.action == "boundary":
-            updated = advance(row, read_json(args.file), args.expect)
+            draft = validate(read_json(args.file))
+            links = getattr(args, "link_observation", [])
+            expected_links = {}
+            if links:
+                # Reject stale work/scope before deriving, and preserve the
+                # original transition/feedback gates after derivation.
+                advance(row, draft, args.expect)
+                if draft["target"] != row["target"]:
+                    raise HarnessError("Changed target/source requires explicit boundary feedback")
+                draft, expected_links = feedback.derive_links(draft, root, inbox, links)
+            updated = advance(row, draft, args.expect)
+            reviewed, code = feedback.review(updated, root, inbox)
+            if expected_links:
+                feedback.check_derived_links(reviewed, expected_links)
             if updated["state"] in ("RECORDED", "ANSWERED"):
-                reviewed, code = feedback.review(updated, root, inbox)
                 if code or reviewed["status"] != "FEEDBACK_RECORDED":
                     return {"status": "REVIEW_REQUIRED", "published": False, "feedback": reviewed,
                             "note": "Record an explicit active or handoff boundary and reconcile before closing."}, 1
-            row = publish(args.directory, args.expect, updated)
+            evolve = reviewed["evolve"]
+            # Snapshot computed by the boundary writer. This is not a
+            # caller-provided proof or a gate on ordinary task completion.
+            updated["evolve_handoff"] = {key: evolve[key] for key in ("status", "items")}
+            row = publish(args.directory, args.expect, validate(updated))
         elif args.action == "resume":
             result = summary(row)
             result["feedback"], _ = feedback.review(row, root, inbox)
