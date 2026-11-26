@@ -162,6 +162,30 @@ func publicWANCommand(installed bool, endpoint string) string {
 		format + "' --max-time 7 --connect-timeout 5 " + endpoint
 }
 
+// Pause the installed CI fixture around the actual public HTTPS attempts.
+// Independent observers may read counters, never modify the network.
+func publicWANHostWitness(phase, uuid, ipv4 string) {
+	dir := os.Getenv("BW_S2_WAN_WITNESS_DIR")
+	if dir == "" {
+		return
+	}
+	check(strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci.") &&
+		(phase == "before" || phase == "after") &&
+		net.ParseIP(ipv4) != nil && net.ParseIP(ipv4).To4() != nil,
+		"invalid independent public WAN witness boundary")
+	base := dir + "/wan-" + phase
+	if err := os.WriteFile(base+".ready", []byte(uuid+" "+ipv4+"\n"), 0600); err != nil {
+		panic(err)
+	}
+	for i := 0; i < 240; i++ {
+		if _, err := os.Stat(base + ".release"); err == nil {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	check(false, "independent public WAN observer did not finish")
+}
+
 // Count only a complete successful HTTPS status, never a prefix or proxy.
 func publicHTTP2xx(body string) bool {
 	body = strings.TrimSpace(body)
@@ -1244,6 +1268,9 @@ func main() {
 	// fixed HTTPS endpoint with guest curl proves real public routing only
 	// when online control succeeds *before* and *after* the offline test.
 	// Some ephemeral hosted runners cannot provide guest WAN reachability.
+	if installed {
+		publicWANHostWitness("before", uuid, a4)
+	}
 	externalSupported := false
 	externalURL := ""
 	_, hasCurl := guestRead(ctx, admin, uuid, "native-s2-wan-curl-available-01",
@@ -1274,6 +1301,10 @@ func main() {
 		}
 	} else {
 		fmt.Println("S2_NATIVE_EXTERNAL_IPV4_WAN_CURL=UNVERIFIED_MISSING_CLIENT")
+	}
+
+	if installed {
+		publicWANHostWitness("after", uuid, a4)
 	}
 
 	// One-use isolated HTTPS WAN emulator: NOT real public Internet. A

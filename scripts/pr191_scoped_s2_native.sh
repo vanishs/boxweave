@@ -78,7 +78,7 @@ BW_S2_INSTALLED_SCOPED_NATIVE=1 BW_S2_MCP_URL=http://127.0.0.1:18650/mcp \
   BW_S2_EXPIRED_TOKEN="$expired" BW_S2_REVOKED_TOKEN="$revoked" \
   BW_S2_FOREIGN_LAYER_OPID="$foreign" BW_S2_QUEUED_CANCEL_OPID="$queued" \
   BW_S2_SIMULATED_WAN_CA_CERT_B64="$ca" BW_S2_HISTORY_CURSOR_WITNESS_DIR="$work" \
-  BW_S2_OUTPUT_WITNESS_DIR="$work" "$probe" > "$work/probe.log" 2>&1 &
+  BW_S2_WAN_WITNESS_DIR="$work" BW_S2_OUTPUT_WITNESS_DIR="$work" "$probe" > "$work/probe.log" 2>&1 &
 probe_pid=$!
 # Do not restart or clean a failed native original. The VM itself is one-use.
 wait_marker() {
@@ -101,6 +101,38 @@ seed_history append > "$work/history-append.txt"
 grep -Fxq S2_SQLITE_CONCURRENT_HISTORY_APPEND_12=PASS "$work/history-append.txt"
 touch "$work/history-cursor.release"
 echo S2_NATIVE_REAL_SQLITE_HISTORY_WRITER_DURING_MCP_PAGE=PASS
+# Read-only snapshots bracket the same fixed guest HTTPS attempts.
+# The exact pinned NIC/UUID must be independently observed. Counters are
+# diagnostic, not a WAN positive or proof of cause; no policy is changed.
+wan_snapshot() {
+  phase="$1"
+  wait_marker "wan-$phase.ready" 450
+  read -r wan_uuid wan_ip < "$work/wan-$phase.ready"
+  bridge="$(sudo incus profile device get default eth0 network --project "$project")"
+  printf '%s\n' "$bridge" | grep -Eq '^[a-zA-Z0-9_.-]{1,15}$'
+  sudo incus query "/1.0/instances/bw-s2-ghci-110a?project=$project" |
+    python3 -c 'import ipaddress,json,sys,uuid; x=json.load(sys.stdin); u,a,b=sys.argv[1:]; assert str(uuid.UUID(u))==u and x["config"]["volatile.uuid"]==u; assert x["status"]=="Running" and str(ipaddress.IPv4Address(a))==a and x["expanded_devices"]["eth0"]["ipv4.address"]==a and x["expanded_devices"]["eth0"]["network"]==b' "$wan_uuid" "$wan_ip" "$bridge"
+  nat="$(sudo incus network get "$bridge" ipv4.nat --project default)"
+  forwarding="$(sysctl -n net.ipv4.ip_forward)"
+  case "$nat" in true|false) ;; *) nat=UNVERIFIED ;; esac
+  case "$forwarding" in 0|1) ;; *) forwarding=UNVERIFIED ;; esac
+  echo "P1B_SCOPED_WAN_HOST_PATH $phase $wan_uuid nat=$nat forwarding=$forwarding"
+  # Emit only base-chain policy/counters, not the full host ruleset.
+  if sudo timeout 8 iptables -w 3 -nvx -L FORWARD > "$work/wan-$phase.forward" 2>/dev/null; then
+    awk 'NR==1 && $1=="Chain" && $2=="FORWARD" && ($4=="ACCEPT" || $4=="DROP") && $5~/^[0-9]+$/ {print "P1B_SCOPED_WAN_HOST_FORWARD " phase " " $4 " " $5; ok=1} END{if(!ok) print "P1B_SCOPED_WAN_HOST_FORWARD " phase " UNVERIFIED"}' phase="$phase" "$work/wan-$phase.forward"
+  else
+    echo "P1B_SCOPED_WAN_HOST_FORWARD $phase UNVERIFIED"
+  fi
+  # Observe only the exact guest source and TCP/443; emit aggregate counts.
+  if sudo timeout 8 conntrack -L -f ipv4 -p tcp -s "$wan_ip" --dport 443 > "$work/wan-$phase.conntrack" 2>/dev/null; then
+    awk '$1=="tcp"{n++; if(/\[UNREPLIED\]/)u++; if(/ESTABLISHED/)e++} END{printf "P1B_SCOPED_WAN_HOST_CONNTRACK %s %d %d %d\n",phase,n,u,e}' phase="$phase" "$work/wan-$phase.conntrack"
+  else
+    echo "P1B_SCOPED_WAN_HOST_CONNTRACK $phase UNVERIFIED"
+  fi
+  touch "$work/wan-$phase.release"
+}
+wan_snapshot before
+wan_snapshot after
 wait_marker output-witness.ready 450
 native_id="$(cat "$work/output-witness.ready")"
 printf '%s\n' "$native_id" | grep -Eq '^[0-9a-f-]{36}$'
