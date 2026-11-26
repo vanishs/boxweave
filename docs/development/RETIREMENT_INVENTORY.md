@@ -72,3 +72,5 @@ P1b-06b4: 0842da7 SDK/Exec WAL CI_VERIFIED (N2 14/14); generic Update ACK durabi
 P1b-06b5: Update ACK durability CI_VERIFIED at 0b0b0fb; full original S2 SDK/packet candidate on fixed installed Scoped BOX_VERIFIED, CI_PENDING. Physical quota, other fault and S2.5 gates retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b5--full-original-s2-protocolpacket-probe-on-installed-scoped).
 
 P1b-06b5a: c843166 installed S2 protocol/history partial actual PASS, foreign inventory blocked original Create; corrected fixture retains global guard and read-only foreign negative. Legacy reviewed recovery conflict root cause OPEN; redacted phase diagnosis BOX_VERIFIED. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b5a--foreign-inventory-refusal-and-reviewed-recovery-diagnosis).
+
+P1b-06b6: original S2 private SQLite FULL producer extracted and reused; installed Scoped GC replacement candidate BOX_VERIFIED, native CI_PENDING. No old witness retirement or runtime deletion. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b6--installed-scoped-exec-retention-and-private-sqlite-enospc).

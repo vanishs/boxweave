@@ -21,17 +21,34 @@ case "$work" in
   /tmp/bw-v1-s2-ghci.*) ;;
   *) echo "S2_INSTALLED_GC_REVIEW_BLOCKED: outside disposable directory" >&2; exit 92 ;;
 esac
-test "$source_db" = "$work/mcp-quota-ledger/ledger.sqlite"
+if test "${BW_S2_INSTALLED_SCOPED_GC:-0}" = 1; then
+  test "$source_db" = /var/lib/boxweave/ledger.sqlite
+else
+  test "$source_db" = "$work/mcp-quota-ledger/ledger.sqlite"
+fi
 test "$socket" = "/var/lib/incus/unix.socket.user"
 test "$project" = "user-$(id -u boxweave)"
 printf '%s\n' "$operation" | grep -Eq '^[0-9a-f]{32}$'
 printf '%s\n' "$native" | grep -Eq '^[0-9a-f-]{36}$'
 printf '%s\n' "$uuid" | grep -Eq '^[0-9a-f-]{36}$'
-test -f "$work/boxweave"
+if test "${BW_S2_INSTALLED_SCOPED_GC:-0}" = 1; then
+  test "$(sudo sha256sum /usr/local/bin/boxweave | cut -d' ' -f1)" = "${BW_S2_GC_CANDIDATE_SHA:?}"
+  test "$(sudo systemctl show boxweave.service -p ActiveState --value)" = inactive
+  sudo /usr/local/bin/boxweave install-status -project "$project" > "$work/gc-installed-status.json"
+  python3 - "$work/gc-installed-status.json" "$BW_S2_GC_CANDIDATE_SHA" <<'CHECK'
+import json,sys
+v=json.load(open(sys.argv[1]))
+assert v["binary_sha256"]==sys.argv[2] and v["scoped_peer_mode"]=="SCOPED_PEER_FRESH_V2"
+assert not v["service_active"]
+CHECK
+else
+  test -f "$work/boxweave"
+fi
 # This state directory is intentionally private to the nonroot service user.
 # A CI runner has no permission even to stat it; only verified local root may.
 sudo test -f "$source_db"
 echo "S2_GC_INSTALLED_DISPOSABLE_CANONICAL_PATH_PRECHECK=PASS"
+if test "${BW_S2_INSTALLED_SCOPED_GC:-0}" != 1; then
 if [ -e /var/lib/boxweave ] || [ -e /usr/local/bin/boxweave ] ||
    [ -e /etc/systemd/system/boxweave.service ]; then
   echo "S2_INSTALLED_GC_REVIEW_BLOCKED: existing install identity" >&2
@@ -67,6 +84,16 @@ with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
 PY
 sudo chown boxweave:incus /var/lib/boxweave/ledger.sqlite
 sudo chmod 0600 /var/lib/boxweave/ledger.sqlite
+
+else
+  # Fixed actual installed ledger, exact original, never stage a clone.
+  sudo python3 - "$source_db" "$operation" "$native" "$uuid" <<'CHECK'
+import sqlite3,sys
+with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True) as db:
+    assert db.execute("SELECT state,native_operation_id,box_uuid FROM exec_output_gc WHERE operation_id=? AND stream='stdout'", (sys.argv[2],)).fetchall()==[("REVIEW_REQUIRED",sys.argv[3],sys.argv[4])]
+    assert db.execute("SELECT state FROM operations WHERE id=?", (sys.argv[2],)).fetchall()==[("SUCCEEDED",)]
+CHECK
+fi
 
 recover_gc() {
   reviewer="$1"
@@ -157,4 +184,8 @@ with sqlite3.connect(f"file:{sys.argv[1]}?mode=ro",uri=True) as db:
         assert events.count(e)==1,(e,events)
 print("S2_GC_INSTALLED_ROOT_CLI_DURABLE_AUDIT_NO_REPLAY=PASS")
 PY
-echo "S2_GC_INSTALLED_STAGED_CANDIDATE_ROOT_RECOVER_CYCLE=PASS"
+if test "${BW_S2_INSTALLED_SCOPED_GC:-0}" = 1; then
+  echo "P1B_SCOPED_GC_INSTALLED_ROOT_RECOVER_CYCLE=PASS"
+else
+  echo "S2_GC_INSTALLED_STAGED_CANDIDATE_ROOT_RECOVER_CYCLE=PASS"
+fi
