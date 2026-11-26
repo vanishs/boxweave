@@ -170,7 +170,20 @@ R0 checkpoint (2026-11-25): [research and ranked reuse choices](BDH_R0_REUSE_RES
 are recorded. Prefer existing commands unchanged, then a small reference-derived
 feedback draft for F5 if R1 confirms the cost; compact entry and on-demand
 opportunity views only if needed. No executable changes or new Box/CI acceptance.
-R1 and implementation remain subject to explicit owner instruction.
+R1 baseline was subsequently authorized and recorded; implementation remains
+subject to explicit owner instruction.
+
+R1 checkpoint (2026-11-25): [ordinary source-check baseline and evidence](BDH_R1_BASELINE.md).
+Existing bwdev scope check actually ran 13 tests and passed with clean-head
+binding and matching output digest at 69a3ac9. The measured Box MCP subtotal
+was 55 calls: setup 9, solve/verification 8, BDH administration/feedback 38;
+22 GitHub context and CI reads were separate. Actual feedback admission
+refusal and missing private episode history were reconciled; work rev2
+HANDOFF with FEEDBACK_RECORDED, Evolve PENDING. Isolated observations L013
+rev3 and L014 rev40 are exported evidence only; canonical histories remain
+unchanged. Recommend reuse-only R2 first, narrow reference-derived R3 if
+authorized, reuse existing R4 pending handoff; no new architecture.
+R2-R4 await owner scope approval, not automatic execution.
 
 ### R0 — research and reuse gate (research recorded; owner decision pending)
 
@@ -309,7 +322,8 @@ blocker.
 | --- | --- |
 | Planning and historical navigation | Prepared, docs-only |
 | R0 | Research recorded; owner review/scope decision pending |
-| R1-R4 | NOT_STARTED; implementation awaits approved scope |
+| R1 | Baseline and narrow scope recommendation recorded; owner decision pending |
+| R2-R4 | NOT_STARTED; implementation awaits approved scope |
 | R5-R6 | NOT_STARTED |
 | R7 / original V5 | OPEN |
 | L014 V4e-03/04 | Deferred; REOPEN retained |
@@ -317,6 +331,7 @@ blocker.
 
 Reusable handoff: read canonical bootstrap and this plan in #193, reconcile
 latest progress and wait for the owner's instruction. R0 research is recorded in [the reuse research note](BDH_R0_REUSE_RESEARCH.md).
-Await the owner's R1 baseline and implementation-scope authorization;
-do not repeat R0 without a material change in evidence. On later resumptions continue the next authorized
+R1 baseline is recorded in [the baseline note](BDH_R1_BASELINE.md).
+Await the owner's explicit R2-R4 scope authorization;
+do not repeat R0/R1 without a material change in evidence. On later resumptions continue the next authorized
 unfinished slice, not the first stage.
