@@ -184,11 +184,7 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string, scop
 		"SELECT count(*) FROM forward_claims WHERE project!=?",
 	}
 	if !scoped {
-		foreignQueries = append(foreignQueries,
-			"SELECT count(*) FROM network_ipv4_retirements WHERE project!=?",
-			"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=?",
-			"SELECT count(*) FROM network_ipv4_compactions WHERE project!=?",
-		)
+		foreignQueries = append(foreignQueries, legacyMaintenanceForeignQueries()...)
 	}
 	for _, q := range foreignQueries {
 		var n int
@@ -301,37 +297,8 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string, scop
 		return zero, e
 	}
 	if !scoped {
-		for _, q := range []struct {
-			query string
-			dst   *[]string
-		}{
-			{`SELECT delete_operation_id FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyPending},
-			{`SELECT delete_operation_id FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id LIMIT ?`, &o.LegacyCompactions},
-		} {
-			rows, e := tx.QueryContext(ctx, q.query, project, maintenanceRowLimit+1)
-			if e != nil {
-				return zero, e
-			}
-			for rows.Next() {
-				var id string
-				if e = rows.Scan(&id); e != nil {
-					break
-				}
-				if len(*q.dst) >= maintenanceRowLimit || !validHexID(id) {
-					e = ErrDiagnosticInvalid
-					break
-				}
-				*q.dst = append(*q.dst, id)
-			}
-			if e == nil {
-				e = rows.Err()
-			}
-			if ce := rows.Close(); e == nil {
-				e = ce
-			}
-			if e != nil {
-				return zero, e
-			}
+		if e := readLegacyMaintenancePending(ctx, tx, project, &o); e != nil {
+			return zero, e
 		}
 	}
 	o.HistorySHA256, e = maintenanceHistoryWitness(ctx, tx, project, scoped)
@@ -353,9 +320,9 @@ func maintenanceHistoryWitness(ctx context.Context, tx *sql.Tx, project string, 
 		{`SELECT * FROM owned_boxes WHERE project=? ORDER BY uuid`, false},
 		{`SELECT * FROM network_bindings WHERE project=? ORDER BY box_uuid,incarnation,nic`, false},
 		{`SELECT * FROM network_address_fences WHERE project=? ORDER BY bridge,family,address`, false},
-		{`SELECT * FROM network_ipv4_retirements WHERE project=? ORDER BY box_uuid,incarnation`, true},
-		{`SELECT * FROM network_ipv4_retirement_queue WHERE project=? ORDER BY delete_operation_id`, true},
-		{`SELECT * FROM network_ipv4_compactions WHERE project=? ORDER BY delete_operation_id`, true},
+		{legacyMaintenanceArchiveHistory, true},
+		{legacyMaintenanceQueueHistory, true},
+		{legacyMaintenanceCompactionHistory, true},
 		{`SELECT * FROM peer_grants WHERE project=? ORDER BY source_uuid,source_incarnation,target_uuid,target_incarnation`, false},
 		{`SELECT * FROM forward_claims WHERE project=? ORDER BY forward_id`, false},
 		{`SELECT e.seq,e.operation_id,e.at,e.state FROM operation_events e JOIN operations o ON o.id=e.operation_id WHERE o.layer=? ORDER BY e.seq`, false},

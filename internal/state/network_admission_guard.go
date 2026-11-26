@@ -20,3 +20,23 @@ func requireNetworkAdmissionTx(ctx context.Context, tx *sql.Tx, project string, 
 func requireOriginalRecoveryAdmissionTx(ctx context.Context, tx *sql.Tx, original RecoveryTarget, scoped bool) error {
 	return requireNetworkAdmissionTx(ctx, tx, original.Layer, scoped || original.ScopedPeer || original.ScopedLifecycle)
 }
+
+// Transitional refusal only. These legacy tables are not a source of
+// Scoped allocations or capacity. Remove this check only together with
+// the exact schema-version transition and old-state refusal.
+func requireScopedNoLegacyRetirementTx(ctx context.Context, tx *sql.Tx) error {
+	for _, q := range []string{
+		"SELECT EXISTS(SELECT 1 FROM network_ipv4_retirements)",
+		"SELECT EXISTS(SELECT 1 FROM network_ipv4_retirement_queue)",
+		"SELECT EXISTS(SELECT 1 FROM network_ipv4_compactions)",
+	} {
+		var present bool
+		if e := tx.QueryRowContext(ctx, q).Scan(&present); e != nil {
+			return e
+		}
+		if present {
+			return ErrResourceLocked
+		}
+	}
+	return nil
+}

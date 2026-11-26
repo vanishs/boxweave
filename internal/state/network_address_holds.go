@@ -41,26 +41,6 @@ func (s *Store) readCreateAddressHolds(ctx context.Context, project, bridge stri
 	return out, tx.Commit()
 }
 
-// Transitional refusal only. These legacy tables are not a source of
-// Scoped allocations or capacity. Remove this check only together with
-// the exact schema-version transition and old-state refusal.
-func requireScopedNoLegacyRetirementTx(ctx context.Context, tx *sql.Tx) error {
-	for _, q := range []string{
-		"SELECT EXISTS(SELECT 1 FROM network_ipv4_retirements)",
-		"SELECT EXISTS(SELECT 1 FROM network_ipv4_retirement_queue)",
-		"SELECT EXISTS(SELECT 1 FROM network_ipv4_compactions)",
-	} {
-		var present bool
-		if e := tx.QueryRowContext(ctx, q).Scan(&present); e != nil {
-			return e
-		}
-		if present {
-			return ErrResourceLocked
-		}
-	}
-	return nil
-}
-
 func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, bridge string, scoped bool) (networklimits.AddressHolds, error) {
 	zero := networklimits.AddressHolds{}
 	var e error
@@ -100,7 +80,7 @@ func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, brid
 	bindingsQuery := "SELECT project,ipv4,ipv6,mac,state FROM network_bindings n WHERE bridge=?"
 	bindingsArgs := []any{bridge}
 	if !scoped {
-		bindingsQuery += " AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation)"
+		bindingsQuery += legacyHeldBindingsSuffix
 		bindingsArgs = append(bindingsArgs, project)
 	}
 	rows, e := tx.QueryContext(ctx, bindingsQuery, bindingsArgs...)
@@ -172,7 +152,7 @@ func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, brid
 	claimsQuery := "SELECT resource_key FROM operation_resource_claims c WHERE substr(resource_key,1,?)=?"
 	claimsArgs := []any{len(prefix), prefix}
 	if !scoped {
-		claimsQuery += " AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.bridge=? AND r.create_operation_id=c.operation_id AND r.project=c.layer)"
+		claimsQuery += legacyHeldClaimsSuffix
 		claimsArgs = append(claimsArgs, project, bridge)
 	}
 	rows, e = tx.QueryContext(ctx, claimsQuery, claimsArgs...)

@@ -80,9 +80,7 @@ func (s *Store) StageCreateBinding(ctx context.Context, id, project, name string
 		if err = verifyIPv4RetirementHistory(ctx, tx, project, b.Bridge, b.ACL); err != nil {
 			return false, err
 		}
-		if err = tx.QueryRowContext(ctx, `SELECT
-	  (SELECT COUNT(*) FROM network_address_fences WHERE bridge=? AND ((family='ipv4' AND address=?) OR (family='ipv6' AND address=?) OR (project!=? AND state!='RELEASED')))+
-	  (SELECT COUNT(*) FROM network_bindings n WHERE bridge=? AND (mac=? OR (ipv4=? AND NOT EXISTS (SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation)) OR ipv6=? OR (project!=? AND state!='RELEASED')))`, b.Bridge, b.IPv4, b.IPv6, project, b.Bridge, b.MAC, b.IPv4, project, b.IPv6, project).Scan(&n); err != nil {
+		if err = tx.QueryRowContext(ctx, legacyCreateBindingCollisionQuery, b.Bridge, b.IPv4, b.IPv6, project, b.Bridge, b.MAC, b.IPv4, project, b.IPv6, project).Scan(&n); err != nil {
 			return false, err
 		}
 	}
@@ -94,7 +92,7 @@ func (s *Store) StageCreateBinding(ctx context.Context, id, project, name string
 		query := "SELECT COUNT(*) FROM operation_resource_claims WHERE resource_key=?"
 		args := []any{key}
 		if i == 0 && schema == 0 {
-			query = "SELECT COUNT(*) FROM operation_resource_claims c WHERE resource_key=? AND NOT EXISTS (SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.bridge=? AND r.ipv4=? AND r.create_operation_id=c.operation_id AND c.layer=r.project)"
+			query = legacyCreateClaimCollisionQuery
 			args = append(args, project, b.Bridge, b.IPv4)
 		}
 		if err = tx.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
