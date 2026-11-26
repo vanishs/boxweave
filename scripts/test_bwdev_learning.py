@@ -91,6 +91,70 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("DUPLICATE", [row["issue"] for row in result["findings"]])
 
+    def test_brief_next_deferral_and_later_discovery(self):
+        self.capture()
+        self.invoke("defer", "L001", "--expect", "1", "--reason", "finish ordinary work",
+                    "--when", "new actual friction or owner review")
+        before = records.latest(self.inbox / "L001")
+        unrelated, code = self.invoke("next", "--brief", "--query", "unrelated")
+        self.assertEqual(code, 0)
+        self.assertEqual(unrelated["records"], [])
+        self.invoke("observe", "L001", "--expect", "2", "--work-ref", "later",
+                    "--attempt-ref", "one", "--evidence", "fixture:new",
+                    "--observation", "New actual friction", "--outcome", "recurred")
+        full, code = self.invoke("next", "--path", "guide.md")
+        brief, brief_code = self.invoke("next", "--path", "guide.md", "--brief")
+        self.assertEqual(brief_code, code)
+        self.assertEqual(brief["findings"], full["findings"])
+        row = brief["records"][0]
+        self.assertEqual(row["id"], "L001")
+        self.assertEqual(row["state"], "DEFERRED")
+        self.assertEqual(row["revision"], 3)
+        self.assertEqual(row["historical_reconsider"], before["reconsider"])
+        self.assertEqual(row["latest_matching_observation"]["evidence"], "fixture:new")
+        self.assertEqual(row["opportunity"]["status"], "REVIEW_DUE")
+        self.assertEqual(row["opportunity"]["basis"], full["records"][0]["opportunity"]["basis"])
+        self.assertNotIn("observations", row)
+        self.assertEqual(records.latest(self.inbox / "L001")["revision"], 3)
+        self.assertIn("explicit owner scope authorization", brief["detail"])
+
+    def test_brief_next_keeps_audit_and_order(self):
+        self.capture()
+        self.capture("L002", "different evidence")
+        self.invoke("attach", "L001", "--expect", "1", "--implementation-ref", "fixture:patch",
+                    "--validation-evidence", "fixture:test")
+        self.asset.write_text("drifted")
+        full, code = self.invoke("next", "--all")
+        brief, brief_code = self.invoke("next", "--all", "--brief")
+        self.assertEqual(code, 1)
+        self.assertEqual(brief_code, code)
+        self.assertEqual(brief["status"], full["status"])
+        self.assertEqual(brief["findings"], full["findings"])
+        self.assertEqual([r["id"] for r in brief["records"]], [r["id"] for r in full["records"]])
+        for short, long in zip(brief["records"], full["records"]):
+            self.assertEqual(short["opportunity"]["reasons"], long["opportunity"]["reasons"])
+            self.assertEqual(short["opportunity"]["status"], long["opportunity"]["status"])
+        empty, code = self.invoke("next", "--brief", "--query", "unrelated")
+        self.assertEqual(code, 1)
+        self.assertEqual(empty["records"], [])
+        self.assertEqual(empty["findings"], full["findings"])
+        with self.assertRaises(HarnessError):
+            learning.run(self.parser.parse_args(["next", str(self.inbox / "absent"), "--brief"]), self.root)
+
+    def test_brief_next_keeps_current_decision(self):
+        self.capture()
+        row = self.invoke("opportunity", "L001")[0]
+        self.invoke("decide", "L001", "--expect", "1", "--basis", row["opportunity"]["basis"],
+                    "--decision", "defer", "--reason", "ordinary task first",
+                    "--review-ref", "fixture:decision", "--when", "owner requests review")
+        brief, code = self.invoke("next", "--all", "--brief")
+        self.assertEqual(code, 0)
+        item = brief["records"][0]
+        self.assertEqual(item["opportunity"]["status"], "REVIEW_RECORDED")
+        self.assertEqual(item["opportunity"]["decision"]["decision"], "defer")
+        self.assertEqual(item["opportunity"]["decision"]["when"], "owner requests review")
+        self.assertEqual(records.latest(self.inbox / "L001")["revision"], 2)
+
     def test_repository_candidate_history(self):
         result, code = learning.audit(ROOT / "dev/learning", ROOT)
         self.assertIn(code, (0, 1))  # Genuine future drift is a review finding, not malformed data.

@@ -16,9 +16,17 @@ During normal work, capture material facts and defer nonblocking BDH
 improvements. On request, review the current evidence and propose reuse,
 creation, optimization, adjustment, repair or continued deferral. An
 opportunity or review is not authority to select or implement a new BDH
-change. Use the existing commands and durable histories; a compact
-record-derived opportunity view is a planned R3/R4 outcome, not yet an
-implemented feature. No separate queue or background scheduler.
+change. Use the existing commands and durable histories. On request, use:
+
+    python3 dev/bwdev --json learn next dev/learning --all --brief
+
+For a relevant ordinary task, use the existing filters rather than --all.
+The brief view retains audit findings (including nonzero exit), candidate
+identity, original evidence, latest matching observation, recorded cost
+when present and review/reconsideration information. Read the full view
+and learn opportunity before deciding; historical reconsideration is not
+a current decision. Without a checkout, read the linked current records
+through authorized GitHub tools. No separate queue or background scheduler.
 
 Manual bootstrap queue and conventions. An active PR/issue may hold the canonical candidate instead of editing this file; add a link here only when useful for discovery after the task. Do not duplicate the full observation. At each material failure, correction, handoff or completion, check for reusable value. Record one disposition even if no asset is needed.
 

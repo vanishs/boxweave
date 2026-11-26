@@ -230,7 +230,30 @@ fact retypes. Not fresh Agent performance; no demonstrated reduction in
 number of manual submissions, overall tool calls, time or tokens.
 Separate histories are not a distributed transaction. Local technical
 implementation/replay complete; exact-head CI and actual fresh-use/benefit
-validation pending. R4-R7 not authorized. See linked PR for exact CI updates.
+validation pending. R3 exact code quality 45734840685 SUCCESS; candidate
+45734840817 applicable source/build/manifest jobs SUCCESS, native and release
+skipped. R4 subsequently authorized; R5-R7 not authorized.
+
+R4 checkpoint (2026-11-25): [local technical evidence and retained-record review](https://github.com/vanishs/boxweave/pull/193#issuecomment-7179730081).
+Reuse existing inbox, audit, next, opportunity, defer and decide. Opt-in
+learn next INBOX --all --brief projects ranked candidates for owner-requested
+review; ordinary task filters remain unchanged. Preserve global audit exit
+and findings even with no matches, exact candidate/revision/basis, original
+evidence, latest matching observation and recorded decision/reconsideration.
+Full records remain available. Align active Skills with explicit owner
+scope authorization; normal work flags/defers nonblocking gaps and continues.
+No new scheduler, schema, queue, product Tool or automatic selection.
+Box 125/125 no skips, Eval14 PASS, format/diff PASS; expected L014 drift only.
+Actual canonical global output 47835 -> 5346 bytes, relevant 42973 -> 3197,
+unrelated 1839 -> 726 with no matched candidate and preserved drift/exit 1.
+R1 private original HANDOFF / FEEDBACK_RECORDED / Evolve PENDING retained;
+private L014 rev40 -> rev41 explicit defer using existing decide, no proposal
+or episode. Later separate process retrieved exact reason/condition, full
+53821 -> brief 4625 bytes. All original records unchanged; only private
+rev41 appended. This is knowledgeable same-Agent cross-process recovery,
+not an independent fresh task/session or measured overall Agent benefit.
+Canonical histories and both REOPENs unchanged. R4 local technical PASS;
+exact-head CI and fresh ordinary use pending. R5 requires owner authorization.
 
 ### R0 — research and reuse gate (research recorded; owner decision pending)
 
@@ -371,9 +394,9 @@ blocker.
 | R0 | Research recorded; owner review/scope decision pending |
 | R1 | Baseline and narrow scope recommendation recorded; owner decision pending |
 | R2 | Technical delivery PASS and code CI PASS; fresh ordinary Agent use pending |
-| JS/Node retirement | Implemented, Box PASS, CI reconcile at current head; historical drift retained |
-| R3 | Local technical implementation and retained-record replay PASS; CI and fresh-use/benefit pending |
-| R4 | NOT_STARTED; implementation awaits approved scope |
+| JS/Node retirement | Complete, Box and exact retirement CI PASS; historical drift retained |
+| R3 | Technical implementation/replay and applicable exact code CI PASS; fresh-use/benefit pending |
+| R4 | Local technical implementation and retained-record recovery PASS; exact-head CI and fresh ordinary use pending |
 | R5-R6 | NOT_STARTED |
 | R7 / original V5 | OPEN |
 | L014 V4e-03/04 | Deferred; REOPEN retained |
@@ -384,8 +407,8 @@ latest progress and wait for the owner's instruction. R0 research is recorded in
 R1 baseline is recorded in [the baseline note](BDH_R1_BASELINE.md).
 R2 technical delivery and neutral witness instructions are in the linked PR
 record above. Complete the fresh ordinary Agent discovery/use gate without
-repeating valid Box or CI evidence. R3 authorized and local technical results
-recorded; reconcile exact-head CI and fresh ordinary use. R4 requires explicit
-owner authorization.
+repeating valid Box or CI evidence. R3 applicable code CI PASS; fresh ordinary
+use remains pending. R4 technical results recorded; reconcile exact-head CI
+and fresh ordinary use. R5 requires explicit owner authorization.
 Do not repeat R0/R1 without a material change in evidence. On later resumptions
 continue the next authorized unfinished slice, not the first stage.

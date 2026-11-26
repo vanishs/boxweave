@@ -225,6 +225,40 @@ def audit(inbox, root):
     }, 1 if findings else 0
 
 
+def brief_next(data):
+    """Read-only navigation projection; retain audit findings and ranked identities."""
+    result = []
+    for row in data["records"]:
+        opportunity = row["opportunity"]
+        signals = set(opportunity["evidence"])
+        latest_signal = next((item for item in reversed(row.get("observations", []))
+                              if item["evidence"] in signals), None)
+        decision = opportunity["decision"]
+        result.append({
+            **{key: row[key] for key in ("id", "revision", "state", "asset",
+                                        "observation", "evidence", "work_ref",
+                                        "validation", "recorded_work_refs",
+                                        "match_reasons", "next_action")},
+            "impact": row.get("impact", "unknown"),
+            "effort": row.get("effort", "unknown"),
+            "historical_reconsider": row.get("reconsider"),
+            "latest_matching_observation": latest_signal,
+            "opportunity": {
+                **{key: opportunity[key] for key in ("status", "reasons", "basis",
+                                                     "observation_count")},
+                "evidence_count": len(opportunity["evidence"]),
+                "decision": ({key: decision[key] for key in
+                              ("decision", "reason", "when", "review_ref", "episode_id")}
+                             if decision else None),
+            },
+        })
+    return {
+        "status": data["status"], "findings": data["findings"], "records": result,
+        "view": "BRIEF", "note": data["note"],
+        "detail": "Rerun without --brief for all selected evidence and history context; inspect exact candidate with learn opportunity. Latest matching observation is not an aggregation or proof of recurrence. Cost/benefit unknown unless recorded. Review only; selection or implementation requires explicit owner scope authorization.",
+    }
+
+
 def register(parser):
     sub = parser.add_subparsers(dest="action", required=True)
     capture = sub.add_parser("capture", help="Record a new candidate")
@@ -302,6 +336,7 @@ def register(parser):
     nxt.add_argument("--signal", action="append", default=[])
     nxt.add_argument("--limit", type=int, default=8)
     nxt.add_argument("--all", action="store_true")
+    nxt.add_argument("--brief", action="store_true", help="Read-only compact opportunity navigation; retain audit status")
     review = sub.add_parser("review", help="Record an explicit externally reviewed disposition")
     review.add_argument("inbox")
     review.add_argument("id")
@@ -329,6 +364,8 @@ def run(args, root):
                 query=args.query, paths=args.path, domains=args.domain,
                 signals=args.signal, limit=args.limit, include_all=args.all, review_context=data["review_context"])
             data["note"] += " Selection is advisory; recorded work refs are not independently confirmed recurrence."
+            if getattr(args, "brief", False):
+                data = brief_next(data)
         return data, code if args.action in ("audit", "next") else 0
     key = safe_id(args.id)
     directory = inbox / key

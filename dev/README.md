@@ -199,6 +199,14 @@ python3 dev/bwdev --json learn next dev/learning --domain box-exec --signal admi
 python3 dev/bwdev --json work plan --kind harness --domain box-exec
 ```
 
+For owner-requested opportunity review, use learn next dev/learning --all
+--brief (one command line) to navigate the current ranked candidates; read
+full records and learn opportunity before a decision. See [inbox](LEARNING_INBOX.md).
+In ordinary work, record and defer nonblocking BDH gaps; finish or hand off
+the requested work independently. Do not select or implement a BDH change
+without explicit owner scope authorization. The view is read-only and
+keeps nonzero audit exit/findings, even when no candidate matches.
+
 Capture can include --domain, --signal, --task-kind, --impact and --effort.
 Use learn observe with candidate ID, expected revision, work/attempt ref,
 new evidence, observation and outcome to link cross-task feedback.
