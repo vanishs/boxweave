@@ -85,11 +85,18 @@ jobs:
               grep -Fxq "P1B_S25_SCOPED_${marker}=${layer}:PASS" "$RUNNER_TEMP/s25-evidence/console.log"
             done
           done
+          grep -Fxq P1B_S25_INNER_LOCAL_DAEMON_SOCKET_BOUNDARY=PASS "$RUNNER_TEMP/s25-evidence/console.log"
           test "$(grep -c '^P1B_S25_SCOPED_ORIGINAL ' "$RUNNER_TEMP/s25-evidence/console.log")" = 2
           for marker in P1B_S25_SCOPED_TWO_LAYER_FIXED_LEDGER_ACL_GUARD P1B_S25_SCOPED_STARTUP_LIFECYCLE S25_V_INNER_ORIGINAL_MCP_L2_DELETE_NATIVE_ABSENCE S25_V_EXACT_NATIVE_L0_CLEANUP_ORIGINAL_SQLITE; do
             grep -Fxq "$marker=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
           done
-          grep -Fxq P1B_S25_REMAINING_FOREIGN_AND_MAINTENANCE=OPEN "$RUNNER_TEMP/s25-evidence/console.log"
+          for marker in S25_R12_L1_FOREIGN_PACKET_AND_SOCKET_INDEPENDENT_V S25_V_R12_L1_FOREIGN_NATIVE_UUID_CLEANUP P1B_S25_SCOPED_FOREIGN_PACKET; do
+            grep -Fxq "$marker=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          done
+          for marker in P1B_S25_SCOPED_ACTIVE_LEGACY_MAINTENANCE_REFUSED_NO_EFFECT P1B_S25_SCOPED_OFFLINE_LEGACY_MAINTENANCE_REFUSED_NO_EFFECT P1B_S25_SCOPED_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_MAINTENANCE P1B_S25_V_SCOPED_ORIGINAL_OPS_EXACT_BINARY_SQLITE_NATIVE_MAINTENANCE P1B_S25_SCOPED_MAINTENANCE_NO_EFFECT_ORIGINALS; do
+            grep -Fxq "$marker=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          done
+          grep -Fxq P1B_S25_LEGACY_SUCCESSFUL_UPGRADE_ROLLBACK=OUT_OF_SCOPE_170 "$RUNNER_TEMP/s25-evidence/console.log"
       - name: Retain exact test metadata and independently observed results
         if: always()
         uses: actions/upload-artifact@v4

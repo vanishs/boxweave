@@ -574,18 +574,6 @@ cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
 if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  python3 scripts/s25_independent_verifier.py scoped-layers
- "$work/staging/s25-lab-agent" guest-git
- python3 scripts/s25_independent_verifier.py git
- "$work/staging/s25-lab-agent" inner-clean
- python3 scripts/s25_independent_verifier.py wan6innerclean
- python3 scripts/s25_independent_verifier.py l2clean
- "$work/staging/s25-lab-agent" cleanup
- python3 scripts/s25_independent_verifier.py clean
- test -z "$(sudo incus list --all-projects --format csv -c n)"
- sudo /usr/local/bin/boxweave install-status -project "$project" > "$proof/scoped-final-status.json"
- echo P1B_S25_SCOPED_STARTUP_LIFECYCLE=PASS
- echo P1B_S25_REMAINING_FOREIGN_AND_MAINTENANCE=OPEN
- exit 0
 fi
 # Additional P0 BH-009/BH-011/BH-015: cross-Project raw IPv4/IPv6
 # packets and parent native Unix-socket isolation. This test uses ONLY
@@ -595,12 +583,12 @@ foreign_probe_sha="$(sha256sum scripts/s25_r12_foreign_l1.py | awk '{print $1}')
 sudo incus file push scripts/s25_r12_foreign_l1.py bw-s25-mcp-l1/root/s25_r12_foreign_l1.py --project "$project"
 test "$(sudo incus exec bw-s25-mcp-l1 --project "$project" -- sha256sum /root/s25_r12_foreign_l1.py | awk '{print $1}')" = "$foreign_probe_sha"
 printf 'foreign_probe_sha256=%s\n' "$foreign_probe_sha" >> "$proof/identity.txt"
-sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 python3 /root/s25_r12_foreign_l1.py setup > "$proof/r12-foreign-inner-setup.txt"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 P1B_S25_SCOPED="${P1B_S25_SCOPED:-0}" python3 /root/s25_r12_foreign_l1.py setup > "$proof/r12-foreign-inner-setup.txt"
 grep -qx 'S25_R12_L1_FOREIGN_PROJECT_V4_V6_POSITIVE_AND_BIDIRECTIONAL_PACKET_DENIAL=PASS' "$proof/r12-foreign-inner-setup.txt"
 grep -qx 'S25_R12_L1_PARENT_SOCKET_AND_FOREIGN_PROJECT_AUTH_ISOLATION=PASS' "$proof/r12-foreign-inner-setup.txt"
 python3 scripts/s25_independent_verifier.py r12-foreign
 sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-r12-foreign-state.json > "$proof/r12-foreign-before-cleanup.json"
-sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 python3 /root/s25_r12_foreign_l1.py cleanup
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 P1B_S25_SCOPED="${P1B_S25_SCOPED:-0}" python3 /root/s25_r12_foreign_l1.py cleanup
 python3 scripts/s25_independent_verifier.py r12-foreign-clean
 sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-r12-foreign-state.json > "$proof/r12-foreign-after-cleanup.json"
 echo S25_R12_L1_FOREIGN_PACKET_AND_SOCKET_INDEPENDENT_V=PASS
@@ -614,6 +602,11 @@ python3 scripts/s25_independent_verifier.py l2clean
 python3 scripts/s25_independent_verifier.py clean
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 test -z "$(sudo incus list --project "$project" --format csv -c n)"
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ test -z "$(sudo incus list --all-projects --format csv -c n)"
+ echo P1B_S25_SCOPED_STARTUP_LIFECYCLE=PASS
+ echo P1B_S25_SCOPED_FOREIGN_PACKET=PASS
+fi
 # Round 2 independent operator rollback: run only *after* original SDK
 # cleanup. The upgrade canary uses identical source with only a distinct
 # build label; always verify actual install digest and preserve original
@@ -624,6 +617,60 @@ CGO_ENABLED=1 go build -trimpath \
   -o "$work/canary-readable/boxweave-r2-canary" ./cmd/boxweave
 canary_sha="$(sha256sum "$work/canary-readable/boxweave-r2-canary" | awk '{print $1}')"
 test "$canary_sha" != "$binary_sha"
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ # Scoped fresh-only has no successful Legacy upgrade/rollback. Keep
+ # wrong/correct-digest and no-backup negatives, offline operator access,
+ # and exact original receipt recovery; do not fake the old PASS markers.
+ export BW_S25_CANARY_SHA="$canary_sha"
+ ctl=boxweave.service
+ before_pid="$(sudo systemctl show "$ctl" -p MainPID --value)"
+ test "$before_pid" -gt 1
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$work/private/scoped-maint-before.json"
+ refused_scoped_maintenance() {
+   label="$1"; shift
+   if sudo /usr/local/bin/boxweave "$@" > "$work/private/scoped-$label.log" 2>&1; then
+     echo "P1B_S25_SCOPED_MAINTENANCE_ACCEPTED=$label" >&2; exit 95
+   fi
+   grep -Fq 'scoped fresh evidence exists or cannot be inspected:' "$work/private/scoped-$label.log"
+   grep -Fq 'legacy maintenance unsupported' "$work/private/scoped-$label.log"
+ }
+ refused_scoped_maintenance rollback rollback -project "$project" -approve-local
+ refused_scoped_maintenance wrong-digest upgrade -project "$project" -source-binary "$work/canary-readable/boxweave-r2-canary" -expect-sha256 "$(printf '%064d' 0)" -approve-local
+ refused_scoped_maintenance exact-digest upgrade -project "$project" -source-binary "$work/canary-readable/boxweave-r2-canary" -expect-sha256 "$canary_sha" -approve-local
+ test "$(sudo systemctl show "$ctl" -p MainPID --value)" = "$before_pid"
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$work/private/scoped-maint-active.json"
+ cmp "$work/private/scoped-maint-before.json" "$work/private/scoped-maint-active.json"
+ echo P1B_S25_SCOPED_ACTIVE_LEGACY_MAINTENANCE_REFUSED_NO_EFFECT=PASS
+ sudo systemctl stop "$ctl"
+ test "$(sudo systemctl is-active "$ctl")" = inactive
+ code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp || :)"
+ test "$code" = 000
+ refused_scoped_maintenance offline-rollback rollback -project "$project" -approve-local
+ refused_scoped_maintenance offline-upgrade upgrade -project "$project" -source-binary "$work/canary-readable/boxweave-r2-canary" -expect-sha256 "$canary_sha" -approve-local
+ test "$(sudo systemctl is-active "$ctl")" = inactive
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$work/private/scoped-maint-offline.json"
+ cmp "$work/private/scoped-maint-before.json" "$work/private/scoped-maint-offline.json"
+ echo P1B_S25_SCOPED_OFFLINE_LEGACY_MAINTENANCE_REFUSED_NO_EFFECT=PASS
+ sudo systemctl start "$ctl"
+ ready=no
+ for attempt in $(seq 1 40); do
+   after_pid="$(sudo systemctl show "$ctl" -p MainPID --value)"
+   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' || :)"
+   if [ "$after_pid" -gt 1 ] && [ "$after_pid" != "$before_pid" ] && [ "$code" = 401 ]; then ready=yes; break; fi
+   sleep 1
+ done
+ test "$ready" = yes
+ "$work/staging/s25-lab-agent" scoped-maintenance-readback
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-readback
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$proof/scoped-maintenance-final.json"
+ cmp "$work/private/scoped-maint-before.json" "$proof/scoped-maintenance-final.json"
+ sudo /usr/local/bin/boxweave install-status -project "$project" > "$proof/scoped-final-status.json"
+ cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
+ printf 'maintenance_original_binary_sha256=%s\nmaintenance_canary_binary_sha256=%s\n' "$binary_sha" "$canary_sha" > "$proof/scoped-maintenance-binaries.txt"
+ echo P1B_S25_SCOPED_MAINTENANCE_NO_EFFECT_ORIGINALS=PASS
+ echo P1B_S25_LEGACY_SUCCESSFUL_UPGRADE_ROLLBACK=OUT_OF_SCOPE_170
+ exit 0
+fi
 test ! -e /var/lib/boxweave-installer-backup
 if sudo /usr/local/bin/boxweave rollback -project "$project" -approve-local > "$work/private/unbacked-rollback.json" 2>&1; then
  echo S25_R2_FAIL_UNBACKED_ROLLBACK_ACCEPTED >&2; exit 95

@@ -127,6 +127,7 @@ fi
 echo S25_INNER_FOREIGN_PROJECT_DENIED=PASS
 incus image copy images:ubuntu/24.04 local: --target-project "$project" \
   --alias boxweave-ubuntu-24.04 >/dev/null
+echo S25_INNER_IMAGE_READY=PASS
 net="incusbr-$uid"
 incus network show "$net" >/dev/null
 

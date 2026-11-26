@@ -315,10 +315,18 @@ func execGuest(ctx context.Context, s *mcp.ClientSession, uuid, key, script, age
 	saveCheckpoint(m)
 	fmt.Println("S25_GUEST_EXEC_ORIGINAL_OPERATION_ID=" + original)
 	final := wait(ctx, s, original)
-	out := request(ctx, s, "operation_output_get", map[string]any{"operation_id": original, "stream": "stdout", "limit": 4096})
+	limit := 4096
+	if key == "s25-outer-l1-guest-bootstrap-once" {
+		limit = 65536 // bounded original startup evidence, not a second Exec
+	}
+	out := request(ctx, s, "operation_output_get", map[string]any{"operation_id": original, "stream": "stdout", "limit": limit})
 	buf, err := base64.StdEncoding.DecodeString(str(out, "content_base64"))
 	if err != nil {
 		panic(err)
+	}
+	if key == "s25-outer-l1-guest-bootstrap-once" {
+		must(out["ended"] == true && out["truncated"] != true,
+			"bootstrap original stdout exceeds bounded evidence read")
 	}
 	exit, ok := out["exit_code"].(float64)
 	must(ok, "guest Exec returned no verified exit code")
@@ -387,7 +395,7 @@ func bootstrap(ctx context.Context) {
 		"nested independent routed IPv6 HTTPS SDK proof missing")
 	fmt.Println("S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS")
 	if os.Getenv("P1B_S25_SCOPED") == "1" {
-		for _, marker := range []string{"P1B_S25_SCOPED_NATIVE_BOOTSTRAP=inner:PASS", "P1B_S25_SCOPED_STALE_REVIEW_REFUSED=inner:PASS", "P1B_S25_SCOPED_FRESH_INSTALL=inner:PASS"} {
+		for _, marker := range []string{"P1B_S25_SCOPED_NATIVE_BOOTSTRAP=inner:PASS", "P1B_S25_INNER_LOCAL_DAEMON_SOCKET_BOUNDARY=PASS", "P1B_S25_SCOPED_STALE_REVIEW_REFUSED=inner:PASS", "P1B_S25_SCOPED_FRESH_INSTALL=inner:PASS"} {
 			must(strings.Contains(out, marker), "nested Scoped installation evidence missing")
 			fmt.Println(marker)
 		}
@@ -638,8 +646,9 @@ func afterControllerRestart(ctx context.Context) {
 // installer rollback. It reads ONLY the durable original receipts, then
 // replays one already-SUCCEEDED idempotency key with byte-identical intent.
 // This must never dispatch a new native Create or adopt a Box by name.
-func round2PostRollback(ctx context.Context) {
-	must(!isInner(), "offline rollback original recovery is L0-only")
+func round2PostRollback(ctx context.Context, scoped bool) {
+	must(!isInner(), "maintenance original recovery is L0-only")
+	must(scoped == (os.Getenv("P1B_S25_SCOPED") == "1"), "maintenance lane mismatch")
 	m := readCheckpoint()
 	require := []string{
 		"create_op", "delete_op", "peer_delete_op",
@@ -660,7 +669,11 @@ func round2PostRollback(ctx context.Context) {
 	replay := request(ctx, a, "box_create", firstCreateArgs())
 	must(opid(replay) == m["create_op"] && replay["duplicate"] == true,
 		"offline rollback redispatched previously succeeded Create")
-	fmt.Println("S25_R2_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_ROLLBACK=PASS")
+	if scoped {
+		fmt.Println("P1B_S25_SCOPED_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_MAINTENANCE=PASS")
+	} else {
+		fmt.Println("S25_R2_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_ROLLBACK=PASS")
+	}
 }
 func rotatedPeer(ctx context.Context) {
 	must(!isInner(), "token rotation assertion is L0-only")
@@ -839,7 +852,9 @@ func main() {
 	case "post-restart":
 		afterControllerRestart(ctx)
 	case "round2-postrollback":
-		round2PostRollback(ctx)
+		round2PostRollback(ctx, false)
+	case "scoped-maintenance-readback":
+		round2PostRollback(ctx, true)
 	case "rotated-peer":
 		rotatedPeer(ctx)
 	case "nested-exec":
