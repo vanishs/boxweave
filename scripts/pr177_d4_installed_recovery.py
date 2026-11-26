@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Installed D4 acceptance, only in dedicated disposable test installation."""
 import errno
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import pty
 import select
@@ -193,12 +194,22 @@ def main(project, receipt, testbin, mode):
             assert len(before[1])==5 and len(oldjournal)>1
         wait_mcp_listener()
         assert pid()==controller and db_state(original)==before and journal(original,mode)==oldjournal
-        with LoopbackMCP(token=token(receipt),allow_mutations=True,timeout=60) as reader:
-            unknown(reader,ids["d4-a"],original,mode)
+        def navigation():
+            with LoopbackMCP(token=token(receipt),allow_mutations=True,timeout=60) as reader:
+                unknown(reader,ids["d4-a"],original,mode)
+
+        def review():
+            report=json.loads(run([BIN,"doctor","-project",project],capture_output=True,text=True).stdout)["diagnostic"]
+            issue=next(i["id"] for i in report["issues"] if i["code"] in ("PROJECT_PEER_BARRIER","UNRESOLVED_OPERATION") and i.get("original_id")==original)
+            return issue,run([BIN,"recover","--plan","--issue",issue,"-project",project],capture_output=True,text=True)
+
+        # Incus 7.6 retains completed native operations for only five seconds.
+        # Run independent read/refusal witnesses concurrently, before approval.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            nav=pool.submit(navigation)
+            issue,planned=review()
+            nav.result()
         assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
-        report=json.loads(run([BIN,"doctor","-project",project],capture_output=True,text=True).stdout)["diagnostic"]
-        issue=next(i["id"] for i in report["issues"] if i["code"] in ("PROJECT_PEER_BARRIER","UNRESOLVED_OPERATION") and i.get("original_id")==original)
-        planned=run([BIN,"recover","--plan","--issue",issue,"-project",project],capture_output=True,text=True)
         p=json.loads(planned.stdout)
         assert p["status"]=="REVIEW_READY" and p["apply_available"] and p["mode"]==mode and p["original_id"]==original,p
         assert p["leaf"]=="MCP_SETTLE_ORIGINAL_NO_REPLAY" and p["original_state"]=="UNKNOWN" and not p["native_retried"]
@@ -209,13 +220,16 @@ def main(project, receipt, testbin, mode):
             out=subprocess.run(args,input=payload,text=True,capture_output=True,timeout=100)
             assert out.returncode!=0,(out.stdout,out.stderr)
         wrong=list(base);wrong[-1]="0"*64
-        refused(wrong,planned.stdout)
-        refused([x for x in base if x!="--approve-local"],planned.stdout)
-        refused(["runuser","-u","boxweave","--",*base],planned.stdout)
         forged=dict(p);forged["original_revision"]+=1
-        refused(base,json.dumps(forged))
-        assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
-        declined,_=guided(project,issue,False)
+        cases=[(wrong,planned.stdout),
+               ([x for x in base if x!="--approve-local"],planned.stdout),
+               (["runuser","-u","boxweave","--",*base],planned.stdout),
+               (base,json.dumps(forged))]
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            negatives=[pool.submit(refused,*case) for case in cases]
+            declined,_=guided(project,issue,False)
+            for check in negatives:
+                check.result()
         assert declined["original_id"]==original and db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
         print("PR188_H3B_GUIDED_DECLINE_NO_EFFECT=PASS",mode,flush=True)
         if mode=="SCOPED_V2":
@@ -227,20 +241,22 @@ def main(project, receipt, testbin, mode):
             assert p["original_id"]==original
             print("PR188_H3B_GUIDED_APPLY=PASS",mode,flush=True)
         else:
-            # The negative checks and guided decline use the earlier review.
-            # For the positive machine apply explicitly review fresh evidence;
-            # never retry a failed apply or approve a changed original/ledger.
-            fresh=run([BIN,"recover","--plan","--issue",issue,"-project",project],capture_output=True,text=True)
-            q=json.loads(fresh.stdout)
-            assert q["status"]=="REVIEW_READY" and q["apply_available"] and not q["native_retried"]
-            stable=("issue_id","scope","mode","original_id","original_action","original_state","original_revision","original_sha256","ledger_sha256","installation_sha256","leaf")
-            assert all(q[k]==p[k] for k in stable),"reviewed original, ledger or installation changed"
-            assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
-            print("P1B_LEGACY_FRESH_EXACT_REVIEW", "witness_changed="+str(q["witness"]!=p["witness"]),flush=True)
-            p=q
-            base[-1]=p["review_sha256"]
-            planned.stdout=fresh.stdout
-            result=json.loads(run(base,input=planned.stdout,text=True,capture_output=True).stdout)
+            # The product re-observes all evidence before admission. A
+            # redundant fresh plan consumes the native receipt window.
+            print("P1B_LEGACY_FIRST_EXACT_REVIEW",flush=True)
+            out=subprocess.run(base,input=planned.stdout,text=True,capture_output=True,timeout=100)
+            if out.returncode:
+                # Diagnostic only: preserve and inspect, never re-apply.
+                obs=subprocess.run([BIN,"recover","--plan","--issue",issue,"-project",project],capture_output=True,text=True,timeout=100)
+                try:
+                    current=json.loads(obs.stdout)
+                    print("P1B_LEGACY_REFUSED_REOBSERVATION",current.get("status"),current.get("reason"),(current.get("witness") or {}).get("reason"),flush=True)
+                except (ValueError,AttributeError):
+                    print("P1B_LEGACY_REFUSED_REOBSERVATION_UNAVAILABLE",flush=True)
+                assert db_state(original)==before and journal(original,mode)==oldjournal and pid()==controller
+                print(out.stderr[-4000:],file=sys.stderr,flush=True)
+                out.check_returncode()
+            result=json.loads(out.stdout)
         rec=result["recovery"]
         assert rec["original_operation_id"]==original and rec["disposition"]=="SETTLED" and rec["operation"]["state"]=="SUCCEEDED",result
         assert result["postcheck"]["state"]=="DURABLE_ORIGINAL_POSTSTATE_VERIFIED" and result["postcheck"]["original_state"]=="SUCCEEDED" and not result["native_retried"],result
