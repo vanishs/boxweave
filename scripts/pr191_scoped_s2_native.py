@@ -96,6 +96,7 @@ def verify_public_wan(read, project, actor, uuid, log):
     restored=prefix+"online-after-01"
     keys=[client,*online,offline,restored]
     records={}
+    ids={}
     for line in log.splitlines():
         if not line.startswith("S2_NATIVE_PUBLIC_IPV4_ORIGINAL "):
             continue
@@ -109,6 +110,21 @@ def verify_public_wan(read, project, actor, uuid, log):
         assert box==uuid and native and tracking
         assert read("SELECT exit_code FROM exec_outputs WHERE operation_id=?",(oid,))==[(code,)]
         records[key]=(code,status)
+        ids[key]=oid
+    # Timing observations are from the same curl original, not a new
+    # probe. Require complete correlation and numeric-only fields.
+    timings={}
+    for line in log.splitlines():
+        if not line.startswith("P1B_SCOPED_PUBLIC_IPV4_TIMING "):
+            continue
+        _,key,oid,*values=line.split()
+        assert key in records and key!=client and key not in timings
+        assert ids[key]==oid and len(values)==4
+        assert all(re.fullmatch(r"[0-9]{1,3}\.[0-9]{6}",v) for v in values)
+        metrics=tuple(int(v.replace(".","")) for v in values)
+        assert max(metrics[:3])<=metrics[3]
+        timings[key]=metrics
+    assert set(timings)==set(records)-{client}
     assert set(records)=={k for k in keys if by_key(read,k)}
     assert client in records and records[client][1]=="CLIENT"
     def positive(key):
@@ -167,6 +183,7 @@ def main(project, candidate_sha, phase, *args):
         result=verify_public_wan(rows,project,actor,original[0][7],Path(logpath).read_text())
         print("P1B_SCOPED_PUBLIC_IPV4_TLS_INDEPENDENT="+result)
         print("P1B_SCOPED_PUBLIC_IPV4_TLS_ORIGINAL_EVIDENCE=PASS")
+        print("P1B_SCOPED_PUBLIC_IPV4_TIMING_CORRELATION=PASS")
         return
     if phase == "foreign":
         assert len(args) == 2 and native_names() == [MAIN]

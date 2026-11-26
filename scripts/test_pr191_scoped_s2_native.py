@@ -79,7 +79,10 @@ class ScopedS2OracleTests(unittest.TestCase):
         self.add(key,"box_exec")
         r=by_key(self.read,key)[0]
         self.db.execute("UPDATE exec_outputs SET exit_code=? WHERE operation_id=?",(code,r[0]))
-        return "S2_NATIVE_PUBLIC_IPV4_ORIGINAL "+" ".join((key,r[0],r[9],r[1],r[7],str(code),status))
+        line="S2_NATIVE_PUBLIC_IPV4_ORIGINAL "+" ".join((key,r[0],r[9],r[1],r[7],str(code),status))
+        if status!="CLIENT":
+            line+="\nP1B_SCOPED_PUBLIC_IPV4_TIMING "+key+" "+r[0]+" 0.010000 0.000000 0.000000 5.000000"
+        return line
 
     def test_wan_positive_negative_and_missing_positive_control(self):
         prefix="native-s2-wan-"
@@ -103,6 +106,20 @@ class ScopedS2OracleTests(unittest.TestCase):
         self.assertEqual(verify_public_wan(self.read,self.project,self.actor,self.uuid,log),"UNVERIFIED")
         with self.assertRaises(AssertionError):
             verify_public_wan(self.read,self.project,self.actor,self.uuid,log.replace("P1B_SCOPED_PUBLIC_IPV4_TLS=UNVERIFIED","S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS"))
+
+    def test_wan_timing_correlates_every_actual_attempt(self):
+        prefix="native-s2-wan-"
+        records=[self.wan_record(prefix+"curl-available-01",0,"CLIENT")]
+        records.extend(self.wan_record(prefix+f"online-before-{i:02d}",28,"000") for i in range(1,5))
+        log="\n".join(records+["S2_NATIVE_EXTERNAL_IPV4_WAN_BASELINE=UNVERIFIED","P1B_SCOPED_PUBLIC_IPV4_TLS=UNVERIFIED"])
+        timing=records[1].splitlines()[1]
+        for broken in (log.replace(timing,""),log+"\n"+timing,
+                       log.replace(timing,timing.replace(timing.split()[2],"0"*32)),
+                       log.replace("0.010000","not-a-time",1),
+                       log.replace("5.000000","0.000001",1)):
+            with self.subTest(broken=broken[:100]),self.assertRaises(AssertionError):
+                verify_public_wan(self.read,self.project,self.actor,self.uuid,broken)
+        self.assertEqual(verify_public_wan(self.read,self.project,self.actor,self.uuid,log),"UNVERIFIED")
 
     def test_history_count_and_original_cancel(self):
         for i in range(132):

@@ -126,3 +126,5 @@ BOX_VERIFIED means source/fixture tests only.
   witnesses and remaining dispositions are independently verified.
 
 P1b-06d11 follow-up: 69ac198 S25 job 139851764466 actual same-name distinct-native, cross-token, two fixed-ledger/ACL/guard and foreign-packet proof PASS. Combined Update NativeAck WAL test source verified, actual CI pending. No public WAN or alternate-pool waiver.
+
+P1b-06d12: [exact checkpoint and new CI failures](CONSOLIDATION_P1B_06D12_CHECKPOINT.md). Prior schema and obsolete-route refusal independently verified; real ACK cut passed but restart failed both modes; corrective source BOX_VERIFIED, native CI required. Public WAN and alternate pool remain open. No waiver.

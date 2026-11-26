@@ -4,6 +4,7 @@
 The test-owned SQLite trigger refuses only a named fixture terminal update.
 No production switch, alternate ledger, native replay, or fake receipt.
 """
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -24,7 +25,7 @@ TRIGGER = "p1b_only_ci_final_commit_fault"
 
 
 def rows(sql, params=()):
-    with sqlite3.connect(DB + "?mode=ro", uri=True) as db:
+    with closing(sqlite3.connect(DB + "?mode=ro", uri=True)) as db:
         return db.execute(sql, params).fetchall()
 
 

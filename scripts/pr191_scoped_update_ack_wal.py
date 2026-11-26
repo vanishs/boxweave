@@ -51,6 +51,20 @@ def ack_proof(query, original, actual, nonce, phase):
     return row[2], row[3]
 
 
+def restart_proof(cut, after, final, cp, live, project, name):
+    oid, tracking, uuid = (cp[k] for k in ("update_id", "tracking_id", "box_id"))
+    expected = (oid, tracking, "UNKNOWN", live[1], uuid, uuid)
+    fields = ("operation_id", "tracking_id", "state", "native_operation_id", "box_uuid", "incarnation")
+    observed = tuple(final.get(k, "") for k in fields)
+    assert observed == expected, ("restart MCP identity", observed, expected)
+    assert len(after[0]) == 1 and after[0][0][:6] == expected, (
+        "restart ledger identity", [row[:6] for row in after[0]], expected)
+    assert after[0][0][7] == "PROCESS_RESTART_OR_LOST_ACK"
+    assert after[1] == cut[1] == [(project, "box:" + name)] and not after[3] and not cut[3]
+    assert after[2] and after[2][:-1] == cut[2] and after[2][-1][1:] == (
+        "UNKNOWN", "PROCESS_RESTART_OR_LOST_ACK"), "restart event lineage"
+
+
 def main(project, receipt, candidate_sha, phase):
     assert os.geteuid() == 0 and os.environ.get("GITHUB_ACTIONS") == "true"
     assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted" and phase in NAMES
@@ -164,7 +178,8 @@ def main(project, receipt, candidate_sha, phase):
         live = ack_proof(rows, cp, actual, nonce, phase)
         assert live == durable, "live/cold ACK visibility differs; preserve original"
         oid = cp["update_id"]
-        assert snapshot(oid)[1] == [(project, "box:" + name)] and not snapshot(oid)[3]
+        cut_snapshot = snapshot(oid)
+        assert cut_snapshot[1] == [(project, "box:" + name)] and not cut_snapshot[3]
         assert not os.path.lexists(ROOT / ("op-" + oid))
         print("P1B_SCOPED_UPDATE_NATIVE_ACK_WAL_CUT=PASS", phase, oid, actual, live[0], flush=True)
         # Remove only the exact test-owned schema objects, after proof.
@@ -180,17 +195,19 @@ db.close()
 """
         subprocess.run(restricted("python3", "-c", script, nonce, oid, live[0]), check=True, timeout=30)
         assert not rows("SELECT name FROM sqlite_master WHERE name IN (?,?)", (TABLE, TRIGGER))
+        assert snapshot(oid) == cut_snapshot, "test DDL removal changed original"
         marker_before = marker.read_bytes()
     LIB.unlink()
     command("systemctl", "start", CTL)
     wait_mcp_listener()
     assert pid(CTL) != previous and Path("/etc/systemd/system/boxweave.service").read_bytes() == unit_before
     assert rows("PRAGMA integrity_check") == [("ok",)]
+    assert os.path.samefile("/proc/" + str(pid(CTL)) + "/exe", BIN)
+    with LoopbackMCP(token=credential, timeout=60) as c:
+        assert c.host_status()["peer_mode"] == "SCOPED_V2"
+        final = c.operation_get(oid)
     before = snapshot(oid)
-    assert before[0][0][:6] == (oid, cp["tracking_id"], "UNKNOWN", live[1], uuid, uuid)
-    assert before[1] == [(project, "box:" + name)] and not before[3]
-    assert [e[1] for e in before[2]].count("UNKNOWN") == 1
-    assert not any(e[1] == "SUCCEEDED" for e in before[2])
+    restart_proof(cut_snapshot, before, final, cp, live, project, name)
     sdk("resume", True)
     assert snapshot(oid) == before
     assert rows("SELECT id FROM operations WHERE work_ref=?", (WORK,)) == [(oid,)]

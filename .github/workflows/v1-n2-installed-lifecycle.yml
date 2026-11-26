@@ -248,6 +248,7 @@ jobs:
               grep -Fxq "P1B_SCOPED_SCHEMA_REFUSED=PASS $layout" "$RUNNER_TEMP/n2-installed.log"
             done
             grep -Fxq P1B_SCOPED_PUBLIC_IPV4_TLS_ORIGINAL_EVIDENCE=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq P1B_SCOPED_PUBLIC_IPV4_TIMING_CORRELATION=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Exq 'P1B_SCOPED_PUBLIC_IPV4_TLS_INDEPENDENT=(PASS|UNVERIFIED)' "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"

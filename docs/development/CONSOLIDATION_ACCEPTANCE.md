@@ -101,3 +101,5 @@ P1b-06d5 actual d32939b scoped-overlap CI job 139837920373 PASS; P1b-06d8 indepe
 P1b-06d10: 72/72 consumed S2 marker map in CONSOLIDATION_P1B_WITNESS_CROSSWALK.md; schema and obsolete-route refusal BOX_VERIFIED, installed CI_PENDING. Actual combined Update NativeAck WAL cut, alternate pool, public WAN and final consumer conversion remain OPEN. Original gates retained.
 
 P1b-06d11: exact 69ac198 S25 139851764466 actual dual controller/inner install PASS. Combined Update NativeAck WAL before/after conversion BOX_VERIFIED; actual installed CI_PENDING. Preserve original gates.
+
+P1b-06d12: [exact checkpoint and new CI failures](CONSOLIDATION_P1B_06D12_CHECKPOINT.md). Prior schema and obsolete-route refusal independently verified; real ACK cut passed but restart failed both modes; corrective source BOX_VERIFIED, native CI required. Public WAN and alternate pool remain open. No waiver.

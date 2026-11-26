@@ -128,12 +128,38 @@ func guestRead(ctx context.Context, session *mcp.ClientSession, uuid, key, comma
 		status := strings.TrimSpace(string(body))
 		if key == "native-s2-wan-curl-available-01" {
 			status = "CLIENT"
-		} else if len(status) != 3 || strings.Trim(status, "0123456789") != "" {
+		} else if os.Getenv("BW_S2_INSTALLED_SCOPED_NATIVE") == "1" {
+			// Only fixed curl write-out fields, never response body or stderr.
+			fields := strings.Fields(status)
+			check(len(fields) == 5, "missing public WAN timing evidence")
+			status = fields[0]
+			body = []byte(status)
+			for _, value := range fields[1:] {
+				seconds, micros, ok := strings.Cut(value, ".")
+				check(ok && len(seconds) >= 1 && len(seconds) <= 3 && len(micros) == 6 &&
+					strings.Trim(seconds+micros, "0123456789") == "", "invalid public WAN timing evidence")
+			}
+			fmt.Println("P1B_SCOPED_PUBLIC_IPV4_TIMING", key, opID, strings.Join(fields[1:], " "))
+		}
+		if key != "native-s2-wan-curl-available-01" && (len(status) != 3 || strings.Trim(status, "0123456789") != "") {
 			status = "UNREADABLE"
 		}
 		fmt.Println("S2_NATIVE_PUBLIC_IPV4_ORIGINAL", key, opID, field(final, "native_operation_id"), field(final, "tracking_id"), uuid, int(exit), status)
 	}
 	return strings.TrimSpace(string(body)), int(exit)
+}
+
+// Keep the historical Legacy wire witness unchanged. In installed Scoped
+// collect timings on the SAME curl request, not extra probes or a proxy.
+// A zero timing is an observation, not proof of the cause of a timeout.
+func publicWANCommand(installed bool, endpoint string) string {
+	format, locale := "%{http_code}", ""
+	if installed {
+		format += " %{time_namelookup} %{time_connect} %{time_appconnect} %{time_total}"
+		locale = "LC_ALL=C "
+	}
+	return locale + "curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -f -sS -o /dev/null -w '" +
+		format + "' --max-time 7 --connect-timeout 5 " + endpoint
 }
 
 // Count only a complete successful HTTPS status, never a prefix or proxy.
@@ -1234,7 +1260,7 @@ func main() {
 		} {
 			body, status := guestRead(ctx, admin, uuid,
 				fmt.Sprintf("native-s2-wan-online-before-%02d", i+1),
-				"curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+candidate)
+				publicWANCommand(installed, candidate))
 			if status == 0 && publicHTTP2xx(body) {
 				externalURL = candidate
 				externalSupported = true
@@ -1313,7 +1339,7 @@ func main() {
 	if externalSupported {
 		publicOffline, publicOfflineExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-offline-01",
-			"curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
+			publicWANCommand(installed, externalURL))
 		check(publicOfflineExit != 0 && strings.TrimSpace(publicOffline) == "000", "public HTTPS received response despite internet=false")
 	}
 	online := call(ctx, admin, "box_update", map[string]any{
@@ -1350,7 +1376,7 @@ func main() {
 	if externalSupported {
 		publicOnline, publicExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-online-after-01",
-			"curl -q -4 --noproxy '*' --proto '=https' --proto-redir '=https' -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
+			publicWANCommand(installed, externalURL))
 		check(publicExit == 0 && publicHTTP2xx(publicOnline),
 			"public WAN did not recover after internet=true")
 		fmt.Println("S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS")
