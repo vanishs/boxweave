@@ -8,6 +8,19 @@ stage="$1"; binary_sha="$2"; agent_sha="$3"; package_proxy="$4"; simwan_sha="$5"
 test "$(id -u)" = 0
 test ! -e /var/lib/incus
 test ! -e /var/lib/boxweave
+case "${P1B_S25_SCOPED:-0}" in 0|1) ;; *) exit 88 ;; esac
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ test "$#" = 7
+ test "$(hostname)" = bw-s25-mcp-l1
+ awk '$5 ~ /^\/(var\/lib|run)\/incus(\/|$)/ {bad=1} END {exit bad}' /proc/self/mountinfo
+ curl -fsSL --max-time 60 "$stage/pr191_s25_scoped_setup.sh" -o /root/pr191_s25_scoped_setup.sh
+ echo "$6  /root/pr191_s25_scoped_setup.sh" | sha256sum -c -
+ curl -fsSL --max-time 60 "$stage/s25-install.sh" -o /root/s25-install.sh
+ echo "$7  /root/s25-install.sh" | sha256sum -c -
+ export BW_S25_INSTALL_SHA="$7" BW_S25_SETUP_LAYER=inner BW_S25_ALLOWED_NESTED=1 P1B_S25_SCOPED=1
+else
+ test "$#" = 5
+fi
 . /etc/os-release
 test "$ID" = ubuntu && test "$VERSION_ID" = 24.04
 echo S25_INNER_GUEST_START=PASS
@@ -61,7 +74,7 @@ if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list
 fi
 echo S25_INNER_HTTPS_ONLY_APT_SOURCES=PASS
 apt-get update -qq
-apt-get install -y --no-install-recommends ca-certificates curl gpg git openssl iproute2 python3 nftables conntrack >/dev/null
+apt-get install -y --no-install-recommends ca-certificates curl gpg git openssl iproute2 python3 nftables conntrack dnsmasq-base >/dev/null
 curl -fsSL --retry 2 --max-time 40 https://pkgs.zabbly.com/key.asc -o /tmp/s25-zabbly.asc
 fingerprint="$(gpg --show-keys --with-colons /tmp/s25-zabbly.asc | awk -F: '$1=="fpr"{print $10;exit}')"
 test "$fingerprint" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
@@ -79,10 +92,14 @@ S25_SIGNED_APT
 apt-get update -qq
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ sh /root/pr191_s25_scoped_setup.sh bootstrap /usr/local/bin/boxweave-s25-candidate "$binary_sha" "$pkg" /root
+else
 apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
 systemctl start incus.service
 systemctl is-active --quiet incus.service
 incus admin init --auto --storage-backend=dir
+fi
 test -z "$(incus list --all-projects --format csv -c n)"
 # Incus image copy default pull is performed by the TARGET daemon,
 # not necessarily by the incus CLI. Configure only the fresh, exclusively
@@ -92,7 +109,9 @@ test "$(incus config get core.proxy_https)" = "$package_proxy"
 echo S25_INNER_INCUS_DAEMON_SCOPED_HTTPS_PROXY=PASS
 echo S25_INNER_PINNED_INCUS_DAEMON=PASS
 
-useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
+if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
+ useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
+fi
 uid="$(id -u boxweave)"
 project="user-$uid"
 runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
@@ -113,6 +132,9 @@ incus network show "$net" >/dev/null
 
 target_acl="bw-s25-inner-owned"
 candidate=/usr/local/bin/boxweave-s25-candidate
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ sh /root/pr191_s25_scoped_setup.sh install "$candidate" "$binary_sha" "$project" /root
+else
 "$candidate" native-prepare-plan -project "$project" -pool default \
   -network "$net" -acl "$target_acl" > /root/s25-native-plan.json
 sha="$(python3 -c 'import json;print(json.load(open("/root/s25-native-plan.json"))["review_sha256"])')"
@@ -142,13 +164,16 @@ hash="$(sha256sum "$candidate" | awk '{print $1}')"
 test "$hash" = "$binary_sha"
 "$candidate" install-stage -project "$project" \
   -source-binary "$candidate" -expect-sha256 "$hash" -approve-stage > /root/s25-stage.json
+fi
 for name in admin1 admin2 peer; do
  runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
   /usr/local/bin/boxweave token-create > "/root/s25-$name.secret"
  chmod 0600 "/root/s25-$name.secret"
 done
-"$candidate" install-activate -project "$project" -approve-local > /root/s25-activate.json
+if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
+ "$candidate" install-activate -project "$project" -approve-local > /root/s25-activate.json
+fi
 # Doctor is observation-only. Explicit token creation initializes the ledger;
 # activate the exact staged service before checking installed readiness.
 runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \

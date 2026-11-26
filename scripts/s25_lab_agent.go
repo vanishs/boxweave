@@ -366,12 +366,18 @@ func bootstrap(ctx context.Context) {
 	// Transport is a PRIVATE temporary root-only CI bridge server. The guest
 	// verifies the pinned setup script digest, then setup validates candidate
 	// and Agent binary digests before starting its independent L1 Incus+v1.
+	mode := ""
+	extra := ""
+	if os.Getenv("P1B_S25_SCOPED") == "1" {
+		mode = "P1B_S25_SCOPED=1 "
+		extra = " '" + environmental("BW_S25_SCOPED_HELPER_SHA") + "' '" + environmental("BW_S25_INSTALL_SHA") + "'"
+	}
 	cmd := "set -eu; curl -fsSL --max-time 45 " + stage + "/s25_inner_setup.sh -o /tmp/s25_inner_setup.sh; " +
 		"printf '%s  %s\\n' '" + sha + "' /tmp/s25_inner_setup.sh | sha256sum -c -; " +
-		"sh /tmp/s25_inner_setup.sh '" + stage + "' '" + environmental("BW_S25_BINARY_SHA256") +
+		mode + "sh /tmp/s25_inner_setup.sh '" + stage + "' '" + environmental("BW_S25_BINARY_SHA256") +
 		"' '" + environmental("BW_S25_AGENT_SHA256") + "' '" +
 		environmental("BW_S25_PACKAGE_PROXY_URL") + "' '" +
-		environmental("BW_S25_SIMWAN6_HELPER_SHA") + "'"
+		environmental("BW_S25_SIMWAN6_HELPER_SHA") + "'" + extra
 	s := connectActor(ctx, "a")
 	defer s.Close()
 	final, out, exit := execGuest(ctx, s, m["uuid"], "s25-outer-l1-guest-bootstrap-once", cmd, "agent-outer-alpha", 900000)
@@ -380,6 +386,12 @@ func bootstrap(ctx context.Context) {
 	must(strings.Contains(out, "S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS"),
 		"nested independent routed IPv6 HTTPS SDK proof missing")
 	fmt.Println("S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS")
+	if os.Getenv("P1B_S25_SCOPED") == "1" {
+		for _, marker := range []string{"P1B_S25_SCOPED_NATIVE_BOOTSTRAP=inner:PASS", "P1B_S25_SCOPED_STALE_REVIEW_REFUSED=inner:PASS", "P1B_S25_SCOPED_FRESH_INSTALL=inner:PASS"} {
+			must(strings.Contains(out, marker), "nested Scoped installation evidence missing")
+			fmt.Println(marker)
+		}
+	}
 	m = readCheckpoint()
 	m["bootstrap_op"] = str(final, "operation_id")
 	saveCheckpoint(m)

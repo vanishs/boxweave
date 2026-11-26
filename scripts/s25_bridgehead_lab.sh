@@ -17,9 +17,35 @@ proof="$RUNNER_TEMP/s25-evidence"
 mkdir -p "$proof"
 echo "S25_LAB_SOURCE_SHA=$(git rev-parse HEAD)"
 echo S25_LAB_DISPOSABLE_HOST=PASS
+case "${P1B_S25_SCOPED:-0}" in 0|1) ;; *) exit 88 ;; esac
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ test -z "${S5B1_MODE:-}${S3_FILE_INSTALLED_PHASE2:-}"
+ test ! -e /usr/local/bin/boxweave-s25-candidate
+ test "$(git rev-parse HEAD)" = "${P1B_S25_EXACT_HEAD:?}"
+ test ! -e /var/lib/boxweave
+ test ! -e /usr/local/bin/boxweave
+ # Same isolated runner prerequisite as N2; never applied to a shared Host.
+ sudo python3 - <<'P1B_S25_PARENT'
+import os,stat
+for name in ("/","/usr","/usr/local","/usr/local/bin"):
+    s=os.lstat(name)
+    assert stat.S_ISDIR(s.st_mode) and s.st_uid==0
+    if name in ("/usr/local","/usr/local/bin"):
+        os.chmod(name,stat.S_IMODE(s.st_mode)&~0o022)
+    assert not os.lstat(name).st_mode&0o022
+P1B_S25_PARENT
+ CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+ sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
+ cp scripts/pr191_s25_scoped_setup.sh "$work/staging/pr191_s25_scoped_setup.sh"
+ cp install.sh "$work/staging/s25-install.sh"
+ cp install.sh "$work/private/s25-install.sh"
+ setup_helper_sha="$(sha256sum "$work/staging/pr191_s25_scoped_setup.sh" | cut -d' ' -f1)"
+ install_sha="$(sha256sum "$work/staging/s25-install.sh" | cut -d' ' -f1)"
+ candidate_sha="$(sha256sum "$work/staging/boxweave" | cut -d' ' -f1)"
+fi
 
 sudo apt-get update -qq
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 iproute2 nftables conntrack >/dev/null
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 iproute2 nftables conntrack dnsmasq-base >/dev/null
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/staging/zabbly.asc"
 fp="$(gpg --show-keys --with-colons "$work/staging/zabbly.asc" | awk -F: '$1=="fpr"{print $10;exit}')"
@@ -37,15 +63,19 @@ S25_APT_SOURCE
 sudo apt-get update -qq
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ sudo env P1B_S25_SCOPED=1 BW_S25_SETUP_LAYER=outer GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+   sh scripts/pr191_s25_scoped_setup.sh bootstrap /usr/local/bin/boxweave-s25-candidate "$candidate_sha" "$pkg" "$work/private"
+else
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
 sudo systemctl start incus.service
 sudo systemctl is-active --quiet incus.service
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 sudo incus admin init --auto --storage-backend=dir
+sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
+fi
 echo "S25_LAB_INCUS_APT=$pkg"
 echo S25_LAB_NATIVE_INCUS_7_6_INITIALIZED=PASS
-
-sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
 uid="$(id -u boxweave)"
 project="user-$uid"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus project list --format csv >/dev/null
@@ -59,7 +89,9 @@ sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --a
 net="incusbr-$uid"
 acl="bw-s25-standalone-owned"
 sudo incus network show "$net" >/dev/null
-if [ -n "${S5B1_MODE:-}" ]; then
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+  test "$(sha256sum "$work/staging/boxweave" | cut -d' ' -f1)" = "$candidate_sha"
+elif [ -n "${S5B1_MODE:-}" ]; then
   test "$(git rev-parse HEAD)" = a3e02b4750edcabb80427e3311a19614d82b0029
   CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-rc.10 -X main.commit=$(git rev-parse HEAD) -buildid=" -o "$work/staging/boxweave" ./cmd/boxweave
 else
@@ -73,11 +105,18 @@ binary_sha="$(sha256sum "$work/staging/boxweave" | awk '{print $1}')"
 agent_sha="$(sha256sum "$work/staging/s25-lab-agent" | awk '{print $1}')"
 setup_sha="$(sha256sum "$work/staging/s25_inner_setup.sh" | awk '{print $1}')"
 simwan_sha="$(sha256sum "$work/staging/s25_simwan6.py" | awk '{print $1}')"
-sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
+if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
+ sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
+fi
 
 printf 'source_commit=%s\ncandidate_binary_sha256=%s\nagent_binary_sha256=%s\ninner_setup_sha256=%s\nincus_apt=%s\n' "$(git rev-parse HEAD)" "$binary_sha" "$agent_sha" "$setup_sha" "$pkg" > "$proof/identity.txt"
 printf 'simwan6_helper_sha256=%s\n' "$simwan_sha" >> "$proof/identity.txt"
 
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ sudo env P1B_S25_SCOPED=1 BW_S25_SETUP_LAYER=outer GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted BW_S25_INSTALL_SHA="$install_sha" \
+   sh scripts/pr191_s25_scoped_setup.sh install /usr/local/bin/boxweave-s25-candidate "$binary_sha" "$project" "$work/private"
+ printf 'scoped_helper_sha256=%s\ninstaller_sha256=%s\n' "$setup_helper_sha" "$install_sha" >> "$proof/identity.txt"
+else
 sudo /usr/local/bin/boxweave-s25-candidate native-prepare-plan -project "$project" -pool default -network "$net" -acl "$acl" > "$work/private/plan.json"
 sha="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["review_sha256"])' "$work/private/plan.json")"
 if sudo /usr/local/bin/boxweave-s25-candidate native-prepare-apply -project "$project" -pool default -network "$net" -acl "$acl" -native-prepare-sha256 0000000000000000000000000000000000000000000000000000000000000000 -approve-local >/dev/null 2>&1; then
@@ -93,11 +132,14 @@ S25_PREREQ_ASSERT
 echo S25_LAB_NATIVE_PREREQ_EIGHT_CHECKS=PASS
 
 sudo /usr/local/bin/boxweave-s25-candidate install-stage -project "$project" -source-binary /usr/local/bin/boxweave-s25-candidate -expect-sha256 "$binary_sha" -approve-stage > "$work/private/stage.json"
+fi
 for name in admin1 admin2 admin3 peer; do
  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create > "$work/private/$name.secret"
  chmod 0600 "$work/private/$name.secret"
 done
-sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local > "$work/private/activated.json"
+if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
+ sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local > "$work/private/activated.json"
+fi
 # Doctor is observation-only. Explicit token creation initializes the ledger;
 # activate the exact staged service before checking installed readiness.
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave doctor -project "$project" > "$proof/doctor.json" || {
@@ -378,6 +420,9 @@ sudo chown "$(id -u):$(id -g)" "$work/staging/s25_simwan6.crt"
 chmod 0644 "$work/staging/s25_simwan6.crt"
 echo S25_L0_SIMWAN6_TLS_NAMESPACE_READY=PASS
 
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ export P1B_S25_SCOPED=1 BW_S25_SCOPED_HELPER_SHA="$setup_helper_sha" BW_S25_INSTALL_SHA="$install_sha"
+fi
 export BW_S25_URL=http://127.0.0.1:18650/mcp
 export BW_S25_PROJECT="$project"
 export BW_S25_OUTER_DB=/var/lib/boxweave/ledger.sqlite
@@ -527,6 +572,21 @@ python3 scripts/s25_independent_verifier.py l2
 echo S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ python3 scripts/s25_independent_verifier.py scoped-layers
+ "$work/staging/s25-lab-agent" guest-git
+ python3 scripts/s25_independent_verifier.py git
+ "$work/staging/s25-lab-agent" inner-clean
+ python3 scripts/s25_independent_verifier.py wan6innerclean
+ python3 scripts/s25_independent_verifier.py l2clean
+ "$work/staging/s25-lab-agent" cleanup
+ python3 scripts/s25_independent_verifier.py clean
+ test -z "$(sudo incus list --all-projects --format csv -c n)"
+ sudo /usr/local/bin/boxweave install-status -project "$project" > "$proof/scoped-final-status.json"
+ echo P1B_S25_SCOPED_STARTUP_LIFECYCLE=PASS
+ echo P1B_S25_REMAINING_FOREIGN_AND_MAINTENANCE=OPEN
+ exit 0
+fi
 # Additional P0 BH-009/BH-011/BH-015: cross-Project raw IPv4/IPv6
 # packets and parent native Unix-socket isolation. This test uses ONLY
 # a freshly created foreign guest in the disposable INNER L1 daemon.

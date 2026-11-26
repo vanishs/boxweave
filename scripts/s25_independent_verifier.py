@@ -496,6 +496,53 @@ def cleaned():
                 "agent-s25-cleanup")
     print("S25_V_EXACT_NATIVE_L0_CLEANUP_ORIGINAL_SQLITE=PASS")
 
+def verify_scoped_layers():
+    """No-token independent evidence for both reviewed installed controllers."""
+    require(os.environ.get("P1B_S25_SCOPED") == "1", "Scoped lane only")
+    m = inspect_l1()
+    inner_cp = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
+    outer_project = os.environ["BW_S25_PROJECT"]
+    inner_project = inner("sh", "-c", "printf user-; id -u boxweave")
+    expected = os.environ["BW_S25_BINARY_SHA256"]
+    commit = os.environ["P1B_S25_EXACT_HEAD"]
+    for runner, project, checkpoint, name, actor in (
+        (lambda *args: cli("sudo", *args), outer_project, m, "bw-s25-mcp-l1", "agent-outer-alpha"),
+        (inner, inner_project, inner_cp, "bw-s25-mcp-l2", "agent-inner-alpha"),
+    ):
+        status = as_json(runner("/usr/local/bin/boxweave", "install-status", "-project", project))
+        require(status.get("scoped_peer_mode") == "SCOPED_PEER_FRESH_V2" and
+                status.get("build_commit") == commit and status.get("binary_sha256") == expected and
+                status.get("native_project") == project and status.get("service_active") is True and
+                status.get("restart_required") is False, "independent Scoped installed identity")
+        for unit in ("boxweave.service", "boxweave-scoped-guard.service", "boxweave-scoped-lifecycle.service"):
+            require(runner("systemctl", "is-active", unit) == "active", "Scoped unit not active: " + unit)
+        require(runner("sha256sum", "/usr/local/bin/boxweave").split()[0] == expected,
+                "actual binary identity drifted")
+        code = (
+            "import json,sqlite3,sys;"
+            "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+            "p,u,o,a=sys.argv[1:];"
+            "v=c.execute('SELECT layer,box_uuid,incarnation,state,agent_ref,native_operation_id,tracking_id FROM operations WHERE id=?',(o,)).fetchall();"
+            "assert len(v)==1 and v[0][:5]==(p,u,u,'SUCCEEDED',a) and v[0][5] and v[0][6];"
+            "r=c.execute('SELECT acl,state FROM network_bindings WHERE project=? AND box_uuid=?',(p,u)).fetchall();"
+            "assert len(r)==1 and r[0][1]=='PINNED' and r[0][0].startswith('bw-peer-') and r[0][0]!='bw-peer-quarantine';"
+            "print(json.dumps({'acl':r[0][0],'native_operation':v[0][5],'tracking_id':v[0][6]}))"
+        )
+        pin = as_json(runner("python3", "-c", code, project, checkpoint["uuid"], checkpoint["create_op"], actor))
+        obj = as_json(runner("incus", "query", "/1.0/instances/" + name + "?project=" + project))
+        require(obj["config"]["volatile.uuid"] == checkpoint["uuid"] and
+                obj["expanded_devices"]["eth0"]["security.acls"] == pin["acl"],
+                "native identity or per-incarnation ACL drifted")
+        acl = as_json(runner("incus", "query", "/1.0/network-acls/" + pin["acl"]))
+        require(acl.get("used_by") == ["/1.0/instances/" + name + "?project=" + project],
+                "Scoped ACL shared with unrelated resource")
+        print("P1B_S25_SCOPED_ORIGINAL", name, checkpoint["create_op"], pin["native_operation"], pin["tracking_id"], checkpoint["uuid"])
+    outer_socket = cli("sudo", "stat", "-c", "%d:%i", "/var/lib/incus/unix.socket.user")
+    inner_socket = inner("stat", "-c", "%d:%i", "/var/lib/incus/unix.socket.user")
+    require(outer_socket != inner_socket, "parent native socket unexpectedly inherited")
+    print("P1B_S25_SCOPED_TWO_LAYER_FIXED_LEDGER_ACL_GUARD=PASS")
+
+
 if __name__ == "__main__":
     require(os.environ.get("GITHUB_ACTIONS") == "true" and
             os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted",
@@ -505,6 +552,8 @@ if __name__ == "__main__":
         inspect_l1()
     elif sys.argv[1] == "l2":
         inspect_l2()
+    elif sys.argv[1] == "scoped-layers":
+        verify_scoped_layers()
     elif sys.argv[1] == "wan6outer":
         inspect_simwan6(False)
     elif sys.argv[1] == "wan6outerclean":

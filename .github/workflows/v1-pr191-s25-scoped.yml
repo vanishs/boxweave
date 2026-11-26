@@ -1,0 +1,100 @@
+name: P1b independent Scoped nested startup and lifecycle (non-release)
+
+on:
+  pull_request:
+    branches: [v1]
+    paths:
+      - 'scripts/s25*'
+      - 'scripts/pr191_s25*'
+      - 'scripts/test_pr191_s25*'
+      - 'internal/**'
+      - 'cmd/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'install.sh'
+      - '.github/workflows/v1-pr191-s25-scoped.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  s25-bridgehead-lab:
+    name: s25-scoped-nested-startup-and-lifecycle
+    if: github.repository == 'vanishs/boxweave' && github.event.pull_request.number == 191 && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+      P1B_S25_SCOPED: '1'
+      P1B_S25_EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate isolated LAB scripts and independent verifier
+        run: |
+          sh -n scripts/s25_bridgehead_lab.sh
+          sh -n scripts/s25_inner_setup.sh
+          sh -n scripts/pr191_s25_scoped_setup.sh
+          python3 scripts/test_pr191_s25_scoped_setup.py
+          python3 -m py_compile scripts/s25_independent_verifier.py
+          python3 -m py_compile scripts/s25_simwan6.py
+          python3 -m py_compile scripts/s25_r12_foreign_l1.py
+          go build -o "$RUNNER_TEMP/s25-agent-build-check" ./scripts/s25_lab_agent.go
+      - name: Exact-source native L0 -> MCP L1 -> MCP L2, two Agents and independent verification
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/s25-evidence"
+          sh scripts/s25_bridgehead_lab.sh 2>&1 | tee "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_ORIGINAL_KEY_DIFFERENT_INTENT_DENIED=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_QUIET_RUNNING_BOUNDED_WAIT=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_QUIET_FINISH_UNCANCELLED=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_QUIET_ORIGINAL_SQLITE_RECONCILED=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_L1_MCP_L2_UPDATE_STOP_START_SAME_NATIVE_UUID=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_MCP_L2_NATIVE_IPV4_IPV6_GATEWAY_EGRESS=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_GUEST_GIT_TEST_ORIGINAL_FAILURE=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_GUEST_GIT_FIX_AND_RETEST=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_MCP_ORIGINAL_GIT_FAIL_AND_REPAIR_OPS=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_SIMWAN6_SEPARATELY_ROUTED_TLS_HOST_CONTROL=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_SIMWAN6_OUTER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_V_SIMWAN6_OUTER_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_V_SIMWAN6_OUTER_ORIGINAL_MCP_PEER_DELETED=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_V_SIMWAN6_INNER_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_V_SIMWAN6_INNER_ORIGINAL_MCP_PEER_DELETED=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_R2_REAL_SERVICE_SIGKILL_DISTINCT_PID_HTTP_AUTH_RECOVERY=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_R2_SIGKILL_ORIGINAL_TWO_AGENT_SQLITE_AND_NATIVE_NO_REPLAY=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_R12_TWO_AGENT_RESOURCE_CONFLICT_DENIED=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_R12_REAL_MCP_REPLY_LOST_AFTER_DISPATCH_NO_RETRY=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_R12_INDEPENDENT_AGENT_RECOVERED_MCP_LOST_REPLY_ORIGINAL=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_R12_REVOKED_ORIGINAL_AGENT_HTTP_401=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_R12_POST_REVOKE_SECOND_AGENT_ORIGINAL_RECEIPT_INTACT=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_V_R12_LOST_ACK_EXACT_ONE_NATIVE_EXEC_ORIGINAL=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          for layer in outer inner; do
+            for marker in NATIVE_BOOTSTRAP STALE_REVIEW_REFUSED FRESH_INSTALL; do
+              grep -Fxq "P1B_S25_SCOPED_${marker}=${layer}:PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+            done
+          done
+          test "$(grep -c '^P1B_S25_SCOPED_ORIGINAL ' "$RUNNER_TEMP/s25-evidence/console.log")" = 2
+          for marker in P1B_S25_SCOPED_TWO_LAYER_FIXED_LEDGER_ACL_GUARD P1B_S25_SCOPED_STARTUP_LIFECYCLE S25_V_INNER_ORIGINAL_MCP_L2_DELETE_NATIVE_ABSENCE S25_V_EXACT_NATIVE_L0_CLEANUP_ORIGINAL_SQLITE; do
+            grep -Fxq "$marker=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          done
+          grep -Fxq P1B_S25_REMAINING_FOREIGN_AND_MAINTENANCE=OPEN "$RUNNER_TEMP/s25-evidence/console.log"
+      - name: Retain exact test metadata and independently observed results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1b-scoped-nested-startup-evidence
+          path: ${{ runner.temp }}/s25-evidence/
+          retention-days: 7
+          if-no-files-found: warn
