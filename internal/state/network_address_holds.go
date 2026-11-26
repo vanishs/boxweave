@@ -41,17 +41,35 @@ func (s *Store) readCreateAddressHolds(ctx context.Context, project, bridge stri
 	return out, tx.Commit()
 }
 
+type addressHoldQuery struct {
+	sql  string
+	args []any
+}
+
+const addressHoldBindingsQuery = "SELECT project,ipv4,ipv6,mac,state FROM network_bindings n WHERE bridge=?"
+const addressHoldClaimsQuery = "SELECT resource_key FROM operation_resource_claims c WHERE substr(resource_key,1,?)=?"
+
 func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, bridge string, scoped bool) (networklimits.AddressHolds, error) {
-	zero := networklimits.AddressHolds{}
-	var e error
 	if scoped {
-		e = requireScopedNoLegacyRetirementTx(ctx, tx)
-	} else {
-		e = verifyIPv4RetirementHistory(ctx, tx, project, bridge, "")
+		return readScopedCreateAddressHoldsTx(ctx, tx, project, bridge)
 	}
-	if e != nil {
-		return zero, e
+	return readLegacyCreateAddressHoldsTx(ctx, tx, project, bridge)
+}
+
+func readScopedCreateAddressHoldsTx(ctx context.Context, tx *sql.Tx, project, bridge string) (networklimits.AddressHolds, error) {
+	if e := requireScopedNoLegacyRetirementTx(ctx, tx); e != nil {
+		return networklimits.AddressHolds{}, e
 	}
+	prefix := "create-pin:" + bridge + ":"
+	return collectCreateAddressHoldsTx(ctx, tx, project, bridge,
+		addressHoldQuery{addressHoldBindingsQuery, []any{bridge}},
+		addressHoldQuery{addressHoldClaimsQuery, []any{len(prefix), prefix}})
+}
+
+// Collect and validate all retained rows under the caller's one snapshot.
+// Only the two internal policy readers select which rows are visible.
+func collectCreateAddressHoldsTx(ctx context.Context, tx *sql.Tx, project, bridge string, bindings, claims addressHoldQuery) (networklimits.AddressHolds, error) {
+	zero := networklimits.AddressHolds{}
 	holds := networklimits.NewAddressHolds()
 	addIP := func(raw string, v6 bool) error {
 		if !auditIP(raw, v6) {
@@ -77,13 +95,7 @@ func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, brid
 		}
 		return nil
 	}
-	bindingsQuery := "SELECT project,ipv4,ipv6,mac,state FROM network_bindings n WHERE bridge=?"
-	bindingsArgs := []any{bridge}
-	if !scoped {
-		bindingsQuery += legacyHeldBindingsSuffix
-		bindingsArgs = append(bindingsArgs, project)
-	}
-	rows, e := tx.QueryContext(ctx, bindingsQuery, bindingsArgs...)
+	rows, e := tx.QueryContext(ctx, bindings.sql, bindings.args...)
 	if e != nil {
 		return zero, e
 	}
@@ -149,13 +161,7 @@ func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, brid
 		return zero, e
 	}
 	prefix := "create-pin:" + bridge + ":"
-	claimsQuery := "SELECT resource_key FROM operation_resource_claims c WHERE substr(resource_key,1,?)=?"
-	claimsArgs := []any{len(prefix), prefix}
-	if !scoped {
-		claimsQuery += legacyHeldClaimsSuffix
-		claimsArgs = append(claimsArgs, project, bridge)
-	}
-	rows, e = tx.QueryContext(ctx, claimsQuery, claimsArgs...)
+	rows, e = tx.QueryContext(ctx, claims.sql, claims.args...)
 	if e != nil {
 		return zero, e
 	}

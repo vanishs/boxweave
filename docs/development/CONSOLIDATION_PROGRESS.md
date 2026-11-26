@@ -516,3 +516,5 @@ P1-06d21: [source separation checkpoint](CONSOLIDATION_P1_06D21_CHECKPOINT.md). 
 P1b alternate-pool: [integration checkpoint](CONSOLIDATION_P1B_ALTPOOL_CHECKPOINT.md). Recovered original source; Box-verified candidate, installed CI pending. C03/C05/C11 retained. No waiver.
 
 P1-06d23: [Create availability separation](CONSOLIDATION_P1_06D23_CHECKPOINT.md). Full state/control/recovery Box PASS, independent CI pending. No P1 closure.
+
+P1-06d24: [retained-address reader separation](CONSOLIDATION_P1_06D24_CHECKPOINT.md). Box regression PASS, independent CI pending. No retirement waiver.

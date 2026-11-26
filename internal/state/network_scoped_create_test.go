@@ -89,6 +89,33 @@ func TestPR178ScopedCreateAtomicACLExchange(t *testing.T) {
 
 // The transitional schema has legacy archive tables, but a Scoped controller
 // cannot treat archived addresses as reusable or trust any mixed history.
+func TestP1ScopedAddressHoldsPreserveUnknownClaims(t *testing.T) {
+	ctx := context.Background()
+	s, original, in, pin := p1CreateFixture(t, false)
+	if e := s.Unknown(ctx, original.ID, "DISPATCHING", "NATIVE_OUTCOME_AMBIGUOUS"); e != nil {
+		t.Fatal(e)
+	}
+	h, e := s.ReadScopedCreateAddressHolds(ctx, in.Project, in.Bridge)
+	if e != nil || len(h.IPs) != 2 || len(h.MACs) != 1 ||
+		!h.IPs[netip.MustParseAddr(pin.IPv4)] || !h.IPs[netip.MustParseAddr(pin.IPv6)] || !h.MACs[pin.MAC] {
+		t.Fatal("original prospective holds missing", h, e)
+	}
+	legacy, e := s.ReadCreateAddressHolds(ctx, in.Project, in.Bridge)
+	if e != nil || len(legacy.IPs) != 2 || len(legacy.MACs) != 1 ||
+		!legacy.IPs[netip.MustParseAddr(pin.IPv4)] || !legacy.IPs[netip.MustParseAddr(pin.IPv6)] || !legacy.MACs[pin.MAC] {
+		t.Fatal("legacy unarchived holds changed", legacy, e)
+	}
+	other, e := s.ReadScopedCreateAddressHolds(ctx, in.Project, "incusbr-other")
+	if e != nil || len(other.IPs) != 0 || len(other.MACs) != 0 {
+		t.Fatal("foreign bridge holds leaked", other, e)
+	}
+	p1AssertOriginal(t, s, original.ID, "UNKNOWN", "")
+	var n int
+	if e = s.db.QueryRow("SELECT COUNT(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", original.ID).Scan(&n); e != nil || n != 4 {
+		t.Fatal("original claims changed", n, e)
+	}
+}
+
 func TestP1ScopedAddressHoldsRefuseLegacyRetirement(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
