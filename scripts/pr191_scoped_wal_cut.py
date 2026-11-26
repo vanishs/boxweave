@@ -53,15 +53,19 @@ def systemctl(*args):
     return subprocess.check_output(["systemctl", *args], text=True, timeout=60).strip()
 
 
-def marker_setup(action, nonce):
+def marker_setup(action, nonce, work=WORK):
     # Install the test-only DDL AFTER clean startup, as in the existing
     # ACK/final-commit fixtures. Never relax the product schema validator.
     detail = {"box_create": "ORIGINAL_CREATE_UUID_ATOMIC",
               "box_delete": "SCOPED_DELETE_ACL_ABSENT_ATOMIC",
-              "box_exec": "VERIFIED_NATIVE_EXEC_TERMINAL"}[action]
+              "box_exec": "VERIFIED_NATIVE_EXEC_TERMINAL",
+              "box_update": ""}[action]
+    state = "VERIFYING" if action == "box_update" else "SUCCEEDED"
+    assert work == ("lab/p0-native-sqlite" if action == "box_update" else WORK)
     script = """import sqlite3, sys
 db = sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=rw', uri=True, timeout=10)
-action, detail, work, nonce = sys.argv[1:]
+action, detail, work, nonce, state = sys.argv[1:]
+assert state in ("VERIFYING", "SUCCEEDED")
 assert db.execute('PRAGMA journal_mode').fetchone() == ('wal',)
 assert not db.execute("SELECT name FROM sqlite_master WHERE name IN ('p1b_test_wal_marker','p1b_test_wal_terminal')").fetchall()
 assert not db.execute("SELECT id FROM operations WHERE work_ref=?", (work,)).fetchall()
@@ -69,7 +73,7 @@ assert all(v.isascii() and all(c.isalnum() or c in '_/-' for c in v) for v in sy
 with db:
     db.execute('CREATE TABLE p1b_test_wal_marker (nonce TEXT NOT NULL, original TEXT NOT NULL)')
     db.execute("CREATE TRIGGER p1b_test_wal_terminal AFTER INSERT ON operation_events "
-               "WHEN NEW.state='SUCCEEDED' AND NEW.safe_detail='" + detail +
+               "WHEN NEW.state='" + state + "' AND NEW.safe_detail='" + detail +
                "' AND EXISTS(SELECT 1 FROM operations WHERE id=NEW.operation_id AND action='" + action +
                "' AND work_ref='" + work + "') BEGIN INSERT INTO p1b_test_wal_marker VALUES ('" +
                nonce + "', NEW.operation_id); END")
@@ -78,7 +82,7 @@ print(db.execute("SELECT rootpage FROM sqlite_master WHERE name='p1b_test_wal_ma
 db.close()
 """
     page = subprocess.check_output(["runuser", "-u", "boxweave", "--", "python3", "-c", script,
-                                    action, detail, WORK, nonce], text=True, timeout=30).strip()
+                                    action, detail, work, nonce, state], text=True, timeout=30).strip()
     assert page.isdecimal() and int(page) > 0
     return page
 

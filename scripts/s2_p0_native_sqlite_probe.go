@@ -45,9 +45,13 @@ func child(m map[string]any, key string) map[string]any {
 	return s
 }
 func session(ctx context.Context, token string) *mcp.ClientSession {
+	endpoint := "http://127.0.0.1:18657/mcp"
+	if os.Getenv("BW_S2_P0_SCOPED") == "1" && os.Getenv("BW_S2_P0_INSTALLED_LISTENER") == "1" {
+		endpoint = "http://127.0.0.1:18650/mcp"
+	}
 	c := mcp.NewClient(&mcp.Implementation{Name: "s2-p0-combined-witness", Version: "1"}, nil)
 	s, err := c.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:             "http://127.0.0.1:18657/mcp",
+		Endpoint:             endpoint,
 		HTTPClient:           &http.Client{Transport: transport{token}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
@@ -122,11 +126,15 @@ func main() {
 	defer s.Close()
 	switch mode {
 	case "seed":
-		created, err := call(ctx, s, "box_create", map[string]any{
+		args := map[string]any{
 			"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
 			"start": false, "internet": true,
 			"idempotency_key": "s2-p0-combined-seed-" + phase + "-once",
-		})
+		}
+		if os.Getenv("BW_S2_P0_SCOPED") == "1" {
+			args["image"] = "local:boxweave-ubuntu-24.04"
+		}
+		created, err := call(ctx, s, "box_create", args)
 		must(err == nil && get(created, "operation_id") != "", "durable fixture Create not admitted")
 		record := saved{CreateID: get(created, "operation_id")}
 		for i := 0; i < 120; i++ {
@@ -171,8 +179,17 @@ func main() {
 		newArgs := updateArgs(record.BoxID, phase)
 		newArgs["idempotency_key"] = "s2-p0-new-key-must-stay-locked-" + phase
 		newArgs["cpu"] = 3
-		_, e = call(ctx, s, "box_update", newArgs)
-		must(e != nil, "new-key Update bypassed P0 original UNKNOWN lock")
+		if os.Getenv("BW_S2_P0_SCOPED") == "1" {
+			must(get(again, "tracking_id") == record.TrackingID && get(again, "state") == "UNKNOWN" &&
+				get(again, "native_operation_id") == get(op, "native_operation_id"), "replay changed original receipt")
+			denied, er := s.CallTool(ctx, &mcp.CallToolParams{Name: "box_update", Arguments: newArgs})
+			must(er == nil && denied != nil && denied.IsError, "expected typed blocker")
+			raw, er := json.Marshal(denied)
+			must(er == nil && strings.Contains(string(raw), "UNKNOWN_BLOCKER") && strings.Contains(string(raw), record.UpdateID), "missing original blocker")
+		} else {
+			_, e = call(ctx, s, "box_update", newArgs)
+			must(e != nil, "new-key Update bypassed P0 original UNKNOWN lock")
+		}
 		// Independent bounded client sessions read the same original through
 		// official MCP HTTP while SQLite status and journal are stable.
 		const clients = 8

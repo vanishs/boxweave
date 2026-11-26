@@ -99,3 +99,5 @@ P1b-06d6: ab00971 standalone Stop ACK-loss CI_VERIFIED (139830829075). C03/C05/C
 P1b-06d5 actual d32939b scoped-overlap CI job 139837920373 PASS; P1b-06d8 independent same-name dual-Scoped installation, typed cross-scope denial, no admission in either ledger and disposable cross-auth verification BOX_VERIFIED (source only), CI_PENDING. Same-daemon foreign Project/native packet and socket proof retained; not a supported same-daemon multi-controller deployment.
 
 P1b-06d10: 72/72 consumed S2 marker map in CONSOLIDATION_P1B_WITNESS_CROSSWALK.md; schema and obsolete-route refusal BOX_VERIFIED, installed CI_PENDING. Actual combined Update NativeAck WAL cut, alternate pool, public WAN and final consumer conversion remain OPEN. Original gates retained.
+
+P1b-06d11: exact 69ac198 S25 139851764466 actual dual controller/inner install PASS. Combined Update NativeAck WAL before/after conversion BOX_VERIFIED; actual installed CI_PENDING. Preserve original gates.
