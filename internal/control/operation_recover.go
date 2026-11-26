@@ -30,11 +30,7 @@ func (s *Service) registerRecoveryTool(server *mcp.Server) {
 			}
 			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
-			svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: principal.Layer, PeerWitness: recovery.ObserveCompletedPeer}
-			if s.ScopedPeerFresh {
-				svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
-				svc.ScopedLifecycleWitness = install.NativeScopedLifecycleRecoverCall
-			}
+			svc := s.recoveryObserver(principal.Layer)
 			var out recovery.Result
 			switch in.Mode {
 			case "inspect":
@@ -66,4 +62,17 @@ func (s *Service) registerRecoveryTool(server *mcp.Server) {
 			out.NextAction = &next
 			return privateReadReply(ctx, s, principal.TokenID, out)
 		})
+}
+
+// Recovery witnesses are mutually exclusive. A Scoped controller must not
+// fall back to the historical PRS socket for a legacy original.
+func (s *Service) recoveryObserver(layer string) recovery.Service {
+	svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: layer}
+	if s.ScopedPeerFresh {
+		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
+		svc.ScopedLifecycleWitness = install.NativeScopedLifecycleRecoverCall
+	} else {
+		svc.PeerWitness = recovery.ObserveCompletedPeer
+	}
+	return svc
 }

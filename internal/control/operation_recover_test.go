@@ -105,3 +105,13 @@ func TestS5A2HTTPRecoveryRefusesCrossLayerAndUntrustedApproval(t *testing.T) {
 		t.Fatalf("original changed %+v %v", g, e)
 	}
 }
+
+func TestP1RecoveryWitnessModeExclusive(t *testing.T) {
+	for _, scoped := range []bool{false, true} {
+		s := Service{ScopedPeerFresh: scoped}
+		v := s.recoveryObserver("user-1001")
+		if v.Layer != "user-1001" || (v.PeerWitness != nil) == scoped || (v.ScopedPeerWitness != nil) != scoped || (v.ScopedLifecycleWitness != nil) != scoped {
+			t.Fatal("wrong recovery witness mode", scoped)
+		}
+	}
+}

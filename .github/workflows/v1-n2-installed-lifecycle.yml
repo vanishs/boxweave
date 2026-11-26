@@ -394,6 +394,7 @@ jobs:
             grep -Fxq P1B_SCOPED_CREATE_ROLLBACK_SAME_KEY_AND_TYPED_NEW_KEY_REFUSALS=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Eq '^P1B_SCOPED_CREATE_ROLLBACK_UNBOUND_NO_EFFECT=PASS [a-f0-9]{32} [a-f0-9-]{36} [a-f0-9]{32} [a-f0-9-]{36}$' "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq P1B_SCOPED_FINAL_COMMIT_NATIVE_RECOVERY=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq P1B_SCOPED_COMPLETED_PIN_REPAIR_NO_NATIVE_REPLAY=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N3_INSTALLED_LIVE_FLOWS=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N3_ACTIVE_POLICY_LIFECYCLE=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR178_N3_BOOT_POLICY=PASS "$RUNNER_TEMP/n2-installed.log"

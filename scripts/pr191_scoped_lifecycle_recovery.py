@@ -170,6 +170,61 @@ def verify_rollback(project, receipt, probe, create, request, uuid, rec):
     print("P1B_SCOPED_CREATE_ROLLBACK_UNBOUND_NO_EFFECT=PASS",oid,native,create["tracking_id"],uuid,flush=True)
 
 
+def repair_completed_pin(c, project, original, uuid):
+    """Reuse the completed exact Create, not a second native effect."""
+    oid, native = original["operation_id"], original["native_operation_id"]
+    assert os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+    assert rows("SELECT uuid FROM owned_boxes WHERE project=? AND name=? AND state='OWNED'", (project, NAME)) == [(uuid,)]
+    original_before = rows("SELECT * FROM operations WHERE id=?", (oid,))
+    events = rows("SELECT * FROM operation_events WHERE operation_id=? ORDER BY seq", (oid,))
+    claims = rows("SELECT * FROM operation_resource_claims WHERE operation_id=? ORDER BY resource_key", (oid,))
+    audits = rows("SELECT * FROM recovery_audit WHERE operation_id=? ORDER BY seq", (oid,))
+    native_before = instance(project, NAME)
+    root_before = journal(oid, "CREATE", native)
+    acl_before = acls()
+    pin_sql = ("SELECT project,box_uuid,incarnation,nic,bridge,acl,mac,ipv4,ipv6,state "
+               "FROM network_bindings WHERE project=? AND box_uuid=?")
+    fence_sql = ("SELECT bridge,family,address,project,box_uuid,incarnation,state,operation_id "
+                 "FROM network_address_fences WHERE project=? AND box_uuid=? ORDER BY family")
+    pin_before, fences_before = rows(pin_sql, (project, uuid)), rows(fence_sql, (project, uuid))
+    assert len(pin_before) == 1 and len(fences_before) == 2
+    assert all(f[6:] == ("RESERVED", oid) for f in fences_before)
+    count = rows("SELECT count(*) FROM operations")[0][0]
+    # Exact single-use installed CI fixture only. Remove only this original's
+    # binding and one fence; no native change. Recovery must restore.
+    with closing(sqlite3.connect(DB + "?mode=rw", uri=True, timeout=15)) as db, db:
+        assert db.execute("DELETE FROM network_bindings WHERE project=? AND box_uuid=? AND incarnation=? AND state='PINNED'",
+                          (project, uuid, uuid)).rowcount == 1
+        assert db.execute("DELETE FROM network_address_fences WHERE project=? AND box_uuid=? AND incarnation=? AND family='ipv6' AND operation_id=? AND state='RESERVED'",
+                          (project, uuid, uuid, oid)).rowcount == 1
+    assert not rows(pin_sql, (project, uuid))
+    assert len(rows(fence_sql, (project, uuid))) == 1
+    inspect = c.call("operation_recover", {"operation_id": oid, "mode": "inspect"}).structured
+    assert inspect["diagnosis"]["disposition"] == "SAFE_RECOVER", inspect
+    assert inspect["diagnosis"]["reason"] == "CREATE_PIN_LEDGER_REPAIRED" and not inspect["native_retried"]
+    assert not rows(pin_sql, (project, uuid)) and rows("SELECT count(*) FROM operations") == [(count,)]
+    req = {"operation_id": oid, "mode": "reconcile", "idempotency_key": "pr191-scoped-completed-pin-repair"}
+    first = c.call("operation_recover", req).structured
+    rec = first["recovery"]
+    rid = rec["operation"]["operation_id"]
+    assert rec["disposition"] == "SETTLED" and rec["operation"]["state"] == "SUCCEEDED" and rid != oid and not first["native_retried"], first
+    again = c.call("operation_recover", req).structured
+    assert again["recovery"]["operation"]["operation_id"] == rid and again["recovery"]["operation"]["duplicate"] and not again["native_retried"]
+    assert rows(pin_sql, (project, uuid)) == pin_before and rows(fence_sql, (project, uuid)) == fences_before
+    assert rows("SELECT * FROM operations WHERE id=?", (oid,)) == original_before
+    assert rows("SELECT * FROM operation_events WHERE operation_id=? ORDER BY seq", (oid,)) == events
+    assert rows("SELECT * FROM operation_resource_claims WHERE operation_id=? ORDER BY resource_key", (oid,)) == claims
+    audit_after = rows("SELECT * FROM recovery_audit WHERE operation_id=? ORDER BY seq", (oid,))
+    assert len(audit_after) == len(audits) + 1 and audit_after[:-1] == audits
+    assert rows("SELECT count(*) FROM operations") == [(count + 1,)]
+    healthy = c.call("operation_recover", {"operation_id": oid, "mode": "inspect"}).structured
+    assert healthy["diagnosis"]["disposition"] == "NOT_REQUIRED" and healthy["diagnosis"]["reason"] == "CREATE_PIN_LEDGER_COMPLETE", healthy
+    native_after = instance(project, NAME)
+    assert all(native_before[k] == native_after[k] for k in ("config", "expanded_devices", "status"))
+    assert journal(oid, "CREATE", native) == root_before and acls() == acl_before
+    print("P1B_SCOPED_COMPLETED_PIN_REPAIR_ORIGINAL", oid, native, rid, uuid, flush=True)
+    print("P1B_SCOPED_COMPLETED_PIN_REPAIR_NO_NATIVE_REPLAY=PASS", flush=True)
+
 def main(project, receipt, candidate_sha, probe):
     assert os.geteuid() == 0
     assert os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
@@ -198,6 +253,7 @@ def main(project, receipt, candidate_sha, probe):
                         dict(create_args,idempotency_key="pr191-scoped-create-final-cut",
                              work_ref="p1b/scoped-create-final-cut"),uuid,rec)
         settle(c, create, "CREATE", uuid, "scoped-create-final-reconcile")
+        repair_completed_pin(c, project, create, uuid)
         assert rows("SELECT state,operation_id FROM network_address_fences WHERE box_uuid=? ORDER BY family",(uuid,))==[("RESERVED",create["operation_id"])]*2
         acl = verify(project, NAME, uuid, "true")
         assert instance(project, NAME)["config"]["volatile.uuid"] == uuid

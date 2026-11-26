@@ -498,3 +498,5 @@ P1b-06d13: 3cebdb6 exact-head all seven workflows PASS, N2 45809383716 27/27. Ac
 P1-06d14: [real public WAN and runtime/schema consumer checkpoint](CONSOLIDATION_P1_06D14_CHECKPOINT.md). Actual public IPv4 BOX_VERIFIED at 92ffeda, hosted positive UNVERIFIED; P1c/d source BOX_VERIFIED, CI_PENDING; alternate pool BLOCKED, no waiver.
 
 P1-06d15: [completed-original pin and maintenance separation](CONSOLIDATION_P1_06D15_CHECKPOINT.md). Parent 3df436b 7/7 CI, N2 27/27, all 11 Go race packages PASS. New Delete separation, Scoped pin repair and maintenance snapshot/drain BOX_VERIFIED, native CI_PENDING. Alternate pool remains BLOCKED; no DDL/Legacy runtime removal or gate waiver.
+
+P1-06d15b: [exclusive recovery observers and installed pin witness](CONSOLIDATION_P1_06D15B_CHECKPOINT.md). Scoped PRS callback removed; actual completed-original pin repair witness added to existing N2 lane. Source verified, native CI_PENDING. No retirement waiver.
