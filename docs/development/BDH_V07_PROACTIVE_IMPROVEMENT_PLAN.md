@@ -1,5 +1,7 @@
 # BDH v0.7 — proactive improvement execution
 
+**Historical V0-V5 plan and evidence.** The [active BDH development plan](BDH_DEVELOPMENT_PLAN.md) governs the remaining work in #193. Preserve original V4 utility gates, both REOPEN decisions and V5; historical next actions are not a parallel active plan.
+
 Status: V0/V1a CI PASS; V1b and V2a/V2b implemented and Box-tested.
 V2c CI PASS; V3c independent rereview PASS at 5a98abb, V3d authorized delivery recorded (episode rev15). See [V3c repair](BDH_V07_V3C_REPAIR.md) and [V3d/V4 trial](BDH_V07_V3D_V4_TRIAL.md). V4 real paired functional PASS but utility gate NOT MET; witness outcomes recorded, [V4c start](BDH_V07_V4C_START.md) feasibility probe complete; independent REOPEN imported, second selected episode implemented and validated, [V4c implementation](BDH_V07_V4C_IMPLEMENTATION.md) independent review pending. V4c-01 independent PASS on a77e49e and technical delivery recorded; [repair evidence](BDH_V07_V4C_REPAIR.md), [V4d pre-registration](BDH_V07_V4D_TRIAL.md), L014 rev38 records independent REOPEN, second episode rev17 outcomes recorded; [V4e investigation](BDH_V07_V4E_REUSE_INVESTIGATION.md) proposed; REVIEW_DUE, no third selection yet. V5 pending. See [V3 progress](BDH_V07_V3_PROGRESS.md). See [V2c progress](BDH_V07_V2C_PROGRESS.md), [V2 progress](BDH_V07_V2_PROGRESS.md) and
 [first real selected episode](BDH_V07_FIRST_EPISODE.md).

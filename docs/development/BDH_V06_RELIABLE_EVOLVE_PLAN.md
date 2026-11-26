@@ -1,5 +1,7 @@
 # BDH v0.6: reliable Evolve Loop
 
+**Historical v0.6 plan for merged PR #192.** Its bounded L4 review and parent integration are recorded in the [v0.7 research](BDH_V07_IMPROVEMENT_RESEARCH.md). The [active BDH development plan](BDH_DEVELOPMENT_PLAN.md) governs current work in #193.
+
 Stacked child of PR #191 at 33df91cd451187feffc59a436316b168aba9e561.
 Owner paused parent work and authorized isolated improvement before integration.
 The parent is not authorized for merge to v1 or release.
