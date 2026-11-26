@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 from mcp_testkit import LoopbackMCP
-from n2_installed_lifecycle import pid, token
+from n2_installed_lifecycle import op, pid, token
 from pr178_n2_scoped_lifecycle import acls, binding, incus, instance, verify
 
 DB = "file:/var/lib/boxweave/ledger.sqlite"
@@ -152,6 +152,9 @@ def main(project, receipt, candidate_sha):
         acl = verify(project, NAME, uuid, "true")
         assert instance(project, NAME)["config"]["volatile.uuid"] == uuid
         assert instance(project, NAME)["status"] == "Running"
+        op(c, "box_stop", {"box_id": uuid}, "p1b-final-cut-stop")
+        stopped = instance(project, NAME)
+        assert stopped["status"] == "Stopped" and stopped["config"]["volatile.uuid"] == uuid
         delete = cut(c, "box_delete", {"box_id": uuid}, "scoped-delete-final-cut")
         assert delete["box_uuid"] == uuid and binding(uuid)["state"] == "PINNED"
         assert rows("SELECT state FROM owned_boxes WHERE uuid=?", (uuid,)) == [("OWNED",)]

@@ -224,6 +224,12 @@ sudo systemctl is-active --quiet boxweave.service
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
 sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test -n "${P1B_ACK_CUT:-}"; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_ack_loss.py "$project" "$work/actor.receipt" "$first" "$P1B_ACK_CUT"
+  # Unresolved original must be retained until this disposable VM ends.
+  exit 0
+fi
 if test "${PR188_OFFLINE_RETIREMENT:-0}" = 1; then
   CGO_ENABLED=1 go test -c -o "$work/h2b-original.test" ./internal/install
   chmod 0755 "$work/h2b-original.test"
