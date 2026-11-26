@@ -20,7 +20,7 @@ type RecoveryTarget struct {
 	ForwardReady                                                           bool
 	Peer                                                                   RecoveryPeerClaim
 	PeerReady                                                              bool
-	ScopedPeer                                                             bool
+	ScopedPeer, ScopedLifecycle                                            bool
 	LifecycleBinding                                                       VerifiedCreateBinding
 	LifecyclePinStatus                                                     string
 }
@@ -45,6 +45,16 @@ func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id str
 	}
 	if t.Action == "box_create" {
 		t.CreatePinRequired = requiresVerifiedCreateBinding(t.SafeIntent)
+		var hdr struct{ Schema int }
+		if json.Unmarshal([]byte(t.SafeIntent), &hdr) == nil && hdr.Schema == 2 {
+			t.ScopedLifecycle = true
+		}
+	}
+	if t.Action == "box_delete" && t.OwnedState == "OWNED" {
+		e = q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM operations WHERE layer=? AND box_uuid=? AND incarnation=? AND action='box_create' AND json_valid(safe_intent) AND json_extract(safe_intent,'$.schema')=2)`, t.Layer, t.UUID, t.Incarnation).Scan(&t.ScopedLifecycle)
+		if e != nil {
+			return t, e
+		}
 	}
 	if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
 		var in struct {
@@ -106,6 +116,7 @@ type RecoveryProof struct {
 	Forward                                   ForwardClaim
 	Peer                                      RootPeerResult
 	ScopedPeer                                ScopedPeerRootReceipt
+	ScopedLifecycle                           ScopedLifecycleRecoveryProof
 	CreateBinding                             VerifiedCreateBinding
 	LifecycleBinding                          VerifiedCreateBinding
 }
@@ -275,7 +286,15 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	now := time.Now().UnixNano()
 	outcome := p.Kind
 	success := false
-	if p.Kind == RecoveryRepairPin {
+	if t.ScopedLifecycle && (p.Kind == RecoverySettle || p.Kind == RecoveryBind) {
+		if r.Stream != "" || r.Review != nil {
+			return RecoveryRecord{}, ErrResourceLocked
+		}
+		if e = finishScopedLifecycleRecoveryTx(ctx, tx, t, p); e != nil {
+			return RecoveryRecord{}, e
+		}
+		outcome, success = "SETTLED", true
+	} else if p.Kind == RecoveryRepairPin {
 		if r.Stream != "" || t.Action != "box_create" || t.State != "SUCCEEDED" {
 			return RecoveryRecord{}, ErrResourceLocked
 		}

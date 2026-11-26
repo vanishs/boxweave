@@ -58,9 +58,13 @@ func nativeScopedCreateOriginalInactive(ctx context.Context, c incus.InstanceSer
 	return nil
 }
 func nativeScopedCreateBindingCheck(inst *api.Instance, p state.ScopedCreateOriginalProof, acl string, boot, egress bool) error {
+	return nativeScopedCreateShapeCheck(inst, p, acl, boot, egress, false)
+}
+
+func nativeScopedCreateShapeCheck(inst *api.Instance, p state.ScopedCreateOriginalProof, acl string, boot, egress, running bool) error {
 	if inst == nil || inst.Project != p.Intent.Project || inst.Name != p.Intent.Name || inst.Config["user.boxweave.create_operation"] != p.OriginalID ||
 		inst.Config["volatile.uuid"] == "" || inst.Config["volatile.uuid.generation"] != inst.Config["volatile.uuid"] ||
-		inst.Status != "Stopped" || inst.Config["boot.autostart"] != strconv.FormatBool(boot) ||
+		(!running && inst.Status != "Stopped" || running && inst.Status != "Running" && inst.Status != "Ready") || inst.Config["boot.autostart"] != strconv.FormatBool(boot) ||
 		inst.Config["limits.cpu"] != strconv.Itoa(p.Intent.CPU) || inst.Config["limits.memory"] != strconv.FormatInt(p.Intent.MemoryMiB, 10)+"MiB" ||
 		inst.ExpandedConfig["security.privileged"] == "true" || len(inst.ExpandedDevices) != 2 {
 		return errors.New("scoped native Create identity or stopped/boot preimage changed")

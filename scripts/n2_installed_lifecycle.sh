@@ -237,6 +237,7 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
     sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt" "$work/candidate-a" "$first"
     exit 0
   fi
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_lifecycle_recovery.py "$project" "$work/actor.receipt" "$first"
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
   sudo python3 scripts/pr188_h1a_observe.py "$project" live
   sudo python3 scripts/pr188_h1b_plan.py "$project" live --negative-fixtures

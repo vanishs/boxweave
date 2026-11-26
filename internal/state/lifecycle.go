@@ -528,7 +528,7 @@ func finishVerifiedDeleteTxMode(ctx context.Context, tx *sql.Tx, opID string, bo
 		if e = tx.QueryRowContext(ctx, "SELECT bridge FROM network_bindings WHERE project=? AND box_uuid=? AND incarnation=? AND state='PINNED'", box.Project, box.UUID, box.Incarnation).Scan(&bridge); e != nil {
 			return e
 		}
-		p, e := readScopedDeleteOriginalTx(ctx, tx, opID, box.Project, bridge)
+		p, e := readScopedDeleteOriginalTxPhase(ctx, tx, opID, box.Project, bridge, expectedPhase)
 		if e != nil || p.Box != box {
 			return ErrResourceLocked
 		}

@@ -46,8 +46,9 @@ type Service struct {
 	Layer  string
 	// PeerWitness is the installed, root-authenticated read-only PRS RPC.
 	// No plan, approval assertion or root request parameters come from MCP.
-	PeerWitness       func(context.Context, string) (state.RootPeerResult, error)
-	ScopedPeerWitness func(context.Context, string) (state.ScopedPeerRootReceipt, error)
+	PeerWitness            func(context.Context, string) (state.RootPeerResult, error)
+	ScopedPeerWitness      func(context.Context, string) (state.ScopedPeerRootReceipt, error)
+	ScopedLifecycleWitness func(context.Context, string) (state.ScopedLifecycleRecoveryProof, error)
 }
 
 func (s Service) reader() ObservationStore {
@@ -88,7 +89,7 @@ type Result struct {
 // legacy RELEASED audit row. Preserve the row as history but report the
 // retained protection and require explicit review; never infer settlement.
 func protectedNetworkRecovery(t state.RecoveryTarget) bool {
-	return t.DependentDelete || (t.Action == "box_create" && (t.CreatePinStaged || t.CreatePinRequired)) || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete"
+	return t.ScopedLifecycle || t.DependentDelete || (t.Action == "box_create" && (t.CreatePinStaged || t.CreatePinRequired)) || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete"
 }
 func base(t state.RecoveryTarget, stream string) View {
 	v := View{OriginalID: t.ID, OriginalAction: t.Action, OriginalState: t.State, BoxID: t.UUID, Incarnation: t.Incarnation, OriginalNativeID: t.NativeID, ClaimProtection: "NOT_UNKNOWN", NativeObservation: "NOT_CHECKED", EvidenceSource: "SQLITE_DURABLE", GCStream: stream}
@@ -249,6 +250,9 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 			return finish(state.RecoveryBlocked, "NETWORK_LEGACY_RELEASE_REVIEW_REQUIRED")
 		}
 		return finish(state.RecoveryNotNeeded, "ORIGINAL_ALREADY_REVIEWED_RELEASED")
+	}
+	if t.ScopedLifecycle {
+		return s.observeScopedLifecycle(ctx, t, v)
 	}
 	if t.Action == "box_peer_set" {
 		if t.ScopedPeer {

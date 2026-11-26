@@ -22,8 +22,15 @@ type ScopedLifecycleReceipt = scopedLifecycleRecord
 // use of the dispatch request. A race to DISPATCHING can only refuse.
 func scopedLifecycleRequestKind(req NativePeerRootRequest, action, phase string) string {
 	if req == (NativePeerRootRequest{OperationID: req.OperationID, ReconcileApproved: true}) {
-		if action == "box_peer_set" && phase == "UNKNOWN" {
-			return "PEER_RECOVER"
+		if phase == "UNKNOWN" {
+			switch action {
+			case "box_peer_set":
+				return "PEER_RECOVER"
+			case "box_create":
+				return "CREATE_RECOVER"
+			case "box_delete":
+				return "DELETE_RECOVER"
+			}
 		}
 		return ""
 	}
@@ -121,6 +128,13 @@ func NativeScopedLifecycleServe(ctx context.Context) error {
 			}
 			return NativePeerRootResponse{Status: rec.Status, ScopedPeer: &rec}, nil
 		}
+		if kind == "CREATE_RECOVER" || kind == "DELETE_RECOVER" {
+			proof, err := nativeScopedLifecycleRecover(callCtx, db, req.OperationID, orig.Action)
+			if err != nil {
+				return NativePeerRootResponse{}, err
+			}
+			return NativePeerRootResponse{Status: "COMPLETE_VERIFIED", ScopedLifecycleRecovery: &proof}, nil
+		}
 		var receipt scopedLifecycleRecord
 		switch kind {
 		case "CREATE":
@@ -147,7 +161,7 @@ func NativeScopedLifecycleCall(ctx context.Context, original, kind string) (Scop
 		return zero, err
 	}
 	r := out.ScopedLifecycle
-	if out.ScopedPeer != nil || out.Error != "" || out.Status != "VERIFIED" || r == nil || !scopedLifecycleValid(*r) || r.Status != "VERIFIED" || r.Kind != kind || r.OriginalID != original {
+	if out.ScopedLifecycleRecovery != nil || out.ScopedPeer != nil || out.Error != "" || out.Status != "VERIFIED" || r == nil || !scopedLifecycleValid(*r) || r.Status != "VERIFIED" || r.Kind != kind || r.OriginalID != original {
 		return zero, errors.New("scoped lifecycle root outcome unverified")
 	}
 	return *r, nil
@@ -169,10 +183,25 @@ func nativeScopedPeerRequest(ctx context.Context, original string, recoveryOnly 
 		return zero, e
 	}
 	r := out.ScopedPeer
-	if out.ScopedLifecycle != nil || out.Error != "" || out.Status != "COMPLETE_VERIFIED" || r == nil || r.OriginalID != original || r.Status != out.Status || r.VerifiedSteps != 4 || r.RecoveryOnly != recoveryOnly {
+	if out.ScopedLifecycleRecovery != nil || out.ScopedLifecycle != nil || out.Error != "" || out.Status != "COMPLETE_VERIFIED" || r == nil || r.OriginalID != original || r.Status != out.Status || r.VerifiedSteps != 4 || r.RecoveryOnly != recoveryOnly {
 		return zero, errors.New("scoped Peer root outcome unverified")
 	}
 	return *r, nil
+}
+
+// NativeScopedLifecycleRecoverCall is strictly read-only; the effect selector
+// is never retried when a completed journal or native witness is missing.
+func NativeScopedLifecycleRecoverCall(ctx context.Context, original string) (state.ScopedLifecycleRecoveryProof, error) {
+	var zero state.ScopedLifecycleRecoveryProof
+	out, e := nativeScopedRootCall(ctx, NativePeerRootRequest{OperationID: original, ReconcileApproved: true})
+	if e != nil {
+		return zero, e
+	}
+	p := out.ScopedLifecycleRecovery
+	if out.ScopedPeer != nil || out.ScopedLifecycle != nil || out.Receipt != nil || out.Retirement != nil || out.PlanSHA256 != "" || out.Error != "" || out.Status != "COMPLETE_VERIFIED" || p == nil || !p.RecoveryOnly || p.Record.OriginalID != original || p.Record.Status != "VERIFIED" || !scopedLifecycleValid(p.Record) {
+		return zero, errors.New("scoped lifecycle recovery proof unverified")
+	}
+	return *p, nil
 }
 
 func nativeScopedRootCall(ctx context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {

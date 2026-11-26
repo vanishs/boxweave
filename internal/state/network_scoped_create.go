@@ -37,7 +37,14 @@ type ScopedCreateOriginalProof struct {
 // Read the native Create receipt and exact pre-reserved static tuple in one
 // snapshot. No native UUID is supplied by the restricted actor.
 func readScopedCreateOriginalTx(ctx context.Context, tx *sql.Tx, id, project, bridge string) (ScopedCreateOriginalProof, error) {
+	return readScopedCreateOriginalTxPhase(ctx, tx, id, project, bridge, "VERIFYING")
+}
+
+func readScopedCreateOriginalTxPhase(ctx context.Context, tx *sql.Tx, id, project, bridge, expected string) (ScopedCreateOriginalProof, error) {
 	var zero ScopedCreateOriginalProof
+	if expected != "VERIFYING" && expected != "UNKNOWN" {
+		return zero, ErrInvalid
+	}
 	if !validHexID(id) || !strings.HasPrefix(project, "user-") || !auditName(project) || !auditName(bridge) {
 		return zero, ErrInvalid
 	}
@@ -53,11 +60,17 @@ func readScopedCreateOriginalTx(ctx context.Context, tx *sql.Tx, id, project, br
 	}
 	canonical, err := json.Marshal(intent)
 	if err != nil || !bytes.Equal(canonical, raw) || intent.Schema != 2 || intent.Project != project || intent.Bridge != bridge ||
-		!auditName(intent.Name) || resource != "box:"+intent.Name || action != "box_create" || phase != "VERIFYING" ||
+		!auditName(intent.Name) || resource != "box:"+intent.Name || action != "box_create" || phase != expected ||
 		layer != project || uuid != "" || inc != "" || nativeID == "" || actor == "" || token == "" ||
 		intent.CPU < 1 || intent.CPU > 64 || intent.MemoryMiB < 128 || intent.MemoryMiB > 262144 || intent.DiskGiB < 2 || intent.DiskGiB > 2048 ||
 		len(intent.Options) == 0 || len(intent.Options) > 4096 || intent.Options[0] != '{' {
 		return zero, ErrResourceLocked
+	}
+	if expected == "UNKNOWN" {
+		var released int
+		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM recovery_audit WHERE operation_id=? AND decision='RELEASED'", id).Scan(&released); err != nil || released != 0 {
+			return zero, ErrResourceLocked
+		}
 	}
 	active, err := activeCredentialForActor(ctx, tx, actor, token)
 	if err != nil || !active {
@@ -137,6 +150,14 @@ func readScopedCreateOriginalTx(ctx context.Context, tx *sql.Tx, id, project, br
 // ReadRootScopedCreateOriginal exposes only an exact original on a protected
 // read-only ledger connection, never an arbitrary native mutation request.
 func (s *Store) ReadRootScopedCreateOriginal(ctx context.Context, id, project, bridge string) (ScopedCreateOriginalProof, error) {
+	return s.readRootScopedCreateOriginalPhase(ctx, id, project, bridge, "VERIFYING")
+}
+
+func (s *Store) ReadRootScopedCreateUnknownOriginal(ctx context.Context, id, project, bridge string) (ScopedCreateOriginalProof, error) {
+	return s.readRootScopedCreateOriginalPhase(ctx, id, project, bridge, "UNKNOWN")
+}
+
+func (s *Store) readRootScopedCreateOriginalPhase(ctx context.Context, id, project, bridge, expected string) (ScopedCreateOriginalProof, error) {
 	var zero ScopedCreateOriginalProof
 	if s == nil || s.db == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, ErrInvalid
@@ -146,7 +167,7 @@ func (s *Store) ReadRootScopedCreateOriginal(ctx context.Context, id, project, b
 		return zero, err
 	}
 	defer tx.Rollback()
-	p, err := readScopedCreateOriginalTx(ctx, tx, id, project, bridge)
+	p, err := readScopedCreateOriginalTxPhase(ctx, tx, id, project, bridge, expected)
 	if err != nil {
 		return zero, err
 	}
@@ -160,7 +181,11 @@ func (s *Store) ReadRootScopedCreateOriginal(ctx context.Context, id, project, b
 // the native UUID and derived ACL. Address and MAC holds never change.
 // This must be within the same transaction as original Create finalization.
 func exchangeScopedCreateACL(ctx context.Context, tx *sql.Tx, id, project, name, uuid string, b VerifiedCreateBinding) error {
-	p, err := readScopedCreateOriginalTx(ctx, tx, id, project, b.Bridge)
+	return exchangeScopedCreateACLPhase(ctx, tx, id, project, name, uuid, b, "VERIFYING")
+}
+
+func exchangeScopedCreateACLPhase(ctx context.Context, tx *sql.Tx, id, project, name, uuid string, b VerifiedCreateBinding, expected string) error {
+	p, err := readScopedCreateOriginalTxPhase(ctx, tx, id, project, b.Bridge, expected)
 	if err != nil {
 		return err
 	}

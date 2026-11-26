@@ -89,6 +89,10 @@ func finishRecoveryCreateTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 	if err := checkRecoveryCreateTx(ctx, tx, t, p); err != nil {
 		return err
 	}
+	return settleRecoveredCreateTx(ctx, tx, t, p)
+}
+
+func settleRecoveredCreateTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof) error {
 	now := time.Now().UnixNano()
 	if _, err := tx.ExecContext(ctx, "INSERT INTO owned_boxes(uuid,project,name,incarnation,state,created_at) VALUES(?,?,?,?,'OWNED',?)", p.UUID, t.Layer, t.Name, p.UUID, now); err != nil {
 		return err
@@ -105,6 +109,9 @@ func finishRecoveryCreateTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 		return ErrConflict
 	}
 	detail := "RECOVERY_CREATE_PIN_ATOMIC_NO_REPLAY"
+	if t.ScopedLifecycle {
+		detail = "RECOVERY_SCOPED_CREATE_ATOMIC_NO_REPLAY"
+	}
 	if t.NativeID == "" {
 		detail = "RECOVERY_CREATE_ACK_LOST_PIN_ATOMIC_NO_REPLAY"
 	}

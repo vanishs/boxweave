@@ -181,6 +181,8 @@ func (s *DiagnosticSnapshot) CheckPlanRecoveryProof(ctx context.Context, t Recov
 		} else {
 			e = checkRecoveryPeerTx(ctx, tx, t, p)
 		}
+	case t.ScopedLifecycle && (p.Kind == RecoverySettle || p.Kind == RecoveryBind):
+		e = checkScopedLifecycleRecoveryTx(ctx, tx, t, p)
 	case p.Kind == RecoverySettle || p.Kind == RecoveryBind:
 		parent, err := checkGenericRecoveryScopeTx(ctx, tx, t, "")
 		if err != nil {
