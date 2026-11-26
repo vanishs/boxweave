@@ -166,7 +166,13 @@ improvements in a normal task PR.
 
 ## 4. Ordered work and minimum exits
 
-### R0 — research and reuse gate (not started)
+R0 checkpoint (2026-11-25): [research and ranked reuse choices](BDH_R0_REUSE_RESEARCH.md)
+are recorded. Prefer existing commands unchanged, then a small reference-derived
+feedback draft for F5 if R1 confirms the cost; compact entry and on-demand
+opportunity views only if needed. No executable changes or new Box/CI acceptance.
+R1 and implementation remain subject to explicit owner instruction.
+
+### R0 — research and reuse gate (research recorded; owner decision pending)
 
 Before R1-R4 implementation, investigate a small shortlist of mature
 engineering tools and credible studies against actual BDH source and
@@ -302,7 +308,7 @@ blocker.
 | Stage | Status |
 | --- | --- |
 | Planning and historical navigation | Prepared, docs-only |
-| R0 | NOT_STARTED; await owner instruction for research |
+| R0 | Research recorded; owner review/scope decision pending |
 | R1-R4 | NOT_STARTED; implementation awaits approved scope |
 | R5-R6 | NOT_STARTED |
 | R7 / original V5 | OPEN |
@@ -310,7 +316,7 @@ blocker.
 | Other Agent integrations | Deferred |
 
 Reusable handoff: read canonical bootstrap and this plan in #193, reconcile
-latest progress and wait for the owner's instruction. Begin with R0 when
-authorized; after research, present reuse choices and await approval of the
-implementation scope. On later resumptions continue the next authorized
+latest progress and wait for the owner's instruction. R0 research is recorded in [the reuse research note](BDH_R0_REUSE_RESEARCH.md).
+Await the owner's R1 baseline and implementation-scope authorization;
+do not repeat R0 without a material change in evidence. On later resumptions continue the next authorized
 unfinished slice, not the first stage.
