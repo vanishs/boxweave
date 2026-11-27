@@ -374,3 +374,14 @@ redaction, capacity digest drift and historical maintenance refusal.
 Existing H3B/H4B and installed maintenance/retirement evidence are
 retained requirements; revalidate changed code on exact installed
 candidate. Full source CI and final release evidence remain open.
+
+### P3 R3 recovery candidate
+
+C08/P3-C03/C05/C10: local reviewed settlement requires current Scoped
+mode, exact issue/original/digest and authorized re-observation; no
+historical bind/pin reviewed apply, foreign ledger or native replay.
+Preserve read-only original navigation and separate reviewed Exec GC.
+Prior R2 N2 capacity parity, D4 no replay and SDK discovery are
+predecessor evidence, not R3 signoff. S25 CONTROLLER_DOCTOR regression
+and dependent S2 require independent revalidation; diagnostic retry
+is read-only and does not waive readiness.

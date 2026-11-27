@@ -210,3 +210,12 @@ journal, pinned RC13/RC14 adapter recognition and maintenance artifact
 inventory are retained for original evidence, not current health or
 authority. Current maintenance ledger remains Scoped-only. Revisit
 transitive old observations at P4; do not discard original artifacts.
+
+### P3 R3 recovery disposition
+
+Retire Legacy local reviewed plan and transaction-leaf authorization;
+retain historical binding syntax for exact receipt lookup and bounded
+historical navigation, not new effects. Preserve Scoped MCP lifecycle
+reconciliation, current settle-only reviewed leaf, existing GC review
+and original UNKNOWN/claims. R4/P4 retain transitive caller/evidence
+disposition. No H composition changes.

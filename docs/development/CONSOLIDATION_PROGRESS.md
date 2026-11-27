@@ -1768,3 +1768,40 @@ independent CI remains mandatory. Existing N2 H3B/H4B/postflight and
 retirement observations must revalidate affected behavior. H tests
 not rerun locally or modified. R3 owns reviewed Recover/navigation
 convergence. No product maintenance effects or deployment.
+
+### P3 R3 — current reviewed recovery and R2 postflight follow-up
+
+Baseline ba2da1ffc810accbdc3b02048c07aa83947e7acc. R2 exact CI:
+N2 all 29 jobs, Forward PASS; S25 fails at installer CONTROLLER_DOCTOR,
+S2 crosswalk consequently reports missing/failed S25. S1/quality/
+dual-arch five failed jobs contain only the two inherited H failures.
+N2 scoped job 140775130050 proves H3B/H4B capacity parity and churn,
+H4A navigation/busy/replay, D3 positive and partial refusal, guided
+decline/apply and D4 no replay; original cb305e47a214cc4f1149e59520906c8e.
+SDK job 140775130401 proves previous/current SDK and exact 23 discovery.
+Prior-source installed evidence, not R3 exact signoff.
+
+Local reviewed plan/envelope/writer agree on SCOPED_V2 and settle-only
+supported leaves; historical local bind/pin leaves cannot authorize a
+new review. Scoped Create/Delete retain existing MCP route, not local
+apply. Preserve current same-key receipt lookup and historical
+read-only links, no replay or authority expansion. Align fresh ledger
+mode with Doctor; reject foreign count in plan, service and final
+transaction. Restricted worker rechecks current identity. MCP
+description reflects Scoped originals and unchanged 23 tools.
+No H work. Existing GC and P1 ACK/WAL proof retained.
+
+S25 actual failed Doctor JSON was discarded by wrapper; precise
+failing predicate remains unknown. Standardize restricted Doctor
+environment using service_command, emit bounded typed failure reasons,
+allow at most three identical read-only Doctor observations for
+verified current identity/schema/ledger and specific startup/runtime
+gap. No install retry, no gate relaxation, no acceptance claim until S25
+and S2 independently pass. Retain failed originals.
+
+Source test 0ef058844131e3c3b32416f1d23d0172: full CLI/Diagnostic/
+Recovery/Control, selected State D2-D4/S5/P3R3 and five vets PASS.
+Python old positional mock failed for new env prefix, corrected exact
+caller fixture without changing assertions. Recheck
+21d14575697c59b0158331d995cd07aa: 106 Python, format, 13 CI scope
+tests, shell and diff checks PASS. R3 installed verification pending.

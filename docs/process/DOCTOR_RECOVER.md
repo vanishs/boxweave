@@ -20,6 +20,18 @@ does not certify current Scoped coverage from legacy/mixed state. Keep
 original receipts and use the matching reviewed lifecycle; no automatic
 migration, restart, deletion or replay.
 
+### Current reviewed recovery boundary
+
+For the Schema-7 candidate, local reviewed apply supports only
+`MCP_SETTLE_ORIGINAL_NO_REPLAY` on proved current Scoped originals
+(start/stop/update/Exec/peer/Forward). Scoped Create/Delete settlement
+uses the existing MCP route, not the local reviewed leaf. Historical
+bind/pin repair is not a local reviewed apply option. An unavailable,
+mixed, foreign or stale installation/ledger cannot authorize a plan.
+Original receipt links and historical read-only navigation remain
+available; they are not authority or a reason to replay. Existing Exec
+GC review is separate and requires exact stream and local authority.
+
 ## Diagnose without modifying the installation
 
 Use the exact confined Project, normally user-UID for the dedicated

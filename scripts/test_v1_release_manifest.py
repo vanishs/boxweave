@@ -170,7 +170,15 @@ class ReleaseTests(unittest.TestCase):
             return self.dir / ("isolated-" + Path(raw).name)
 
         def output(argv, **kwargs):
-            action = argv[1] if argv[0] != "runuser" else argv[5]
+            if argv[:5] == ["runuser", "-u", "boxweave", "--", "env"]:
+                self.assertEqual(argv[5:13], ["-u", "INCUS_CONF", "-u", "INCUS_CONFIG_DIR",
+                                                "-u", "XDG_CONFIG_HOME", "HOME=/home/boxweave",
+                                                "XDG_CONFIG_HOME=/home/boxweave/.config"])
+                self.assertEqual(argv[13:], [str(fake_path("/usr/local/bin/boxweave")),
+                                              "doctor", "-project", target["project"]])
+                action = argv[14]
+            else:
+                action = argv[1] if argv[0] != "runuser" else argv[5]
             calls.append(action)
             if action == "native-scoped-fresh-plan":
                 if missing_reader or (reader_drift and calls.count(action) > 1):

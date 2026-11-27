@@ -222,7 +222,7 @@ func recoverApplyWorker() error {
 	defer cancel()
 	recheck := func(ctx context.Context) error {
 		i := install.ObserveDiagnosticInstallation(ctx, doctorInstallPlan(a), a.DB)
-		if i.Candidate != p.Mode || i.InstalledIdentity != "VERIFIED" || i.Runtime != "VERIFIED" || i.IdentitySHA256 != p.InstallationSHA256 || i.Mode == "CONFLICT" || p.Mode == "LEGACY" && i.Mode != "LEGACY" || !p.ReviewMatches(time.Now()) {
+		if p.Mode != "SCOPED_V2" || !doctorCurrentScope(i) || i.IdentitySHA256 != p.InstallationSHA256 || !p.ReviewMatches(time.Now()) {
 			return fmt.Errorf("reviewed recovery: restricted installation identity changed: %w", state.ErrConflict)
 		}
 		if p.OriginalAction == "port_forward_create" {

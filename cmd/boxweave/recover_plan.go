@@ -219,13 +219,13 @@ func collectRecoverPlan(ctx context.Context, a doctorArgs, id string) diagnostic
 			p.Block("FRESH_LEDGER_UNAVAILABLE")
 		} else {
 			o, e := snap.ReadOriginal(ctx, a.Project, p.OriginalID)
-			l, le := snap.ReadLedger(ctx, a.Project, report.Installation.Mode, "incusbr-"+strings.TrimPrefix(a.Project, "user-"))
+			l, le := snap.ReadLedger(ctx, a.Project, doctorLedgerMode(report.Installation), "incusbr-"+strings.TrimPrefix(a.Project, "user-"))
 			current := diagnostic.NewReport(a.Project)
 			if le == nil {
 				current.ClassifyLedger(l)
 			}
 			fresh, ok := diagnostic.FindIssue(current, id)
-			if e != nil || le != nil || !ok || p.Issue == nil || fresh != *p.Issue {
+			if e != nil || le != nil || l.ForeignRows != 0 || !ok || p.Issue == nil || fresh != *p.Issue {
 				p.Block("ISSUE_OR_ORIGINAL_CHANGED_OR_UNPROVED")
 			} else if p.SetOriginal(o) {
 				p.LedgerSHA256 = l.ObservationDigest()
@@ -260,7 +260,7 @@ func collectRecoverPlan(ctx context.Context, a doctorArgs, id string) diagnostic
 								updated.ClassifyLedger(ledger)
 							}
 							issue, ok := diagnostic.FindIssue(updated, id)
-							same = ne == nil && le == nil && ok && issue == *p.Issue && newest.Digest == o.Digest && ledger.ObservationDigest() == l.ObservationDigest()
+							same = ne == nil && le == nil && ledger.ForeignRows == 0 && ok && issue == *p.Issue && newest.Digest == o.Digest && ledger.ObservationDigest() == l.ObservationDigest()
 							if again.Close() != nil {
 								same = false
 							}

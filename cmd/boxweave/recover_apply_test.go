@@ -18,7 +18,7 @@ func TestPR177D4ReviewEnvelope(t *testing.T) {
 	id := strings.Repeat("a", 32)
 	box := "12345678-1234-4abc-8def-123456789abc"
 	report := diagnostic.NewReport(project)
-	report.Installation = install.DiagnosticInstallation{Mode: "LEGACY", IdentitySHA256: strings.Repeat("b", 64)}
+	report.Installation = install.DiagnosticInstallation{Mode: "SCOPED_V2", IdentitySHA256: strings.Repeat("b", 64)}
 	report.AddRoutedIssue("operations", "UNRESOLVED_OPERATION", id+"/opaque", "UNVERIFIED", "HOST_REVIEW_REQUIRED")
 	report.Issues[0].OriginalID = id
 	report.Issues[0].BoxID = box

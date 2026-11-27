@@ -23,11 +23,14 @@ func (s Service) ReconcileReviewed(ctx context.Context, r state.RecoveryRequest,
 	if !errors.Is(e, state.ErrNotFound) {
 		return zero, e
 	}
+	if r.Review.Mode != "SCOPED_V2" || r.Review.Leaf != "MCP_SETTLE_ORIGINAL_NO_REPLAY" {
+		return zero, state.ErrInvalid
+	}
 	if time.Now().UnixNano() >= r.Review.ExpiresNS {
 		return zero, fmt.Errorf("reviewed recovery: review expired: %w", state.ErrConflict)
 	}
 	o, l, e := s.Store.ReadReviewedRecoveryEvidence(ctx, r.Layer, r.OriginalID, r.Review.Mode)
-	if e != nil || o.Digest != r.Review.OriginalSHA256 || l.ObservationDigest() != r.Review.LedgerSHA256 {
+	if e != nil || l.ForeignRows != 0 || o.Digest != r.Review.OriginalSHA256 || l.ObservationDigest() != r.Review.LedgerSHA256 {
 		return zero, fmt.Errorf("reviewed recovery: original or ledger evidence changed: %w", state.ErrConflict)
 	}
 	_, proof := s.observe(ctx, o.Target, "")

@@ -17,6 +17,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 
@@ -532,6 +533,51 @@ def install_phase(name, command, capture=False):
         raise phase_unverified(name) from exc
 
 
+def doctor_postflight(command):
+    """Reobserve only the exact installed Doctor; never repeat installation."""
+    print("INSTALL_PHASE=CONTROLLER_DOCTOR", flush=True)
+    for attempt in range(3):
+        try:
+            return command_json(command)
+        except subprocess.CalledProcessError as exc:
+            # Doctor emits redacted JSON even when preflight is incomplete.
+            # Log only bounded typed classifications, never raw stdout/intent.
+            try:
+                report = json.loads(exc.output or "")
+                d = report["diagnostic"]
+                i = d["installation"]
+                fields = {
+                    "mode": i.get("mode"), "candidate": i.get("candidate"),
+                    "manifest": i.get("manifest"), "identity": i.get("installed_identity"),
+                    "runtime": i.get("runtime"), "installation_reason": i.get("reason"),
+                    "guard": i.get("guard_unit"), "lifecycle": i.get("lifecycle_unit"),
+                    "root_journal": i.get("root_journal"), "root_proof": i.get("root_proof"),
+                    "artifacts": i.get("scoped_artifacts"), "dependencies": i.get("dependencies"),
+                    "database": d["database"].get("state"), "database_reason": d["database"].get("reason"),
+                    "native": d["native"].get("state"), "native_reason": d["native"].get("reason"),
+                    "mcp": d["mcp"].get("state"), "mcp_reason": d["mcp"].get("reason"),
+                }
+                fields = {k: v if isinstance(v, str) and re.fullmatch(r"[A-Z0-9_]{1,100}", v)
+                          else "UNAVAILABLE" for k, v in fields.items()}
+                print("CONTROLLER_DOCTOR_INCOMPLETE " + json.dumps(fields, sort_keys=True),
+                      file=sys.stderr, flush=True)
+                # A startup/observation gap may settle. A legacy/mixed
+                # identity, wrong schema or foreign ledger is not retried.
+                retry = (i.get("candidate") == "SCOPED_V2" and i.get("mode") in ("SCOPED_V2", "UNVERIFIED")
+                         and i.get("manifest") == i.get("installed_identity") == "VERIFIED"
+                         and report.get("schema_version") == 7 and d["database"].get("state") == "OBSERVED"
+                         and isinstance(d.get("ledger"), dict) and d["ledger"].get("foreign_rows", 0) == 0
+                         and i.get("service_unit") == "ACTIVE"
+                         and d["mcp"].get("reason") in ("LOCAL_MCP_UNAVAILABLE", "CONTROLLER_RUNTIME_UNVERIFIED"))
+            except (ValueError, KeyError, TypeError, AttributeError):
+                retry = False
+            if not retry or attempt == 2:
+                raise phase_unverified("CONTROLLER_DOCTOR") from exc
+            time.sleep(1)
+        except (OSError, ValueError, InstallError, subprocess.SubprocessError) as exc:
+            raise phase_unverified("CONTROLLER_DOCTOR") from exc
+
+
 def normalize_oauth_origin(raw):
     # Only a single terminal slash is accepted as a convenience.
     # The installed CLI remains the authoritative validator.
@@ -817,7 +863,7 @@ def main():
             raise phase_unverified("INSTALLED_STATUS")
         installed = "/usr/local/bin/boxweave"
         identity = ["runuser", "-u", args.service_user, "--", installed]
-        doctor = install_phase("CONTROLLER_DOCTOR", identity + ["doctor", "-project", args.project], capture=True)
+        doctor = doctor_postflight(service_command(args, Path(installed), "doctor", "-project", args.project))
         print("Doctor:", json.dumps(doctor), flush=True)
         if (doctor.get("version") != installed_status.get("version") or
                 doctor.get("commit") != installed_status.get("build_commit") or

@@ -201,3 +201,19 @@ func TestPR177D4ExistingOnlyWriter(t *testing.T) {
 		t.Fatal("created source parent", e)
 	}
 }
+
+func TestP3R3HistoricalReviewedLeavesAreNotNewAuthority(t *testing.T) {
+	for _, mode := range []string{"LEGACY", "UNSUPPORTED_LEGACY", "UNVERIFIED", "CONFLICT"} {
+		if reviewedRecoveryLeaf(RecoveryTarget{Action: "box_start"}, RecoveryProof{Kind: RecoverySettle}, mode) != "" {
+			t.Fatal("historical reconciliation leaf", mode)
+		}
+	}
+	for _, kind := range []string{RecoveryBind, RecoveryRepairPin} {
+		if reviewedRecoveryLeaf(RecoveryTarget{Action: "box_create"}, RecoveryProof{Kind: kind}, "SCOPED_V2") != "" {
+			t.Fatal("retired leaf", kind)
+		}
+	}
+	if reviewedRecoveryLeaf(RecoveryTarget{Action: "box_start"}, RecoveryProof{Kind: RecoverySettle}, "SCOPED_V2") != "MCP_SETTLE_ORIGINAL_NO_REPLAY" {
+		t.Fatal("current leaf lost")
+	}
+}
