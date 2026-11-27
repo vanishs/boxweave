@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vanishs/boxweave/internal/networklimits"
+	"github.com/vanishs/boxweave/internal/peerscope"
 )
 
 // N4's one-use 1024-row SQLite-only budget is intentionally separate from
@@ -38,7 +40,11 @@ func TestN4ProjectCapacityAndNetworkAudit1024LocalBudget(t *testing.T) {
 		if _, e = tx.ExecContext(ctx, "INSERT INTO owned_boxes(uuid,project,name,incarnation,state,created_at) VALUES(?, ?, ?, ?, 'OWNED',1)", uuid, project, name, uuid); e != nil {
 			t.Fatal(e)
 		}
-		if _, e = tx.ExecContext(ctx, "INSERT INTO network_bindings(project,box_uuid,incarnation,nic,bridge,acl,mac,ipv4,ipv6,state,observed_at) VALUES(?,?,?,'eth0','bwbr0','bw-s4b2',?,?,?,'PINNED',1)", project, uuid, uuid, mac, ip4, ip6); e != nil {
+		acl, aclErr := peerscope.ACLName(project, "bwbr0", uuid)
+		if aclErr != nil {
+			t.Fatal(aclErr)
+		}
+		if _, e = tx.ExecContext(ctx, "INSERT INTO network_bindings(project,box_uuid,incarnation,nic,bridge,acl,mac,ipv4,ipv6,state,observed_at) VALUES(?,?,?,'eth0','bwbr0',?,?,?,?,'PINNED',1)", project, uuid, uuid, acl, mac, ip4, ip6); e != nil {
 			t.Fatal(e)
 		}
 		for _, f := range []struct{ family, address string }{{"ipv4", ip4}, {"ipv6", ip6}} {
@@ -98,13 +104,24 @@ func TestN4ProjectCapacityAndNetworkAudit1024LocalBudget(t *testing.T) {
 		}
 		return nil
 	})
+	// Schema 7 admits only the scoped inventory reader; retain all three
+	// repeated full-inventory reads under the original per-read budget.
+	if legacy, err := st.ReadCompleteNetworkAuditLedger(ctx, project, "bwbr0", "bw-s4b2"); !errors.Is(err, ErrResourceLocked) || len(legacy.Boxes) != 0 {
+		t.Fatal("retired shared ACL reader did not refuse", err)
+	}
 	measure("PEER_ROOT_LEDGER", func() error {
-		result, e := st.ReadCompleteNetworkAuditLedger(ctx, project, "bwbr0", "bw-s4b2")
+		result, e := st.ReadCompleteScopedNetworkAuditLedger(ctx, project, "bwbr0")
 		if e != nil {
 			return e
 		}
 		if len(result.Boxes) != networklimits.MaxProjectBoxes {
 			return fmt.Errorf("peer root audit truncated %d", len(result.Boxes))
+		}
+		for _, box := range result.Boxes {
+			acl, err := peerscope.ACLName(project, "bwbr0", box.UUID)
+			if err != nil || box.ACL != acl || box.Incarnation != box.UUID || box.IPv4 == "" || box.IPv6 == "" {
+				return fmt.Errorf("incomplete scoped inventory identity: %s", box.UUID)
+			}
 		}
 		return nil
 	})

@@ -673,8 +673,10 @@ if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
    if sudo /usr/local/bin/boxweave "$@" > "$work/private/scoped-$label.log" 2>&1; then
      echo "P1B_S25_SCOPED_MAINTENANCE_ACCEPTED=$label" >&2; exit 95
    fi
-   grep -Fq 'scoped fresh evidence exists or cannot be inspected:' "$work/private/scoped-$label.log"
-   grep -Fq 'legacy maintenance unsupported' "$work/private/scoped-$label.log"
+   if ! grep -Fxq 'boxweave: scoped fresh only: legacy installation mutation unsupported' "$work/private/scoped-$label.log"; then
+     echo "P1B_S25_SCOPED_MAINTENANCE_UNEXPECTED_REFUSAL=$label" >&2
+     return 96
+   fi
  }
  refused_scoped_maintenance rollback rollback -project "$project" -approve-local
  refused_scoped_maintenance wrong-digest upgrade -project "$project" -source-binary "$work/canary-readable/boxweave-r2-canary" -expect-sha256 "$(printf '%064d' 0)" -approve-local
@@ -711,6 +713,10 @@ if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  printf 'maintenance_original_binary_sha256=%s\nmaintenance_canary_binary_sha256=%s\n' "$binary_sha" "$canary_sha" > "$proof/scoped-maintenance-binaries.txt"
  echo P1B_S25_SCOPED_MAINTENANCE_NO_EFFECT_ORIGINALS=PASS
  echo P1B_S25_LEGACY_SUCCESSFUL_UPGRADE_ROLLBACK=OUT_OF_SCOPE_170
+ # Retained dual-Agent verifier completed, including scoped refusal,
+ # offline/readback and all preceding original lifecycle assertions.
+ echo S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS
+ echo S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET
  exit 0
 fi
 test ! -e /var/lib/boxweave-installer-backup
