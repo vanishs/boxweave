@@ -265,7 +265,14 @@ class WitnessMap(unittest.TestCase):
     def test_ci_receipts_after_existing_gates(self):
         root=Path(__file__).resolve().parents[1]/".github/workflows"
         n2=(root/"v1-n2-installed-lifecycle.yml").read_text()
-        self.assertLess(n2.index("grep -Fxq RC14_LEGACY_TO_SCOPED_REINSTALL=PASS"),n2.index("--ci-receipt"))
+        self.assertLess(n2.index("scripts/pr191_n2_evidence_identity.py \"$RUNNER_TEMP/n2-installed.log\""),
+                        n2.index("run: bash scripts/pr191_n2_installed_gate.sh"))
+        self.assertLess(n2.index("run: bash scripts/pr191_n2_installed_gate.sh"),n2.index("--ci-receipt"))
+        gate=(root.parents[1]/"scripts/pr191_n2_installed_gate.sh").read_text()
+        self.assertIn("set -euo pipefail",gate)
+        self.assertIn("grep -Fxq RC14_LEGACY_TO_SCOPED_REINSTALL=PASS",gate)
+        self.assertIn("P2_R3_SCOPED_OFFLINE_MISSING_ACK_REFUSED=PASS",gate)
+        self.assertNotIn("continue-on-error:",n2)
         self.assertLess(n2.index("--ci-receipt"),n2.index("uses: actions/upload-artifact@v4"))
         for name in ("v1-pr191-s25-scoped.yml","v1-release.yml"):
             s=(root/name).read_text()
@@ -277,6 +284,17 @@ class WitnessMap(unittest.TestCase):
             for file in ("scripts/s2_p3_evidence_audit.py","scripts/s2_p3_scoped_acceptance.json"):
                 self.assertTrue(any(fnmatchcase(file,p) for p in patterns),
                                 f"{name} does not trigger on {file}")
+
+    def test_n2_inline_run_character_budget(self):
+        # GitHub's workflow run-step limit is 21,000 characters.
+        # Keep headroom for expression substitution. Block scalars in N2
+        # use a fixed ten-space content indent.
+        workflow=(Path(__file__).resolve().parents[1]/".github/workflows/v1-n2-installed-lifecycle.yml").read_text()
+        blocks=re.findall(r"^        run: \|\n((?: {10}[^\n]*\n|\n)*)",workflow,re.M)
+        self.assertTrue(blocks)
+        for block in blocks:
+            self.assertLessEqual(len("\n".join(l[10:] for l in block.splitlines())),20000)
+        self.assertIn("run: bash scripts/pr191_n2_installed_gate.sh",workflow)
 
     def test_wan_replacement_not_public_positive(self):
         self.assertNotIn("S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS",requirements(ROWS,"scoped-s2-native"))

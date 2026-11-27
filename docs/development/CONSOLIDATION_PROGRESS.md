@@ -1501,3 +1501,25 @@ gate retirement, H/C04/C01 waiver or R4 advancement. Learning:
 literal-path tests can miss equivalent wildcard coverage; keep
 behavioral trigger checks and distinguish missing CI metadata from
 a confirmed trigger failure. No new BDH asset/promotion.
+
+### P2 R3 — N2 pre-job failure diagnosed
+
+Repository-level all-event read found exact 82c41e7 N2 run 46057428761
+(push, failure, zero jobs) and 5a3af5a N2 run 46055728195 (push,
+failure). The PR-filtered listing omitted these. Both candidates' N2
+run block is 21899 characters; prior 3ba1029 successful-start N2 block
+was 20479. GitHub documents a 21000-character limit:
+https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun
+Concrete violation matches the pre-job failure; platform annotation
+unavailable, actual corrected launch still required.
+
+Extract exact original marker assertions to scripts/pr191_n2_installed_gate.sh
+(21417 bytes, SHA256 7ec0fb370148d70ecd5b3c72d0f1ee6c2fc77661773ff7c22b5cd02c6ea31012).
+Preserve fail-fast shell, transcript, identity check and gate-before-receipt
+ordering. Remaining inline blocks 482 and 533 characters. No removed
+lanes, assertions or changed authorization. Add inline budget regression.
+Local bffee141821127d97088ba4b54113e10 exit0: byte-for-byte extraction,
+bash syntax, 22 evidence tests, actionlint, format and YAML PASS.
+CI launch and native proof pending. Learning: check all event types
+for missing PR runs and platform limits beyond syntax validation.
+No BDH promotion, no R4 or retirement gate waiver.
