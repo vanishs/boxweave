@@ -23,7 +23,7 @@ func TestPR177D2ScopedRetiredAndLegacyRoutes(t *testing.T) {
 		t.Fatal(l.Network)
 	}
 	legacy, e := snap.ReadLedger(ctx, b.Project, "LEGACY", "incusbr-1001")
-	if e != nil || legacy.LegacyRetirement == nil || legacy.LegacyRetirement.Pending != 1 || legacy.PeerCapacity != nil {
+	if e != nil || legacy.LegacyRetirement != nil || legacy.PeerCapacity != nil {
 		t.Fatal(legacy, e)
 	}
 	unknown, e := snap.ReadLedger(ctx, b.Project, "UNVERIFIED", "incusbr-1001")

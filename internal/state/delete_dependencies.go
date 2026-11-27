@@ -242,25 +242,26 @@ func (s *Store) NextDeleteChild(ctx context.Context, parent string, needStop boo
 	} else if !errors.Is(e, sql.ErrNoRows) {
 		return out, e
 	} else {
-		var intent RootPeerRevokeSafeIntent
-		intent.Project = p.Project
+		intent := ScopedPeerOriginalIntent{Schema: 2, Project: p.Project, Bridge: "incusbr-" + strings.TrimPrefix(p.Project, "user-")}
 		e = tx.QueryRowContext(ctx, "SELECT source_uuid,source_incarnation,target_uuid,target_incarnation FROM peer_grants WHERE project=? AND desired=1 AND status='CONFIRMED' AND ((source_uuid=? AND source_incarnation=?) OR (target_uuid=? AND target_incarnation=?)) ORDER BY source_uuid,target_uuid LIMIT 1", p.Project, p.UUID, p.Incarnation, p.UUID, p.Incarnation).Scan(&intent.SourceUUID, &intent.SourceIncarnation, &intent.TargetUUID, &intent.TargetIncarnation)
 		if e == nil {
-			for _, b := range []struct{ uuid, inc string }{{intent.SourceUUID, intent.SourceIncarnation}, {intent.TargetUUID, intent.TargetIncarnation}} {
-				var bridge, acl string
-				if e = tx.QueryRowContext(ctx, "SELECT n.bridge,n.acl FROM network_bindings n JOIN owned_boxes b ON b.project=n.project AND b.uuid=n.box_uuid AND b.incarnation=n.incarnation WHERE n.project=? AND n.box_uuid=? AND n.incarnation=? AND b.state='OWNED' AND n.nic='eth0' AND n.state='PINNED'", p.Project, b.uuid, b.inc).Scan(&bridge, &acl); e != nil || !auditName(bridge) || !auditName(acl) {
-					return out, ErrResourceLocked
-				}
-				if intent.Bridge != "" && (intent.Bridge != bridge || intent.ACL != acl) {
-					return out, ErrResourceLocked
-				}
-				intent.Bridge, intent.ACL = bridge, acl
+			policy, pe := readScopedTerminalPeerPolicyTx(ctx, tx, p.Project, intent.Bridge)
+			if pe != nil {
+				return out, ErrResourceLocked
 			}
-			a.Action = "box_peer_set"
-			a.BoxUUID, a.Incarnation = intent.SourceUUID, intent.SourceIncarnation
-			a.ResourceKey = "acl:default/" + intent.ACL
-			a.ResourceKeys = []string{"box:" + intent.SourceUUID, "box:" + intent.TargetUUID}
-			a.SafeIntent, _ = json.Marshal(intent)
+			found := false
+			for _, direction := range policy.Active {
+				if direction.SourceUUID == intent.SourceUUID && direction.SourceIncarnation == intent.SourceIncarnation && direction.TargetUUID == intent.TargetUUID && direction.TargetIncarnation == intent.TargetIncarnation {
+					found = true
+				}
+			}
+			if !found {
+				return out, ErrResourceLocked
+			}
+			a, e = scopedPeerAdmission(intent, a)
+			if e != nil {
+				return out, e
+			}
 		} else if !errors.Is(e, sql.ErrNoRows) {
 			return out, e
 		} else if needStop {

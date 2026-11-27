@@ -117,7 +117,7 @@ func scopedWriteExclusive(path, body string) error {
 
 // CheckScopedServeMode prevents an installed scoped journal from silently
 // entering the legacy controller, including when an operator omits the flag.
-func CheckScopedServeMode(enabled bool) error {
+func CheckScopedServeMode() error {
 	if e := CheckScopedDrainFence(); e != nil {
 		return e
 	}
@@ -126,16 +126,13 @@ func CheckScopedServeMode(enabled bool) error {
 	}
 	st, err := os.Lstat(nativePeerFreshJournalDir)
 	if errors.Is(err, os.ErrNotExist) {
-		if enabled {
-			return errors.New("scoped installation journal missing")
-		}
-		return refuseScopedLegacy()
+		return errors.New("scoped installation journal missing")
 	}
 	if err != nil {
 		return err
 	}
 	owner, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || owner.Uid != 0 || !st.IsDir() || st.Mode().Perm() != 0700 || !enabled {
+	if !ok || owner.Uid != 0 || !st.IsDir() || st.Mode().Perm() != 0700 {
 		return errors.New("scoped journal requires scoped controller mode")
 	}
 	return nil

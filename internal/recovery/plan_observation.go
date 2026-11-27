@@ -56,20 +56,11 @@ func (s Service) InspectPlan(ctx context.Context, t state.RecoveryTarget) (PlanW
 
 // No Scoped plan can fall back to a Legacy precondition checker.
 func (s Service) checkPlanRecovery(ctx context.Context, t state.RecoveryTarget, p state.RecoveryProof) error {
-	if s.ScopedMode {
-		checker, ok := s.ReadStore.(interface {
-			CheckScopedPlanRecoveryProof(context.Context, state.RecoveryTarget, state.RecoveryProof) error
-		})
-		if !ok {
-			return state.ErrResourceLocked
-		}
-		return checker.CheckScopedPlanRecoveryProof(ctx, t, p)
-	}
 	checker, ok := s.ReadStore.(interface {
-		CheckPlanRecoveryProof(context.Context, state.RecoveryTarget, state.RecoveryProof) error
+		CheckScopedPlanRecoveryProof(context.Context, state.RecoveryTarget, state.RecoveryProof) error
 	})
 	if !ok {
 		return state.ErrResourceLocked
 	}
-	return checker.CheckPlanRecoveryProof(ctx, t, p)
+	return checker.CheckScopedPlanRecoveryProof(ctx, t, p)
 }

@@ -211,12 +211,8 @@ func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 	})
 }
 
-// The mode is installation-selected, never an input field.
 func (s *Service) admitNetwork(ctx context.Context, a state.Admission) (state.Receipt, error) {
-	if s.ScopedPeerFresh {
-		return s.Store.AdmitScoped(ctx, a)
-	}
-	return s.Store.Admit(ctx, a)
+	return s.Store.AdmitScoped(ctx, a)
 }
 
 func (s *Service) worker() state.Worker {
@@ -421,10 +417,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if in.Internet != nil {
 				internet = *in.Internet
 			}
-			if s.ScopedPeerFresh {
-				return s.admitScopedCreate(ctx, req, in, start, internet)
-			}
-			return s.admitLegacyCreate(ctx, req, in, start, internet)
+			return s.admitScopedCreate(ctx, req, in, start, internet)
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_list",
@@ -565,7 +558,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_delete",
-		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Scoped V2 cleans confirmed Peer directions automatically; Legacy Peer requires host-local PRS review/approval. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
+		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Confirmed Scoped Peer directions are cleaned automatically. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true)},
 		s.operateBoxDelete)
 
@@ -784,10 +777,7 @@ func (s *Service) operateBoxDelete(ctx context.Context, req *mcp.CallToolRequest
 		if err := s.Native.ConfirmDeleteAbsence(ctx, box.Name); err != nil {
 			return err
 		}
-		if s.ScopedPeerFresh {
-			return s.finalizeScopedDelete(ctx, r.ID, box, nativeID)
-		}
-		return s.finalizeLegacyDelete(ctx, r.ID, box)
+		return s.finalizeScopedDelete(ctx, r.ID, box, nativeID)
 	}
 	r, err = s.submitNative(r, effect, verify)
 	return &mcp.CallToolResult{}, r, err

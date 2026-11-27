@@ -31,7 +31,7 @@ func TestPR177D4ServiceReobservesAndRechecks(t *testing.T) {
 			if e = s.RegisterOwnedBox(ctx, bu, project, "owned", bu); e != nil {
 				t.Fatal(e)
 			}
-			rec, e := s.Admit(ctx, state.Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "d4-original-native-operation", Action: "box_start", RequestID: "d4-fixture", ResourceKey: "box:owned", BoxUUID: bu, Incarnation: bu, SafeIntent: []byte("{}")})
+			rec, e := s.AdmitScoped(ctx, state.Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "d4-original-native-operation", Action: "box_start", RequestID: "d4-fixture", ResourceKey: "box:owned", BoxUUID: bu, Incarnation: bu, SafeIntent: []byte("{}")})
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -44,7 +44,7 @@ func TestPR177D4ServiceReobservesAndRechecks(t *testing.T) {
 			if e = s.Unknown(ctx, rec.ID, "VERIFYING", "TEST_ORIGINAL_UNKNOWN"); e != nil {
 				t.Fatal(e)
 			}
-			o, l, e := s.ReadReviewedRecoveryEvidence(ctx, project, rec.ID, "LEGACY")
+			o, l, e := s.ReadReviewedRecoveryEvidence(ctx, project, rec.ID, "SCOPED_V2")
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -55,7 +55,7 @@ func TestPR177D4ServiceReobservesAndRechecks(t *testing.T) {
 			if p.Kind != state.RecoverySettle {
 				t.Fatal(p)
 			}
-			r := state.RecoveryRequest{Layer: project, LocalReviewer: "d4-operator", OriginalID: rec.ID, Key: "d4-reviewed-service-key", Review: &state.ReviewedRecoveryBinding{ReviewSHA256: strings.Repeat("a", 64), OriginalSHA256: o.Digest, LedgerSHA256: l.ObservationDigest(), WitnessSHA256: state.RecoveryWitnessDigest(o.Target, p), Mode: "LEGACY", Leaf: "MCP_SETTLE_ORIGINAL_NO_REPLAY", ExpiresNS: time.Now().Add(time.Minute).UnixNano()}}
+			r := state.RecoveryRequest{Layer: project, LocalReviewer: "d4-operator", OriginalID: rec.ID, Key: "d4-reviewed-service-key", Review: &state.ReviewedRecoveryBinding{ReviewSHA256: strings.Repeat("a", 64), OriginalSHA256: o.Digest, LedgerSHA256: l.ObservationDigest(), WitnessSHA256: state.RecoveryWitnessDigest(o.Target, p), Mode: "SCOPED_V2", Leaf: "MCP_SETTLE_ORIGINAL_NO_REPLAY", ExpiresNS: time.Now().Add(time.Minute).UnixNano()}}
 			if fault == "native-drift" {
 				w.box.NativeState = "Stopped"
 				svc.Native = w

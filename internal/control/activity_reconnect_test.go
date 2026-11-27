@@ -43,7 +43,7 @@ func (t *activityLostReplyTransport) RoundTrip(req *http.Request) (*http.Respons
 }
 
 func activityMCPServer(st *state.Store) *httptest.Server {
-	svc := &Service{ScopedPeerFresh: true, Store: st, Native: native.Reader{
+	svc := &Service{Store: st, Native: native.Reader{
 		Socket: "/nonexistent", Project: "bw-test",
 	}, BuildVersion: "reconnect-test", BuildCommit: "reconnect-test", Listener: "127.0.0.1:18650"}
 	return httptest.NewServer(svc.Handler())

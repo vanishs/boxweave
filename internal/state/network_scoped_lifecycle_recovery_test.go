@@ -291,6 +291,28 @@ func TestP1ScopedDeleteCompletedRecoveryAtomic(t *testing.T) {
 	if e = check(); e != nil {
 		t.Fatal("recovered retirement history refused", e)
 	}
+	createReceipt, e := s.ReplayRecovery(ctx, createReq)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, cut := range []struct{ change, restore, id string }{
+		{"UPDATE operation_events SET safe_detail='DAMAGED' WHERE operation_id=? AND safe_detail='RECOVERY_SCOPED_CREATE_ATOMIC_NO_REPLAY'", "UPDATE operation_events SET safe_detail='RECOVERY_SCOPED_CREATE_ATOMIC_NO_REPLAY' WHERE operation_id=? AND safe_detail='DAMAGED'", orig.ID},
+		{"UPDATE operations SET resource_key='recovery:other' WHERE id=?", "UPDATE operations SET resource_key='recovery:" + orig.ID + "' WHERE id=?", createReceipt.Receipt.ID},
+		{"UPDATE recovery_audit SET decision='RELEASED' WHERE operation_id=? AND decision='RECOVERY_SETTLED'", "UPDATE recovery_audit SET decision='RECOVERY_SETTLED' WHERE operation_id=? AND decision='RELEASED'", orig.ID},
+	} {
+		if _, e = s.db.Exec(cut.change, cut.id); e != nil {
+			t.Fatal(e)
+		}
+		if e = check(); !errors.Is(e, ErrResourceLocked) {
+			t.Fatal("damaged recovered Create lineage accepted", cut.change, e)
+		}
+		if _, e = s.db.Exec(cut.restore, cut.id); e != nil {
+			t.Fatal(e)
+		}
+		if e = check(); e != nil {
+			t.Fatal("restored lineage refused", e)
+		}
+	}
 	if _, e = s.db.Exec("DELETE FROM recovery_audit WHERE operation_id=? AND decision='RECOVERY_SETTLED'", parent.ID); e != nil {
 		t.Fatal(e)
 	}

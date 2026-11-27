@@ -153,4 +153,16 @@ P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transp
 
 - P1b-06d11: S25 139851764466 PASS; combined Update ACK WAL conversion source tests 01634b3c0d95bc0d05747e7148670571 exit0; actual CI pending.
 
+- 2026-11-26 #191 R2/R3: [prior aggregate and blocked Install conversions](https://github.com/vanishs/boxweave/pull/191#issuecomment-7209278701); [safety investigation and independent C/E progress](https://github.com/vanishs/boxweave/pull/191#issuecomment-7209413770). Platform rationale unknown. Deferred workflow observation recorded in the existing learning inbox; no bypass or gate change. Preserve original Box and continue independent S2/N2 consumers.
+
+- 2026-11-26 #191 R2/R3: reproduced and fixed Forward history gap; eight race tests, 31 probe builds, 111 Python tests pass. Full Go aggregate retains two original Install failures. CI evidence index source verified. Scope: offline conversion P2, no waiver. See CONSOLIDATION_PROGRESS.md.
+
 - 2026-11-26 #191: phase-wide continuation correction; original local P1 state preserved; 136 BDH tests and 24 Eval cases pass; real P1 history revision4 CONTINUE. See dev/LEARNING_INBOX.md. No product gate changed.
+
+- #191 R2/R3: historical 23-lane format comparison, N2 trigger repair, 29 source tests pass; task revision7 REVIEW_BLOCKERS. See progress and learning inbox.
+
+- #191 R2/R3 independent clean-lab install, three active units, schema7, old-state refusal and restart PASS; task rev10 REVIEW_BLOCKERS. See CONSOLIDATION_PROGRESS.md. Original two Install failures unchanged.
+
+- #191 R5 independent review and BDH cycle05: original full Race guest exit1, same two Install failures; original output consumed, guarded active R5 rev10 REVIEW_BLOCKERS, no ready group, actual Finish Gate REVIEW_REQUIRED. e233220 CI 7/7, N2 28/28, not dirty product proof. See CONSOLIDATION_PROGRESS.md; no P1 completion.
+
+- Owner decision (2026-11-27): P1 implementation is considered development-complete for scheduling; proceed with independent P2 development. This explicitly defers the unresolved Install composed witness in #194, not a PASS, waiver, or permission to repeat a refused operation. The existing 577 PASS / 66 SKIP / 2 FAIL aggregate and Race exit 1 remain recorded. Retain the original failed tests and all safety assertions. Exact-candidate regression, native and CI evidence, C04 hosted equivalence if needed, and old-gate applicability/replacement remain open before formal P1 acceptance, merge or release. This Schema 7 development checkpoint is not an accepted or release candidate. See [#194](https://github.com/vanishs/boxweave/issues/194) and [R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7212654941).

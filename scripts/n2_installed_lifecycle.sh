@@ -30,6 +30,7 @@ chmod 0755 "$work"
 commit="$(git rev-parse HEAD)"
 test "$commit" = "${N2_EXACT_HEAD:?}"
 echo "N2_INSTALL_SOURCE=$commit"
+echo "N2_EVIDENCE_LANE=${N2_EVIDENCE_LANE:?}"
 # Observe the pre-existing runner environment before native bootstrap.
 # This is read-only diagnostic evidence, never a WAN positive control.
 if test "${P1B_S2_NATIVE:-0}" = 1; then
@@ -41,6 +42,7 @@ done
 first="$(sha256sum "$work/candidate-a" | cut -d' ' -f1)"
 next="$(sha256sum "$work/candidate-b" | cut -d' ' -f1)"
 test "$first" != "$next"
+echo "N2_INSTALL_CANDIDATE_SHA256=$first"
 # CI package selection: unrelated optional repository is not needed.
 # Required repository signatures and exact package checks are unchanged.
 sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_ci_apt_sources.py
@@ -162,6 +164,9 @@ else
   python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"
 fi
 installed=/usr/local/bin/boxweave
+installed_sha="$(sudo sha256sum "$installed" | cut -d' ' -f1)"
+test "$installed_sha" = "$first"
+echo "N2_INSTALLED_CANDIDATE_SHA256=$installed_sha"
 if test "${PR178_SCOPED_N2:-0}" != 1; then
 sudo systemctl is-active --quiet boxweave.service
 sudo systemctl is-active --quiet boxweave-ipv4-retirement.service
@@ -197,7 +202,7 @@ import json,sys
 root,svc=(json.load(open(p)) for p in sys.argv[1:3])
 for x in (root,svc):
     d=x["diagnostic"]
-    assert x["ready"] and x["native"]["ready"] and x["schema_version"]==6
+    assert x["ready"] and x["native"]["ready"] and x["schema_version"]==7
     assert d["version"]==1 and d["database"]["state"]=="OBSERVED" and d["database"]["epoch_ns"]>0
     assert d["coverage"]=="PARTIAL_D2_DIAGNOSIS" and not d["cross_source_atomic"] and d["mcp"]["reason"]=="LOCAL_HTTP_401_ONLY_AUTHENTICATED_MCP_NOT_CHECKED"
     assert d["installation"]["installed_identity"]=="VERIFIED" and d["installation"]["runtime"]=="VERIFIED"

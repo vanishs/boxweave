@@ -87,16 +87,13 @@ const maintenanceRowLimit = 8192
 // ReadMaintenanceLedger uses only the private snapshot. No source SQL
 // connections, schema upgrade, credential content or arbitrary intent.
 func (s *DiagnosticSnapshot) ReadMaintenanceLedger(ctx context.Context, project string) (MaintenanceLedger, error) {
-	return s.readMaintenanceLedger(ctx, project, false)
+	return s.ReadScopedMaintenanceLedger(ctx, project)
 }
 
 // ReadScopedMaintenanceLedger refuses mixed retirement history. It uses the
 // same snapshot and never treats absence of legacy data as native authority.
 func (s *DiagnosticSnapshot) ReadScopedMaintenanceLedger(ctx context.Context, project string) (MaintenanceLedger, error) {
-	return s.readMaintenanceLedger(ctx, project, true)
-}
 
-func (s *DiagnosticSnapshot) readMaintenanceLedger(ctx context.Context, project string, scoped bool) (MaintenanceLedger, error) {
 	var zero MaintenanceLedger
 	if !SafeDiagnosticProject(project) {
 		return zero, ErrInvalid
@@ -106,7 +103,7 @@ func (s *DiagnosticSnapshot) readMaintenanceLedger(ctx context.Context, project 
 		return zero, e
 	}
 	defer tx.Rollback()
-	o, e := readMaintenanceLedger(ctx, tx, project, scoped)
+	o, e := readMaintenanceLedger(ctx, tx, project)
 	if e != nil {
 		return zero, e
 	}
@@ -115,13 +112,8 @@ func (s *DiagnosticSnapshot) readMaintenanceLedger(ctx context.Context, project 
 	}
 	return o, nil
 }
-func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string, scoped bool) (MaintenanceLedger, error) {
+func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (MaintenanceLedger, error) {
 	var zero MaintenanceLedger
-	if scoped {
-		if e := requireScopedNoLegacyRetirementTx(ctx, tx); e != nil {
-			return zero, e
-		}
-	}
 	o := MaintenanceLedger{Project: project, LegacyPending: []string{}, LegacyCompactions: []string{}, RetiredBoxes: []MaintenanceRetiredBox{}, Boxes: []MaintenanceBox{}, Originals: []MaintenanceOriginal{}, Peers: []MaintenancePeer{}, Forwards: []MaintenanceForward{}}
 	l, e := readNativeNetworkLedgerTx(ctx, tx, project)
 	if e != nil {
@@ -182,9 +174,6 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string, scop
 		"SELECT count(*) FROM network_address_fences WHERE project!=?",
 		"SELECT count(*) FROM peer_grants WHERE project!=?",
 		"SELECT count(*) FROM forward_claims WHERE project!=?",
-	}
-	if !scoped {
-		foreignQueries = append(foreignQueries, legacyMaintenanceForeignQueries()...)
 	}
 	for _, q := range foreignQueries {
 		var n int
@@ -296,12 +285,7 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string, scop
 	if e != nil {
 		return zero, e
 	}
-	if !scoped {
-		if e := readLegacyMaintenancePending(ctx, tx, project, &o); e != nil {
-			return zero, e
-		}
-	}
-	o.HistorySHA256, e = maintenanceHistoryWitness(ctx, tx, project, scoped)
+	o.HistorySHA256, e = maintenanceHistoryWitness(ctx, tx, project)
 	if e != nil {
 		return zero, e
 	}
@@ -310,34 +294,24 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string, scop
 
 // Bounded digest of exact identity and historical effect records. No raw
 // actor, credential, arbitrary intent, or log content is emitted.
-func maintenanceHistoryWitness(ctx context.Context, tx *sql.Tx, project string, scoped bool) (string, error) {
-	queries := []struct {
-		sql    string
-		legacy bool
-	}{
-		{`SELECT id,action,state,updated_at,resource_key,box_uuid,incarnation,native_operation_id,intent_digest,error_class FROM operations WHERE layer=? ORDER BY id`, false},
-		{`SELECT operation_id,resource_key FROM operation_resource_claims WHERE layer=? ORDER BY operation_id,resource_key`, false},
-		{`SELECT * FROM owned_boxes WHERE project=? ORDER BY uuid`, false},
-		{`SELECT * FROM network_bindings WHERE project=? ORDER BY box_uuid,incarnation,nic`, false},
-		{`SELECT * FROM network_address_fences WHERE project=? ORDER BY bridge,family,address`, false},
-		{legacyMaintenanceArchiveHistory, true},
-		{legacyMaintenanceQueueHistory, true},
-		{legacyMaintenanceCompactionHistory, true},
-		{`SELECT * FROM peer_grants WHERE project=? ORDER BY source_uuid,source_incarnation,target_uuid,target_incarnation`, false},
-		{`SELECT * FROM forward_claims WHERE project=? ORDER BY forward_id`, false},
-		{`SELECT e.seq,e.operation_id,e.at,e.state FROM operation_events e JOIN operations o ON o.id=e.operation_id WHERE o.layer=? ORDER BY e.seq`, false},
-		{`SELECT a.seq,a.operation_id,a.at,a.decision,a.evidence_digest FROM recovery_audit a JOIN operations o ON o.id=a.operation_id WHERE o.layer=? ORDER BY a.seq`, false},
+func maintenanceHistoryWitness(ctx context.Context, tx *sql.Tx, project string) (string, error) {
+	queries := []string{
+		`SELECT id,action,state,updated_at,resource_key,box_uuid,incarnation,native_operation_id,intent_digest,error_class FROM operations WHERE layer=? ORDER BY id`,
+		`SELECT operation_id,resource_key FROM operation_resource_claims WHERE layer=? ORDER BY operation_id,resource_key`,
+		`SELECT * FROM owned_boxes WHERE project=? ORDER BY uuid`,
+		`SELECT * FROM network_bindings WHERE project=? ORDER BY box_uuid,incarnation,nic`,
+		`SELECT * FROM network_address_fences WHERE project=? ORDER BY bridge,family,address`,
+		`SELECT * FROM peer_grants WHERE project=? ORDER BY source_uuid,source_incarnation,target_uuid,target_incarnation`,
+		`SELECT * FROM forward_claims WHERE project=? ORDER BY forward_id`,
+		`SELECT e.seq,e.operation_id,e.at,e.state FROM operation_events e JOIN operations o ON o.id=e.operation_id WHERE o.layer=? ORDER BY e.seq`,
+		`SELECT a.seq,a.operation_id,a.at,a.decision,a.evidence_digest FROM recovery_audit a JOIN operations o ON o.id=a.operation_id WHERE o.layer=? ORDER BY a.seq`,
 	}
 	h := sha256.New()
+	h.Write([]byte("boxweave/maintenance-history/v7\n"))
 	count, total := 0, 0
 	for _, q := range queries {
-		// Preserve schema-6 witness bytes for an empty legacy table. The
-		// scoped reader has already proved all three empty in this transaction.
-		h.Write([]byte(q.sql + "\n"))
-		if scoped && q.legacy {
-			continue
-		}
-		rows, e := tx.QueryContext(ctx, q.sql, project)
+		h.Write([]byte(q + "\n"))
+		rows, e := tx.QueryContext(ctx, q, project)
 		if e != nil {
 			return "", e
 		}

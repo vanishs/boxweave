@@ -170,7 +170,7 @@ sudo cp -p "$work/receipt.original" "$backup/receipt.json"
 test "$(sudo sha256sum "$backup/receipt.json" | cut -d' ' -f1)" = "$backup_before"
 healthy 1.0.0-rc.11
 echo GUIDED_UPGRADE_BACKUP_NEGATIVES=PASS
-# The schema-6 candidate must fail its restricted preflight BEFORE closing
+# The schema-7 candidate must fail its restricted preflight BEFORE closing
 # the older backup or stopping the active RC11 service.
 pid_before="$(sudo systemctl show -p MainPID --value boxweave)"
 if tty_run "UPGRADE $project" sudo sh install.sh --upgrade --local-binary "$work/candidate" --sha256 "$candidate_sha" > "$work/candidate.log" 2>&1; then exit 88; fi

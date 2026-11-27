@@ -58,11 +58,7 @@ func captureMaintenanceLedger(ctx context.Context, db, project, mode string) (*s
 	if e != nil {
 		return nil, diagnostic.Source{State: "UNVERIFIED", Reason: diagnostic.DatabaseReason(e)}
 	}
-	read := snap.ReadMaintenanceLedger
-	if mode == "SCOPED_V2" {
-		read = snap.ReadScopedMaintenanceLedger
-	}
-	l, e := read(c, project)
+	l, e := snap.ReadScopedMaintenanceLedger(c, project)
 	ce := snap.Close()
 	if e != nil {
 		return nil, diagnostic.Source{State: "UNVERIFIED", Reason: diagnostic.DatabaseReason(e)}

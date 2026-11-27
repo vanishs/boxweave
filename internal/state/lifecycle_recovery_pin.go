@@ -70,8 +70,8 @@ func readLifecycleRecoveryPin(ctx context.Context, q credentialRowQuery, t Recov
 		if originalState != "SUCCEEDED" {
 			return VerifiedCreateBinding{}, "CONFLICT", nil
 		}
-		// Native ACK lost Create is valid only with its exact linked
-		// recovery receipt and audit; an edited state bit alone is not
+		// Recovered Create requires its exact linked receipt and audit;
+		// a native ACK or an edited state bit alone is not
 		// provenance sufficient for native lifecycle or Delete.
 		var lineage int
 		e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations c WHERE c.id=? AND c.state='SUCCEEDED' AND EXISTS(SELECT 1 FROM operation_events e WHERE e.operation_id=c.id AND e.state='SUCCEEDED') AND "+successfulCreateLineageEvidence, originalID).Scan(&lineage)

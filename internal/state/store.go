@@ -19,7 +19,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 // Pre-release schema v6: fresh pilots only; older SQLite schemas are refused.
 // The OAuth slice must be independently staged with a clean pilot database.
@@ -48,9 +48,6 @@ var schemaDDL = []string{
 	"CREATE TABLE operation_resource_claims (operation_id TEXT NOT NULL REFERENCES operations(id), layer TEXT NOT NULL, resource_key TEXT NOT NULL, PRIMARY KEY(operation_id,resource_key))",
 	"CREATE TABLE network_bindings (project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, nic TEXT NOT NULL, bridge TEXT NOT NULL, acl TEXT NOT NULL, mac TEXT NOT NULL, ipv4 TEXT NOT NULL, ipv6 TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('OBSERVED','PINNED','QUARANTINED','RELEASED')), observed_at INTEGER NOT NULL, PRIMARY KEY(project,box_uuid,incarnation,nic))",
 	"CREATE TABLE network_address_fences (bridge TEXT NOT NULL, family TEXT NOT NULL CHECK(family IN ('ipv4','ipv6')), address TEXT NOT NULL, project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('RESERVED','QUARANTINED','RELEASED')), operation_id TEXT NOT NULL DEFAULT '', observed_at INTEGER NOT NULL, PRIMARY KEY(bridge,family,address))",
-	legacyRetirementTableDDL,
-	legacyRetirementQueueTableDDL,
-	legacyCompactionTableDDL,
 	"CREATE TABLE peer_grants (project TEXT NOT NULL, source_uuid TEXT NOT NULL, source_incarnation TEXT NOT NULL, target_uuid TEXT NOT NULL, target_incarnation TEXT NOT NULL, desired INTEGER NOT NULL CHECK(desired IN (0,1)), status TEXT NOT NULL CHECK(status IN ('PENDING','CONFIRMED','UNKNOWN','REVOKED')), source_ipv4 TEXT NOT NULL DEFAULT '', target_ipv4 TEXT NOT NULL DEFAULT '', source_ipv6 TEXT NOT NULL DEFAULT '', target_ipv6 TEXT NOT NULL DEFAULT '', acl_generation TEXT NOT NULL DEFAULT '', operation_id TEXT NOT NULL DEFAULT '', last_verified_operation_id TEXT REFERENCES operations(id), PRIMARY KEY(project,source_uuid,source_incarnation,target_uuid,target_incarnation))",
 	"CREATE TABLE forward_claims (forward_id TEXT PRIMARY KEY, project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_device TEXT NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('tcp','udp')), host_bind TEXT NOT NULL, host_port INTEGER NOT NULL CHECK(host_port BETWEEN 1 AND 65535), guest_port INTEGER NOT NULL CHECK(guest_port BETWEEN 1 AND 65535), guest_ip TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('PENDING','CONFIRMED','UNKNOWN','REVOKED')), operation_id TEXT NOT NULL DEFAULT '')",
 }
@@ -75,8 +72,6 @@ var schemaIndexes = []string{
 	"CREATE UNIQUE INDEX network_bindings_pinned_v4 ON network_bindings(bridge,ipv4) WHERE state='PINNED' AND ipv4!=''",
 	"CREATE UNIQUE INDEX network_bindings_pinned_v6 ON network_bindings(bridge,ipv6) WHERE state='PINNED' AND ipv6!=''",
 	"CREATE UNIQUE INDEX network_bindings_pinned_mac ON network_bindings(bridge,mac) WHERE state='PINNED' AND mac!=''",
-	legacyRetirementIndexDDL,
-	legacyRetirementQueueIndexDDL,
 	"CREATE INDEX network_address_fences_owner_state ON network_address_fences(project,box_uuid,state)",
 	"CREATE INDEX peer_grants_target_state ON peer_grants(project,target_uuid,status)",
 	"CREATE UNIQUE INDEX forward_claims_active_listener ON forward_claims(host_bind,protocol,host_port) WHERE state!='REVOKED'",
@@ -552,16 +547,13 @@ func activeCredentialForActor(ctx context.Context, q credentialRowQuery, actorID
 // Admit persists the original immutable intent hash and sanitized replay payload.
 // Concurrent equal requests must return exactly the original IDs and cause no native effect.
 func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
-	return s.admitNetworkMode(ctx, a, false)
+	return s.AdmitScoped(ctx, a)
 }
 
 // AdmitScoped selects the installed Scoped policy from the trusted controller,
 // not from an MCP field. Exact replay still precedes all fresh-work fences.
 func (s *Store) AdmitScoped(ctx context.Context, a Admission) (Receipt, error) {
-	return s.admitNetworkMode(ctx, a, true)
-}
 
-func (s *Store) admitNetworkMode(ctx context.Context, a Admission, scoped bool) (Receipt, error) {
 	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
 		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 || a.RequestID == "" ||
 		!validRef(a.WorkRef) || !validRef(a.AgentRef) || len(a.ResourceKey) > 192 ||
@@ -609,9 +601,6 @@ func (s *Store) admitNetworkMode(ctx context.Context, a Admission, scoped bool) 
 	}
 	// Even a lost root ACL acknowledgement cannot reopen the Project. Exact
 	// idempotent receipt replay above remains available.
-	if e := requireNetworkAdmissionTx(ctx, tx, a.Layer, scoped); e != nil {
-		return Receipt{}, e
-	}
 	if err = scopedCreateAdmissionBarrier(ctx, tx, a); err != nil {
 		return Receipt{}, err
 	}

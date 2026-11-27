@@ -201,10 +201,9 @@ func TestS5A4ForwardMissingAckOrDriftKeepsListener(t *testing.T) {
 func TestS5A4DependentDeleteLinkedChildrenAndFinalRecovery(t *testing.T) {
 	ctx := context.Background()
 	t.Run("linked-child-retains-parent", func(t *testing.T) {
-		s := newStore(t)
-		b4OwnedFixture(t, s, "user-1001", "a", s4b2RootSrc)
-		a := b5DeleteAdmission(t, s, s4b2RootSrc, "a")
-		fwd := a4Admit(t, s, a4ForwardAdmission(a, 24108))
+		s, b, _ := n3ScopedOwnedFixture(t)
+		a := scopedDeleteAdmission(t, s, b)
+		fwd := a4AdmitMode(t, s, a4ForwardAdmission(a, 24108), true)
 		if e := s.Claim(ctx, fwd.ID); e != nil {
 			t.Fatal(e)
 		}
@@ -214,7 +213,7 @@ func TestS5A4DependentDeleteLinkedChildrenAndFinalRecovery(t *testing.T) {
 		if e := s.FinalizeVerifiedForward(ctx, fwd.ID, true); e != nil {
 			t.Fatal(e)
 		}
-		parent := a4Admit(t, s, a)
+		parent := a4AdmitMode(t, s, a, true)
 		if e := s.Claim(ctx, parent.ID); e != nil {
 			t.Fatal(e)
 		}
@@ -224,13 +223,13 @@ func TestS5A4DependentDeleteLinkedChildrenAndFinalRecovery(t *testing.T) {
 		}
 		a4Unknown(t, s, child.Receipt.ID, true)
 		r, target := a4Request(t, s, child.Receipt.ID)
-		if _, e = s.CommitRecovery(ctx, r, target, a4ForwardProof(target)); e == nil {
+		if _, e = s.CommitScopedRecovery(ctx, r, target, a4ForwardProof(target)); e == nil {
 			t.Fatal("child settled while parent running")
 		}
 		if e = s.Unknown(ctx, parent.ID, "DISPATCHING", "A4_PARENT_UNKNOWN"); e != nil {
 			t.Fatal(e)
 		}
-		a4Settle(t, s, r, target, a4ForwardProof(target))
+		a4SettleMode(t, s, r, target, a4ForwardProof(target), true)
 		p, e := s.Get(ctx, parent.ID)
 		if e != nil || p.State != "UNKNOWN" || p.NativeOperationID != "" {
 			t.Fatalf("parent replayed or unlocked %+v %v", p, e)
@@ -242,10 +241,9 @@ func TestS5A4DependentDeleteLinkedChildrenAndFinalRecovery(t *testing.T) {
 		}
 	})
 	t.Run("final-exact-terminal", func(t *testing.T) {
-		s := newStore(t)
-		s4b2InsertAuditFixture(t, s)
-		a := b5DeleteAdmission(t, s, s4b2RootSrc, "a")
-		parent := a4Admit(t, s, a)
+		s, b, _ := n3ScopedOwnedFixture(t)
+		a := scopedDeleteAdmission(t, s, b)
+		parent := a4AdmitMode(t, s, a, true)
 		if e := s.Claim(ctx, parent.ID); e != nil {
 			t.Fatal(e)
 		}
@@ -275,18 +273,23 @@ func TestS5A4DependentDeleteLinkedChildrenAndFinalRecovery(t *testing.T) {
 		if e = s.CheckDependentDeleteRecovery(ctx, target); e != nil {
 			t.Fatal(e)
 		}
-		p := recoverProof(target)
-		p.Fingerprint = "DELETE_SUCCESS:test-witness"
+		orig, e := purePeerReadOnly(t, s).ReadRootScopedDeleteUnknownOriginal(ctx, parent.ID, b.Project, purePeerBridge)
+		if e != nil {
+			t.Fatal(e)
+		}
+		p := p1CompletedProof(t, target, "DELETE", orig.Binding, ScopedLifecycleOriginalSHA256(orig))
+		p.UUID = b.UUID
+		p.ScopedLifecycle.Record.UUID = b.UUID
 		if _, e = s.db.Exec("UPDATE operations SET state='UNKNOWN' WHERE id=?", child.Receipt.ID); e != nil {
 			t.Fatal(e)
 		}
-		if _, e = s.CommitRecovery(ctx, r, target, p); e == nil {
+		if _, e = s.CommitScopedRecovery(ctx, r, target, p); e == nil {
 			t.Fatal("unknown child bypassed")
 		}
 		if _, e = s.db.Exec("UPDATE operations SET state='SUCCEEDED' WHERE id=?", child.Receipt.ID); e != nil {
 			t.Fatal(e)
 		}
-		a4Settle(t, s, r, target, p)
+		a4SettleMode(t, s, r, target, p, true)
 		var n int
 		if e = s.db.QueryRow("SELECT count(*) FROM network_address_fences WHERE project=? AND box_uuid=? AND state='RELEASED' AND operation_id=?", a.Layer, a.BoxUUID, parent.ID).Scan(&n); e != nil || n != 2 {
 			t.Fatalf("fences %d %v", n, e)
@@ -306,37 +309,32 @@ func TestS5A4PeerRootCompletedGrantRevokeAtomic(t *testing.T) {
 	ctx := context.Background()
 	for _, grant := range []bool{true, false} {
 		t.Run(fmt.Sprint(grant), func(t *testing.T) {
-			var s *Store
-			var id string
-			if grant {
-				s, _, id = s4b3UnknownGrantRecoveryFixture(t)
-			} else {
-				s, _, id = s4b2RootOperationFixture(t)
-				s4b2PendingExistingGrantToConfirmed(t, s)
-				if e := s.StageRootPeerRevocation(ctx, id); e != nil {
-					t.Fatal(e)
-				}
-				a4Unknown(t, s, id, false)
+			s, root, id := pr178ScopedReadyToStage(t, grant)
+			if e := s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+				t.Fatal(e)
+			}
+			if e := s.Unknown(ctx, id, "DISPATCHING", "TEST_LOST_ACK"); e != nil {
+				t.Fatal(e)
 			}
 			r, target := a4Request(t, s, id)
-			if !target.PeerReady {
-				t.Fatalf("root snapshot %+v", target)
+			if !target.ScopedPeer {
+				t.Fatal(target)
 			}
-			p := a4PeerProof(target)
+			p := RecoveryProof{Kind: RecoverySettle, Reason: "SCOPED_PEER_COMPLETED_NO_REPLAY", UUID: target.UUID, Fingerprint: "synthetic", ScopedPeer: scopedTestReceipt(t, root, id, true)}
 			bad := p
-			bad.Peer.KernelVerified = false
-			if _, e := s.CommitRecovery(ctx, r, target, bad); e == nil {
+			bad.ScopedPeer.VerifiedSteps = 3
+			if _, e := s.CommitScopedRecovery(ctx, r, target, bad); e == nil {
 				t.Fatal("partial root proof accepted")
 			}
 			bad = p
-			bad.Peer.PlanSHA256 = "invalid"
-			if _, e := s.CommitRecovery(ctx, r, target, bad); e == nil {
+			bad.ScopedPeer.PlanSHA256 = "invalid"
+			if _, e := s.CommitScopedRecovery(ctx, r, target, bad); e == nil {
 				t.Fatal("invalid digest accepted")
 			}
 			if _, e := s.db.Exec("CREATE TRIGGER a4_peer_fault BEFORE INSERT ON operation_events WHEN NEW.safe_detail LIKE 'SETTLED:%' BEGIN SELECT RAISE(ABORT,'a4 fault'); END"); e != nil {
 				t.Fatal(e)
 			}
-			if _, e := s.CommitRecovery(ctx, r, target, p); e == nil {
+			if _, e := s.CommitScopedRecovery(ctx, r, target, p); e == nil {
 				t.Fatal("peer fault accepted")
 			}
 			var status string
@@ -346,7 +344,7 @@ func TestS5A4PeerRootCompletedGrantRevokeAtomic(t *testing.T) {
 			if _, e := s.db.Exec("DROP TRIGGER a4_peer_fault"); e != nil {
 				t.Fatal(e)
 			}
-			a4Settle(t, s, r, target, p)
+			a4SettleMode(t, s, r, target, p, true)
 			want := "REVOKED"
 			if grant {
 				want = "CONFIRMED"
@@ -355,5 +353,58 @@ func TestS5A4PeerRootCompletedGrantRevokeAtomic(t *testing.T) {
 				t.Fatalf("peer %s %v", status, e)
 			}
 		})
+	}
+}
+
+func TestP1ScopedDeletePeerChildRecoveryNeverReplaysParent(t *testing.T) {
+	ctx := context.Background()
+	s, b, token := n3ScopedOwnedFixture(t)
+	purePeerComplete(t, s, purePeerAdmit(t, s, token, "recovery-grant", 1, 2, true))
+	parent := a4AdmitMode(t, s, scopedDeleteAdmission(t, s, b), true)
+	if e := s.Claim(ctx, parent.ID); e != nil {
+		t.Fatal(e)
+	}
+	child, e := s.NextDeleteChild(ctx, parent.ID, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	id := child.Receipt.ID
+	if e = s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+		t.Fatal(e)
+	}
+	root := purePeerReadOnly(t, s)
+	ordinary := scopedTestReceipt(t, root, id, false)
+	if e = s.Unknown(ctx, id, "DISPATCHING", "TEST_LOST_CHILD_ACK"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = root.ReadRootScopedPeerOriginal(ctx, id, b.Project, purePeerBridge); e == nil {
+		t.Fatal("UNKNOWN dispatch")
+	}
+	if _, e = root.ReadRootScopedPeerUnknownOriginal(ctx, id, b.Project, purePeerBridge); e == nil {
+		t.Fatal("child recovery with live parent")
+	}
+	if e = s.Unknown(ctx, parent.ID, "DISPATCHING", "TEST_LOST_PARENT"); e != nil {
+		t.Fatal(e)
+	}
+	rec := scopedTestReceipt(t, root, id, true)
+	if rec.ProofSHA256 != ordinary.ProofSHA256 {
+		t.Fatal("changed child proof")
+	}
+	r, target := a4Request(t, s, id)
+	p := RecoveryProof{Kind: RecoverySettle, Reason: "SCOPED_PEER_COMPLETED_NO_REPLAY", UUID: target.UUID, Fingerprint: "synthetic", ScopedPeer: rec}
+	a4SettleMode(t, s, r, target, p, true)
+	p1AssertOriginal(t, s, parent.ID, "UNKNOWN", "")
+	if e = s.AuthorizeCascadeFinal(ctx, parent.ID); e == nil {
+		t.Fatal("UNKNOWN parent gained dispatch")
+	}
+	if _, e = s.NextDeleteChild(ctx, parent.ID, false); e == nil {
+		t.Fatal("UNKNOWN parent gained child")
+	}
+	calls := 0
+	if e = (Worker{Store: s}).ExecuteScopedPeerOriginal(id, func(context.Context, string) (ScopedPeerRootReceipt, error) { calls++; return ordinary, nil }); e == nil || calls != 0 {
+		t.Fatal("replay", e, calls)
+	}
+	if _, e = root.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, purePeerBridge); e != nil {
+		t.Fatal(e)
 	}
 }

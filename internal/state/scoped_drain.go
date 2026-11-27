@@ -75,7 +75,7 @@ func (s *Store) ReadScopedDrainWitness(ctx context.Context, project string) (Mai
 		return MaintenanceLedger{}, e
 	}
 	defer tx.Rollback()
-	l, e := readMaintenanceLedger(ctx, tx, project, true)
+	l, e := readMaintenanceLedger(ctx, tx, project)
 	if e != nil {
 		return MaintenanceLedger{}, e
 	}

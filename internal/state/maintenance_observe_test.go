@@ -3,7 +3,6 @@ package state
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 )
@@ -117,44 +116,27 @@ func TestP1ScopedMaintenanceRetainsWitnessDigest(t *testing.T) {
 	}
 }
 
-func TestP1ScopedMaintenanceRefusesMixedHistory(t *testing.T) {
+func TestP1ScopedMaintenanceRetainsHistoryDigest(t *testing.T) {
 	ctx := context.Background()
-	for _, table := range []string{"network_ipv4_retirements", "network_ipv4_retirement_queue", "network_ipv4_compactions"} {
-		t.Run(table, func(t *testing.T) {
-			s, b, del := n3RetiredFixture(t)
-			var e error
-			// Synthetic mixed rows in the same Project; never native effects.
-			switch table {
-			case "network_ipv4_retirements":
-				_, e = s.db.Exec(`INSERT INTO network_ipv4_retirements(project,box_uuid,incarnation,bridge,acl,mac,ipv4,ipv6,create_operation_id,delete_operation_id,native_proof_sha256,retired_at)
- SELECT n.project,n.box_uuid,n.incarnation,n.bridge,n.acl,n.mac,n.ipv4,n.ipv6,c.id,?,?,1 FROM network_bindings n JOIN operations c ON c.layer=n.project AND c.box_uuid=n.box_uuid AND c.incarnation=n.incarnation AND c.action='box_create' WHERE n.project=? AND n.box_uuid=?`, del.ID, strings.Repeat("a", 64), b.Project, b.UUID)
-			case "network_ipv4_retirement_queue":
-				_, e = s.db.Exec("INSERT INTO network_ipv4_retirement_queue(delete_operation_id,project,attempt_order) VALUES(?,?,1)", del.ID, b.Project)
-			case "network_ipv4_compactions":
-				_, e = s.db.Exec("INSERT INTO network_ipv4_compactions(project,delete_operation_id,plan_sha256,prepared_at) VALUES(?,?,?,1)", b.Project, del.ID, strings.Repeat("a", 64))
-			}
-			if e != nil {
-				t.Fatal(e)
-			}
-			var n int
-			if e = s.db.QueryRow("SELECT count(*) FROM " + table).Scan(&n); e != nil || n != 1 {
-				t.Fatal(n, e)
-			}
-			snap := DiagnosticSnapshot{store: s}
-			legacy, e := snap.ReadMaintenanceLedger(ctx, b.Project)
-			if e != nil || len(legacy.HistorySHA256) != 64 {
-				t.Fatal(legacy, e)
-			}
-			if l, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project); !errors.Is(e, ErrResourceLocked) || l.HistorySHA256 != "" {
-				t.Fatal("mixed snapshot authorized", l, e)
-			}
-			if l, e := s.ReadScopedDrainWitness(ctx, b.Project); !errors.Is(e, ErrResourceLocked) || l.HistorySHA256 != "" {
-				t.Fatal("mixed drain authorized", l, e)
-			}
-			after, e := snap.ReadMaintenanceLedger(ctx, b.Project)
-			if e != nil || after.ObservationDigest() != legacy.ObservationDigest() {
-				t.Fatal("observation changed", after, e)
-			}
-		})
+	s, b, _ := n3RetiredFixture(t)
+	snap := DiagnosticSnapshot{store: s}
+	prior, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || len(prior.HistorySHA256) != 64 {
+		t.Fatal(prior, e)
+	}
+	drain, e := s.ReadScopedDrainWitness(ctx, b.Project)
+	if e != nil || drain.HistorySHA256 != prior.HistorySHA256 {
+		t.Fatal(drain, e)
+	}
+	after, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || after.ObservationDigest() != prior.ObservationDigest() {
+		t.Fatal(after, e)
+	}
+	if _, e = s.db.Exec("UPDATE network_address_fences SET observed_at=observed_at+1 WHERE state='RELEASED'"); e != nil {
+		t.Fatal(e)
+	}
+	after, e = snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || after.HistorySHA256 == prior.HistorySHA256 {
+		t.Fatal("history change hidden", after, e)
 	}
 }

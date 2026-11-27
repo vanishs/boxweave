@@ -140,14 +140,12 @@ func checkCreatePinPolicyTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 		return false, e
 	}
 	switch schema {
-	case 0:
-		return false, verifyIPv4RetirementHistory(ctx, tx, t.Layer, pin.Bridge, pin.ACL)
 	case 2:
 		acl, e := peerscope.ACLName(t.Layer, pin.Bridge, t.UUID)
 		if e != nil || acl != pin.ACL || t.NativeID == "" {
 			return true, ErrResourceLocked
 		}
-		return true, requireScopedNoLegacyRetirementTx(ctx, tx)
+		return true, nil
 	default:
 		return false, ErrResourceLocked
 	}

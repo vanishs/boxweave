@@ -295,16 +295,18 @@ def inspect_sqlite(dbpath, guided=False, cold=False, *, scoped=False):
         conn.execute("PRAGMA query_only=ON")
         conn.execute("BEGIN")
         version = [x[0] for x in conn.execute("SELECT version FROM schema_version")]
-        if len(version) != 1 or version[0] not in (4, 5, 6):
+        if len(version) != 1 or version[0] not in (4, 5, 6, 7):
             raise UninstallError("unrecognized controller database schema")
         if scoped:
-            if version != [6]:
+            if version != [7]:
                 raise UninstallError("SCOPED_LEDGER_SCHEMA_UNVERIFIED")
-            # Same transitional global refusal as the Go admission guard.
+            # Schema 7 has no Legacy tables, even empty ones.
             for table in ("network_ipv4_retirements", "network_ipv4_retirement_queue",
                           "network_ipv4_compactions"):
-                if conn.execute("SELECT EXISTS(SELECT 1 FROM " + table + ")").fetchone() != (0,):
+                if conn.execute("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name=?)", (table,)).fetchone() != (0,):
                     raise UninstallError("SCOPED_LEGACY_RETIREMENT_PRESENT:" + table)
+        elif version == [7]:
+            raise UninstallError("SCOPED_LEDGER_REQUIRES_SCOPED_UNINSTALL")
         operation_hash = hashlib.sha256()
         operation_count = 0
         blockers = []
@@ -320,7 +322,7 @@ def inspect_sqlite(dbpath, guided=False, cold=False, *, scoped=False):
                 # For full retirement, exact successful *later* Box Delete
                 # and an earlier local release audit must prove that no live
                 # Box is being abandoned. Network/foreign UNKNOWNs remain blocked.
-                if guided and version[0] in (5, 6) and state == "UNKNOWN":
+                if guided and version[0] in (5, 6, 7) and state == "UNKNOWN":
                     witness = conn.execute("""
                         SELECT o.id, b.uuid, d.id, r.seq, r.evidence_digest, o.action
                         FROM operations o

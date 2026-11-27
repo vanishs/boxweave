@@ -27,9 +27,7 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 		return e
 	}
 	if !scoped {
-		if e = requireNoIPv4Compaction(ctx, tx, t.Layer); e != nil {
-			return e
-		}
+		return ErrResourceLocked
 	}
 	if e = requireCreateBindingReservation(ctx, tx, t.ID, t.Layer, pin); e != nil {
 		return e
@@ -60,10 +58,7 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 	if n != 0 {
 		return ErrResourceLocked
 	}
-	if scoped {
-		return checkScopedPinRepairCollisionsTx(ctx, tx, t, pin)
-	}
-	return checkLegacyPinRepairCollisionsTx(ctx, tx, t, pin)
+	return checkScopedPinRepairCollisionsTx(ctx, tx, t, pin)
 }
 
 const pinRepairClaimQuery = "SELECT COUNT(*) FROM operation_resource_claims c WHERE c.resource_key=? AND c.operation_id!=?"

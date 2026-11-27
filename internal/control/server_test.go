@@ -52,7 +52,7 @@ func fixture(t *testing.T) (*state.Store, *httptest.Server, string, string) {
 		t.Fatal(err)
 	}
 	_ = a
-	srv := &Service{ScopedPeerFresh: true, Store: st, Native: native.Reader{Socket: filepath.Join(dir, "absent-incus.socket"), Project: testScopedProject}, BuildVersion: "s1-test", BuildCommit: "test-commit", Listener: "127.0.0.1:18650"}
+	srv := &Service{Store: st, Native: native.Reader{Socket: filepath.Join(dir, "absent-incus.socket"), Project: testScopedProject}, BuildVersion: "s1-test", BuildCommit: "test-commit", Listener: "127.0.0.1:18650"}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return st, ts, admin, viewer

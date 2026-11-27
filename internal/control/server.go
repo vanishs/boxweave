@@ -65,13 +65,11 @@ func (w *privateMCPWriter) Unwrap() http.ResponseWriter {
 }
 
 type Service struct {
-	ScopedPeerFresh bool
-	Store           *state.Store
-	Native          native.Reader
-	BuildVersion    string
-	BuildCommit     string
-	Listener        string
-	retirementLog   retirementLogLimiter
+	Store        *state.Store
+	Native       native.Reader
+	BuildVersion string
+	BuildCommit  string
+	Listener     string
 }
 
 type HostStatus struct {
@@ -128,10 +126,7 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.ProjectCapacity = &cap
 	}
 	out.Ready = out.MCPReady && out.Native.Ready
-	out.PeerMode = "LEGACY"
-	if s.ScopedPeerFresh {
-		out.PeerMode = "SCOPED_V2"
-	}
+	out.PeerMode = "SCOPED_V2"
 	out.ReadinessClass = "READY_OBSERVED"
 	out.Navigation = state.NextAction{Kind: "NONE"}
 	if !out.MCPReady {
@@ -144,16 +139,9 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 		out.ReadinessClass = "NATIVE_PREREQUISITE_UNVERIFIED"
 		out.Navigation = issuesNext()
 	}
-	if s.ScopedPeerFresh {
-		s.observeScopedCapacity(ctx, &out)
-	} else {
-		s.observeLegacyRetirement(ctx, &out)
-	}
+	s.observeScopedCapacity(ctx, &out)
 	if out.Ready {
-		holds := s.Store.ReadCreateAddressHolds
-		if s.ScopedPeerFresh {
-			holds = s.Store.ReadScopedCreateAddressHolds
-		}
+		holds := s.Store.ReadScopedCreateAddressHolds
 		if capacity, e := s.Native.ReadCreateAddressCapacity(ctx, holds); e == nil {
 			out.AddressCapacity = &capacity
 			out.AddressCapacityStatus = "OBSERVED"
@@ -259,7 +247,7 @@ func (s *Service) Handler() http.Handler {
 			http.Error(w, "OFFLINE_RETIREMENT_IN_PROGRESS", http.StatusServiceUnavailable)
 			return
 		}
-		if s.ScopedPeerFresh && install.CheckScopedDrainFence() != nil {
+		if install.CheckScopedDrainFence() != nil {
 			http.Error(w, "SCOPED_DRAIN_IN_PROGRESS", http.StatusServiceUnavailable)
 			return
 		}
@@ -325,9 +313,6 @@ func (s *Service) ListenAndServe() error {
 	gcCtx, gcCancel := context.WithCancel(context.Background())
 	defer gcCancel()
 	go s.execGCLoop(gcCtx)
-	if !s.ScopedPeerFresh {
-		go s.ipv4RetirementLoop(gcCtx)
-	}
 	return server.ListenAndServe()
 }
 

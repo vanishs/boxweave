@@ -100,8 +100,8 @@ func Activate(p Plan, approved bool) (Manifest, error) {
 	if err != nil {
 		return m, err
 	}
-	if err = verifyRetirementNativePrepared(m); err != nil {
-		return m, err
+	if m.ScopedPeerMode != nativePeerFreshMode || m.RetirementUnitSHA256 != "" || m.RetirementBridge != "" || m.RetirementACL != "" || m.RetirementNativeReviewSHA != "" {
+		return m, errors.New("scoped fresh activation required; legacy installation unsupported")
 	}
 	if err = doctorAsService(p, p.BinaryPath); err != nil {
 		return m, err
@@ -110,15 +110,8 @@ func Activate(p Plan, approved bool) (Manifest, error) {
 		if err = runLocal("systemctl", "daemon-reload"); err != nil {
 			return m, err
 		}
-		if m.ScopedPeerMode == nativePeerFreshMode {
-			if err = activateScopedGuard(); err != nil {
-				return m, err
-			}
-		}
-		if m.RetirementUnitSHA256 != "" {
-			if _, err = retirementUnitProperties(); err != nil {
-				return m, err
-			}
+		if err = activateScopedGuard(); err != nil {
+			return m, err
 		}
 		if err = runLocal("systemctl", "enable", "--now", serviceName); err != nil {
 			return m, err

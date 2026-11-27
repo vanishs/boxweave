@@ -82,6 +82,27 @@ to fill a blocked stage; no PASS for unmet mandatory gates.
    fault/recovery assertions. Exit: one schema, no live old-table
    dependency; aggregate R2/R3 local candidate verified.
 
+### Owner-approved P1/P2 scope boundary (2026-11-26)
+
+P1 remains the single Scoped runtime and schema-7 cutover, including
+necessary installer/consumer dependencies and complete retained core
+regressions. The full offline retirement implementation migration
+from the old Legacy leaf to Scoped belongs to P2, as originally planned.
+Preserve UNKNOWN originals, archive integrity, foreign resources,
+interrupted resume and purge obligations. Do not claim equivalence to
+live drain. A dependency genuinely required for P1 stays in P1.
+This is sequencing, not waiver: old gates remain until explicit
+applicability/replacement disposition, R4/R5 require all mandatory P1
+evidence, and final P5 cannot accept outstanding P2 obligations.
+The two blocked Install regression conversions are not deferred by this
+decision. No safety exception, product publication or release approval.
+
+### Owner-directed development continuation (2026-11-27)
+
+Owner decision (2026-11-27): P1 implementation is considered development-complete for scheduling; proceed with independent P2 development. This explicitly defers the unresolved Install composed witness in #194, not a PASS, waiver, or permission to repeat a refused operation. The existing 577 PASS / 66 SKIP / 2 FAIL aggregate and Race exit 1 remain recorded. Retain the original failed tests and all safety assertions. Exact-candidate regression, native and CI evidence, C04 hosted equivalence if needed, and old-gate applicability/replacement remain open before formal P1 acceptance, merge or release. This Schema 7 development checkpoint is not an accepted or release candidate. See [#194](https://github.com/vanishs/boxweave/issues/194) and [R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7212654941).
+
+This supersedes the earlier no-deferral decision for development sequencing only. Formal R0-R5 exit standards remain unchanged.
+
 ### Joint R2/R3 execution (remaining work)
 
 Use the [phase-wide continuation projection](../../dev/skills/task-resume/SKILL.md#phase-wide-continuation-candidate)

@@ -115,6 +115,92 @@ rationale; never fake old markers. P4 handles unrelated cleanup only.
 The following historical mapping remains evidence; its P4 timing
 is superseded for cutover dependencies. No WAN or native waiver.
 
+## Candidate lane-local and aggregate consumer (R2/R3)
+
+The historical 72-marker union now has an explicit source-controlled map:
+[pr191_s2_witness_map.json](../../scripts/pr191_s2_witness_map.json).
+[Consumer](../../scripts/pr191_s2_witness_map.py) validates all 48 direct
+markers, 24 replacements and the six ordered operation_list witnesses.
+Each of 22 N2 modes and the S25 lane checks its own original transcript,
+exact source, candidate identity and mapped requirements. Other six N2
+modes retain their original full gates; no silent fallback on check error.
+The existing N2/S25 per-mode checks and old S2 audit/manifest/release
+gates remain intact. The new check is additional, not a retirement waiver.
+
+For an independently obtained original log set, use the same read-only
+consumer with --directory DIR --source EXACT_SHA, naming each log for its
+lane. Require all 23 lanes, reject missing, swapped or repeated logs, and
+report each digest and the 24 replacement dispositions. Source and binary
+hashes do not authenticate untrusted text. Independently verify actual
+CI run, attempt, job, conclusion, source and candidate provenance before
+any acceptance. No public WAN or hardware outage inference; C04 separate.
+
+Offline retirement remains an explicitly separate contract. Current
+offline_scope_blockers admits only the reviewed Legacy leaf; the Scoped
+live drain and interrupted purge do not establish offline UNKNOWN archive,
+native retirement or foreign preservation equivalence. Legacy install,
+schema-6 successful upgrade and old helper activation are obsolete
+positive runtime expectations, not generic maintenance coverage. Keep
+legacy/legacy-offline gates until explicit complete disposition, and
+retain the P2 offline conversion obligation. Do not report them as
+current Scoped positive evidence or waive them to obtain green CI.
+
+Source calibration only: 23 lane fixtures, every mapped requirement
+omitted in turn, missing/duplicate/wrong identity, wrong lane and ordered
+list failures, aggregate missing/swapped lane, separate WAN. Local
+operation 5c91e08d975da8a9f749efc7527f6dcb exit 0, 107 related Python
+tests and 48 YAML files. No final native proof or release authorization.
+
+### Schema-7 actual binary negative consumer
+
+Seven private invalid layouts verified against candidate-13 status
+and Doctor with unchanged original bytes, no sidecars, and typed
+refusal (30644e777841e96af0dfc934fc65ca43 exit0). Installed N2 schema
+witness now additionally requires each exact status refusal; original
+Doctor checks and guard/history checks unchanged. Calibration
+35dc2a7ba16d7e97adb71930f4a686c2 exit0. Actual native installed lane
+still unverified. The fresh status/reopen check has no native readiness.
+
+### Exact-original and CI locator continuation
+
+Create/Delete ACK require the identical two retained-original lines;
+the six terminal WAL lanes require exact controller cut, crosscheck and
+completion in order with the same original (Exec also the same native ID).
+The two Update ACK WAL lanes bind cut and restart to the same original.
+Each mapped lane now emits a sanitized CI locator only after its existing
+full per-mode assertions; it binds map digest, source, candidate, original
+transcript digest, repository, workflow, job, run and attempt. No new raw
+log upload. The PR and release S25 routes retain all existing checks.
+The receipt-directory index requires all 23 distinct lane receipts and
+rejects wrong map/source, repeated transcripts, missing lanes or altered
+metadata. These declared locators do NOT authenticate job success or
+establish semantic equivalence; check original CI run/attempt/job and
+complete evidence. R4 performs actual exact-head consumer cutover; no
+legacy gate has been silently removed.
+
+### Owner-approved N2 applicability boundary
+
+- Legacy positive installer, schema-6 upgrade/rollback, old retirement
+  helper activation/outage and Legacy-to-Scoped migration are historical
+  contracts, not supported positive paths of the fresh-only schema-7
+  runtime. Keep source/history and explicit old-state refusal.
+- Generic D3/D4 reviewed recovery, H3B decline, H4A busy/replay/UNKNOWN
+  navigation and D5 authenticated postcheck retain corresponding
+  SCOPED_V2 checks. I2 legacy preview is a no-effect refusal obligation
+  (INSTALL_SCOPED_WRAPPERS_REFUSE_LEGACY). Generic I3 drift refusal and
+  normal retirement/archive/reinstall remain required: current Scoped
+  pre-dispatch foreign ACL/drop-in refusal, complete native restore,
+  retained history and interrupted purge/reinstall witnesses are not
+  proof of every old drift case.
+- Legacy offline exact UNKNOWN review, archived byte preservation,
+  native retirement, foreign preservation and interrupted cleanup/purge
+  implementation conversion belong to P2 per owner. Do not equate
+  normal Scoped drain with offline UNKNOWN archive or waive any final
+  maintenance requirements. Minimum P1 dependencies remain in P1.
+- No active legacy/legacy-offline or old S2 gate removed in this pass;
+  exact replacement and necessary obsolete-contract disposition at
+  consumer cutover. No full installed acceptance for schema 7 yet.
+
 ## Remaining consumers and disposition
 
 - All old S2/S2.5 producers, raw witness audit, grouped acceptance manifest,

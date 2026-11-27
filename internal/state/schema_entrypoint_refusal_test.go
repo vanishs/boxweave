@@ -16,10 +16,14 @@ import (
 // adopting, migrating or dropping its unresolved operation.
 func TestIncompatibleSchemaPreservesOriginalAcrossEntryPoints(t *testing.T) {
 	for _, tc := range []struct{ name, mutation string }{
+		{"exact-v6-with-legacy-history", "UPDATE schema_version SET version=6;" + legacyRetirementTableDDL + ";" + legacyRetirementQueueTableDDL + ";" + legacyCompactionTableDDL + ";" + legacyRetirementIndexDDL + ";" + legacyRetirementQueueIndexDDL},
 		{"old-version", fmt.Sprintf("UPDATE schema_version SET version=%d", SchemaVersion-1)},
 		{"new-version", fmt.Sprintf("UPDATE schema_version SET version=%d", SchemaVersion+1)},
 		{"ambiguous-version", fmt.Sprintf("INSERT INTO schema_version VALUES(%d)", SchemaVersion)},
 		{"foreign-table", "CREATE TABLE old_runtime_shadow (id TEXT)"},
+		{"schema7-legacy-archive", legacyRetirementTableDDL},
+		{"schema7-legacy-queue", legacyRetirementQueueTableDDL},
+		{"schema7-legacy-compaction", legacyCompactionTableDDL},
 		{"missing-declared-index", "DROP INDEX operations_work_time"},
 		{"missing-retained-table", "DROP TABLE network_address_fences"},
 		{"changed-retained-index", "DROP INDEX network_address_fences_owner_state; CREATE INDEX network_address_fences_owner_state ON network_address_fences(box_uuid,project,state)"},
@@ -73,6 +77,11 @@ func TestIncompatibleSchemaPreservesOriginalAcrossEntryPoints(t *testing.T) {
 				_ = db.Close()
 				t.Fatal(err)
 			}
+			if tc.name == "exact-v6-with-legacy-history" {
+				if _, err = db.Exec("INSERT INTO network_ipv4_retirement_queue(delete_operation_id,project,attempt_order) VALUES(?,?,1)", original.ID, "fixture-layer"); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if err = db.Close(); err != nil {
 				t.Fatal(err)
 			}
@@ -103,6 +112,14 @@ func TestIncompatibleSchemaPreservesOriginalAcrossEntryPoints(t *testing.T) {
 					}
 				})
 			}
+			if snap, err := OpenDiagnosticSnapshot(ctx, path); err == nil {
+				snap.Close()
+				t.Fatal("incompatible diagnostic snapshot accepted")
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("diagnostic refusal changed ledger", err)
+			}
 			// Inspect the deliberately incompatible private fixture directly;
 			// never open or migrate a real old installation to test refusal.
 			ro, err := sql.Open("sqlite3", "file:"+path+"?mode=ro&_query_only=1")
@@ -120,6 +137,40 @@ func TestIncompatibleSchemaPreservesOriginalAcrossEntryPoints(t *testing.T) {
 				Scan(&remaining); err != nil || remaining != claims {
 				t.Fatalf("original claim changed: %d != %d (%v)", remaining, claims, err)
 			}
+			if tc.name == "exact-v6-with-legacy-history" {
+				var n int
+				if err = ro.QueryRow("SELECT count(*) FROM network_ipv4_retirement_queue WHERE delete_operation_id=?", original.ID).Scan(&n); err != nil || n != 1 {
+					t.Fatal("legacy history changed", n, err)
+				}
+			}
+
 		})
+	}
+}
+
+// A fresh ledger contains only the retained model; retired entrypoints
+// must not even invoke their native witness on the new schema.
+func TestSchema7FreshLegacyEntryRefusal(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	var version, n int
+	if e := s.db.QueryRow("SELECT version FROM schema_version").Scan(&version); e != nil || version != 7 {
+		t.Fatal(version, e)
+	}
+	if e := s.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name LIKE 'network_ipv4_%'").Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+	called := false
+	if e := s.RetireVerifiedIPv4(ctx, "user-1001", "original", func(context.Context, IPv4RetirementCandidate) (IPv4RetirementCandidate, string, error) {
+		called = true
+		return IPv4RetirementCandidate{}, "", nil
+	}); e == nil || called {
+		t.Fatal("retired callback invoked", e, called)
+	}
+	if ok, e := s.PrepareIPv4Compaction(ctx, "user-1001", "original", func(context.Context, IPv4RetirementCandidate) (string, error) { called = true; return "", nil }); e == nil || ok || called {
+		t.Fatal("compaction callback invoked", ok, e, called)
+	}
+	if e := s.db.QueryRow("SELECT count(*) FROM operations").Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
 	}
 }

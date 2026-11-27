@@ -22,7 +22,7 @@ type ScopedDrainStep struct {
 
 func (s *Service) RunScopedDrainStep(ctx context.Context, actor state.ScopedDrainActor, step ScopedDrainStep, expected string, readOnly bool) (state.Receipt, error) {
 	var zero state.Receipt
-	if s == nil || !s.ScopedPeerFresh || s.Store == nil || !validPrincipalID(actor.ID) {
+	if s == nil || s.Store == nil || !validPrincipalID(actor.ID) {
 		return zero, state.ErrInvalid
 	}
 	// First inspect exact original, even if subsequent state has changed.

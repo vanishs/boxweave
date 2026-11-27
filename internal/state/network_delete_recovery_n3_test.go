@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"errors"
+	"github.com/vanishs/boxweave/internal/peerscope"
 	"testing"
 )
 
@@ -14,7 +15,8 @@ func n3AdmitDeleteForPin(t *testing.T, s *Store, a Admission, uuid string) Recei
 	a.BoxUUID = uuid
 	a.Incarnation = uuid
 	a.CleanupDependencies = true
-	r, e := s.Admit(context.Background(), a)
+	a.SafeIntent = []byte(`{"box_id":"` + uuid + `"}`)
+	r, e := s.AdmitScoped(context.Background(), a)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -107,57 +109,46 @@ func TestN3ModernDeleteRejectsDamagedCreateProvenance(t *testing.T) {
 
 func TestN3DeleteRequiresLostCreateACKExactRecoveryLineage(t *testing.T) {
 	ctx := context.Background()
-	for _, corrupt := range []bool{false, true} {
-		name := "complete"
-		if corrupt {
-			name = "damaged recovery audit"
-		}
-		t.Run(name, func(t *testing.T) {
-			s := newStore(t)
-			tok := activityTestToken(t, s)
-			a := Admission{Layer: "user-1001", ActorID: tok.ID, TokenID: tok.ID, Key: "n3-delete-lost-create-ack-original", RequestID: "create", Action: "box_create", ResourceKey: "box:alpha",
-				SafeIntent: []byte(`{"name":"alpha","cpu":1,"memory_mib":1024,"disk_gib":10,"start":false,"nesting":false,"internet":true,"instance_options":{}}`)}
-			create, e := s.Admit(ctx, a)
+	for _, tc := range []struct{ name, query string }{
+		{"complete", ""},
+		{"damaged recovery audit", "UPDATE recovery_audit SET decision='RELEASED' WHERE operation_id=?"},
+		{"damaged original event", "UPDATE operation_events SET safe_detail='DAMAGED' WHERE operation_id=? AND safe_detail='RECOVERY_SCOPED_CREATE_ATOMIC_NO_REPLAY'"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, orig, in, pin := p1CreateFixture(t, true)
+			if e := s.Unknown(ctx, orig.ID, "VERIFYING", "FINAL_COMMIT_LOST"); e != nil {
+				t.Fatal(e)
+			}
+			req, target := a4Request(t, s, orig.ID)
+			tx, e := s.db.BeginTx(ctx, nil)
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = s.Claim(ctx, create.ID); e != nil {
-				t.Fatal(e)
-			}
-			pin := VerifiedCreateBinding{"bwbr0", "bw-peer", "02:16:3e:11:22:33", "10.24.18.11", "fd43:18::11"}
-			if ok, e := s.StageCreateBinding(ctx, create.ID, a.Layer, "alpha", pin); e != nil || !ok {
-				t.Fatal(ok, e)
-			}
-			if e = s.Unknown(ctx, create.ID, "DISPATCHING", "ACK_LOST"); e != nil {
-				t.Fatal(e)
-			}
-			target, e := s.ReadRecoveryTarget(ctx, a.Layer, create.ID)
+			proof, e := readScopedCreateOriginalTxPhase(ctx, tx, orig.ID, in.Project, in.Bridge, "UNKNOWN")
+			tx.Rollback()
 			if e != nil {
 				t.Fatal(e)
 			}
-			const uuid = "11111111-1111-4111-8111-000000000001"
-			proof := RecoveryProof{Kind: RecoverySettle, Reason: "CREATE_ACK_LOST_STATIC_POSTSTATE_VERIFIED", UUID: uuid, Fingerprint: "native-original-verified", CreateBinding: pin}
-			if _, e = s.CommitRecovery(ctx, RecoveryRequest{Layer: a.Layer, ActorID: tok.ID, TokenID: tok.ID, OriginalID: create.ID, Key: "n3-delete-acklost-provenance-original-recover"}, target, proof); e != nil {
+			pin.ACL, e = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
+			if e != nil {
 				t.Fatal(e)
 			}
-			if corrupt {
-				if _, e = s.db.Exec("UPDATE recovery_audit SET decision='RELEASED' WHERE operation_id=?", create.ID); e != nil {
+			a4SettleMode(t, s, req, target, p1CompletedProof(t, target, "CREATE", pin, ScopedLifecycleOriginalSHA256(proof)), true)
+			a := b5DeleteAdmission(t, s, p1UUID, in.Name)
+			a.Layer = in.Project
+			a.SafeIntent = []byte(`{"box_id":"` + p1UUID + `"}`)
+			if tc.query != "" {
+				if _, e = s.db.Exec(tc.query, orig.ID); e != nil {
 					t.Fatal(e)
 				}
 			}
-			a.Action = "box_delete"
-			a.Key = "n3-delete-after-lost-create-ack"
-			a.RequestID = "delete"
-			a.BoxUUID = uuid
-			a.Incarnation = uuid
-			a.CleanupDependencies = true
-			_, e = s.Admit(ctx, a)
-			if corrupt {
+			_, e = s.AdmitScoped(ctx, a)
+			if tc.query != "" {
 				if !errors.Is(e, ErrResourceLocked) {
-					t.Fatal("corrupt Create noACK lineage admitted Delete", e)
+					t.Fatal("damaged recovery provenance admitted Delete", e)
 				}
 			} else if e != nil {
-				t.Fatal("valid exact Create ACK recovery wrongly refused", e)
+				t.Fatal("valid recovery refused", e)
 			}
 		})
 	}

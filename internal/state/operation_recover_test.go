@@ -286,26 +286,31 @@ func recoveryConcurrentSameKeyAndDifferentKey(t *testing.T, scoped bool) {
 	}
 }
 func TestS5A2RecoveryBindDoesNotUnlockOrInventNativeAck(t *testing.T) {
-	s := newStore(t)
 	ctx := context.Background()
-	r, target := recoveryOriginal(t, s, "box_create", "")
+	s, original, in, _ := p1CreateFixture(t, false)
+	if e := s.Unknown(ctx, original.ID, "DISPATCHING", "ACK_LOST"); e != nil {
+		t.Fatal(e)
+	}
+	r, target := a4Request(t, s, original.ID)
 	var originalSeq, originalAt int64
 	var originalDetail string
 	if e := s.db.QueryRow("SELECT seq,at,safe_detail FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", target.ID).Scan(&originalSeq, &originalAt, &originalDetail); e != nil {
 		t.Fatal(e)
 	}
-	p := RecoveryProof{Kind: RecoveryBind, Reason: "CREATE_MARKER_EXACT_IDENTITY", UUID: rUUID, Fingerprint: "test-marker"}
-	got, e := s.CommitRecovery(ctx, r, target, p)
-	if e != nil || got.Disposition != "IDENTITY_BOUND" || got.Receipt.BoxUUID != rUUID {
-		t.Fatalf("binding %+v %v", got, e)
+	var claims int
+	if e := s.db.QueryRow("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", target.ID).Scan(&claims); e != nil || claims == 0 {
+		t.Fatal(claims, e)
+	}
+	p := RecoveryProof{Kind: RecoveryBind, Reason: "CREATE_MARKER_EXACT_IDENTITY", UUID: p1UUID, Fingerprint: "test-marker"}
+	if _, e := s.CommitScopedRecovery(ctx, r, target, p); !errors.Is(e, ErrResourceLocked) {
+		t.Fatalf("retired bind accepted: %v", e)
 	}
 	current, e := s.ReadRecoveryTarget(ctx, r.Layer, target.ID)
-	if e != nil || current.State != "UNKNOWN" || current.UUID != rUUID || current.NativeID != "" || current.Released {
+	if e != nil || current != target || current.State != "UNKNOWN" || current.NativeID != "" || current.Released {
 		t.Fatalf("unsafe binding %+v %v", current, e)
 	}
-	duplicate, e := s.ReplayRecovery(ctx, r)
-	if e != nil || !duplicate.Receipt.Duplicate || duplicate.Receipt.ID != got.Receipt.ID {
-		t.Fatalf("binding replay %+v %v", duplicate, e)
+	if _, e = s.ReplayRecovery(ctx, r); !errors.Is(e, ErrNotFound) {
+		t.Fatalf("refusal created receipt: %v", e)
 	}
 	var at int64
 	var detail, phase string
@@ -313,56 +318,41 @@ func TestS5A2RecoveryBindDoesNotUnlockOrInventNativeAck(t *testing.T) {
 		t.Fatalf("original event changed %v", e)
 	}
 	var n int
-	if e = s.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", target.ID).Scan(&n); e != nil || n != 2 {
-		t.Fatalf("expected two UNKNOWN events, got %d %v", n, e)
+	if e = s.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", target.ID).Scan(&n); e != nil || n != 1 {
+		t.Fatalf("expected unchanged UNKNOWN history, got %d %v", n, e)
 	}
-	if e = s.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND seq>? AND state='UNKNOWN' AND safe_detail='EXACT_NATIVE_UUID_BOUND_RECOVERY_NO_REPLAY'", target.ID, originalSeq).Scan(&n); e != nil || n != 1 {
-		t.Fatalf("missing unique bind event %d %v", n, e)
+	if e = s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=? AND decision='RECOVERY_IDENTITY_BOUND'", target.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatalf("refusal wrote binding audit %d %v", n, e)
 	}
-	if e = s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=? AND decision='RECOVERY_IDENTITY_BOUND'", target.ID).Scan(&n); e != nil || n != 1 {
-		t.Fatalf("missing unique binding audit %d %v", n, e)
+	if _, e = s.OwnedBox(ctx, in.Project, p1UUID); !errors.Is(e, ErrNotFound) {
+		t.Fatalf("refusal registered identity: %v", e)
 	}
-	_, e = s.Admit(ctx, Admission{Layer: r.Layer, ActorID: r.ActorID, TokenID: r.TokenID, Key: "never-admit-under-original-lock", Action: "box_exec", RequestID: "refusal", ResourceKey: "box:owned", BoxUUID: rUUID, Incarnation: rUUID, SafeIntent: []byte("{}")})
-	if !errors.Is(e, ErrResourceLocked) {
-		t.Fatalf("identity binding unlocked UNKNOWN: %v", e)
+	if e = s.db.QueryRow("SELECT count(*) FROM operation_resource_claims WHERE operation_id=?", target.ID).Scan(&n); e != nil || n != claims {
+		t.Fatalf("original lost claims: %d %v", n, e)
 	}
 }
 func TestS5A2RecoveryExecEvidenceAndDeleteAtomic(t *testing.T) {
+	// Scoped Delete atomicity has its dedicated witness TestP1ScopedDeleteCompletedRecoveryAtomic.
 	ctx := context.Background()
-	for _, action := range []string{"box_exec", "box_delete"} {
-		t.Run(action, func(t *testing.T) {
-			s := newStore(t)
-			r, target := recoveryOriginal(t, s, action, rUUID)
-			p := recoverProof(target)
-			if action == "box_exec" {
-				exit := 127
-				p.Exit = &exit
-				p.StdoutPath = "/1.0/instances/owned/logs/exec-output/exec_" + rNative + ".stdout"
-				p.StderrPath = "/1.0/instances/owned/logs/exec-output/exec_" + rNative + ".stderr"
-				bad := p
-				bad.StdoutPath = "/1.0/instances/foreign/logs/exec-output/exec_" + rNative + ".stdout"
-				if _, e := s.CommitRecovery(ctx, r, target, bad); !errors.Is(e, ErrInvalid) {
-					t.Fatalf("foreign path accepted %v", e)
-				}
-			} else {
-				p.Fingerprint = "DELETE_SUCCESS:independent-fixture"
-			}
-			got, e := s.CommitRecovery(ctx, r, target, p)
-			if e != nil || got.Disposition != "SETTLED" {
-				t.Fatalf("%+v %v", got, e)
-			}
-			if action == "box_exec" {
-				out, e := s.ExecOutput(ctx, target.ID)
-				if e != nil || out.ExitCode == nil || *out.ExitCode != 127 || out.StdoutPath != p.StdoutPath {
-					t.Fatalf("lost guest exit %+v %v", out, e)
-				}
-			} else {
-				var phase, by string
-				if e = s.db.QueryRow("SELECT state,deleted_by_operation_id FROM owned_boxes WHERE uuid=?", rUUID).Scan(&phase, &by); e != nil || phase != "DELETED" || by != target.ID {
-					t.Fatalf("lost original tombstone %s %s %v", phase, by, e)
-				}
-			}
-		})
+	s := newStore(t)
+	r, target := recoveryOriginalMode(t, s, "box_exec", true)
+	p := recoverProof(target)
+	exit := 127
+	p.Exit = &exit
+	p.StdoutPath = "/1.0/instances/owned/logs/exec-output/exec_" + rNative + ".stdout"
+	p.StderrPath = "/1.0/instances/owned/logs/exec-output/exec_" + rNative + ".stderr"
+	bad := p
+	bad.StdoutPath = "/1.0/instances/foreign/logs/exec-output/exec_" + rNative + ".stdout"
+	if _, e := s.CommitScopedRecovery(ctx, r, target, bad); !errors.Is(e, ErrInvalid) {
+		t.Fatalf("foreign path accepted %v", e)
+	}
+	got, e := s.CommitScopedRecovery(ctx, r, target, p)
+	if e != nil || got.Disposition != "SETTLED" {
+		t.Fatalf("%+v %v", got, e)
+	}
+	out, e := s.ExecOutput(ctx, target.ID)
+	if e != nil || out.ExitCode == nil || *out.ExitCode != 127 || out.StdoutPath != p.StdoutPath {
+		t.Fatalf("lost guest exit %+v %v", out, e)
 	}
 }
 func TestS5A2RecoveryRefusalAndLocalParity(t *testing.T) {

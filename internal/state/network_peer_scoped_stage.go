@@ -125,7 +125,7 @@ func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error
 		dst.Incarnation != i.TargetIncarnation {
 		return ErrResourceLocked
 	}
-	expectedClaims, e := scopedPeerResourceClaims(i)
+	expectedClaims, parent, e := scopedPeerParentClaims(ctx, tx, id, i, "ADMITTED")
 	if e != nil {
 		return ErrResourceLocked
 	}
@@ -163,10 +163,10 @@ func stageScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id string) error
 		return ErrRevoked
 	}
 	var busy int
-	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>?
+	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>? AND o.id<>?
   AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
   AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
-  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`, i.Project, id).Scan(&busy)
+  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`, i.Project, id, parent).Scan(&busy)
 	if e != nil || busy != 0 {
 		return ErrResourceLocked
 	}

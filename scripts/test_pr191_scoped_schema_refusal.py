@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from pr191_scoped_schema_refusal import fixtures, refused
+from pr191_scoped_schema_refusal import fixtures, refused, require_schema7, status_refused, STATUS_REFUSAL
 import pr191_scoped_update_transport as update
 
 
@@ -22,14 +22,42 @@ class SchemaRefusal(unittest.TestCase):
         return subprocess.CompletedProcess([], code, json.dumps({
             "ready":ready,"diagnostic":{"database":{"state":"UNVERIFIED","reason":reason}}}),"")
 
-    def test_five_distinct_layouts(self):
-        self.assertEqual(len(self.cases),5)
-        for name in ("old","ambiguous","versioned-foreign"):
+    def test_seven_distinct_layouts(self):
+        self.assertEqual(len(self.cases),7)
+        for name in ("old","future","partial","ambiguous","versioned-foreign"):
             with sqlite3.connect(self.cases[name]) as db:
-                expected = {"old":[(6,)],"ambiguous":[(7,),(7,)],"versioned-foreign":[(7,)]}[name]
+                expected = {"old":[(6,)],"future":[(8,)],"partial":[(7,)],"ambiguous":[(7,),(7,)],"versioned-foreign":[(7,)]}[name]
                 self.assertEqual(db.execute("SELECT version FROM schema_version").fetchall(),expected)
         for path in self.cases.values():
             refused(self.result(),path,path.read_bytes())
+
+    def test_status_exact_refusal_and_no_effect(self):
+        self.assertEqual(set(STATUS_REFUSAL),set(self.cases))
+        for name,path in self.cases.items():
+            with self.subTest(name=name):
+                expected=path.read_bytes()
+                result=subprocess.CompletedProcess([],1,"","boxweave: "+STATUS_REFUSAL[name])
+                status_refused(result,name,path,expected)
+                for bad in (subprocess.CompletedProcess([],0,"",result.stderr),
+                            subprocess.CompletedProcess([],1,"","boxweave: unrelated failure"),
+                            subprocess.CompletedProcess([],1,"{}",result.stderr)):
+                    with self.assertRaises(AssertionError):
+                        status_refused(bad,name,path,expected)
+                with self.assertRaises(AssertionError):
+                    status_refused(result,name,path,b"changed")
+                sidecar=path.with_name(path.name+".serve.lock")
+                sidecar.write_bytes(b"unexpected")
+                try:
+                    with self.assertRaises(AssertionError):
+                        status_refused(result,name,path,expected)
+                finally:
+                    sidecar.unlink()
+
+    def test_exact_installed_schema(self):
+        require_schema7([(7,)])
+        for rows in ([], [(6,)], [(8,)], [(7,), (7,)]):
+            with self.assertRaises(AssertionError):
+                require_schema7(rows)
 
     def test_not_generic_failure(self):
         path = self.cases["foreign"]

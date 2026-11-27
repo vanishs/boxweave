@@ -95,31 +95,24 @@ func s4b2InsertForgedActiveSibling(t *testing.T, s *Store, id string) {
 }
 
 func TestS4B2RootStageAndReadRecheckOldSiblingOperations(t *testing.T) {
+
 	ctx := context.Background()
-	t.Run("controller-stage", func(t *testing.T) {
-		s, _, id := s4b2RootOperationFixture(t)
-		s4b2PendingExistingGrantToConfirmed(t, s)
-		s4b2InsertForgedActiveSibling(t, s, id)
-		if err := s.StageRootPeerRevocation(ctx, id); !errors.Is(err, ErrResourceLocked) {
-			t.Fatalf("unsafe stage admitted existing sibling: %v", err)
-		}
-	})
-	t.Run("host-readonly", func(t *testing.T) {
-		s, reader, id := s4b2RootOperationFixture(t)
-		s4b2PendingExistingGrantToConfirmed(t, s)
-		if err := s.StageRootPeerRevocation(ctx, id); err != nil {
-			t.Fatal(err)
-		}
-		if err := s.Claim(ctx, id); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := reader.ReadRootPeerRevocation(ctx, id, "user-1001", "bwbr0", "bw-s4b2"); err != nil {
-			t.Fatal("valid baseline root proof: ", err)
-		}
-		s4b2InsertForgedActiveSibling(t, s, id)
-		if _, err := reader.ReadRootPeerRevocation(ctx, id, "user-1001", "bwbr0", "bw-s4b2"); !errors.Is(err, ErrResourceLocked) {
-			t.Fatalf("root failed to reject concurrent sibling: %v", err)
-		}
-	})
+	s, _, id := pr178ScopedReadyToStage(t, false)
+	s4b2InsertForgedActiveSibling(t, s, id)
+	if e := s.StageScopedPeerOriginal(ctx, id); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal(e)
+	}
+	s, r, id := pr178ScopedReadyToStage(t, false)
+	if e := s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); e != nil {
+		t.Fatal(e)
+	}
+	s4b2InsertForgedActiveSibling(t, s, id)
+	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal(e)
+	}
 	t.Log("S4_B2_ALL_SIBLING_STAGE_AND_ROOT_READONLY_RECHECK=PASS")
+
 }

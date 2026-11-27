@@ -43,7 +43,7 @@ func newOAuthServerTest(t *testing.T) (*state.Store, *httptest.Server, string) {
 	if err = st.SetOAuthOrigin(context.Background(), oauthPublicOrigin); err != nil {
 		t.Fatal(err)
 	}
-	svc := &Service{ScopedPeerFresh: true, Store: st, Native: native.Reader{Socket: "/nonexistent", Project: testScopedProject}, Listener: "127.0.0.1:18650", BuildVersion: "oauth-unit"}
+	svc := &Service{Store: st, Native: native.Reader{Socket: "/nonexistent", Project: testScopedProject}, Listener: "127.0.0.1:18650", BuildVersion: "oauth-unit"}
 	ts := httptest.NewServer(svc.Handler())
 	t.Cleanup(ts.Close)
 	return st, ts, pwd

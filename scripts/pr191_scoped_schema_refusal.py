@@ -1,4 +1,4 @@
-"""One-use installed Doctor invalid-ledger witness; no live DB writes."""
+"""Installed status and Doctor invalid-ledger witness; no live DB writes."""
 from contextlib import closing
 import hashlib
 import json
@@ -17,8 +17,12 @@ from pr178_n2_scoped_lifecycle import acls
 from n2_installed_lifecycle import pid
 
 
+def require_schema7(versions):
+    assert versions == [(7,)], "installed ledger must have exactly schema 7"
+
+
 def fixtures(directory, version):
-    for name in ("foreign", "corrupt", "old", "ambiguous", "versioned-foreign"):
+    for name in ("foreign", "corrupt", "old", "future", "partial", "ambiguous", "versioned-foreign"):
         path = directory / (name + ".sqlite")
         assert not path.exists()
         if name == "corrupt":
@@ -31,7 +35,7 @@ def fixtures(directory, version):
                 else:
                     db.execute("CREATE TABLE schema_version(version INTEGER NOT NULL)")
                     db.execute("INSERT INTO schema_version VALUES (?)",
-                               (version-1 if name == "old" else version,))
+                               (version-1 if name == "old" else version+1 if name == "future" else version,))
                     if name == "ambiguous":
                         db.execute("INSERT INTO schema_version VALUES (?)", (version,))
                     if name == "versioned-foreign":
@@ -41,15 +45,36 @@ def fixtures(directory, version):
         yield name, path
 
 
+STATUS_REFUSAL = {
+    "foreign": "existing database missing version: refuse foreign adoption",
+    "corrupt": "file is not a database",
+    "old": "unsupported schema 6 (expected 7):",
+    "future": "unsupported schema 8 (expected 7):",
+    "partial": "unexpected SQLite schema/migration tables: refuse foreign adoption",
+    "ambiguous": "ambiguous SQLite migration history: 2 version rows",
+    "versioned-foreign": "unexpected SQLite schema/migration tables: refuse foreign adoption",
+}
+
+
+def unchanged(path, expected):
+    assert path.read_bytes() == expected, "invalid ledger modified"
+    assert not any(path.with_name(path.name+suffix).exists()
+                   for suffix in ("-wal","-shm","-journal",".exec-archive",".serve.lock"))
+
+
+def status_refused(result, name, path, expected):
+    assert result.returncode == 1 and not result.stdout.strip(), "status accepted or did not classify invalid ledger"
+    assert result.stderr.strip().startswith("boxweave: " + STATUS_REFUSAL[name]), "status refused for unrelated reason"
+    unchanged(path, expected)
+
+
 def refused(result, path, expected):
     assert result.returncode != 0, "Doctor accepted invalid ledger"
     report = json.loads(result.stdout)
     database = report["diagnostic"]["database"]
     assert report["ready"] is False and database["state"] == "UNVERIFIED"
     assert database["reason"] == "DIAGNOSTIC_DB_SCHEMA_OR_INTEGRITY_UNVERIFIED"
-    assert path.read_bytes() == expected, "invalid ledger modified"
-    assert not any(path.with_name(path.name+suffix).exists()
-                   for suffix in ("-wal","-shm","-journal",".exec-archive"))
+    unchanged(path, expected)
 
 
 def main(project, candidate_sha):
@@ -71,7 +96,7 @@ def main(project, candidate_sha):
                 ("operations","operation_events","operation_resource_claims","recovery_audit","owned_boxes","network_bindings")]
     before = history()
     versions = rows("SELECT version FROM schema_version")
-    assert len(versions)==1 and versions[0][0]>0
+    require_schema7(versions)
     with tempfile.TemporaryDirectory(prefix="pr191-schema-",dir="/tmp") as temp:
         directory = Path(temp)
         cases = list(fixtures(directory,versions[0][0]))
@@ -81,6 +106,12 @@ def main(project, candidate_sha):
         for name,path in cases:
             expected = path.read_bytes()
             result = subprocess.run(["runuser","-u","boxweave","--",str(binary),
+                                     "status","-project",project,"-db",str(path),
+                                     "-incus-socket",str(directory/"absent-native.sock")],
+                                    text=True,capture_output=True,timeout=40)
+            status_refused(result,name,path,expected)
+            print("P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS",name,flush=True)
+            result = subprocess.run(["runuser","-u","boxweave","--",str(binary),
                                      "doctor","-project",project,"-db",str(path)],
                                     text=True,capture_output=True,timeout=40)
             refused(result,path,expected)
@@ -89,6 +120,7 @@ def main(project, candidate_sha):
     assert snapshot(project)==original and history()==before
     assert [pid(unit) for unit in units]==pids
     assert guard_identity()==guard and not native_names() and acls()=={"bw-peer-quarantine"}
+    print("P1B_SCOPED_INSTALLED_SCHEMA7_EXACT=PASS",flush=True)
     print("S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS",flush=True)
     print("S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS",flush=True)
     print("P1B_SCOPED_SCHEMA_FIXED_INSTALLED_NO_EFFECT=PASS",flush=True)

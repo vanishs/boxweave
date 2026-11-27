@@ -21,7 +21,7 @@ type operationRecoverInput struct {
 
 func (s *Service) registerRecoveryTool(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "operation_recover",
-		Description: "Inspect the exact authorized original Operation and optionally reconcile only independently proven original native terminal/poststate or bind an exact unbound legacy Create identity without releasing UNKNOWN. Staged static Creates require exact original intent, native poststate and both address reservations; ownership, pin, fences and original settlement commit atomically. A completed modern Create may restore only its own missing binding or fence rows after native UUID/static lease proof; conflicting records are never overwritten. Healthy completed Create checks current pinned NIC without mutation. A lost legacy Create ACK can be settled from exact original marker/static poststate and Project quiescence without inventing a native ID. Scoped Create/Delete require a durable original native ID, a completed Root lifecycle journal and independent final poststate; incomplete effects remain UNKNOWN. Pinned lifecycle recovery also verifies the exact durable NIC tuple. mode=inspect is read-only; mode=reconcile requires its own idempotency_key and returns a durable recovery receipt separate from the original. Optional stream examines original Exec GC review. Forward and dependent Delete require exact original success and dependency proof; Scoped Peer uses the exact completed Root journal and independently verified policy; Legacy Peer uses completed PRS journal and independent root read-only kernel verification. Unproved outcomes remain blocked or require approval (not available here). No original replay, native dispatch, or blanket unlock.",
+		Description: "Inspect the exact authorized original Operation and optionally reconcile only independently proven original native terminal/poststate. Staged static Creates require exact original intent, native poststate and both address reservations; ownership, pin, fences and original settlement commit atomically. A completed modern Create may restore only its own missing binding or fence rows after native UUID/static lease proof; conflicting records are never overwritten. Healthy completed Create checks current pinned NIC without mutation. Scoped Create/Delete require a durable original native ID, a completed Root lifecycle journal and independent final poststate; incomplete effects remain UNKNOWN. Pinned lifecycle recovery also verifies the exact durable NIC tuple. mode=inspect is read-only; mode=reconcile requires its own idempotency_key and returns a durable recovery receipt separate from the original. Optional stream examines original Exec GC review. Forward and dependent Delete require exact original success and dependency proof; Scoped Peer uses the exact completed Root journal and independently verified policy. Unproved outcomes remain blocked or require approval (not available here). No original replay, native dispatch, or blanket unlock.",
 		Annotations: mutationAnnotations(false)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in operationRecoverInput) (*mcp.CallToolResult, recovery.Result, error) {
 			principal, e := s.requestPrincipal(req)
@@ -67,11 +67,8 @@ func (s *Service) registerRecoveryTool(server *mcp.Server) {
 // Recovery witnesses are mutually exclusive. A Scoped controller must not
 // fall back to the historical PRS socket for a legacy original.
 func (s *Service) recoveryObserver(layer string) recovery.Service {
-	svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: layer, ScopedMode: s.ScopedPeerFresh}
-	if s.ScopedPeerFresh {
-		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
-		svc.ScopedLifecycleWitness = install.NativeScopedLifecycleRecoverCall
-		return svc
-	}
-	return s.legacyRecoveryObserver(layer)
+	svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: layer}
+	svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
+	svc.ScopedLifecycleWitness = install.NativeScopedLifecycleRecoverCall
+	return svc
 }

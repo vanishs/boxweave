@@ -149,9 +149,6 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		} else if result.State == "UNKNOWN" || result.Action == "operation_recover" {
 			diagnostic.NextAction = navigation.NextAction
 		}
-		if !s.ScopedPeerFresh {
-			observeLegacyPeerNavigation(result, matches, &diagnostic, &navigation)
-		}
 		// A token that was valid when the HTTP request arrived may have
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never

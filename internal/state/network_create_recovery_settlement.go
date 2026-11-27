@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// settleRecoveredCreateTx is shared by the independently proved Scoped and Legacy recovery paths.
+// settleRecoveredCreateTx settles the independently proved Scoped recovery path.
 // Keep the original transaction, ownership and durable event semantics together.
 func settleRecoveredCreateTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p RecoveryProof) error {
 	now := time.Now().UnixNano()
@@ -24,13 +24,7 @@ func settleRecoveredCreateTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, 
 	if err != nil || n != 1 {
 		return ErrConflict
 	}
-	detail := "RECOVERY_CREATE_PIN_ATOMIC_NO_REPLAY"
-	if t.ScopedLifecycle {
-		detail = "RECOVERY_SCOPED_CREATE_ATOMIC_NO_REPLAY"
-	}
-	if t.NativeID == "" {
-		detail = "RECOVERY_CREATE_ACK_LOST_PIN_ATOMIC_NO_REPLAY"
-	}
+	detail := "RECOVERY_SCOPED_CREATE_ATOMIC_NO_REPLAY"
 	_, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES(?,?,'SUCCEEDED',?)", t.ID, now, detail)
 	return err
 }

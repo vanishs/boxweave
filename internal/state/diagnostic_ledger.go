@@ -385,19 +385,13 @@ func readDiagnosticLedgerTx(ctx context.Context, tx *sql.Tx, project, mode, brid
 		return out, e
 	}
 	// Observe every predicate in the same transaction, including live commit.
-	if mode == "LEGACY" {
-		r, e := readIPv4RetirementStatusTx(ctx, tx, project)
-		if e != nil {
-			return out, e
-		}
-		out.LegacyRetirement = &r
-	}
+
 	if l, e := readNativeNetworkLedgerTx(ctx, tx, project); e == nil {
 		out.Network = l
 		out.NetworkObserved = true
 	}
 	if bridge != "" {
-		if h, e := readCreateAddressHoldsModeTx(ctx, tx, project, bridge, mode == "SCOPED_V2"); e == nil {
+		if h, e := readScopedCreateAddressHoldsTx(ctx, tx, project, bridge); e == nil {
 			out.HoldsObserved = true
 			out.HeldMAC = len(h.MACs)
 			raw, _ := json.Marshal(h)
@@ -432,7 +426,7 @@ func (d DiagnosticLedger) ObservationDigest() string {
 	return hex.EncodeToString(h[:])
 }
 func (s *DiagnosticSnapshot) ReadAddressHolds(ctx context.Context, project, bridge string) (networklimits.AddressHolds, error) {
-	return s.store.ReadCreateAddressHolds(ctx, project, bridge)
+	return s.store.ReadScopedCreateAddressHolds(ctx, project, bridge)
 }
 
 // SafeDiagnosticRef never emits untrusted DB text or arbitrary addresses.

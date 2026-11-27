@@ -33,6 +33,7 @@ type ScopedPeerOriginalIntent struct {
 // with a durable original and locks held.
 type ScopedPeerOriginalProof struct {
 	OriginalID                      string
+	ParentID                        string `json:"ParentID,omitempty"`
 	ActorID, TokenID, HistorySHA256 string
 	Intent                          ScopedPeerOriginalIntent
 	Inventory                       ScopedNetworkAuditLedger
@@ -154,7 +155,7 @@ func readScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id, project, brid
 		b.Incarnation != intent.TargetIncarnation {
 		return zero, ErrResourceLocked
 	}
-	expectedClaims, e := scopedPeerResourceClaims(intent)
+	expectedClaims, parent, e := scopedPeerParentClaims(ctx, tx, id, intent, expected)
 	if e != nil {
 		return zero, ErrResourceLocked
 	}
@@ -192,11 +193,11 @@ func readScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id, project, brid
 		return zero, ErrRevoked
 	}
 	var busy int
-	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>?
+	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>? AND o.id<>?
   AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
   AND (o.action='box_peer_set' OR NOT EXISTS
   (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))`,
-		project, id).Scan(&busy)
+		project, id, parent).Scan(&busy)
 	if e != nil || busy != 0 {
 		return zero, ErrResourceLocked
 	}
@@ -324,7 +325,7 @@ func readScopedPeerOriginalTx(ctx context.Context, tx *sql.Tx, id, project, brid
 	sort(revoked)
 	sort(revokedBefore)
 	sort(revokedAfter)
-	return ScopedPeerOriginalProof{OriginalID: id, ActorID: actor, TokenID: token, HistorySHA256: hex.EncodeToString(history.Sum(nil)), Intent: intent, Inventory: inventory,
+	return ScopedPeerOriginalProof{OriginalID: id, ParentID: parent, ActorID: actor, TokenID: token, HistorySHA256: hex.EncodeToString(history.Sum(nil)), Intent: intent, Inventory: inventory,
 		Before: before, After: after, Revoked: revoked,
 		RevokedBefore: revokedBefore, RevokedAfter: revokedAfter,
 		Regrant: regrant == 1, RecoveryOnly: expected == "UNKNOWN"}, nil

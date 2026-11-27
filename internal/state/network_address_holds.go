@@ -14,17 +14,14 @@ import (
 // In particular, all RELEASED/UNKNOWN reservations remain blocked. This
 // snapshot only skips candidates; it never authorizes a new reservation.
 func (s *Store) ReadCreateAddressHolds(ctx context.Context, project, bridge string) (networklimits.AddressHolds, error) {
-	return s.readCreateAddressHolds(ctx, project, bridge, false)
+	return s.ReadScopedCreateAddressHolds(ctx, project, bridge)
 }
 
 // ReadScopedCreateAddressHolds never credits any Legacy retirement as free
 // capacity. During consolidation the old tables still exist; refuse mixed
 // history before a Scoped reservation or capacity observation.
 func (s *Store) ReadScopedCreateAddressHolds(ctx context.Context, project, bridge string) (networklimits.AddressHolds, error) {
-	return s.readCreateAddressHolds(ctx, project, bridge, true)
-}
 
-func (s *Store) readCreateAddressHolds(ctx context.Context, project, bridge string, scoped bool) (networklimits.AddressHolds, error) {
 	zero := networklimits.AddressHolds{}
 	if s == nil || s.db == nil || !auditName(project) || project == "default" || !auditName(bridge) {
 		return zero, ErrInvalid
@@ -34,7 +31,7 @@ func (s *Store) readCreateAddressHolds(ctx context.Context, project, bridge stri
 		return zero, e
 	}
 	defer tx.Rollback()
-	out, e := readCreateAddressHoldsModeTx(ctx, tx, project, bridge, scoped)
+	out, e := readScopedCreateAddressHoldsTx(ctx, tx, project, bridge)
 	if e != nil {
 		return zero, e
 	}
@@ -49,17 +46,7 @@ type addressHoldQuery struct {
 const addressHoldBindingsQuery = "SELECT project,ipv4,ipv6,mac,state FROM network_bindings n WHERE bridge=?"
 const addressHoldClaimsQuery = "SELECT resource_key FROM operation_resource_claims c WHERE substr(resource_key,1,?)=?"
 
-func readCreateAddressHoldsModeTx(ctx context.Context, tx *sql.Tx, project, bridge string, scoped bool) (networklimits.AddressHolds, error) {
-	if scoped {
-		return readScopedCreateAddressHoldsTx(ctx, tx, project, bridge)
-	}
-	return readLegacyCreateAddressHoldsTx(ctx, tx, project, bridge)
-}
-
 func readScopedCreateAddressHoldsTx(ctx context.Context, tx *sql.Tx, project, bridge string) (networklimits.AddressHolds, error) {
-	if e := requireScopedNoLegacyRetirementTx(ctx, tx); e != nil {
-		return networklimits.AddressHolds{}, e
-	}
 	prefix := "create-pin:" + bridge + ":"
 	return collectCreateAddressHoldsTx(ctx, tx, project, bridge,
 		addressHoldQuery{addressHoldBindingsQuery, []any{bridge}},

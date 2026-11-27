@@ -70,7 +70,7 @@ func TestN3NativeNetworkObserverUnavailableNeverClaimsEmpty(t *testing.T) {
 		t.Fatal(e)
 	}
 	project := "user-1001"
-	svc := &Service{ScopedPeerFresh: true, Store: s, Native: native.Reader{Project: project, Socket: "/nonexistent-incus"}}
+	svc := &Service{Store: s, Native: native.Reader{Project: project, Socket: "/nonexistent-incus"}}
 	out, e := svc.readNativeNetworkActivity(ctx, RequestPrincipal{Layer: project, TokenID: tok.ID, ActorID: tok.ID}, activityGetInput{View: "native_network", Limit: 10})
 	if e != nil || len(out.Issues) != 1 || out.Issues[0].Reason != "NATIVE_PROJECT_INVENTORY_UNVERIFIED" ||
 		out.NativeNetwork == nil || out.NativeNetwork.InventoryScanned || out.CoverageDetails.NativeLiveVerified ||

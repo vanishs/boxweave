@@ -25,7 +25,7 @@ func VerifyScopedGCReviewIdentity(p Plan, reviewed Manifest) error {
 		(os.Geteuid() != 0 && os.Geteuid() != uid) {
 		return errors.New("scoped GC review requires the fixed installed restricted identity")
 	}
-	if err := CheckScopedServeMode(true); err != nil {
+	if err := CheckScopedServeMode(); err != nil {
 		return err
 	}
 	raw, _, err := diagnosticReadFile(manifestPath(p), uint32(uid), true, 65536)

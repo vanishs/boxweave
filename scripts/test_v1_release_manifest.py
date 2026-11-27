@@ -74,13 +74,11 @@ class ReleaseTests(unittest.TestCase):
         valid_sha = hashlib.sha256(path.read_bytes()).hexdigest()
         base = ["sh", str(ROOT / "install.sh"), "--local-binary", str(path),
                 "--project", "user-1001", "--sha256"]
-        good = subprocess.run(base + [valid_sha, "--plan"], text=True, capture_output=True)
-        self.assertEqual(good.returncode, 0, good.stderr)
-        self.assertIn("PLAN_ONLY: no host changes", good.stdout)
-        self.assertIn("forward_policy=current fresh installer defaults to all", good.stdout)
-        self.assertIn("default bind stays loopback", good.stdout)
-        self.assertIn("reviewed fresh native preparation explicitly grants Project proxy permission", good.stdout)
-        self.assertIn("service-only installation does not", good.stdout)
+        # A complete plan now requires native review; the fake ELF cannot
+        # provide one. Exercise the isolated reviewed path below.
+        calls, error = self.exercise_guided_install("NO", plan_only=True)
+        self.assertIsNone(error)
+        self.assertEqual(calls, ["native-scoped-fresh-plan"])
         bad = subprocess.run(base + ["0" * 64, "--plan"], text=True, capture_output=True)
         self.assertNotEqual(bad.returncode, 0)
         self.assertIn("SHA256 mismatch", bad.stderr)
@@ -98,7 +96,7 @@ class ReleaseTests(unittest.TestCase):
             "--apply", "--confirm-host-sha256", "0" * 64,
         ], text=True, capture_output=True)
         self.assertNotEqual(denied.returncode, 0)
-        self.assertIn("exact current --confirm-host-sha256", denied.stderr)
+        self.assertIn("exact --scoped-fresh-review-sha256", denied.stderr)
 
     def test_rc_publishing_requires_explicit_one_shot_branch(self):
         workflow = (ROOT / ".github/workflows/v1-release.yml").read_text()
@@ -127,7 +125,7 @@ class ReleaseTests(unittest.TestCase):
         approval = "a" * 64
         candidate = b"fake reviewed release binary"
         target = dict(project="user-1001", pool="default", network="incusbr-1001", acl="bw-user-1001-acl")
-        native_plan = {"target": target, "review_sha256": approval}
+        native_plan = {"Mode": "SCOPED_PEER_FRESH_V2", "Project": target["project"], "ReviewSHA256": approval, "NativeSHA256": "c" * 64, "GuardSHA256": "d" * 64}
         calls = []
         socket_path = Path(tempfile.mkdtemp(dir=self.dir)) / "incus.sock"
         sock = socket.socket(socket.AF_UNIX)
@@ -151,16 +149,14 @@ class ReleaseTests(unittest.TestCase):
         def output(argv, **kwargs):
             action = argv[1] if argv[0] != "runuser" else argv[5]
             calls.append(action)
-            if action == "native-prepare-plan":
+            if action == "native-scoped-fresh-plan":
+                if missing_reader or (reader_drift and calls.count(action) > 1):
+                    raise ns["InstallError"]("INSTALL_MISSING_PREREQUISITE: /usr/sbin/conntrack")
                 result = dict(native_plan)
+                result["HostSHA256"] = hashlib.sha256(b"boxweave-native-host-v1|fixture-machine").hexdigest()
                 if drift and calls.count(action) > 1:
-                    result["review_sha256"] = "c" * 64
+                    result["ReviewSHA256"] = "f" * 64
                 return json.dumps(result)
-            if action == "native-prepare-apply":
-                self.assertIn(approval, argv)
-                return json.dumps({"status": "APPLIED"})
-            if action == "native-prereq-plan":
-                return json.dumps({"config_ready": native_ready, "review_sha256": approval})
             if action == "install-status":
                 return json.dumps({"binary_sha256": hashlib.sha256(candidate).hexdigest(),
                                    "native_project": target["project"], "service_user": "boxweave",
@@ -179,6 +175,10 @@ class ReleaseTests(unittest.TestCase):
         def run(argv, **kwargs):
             action = argv[1] if argv[0] != "runuser" else argv[5]
             calls.append(action)
+            if action == "install-stage":
+                self.assertIn(approval, argv)
+                if not native_ready:
+                    raise subprocess.CalledProcessError(1, argv)
             if oauth_error and action == "oauth-set-origin":
                 raise subprocess.CalledProcessError(1, argv)
             return mock.Mock(returncode=0)
@@ -193,6 +193,7 @@ class ReleaseTests(unittest.TestCase):
         ns["STATE_DIR"] = self.dir / "isolated-state"
         ns["retirement_reader_preflight"] = reader_preflight
         ns["Path"] = fake_path
+        (self.dir / "isolated-machine-id").write_text("fixture-machine")
         ns["current_host_digest"] = lambda: "e" * 64
         ns["select_release"] = lambda *_: (candidate, "1.0.0-rc.8", source, hashlib.sha256(candidate).hexdigest())
         # The temporary candidate must use a real Path, not our host-path mapper.
@@ -200,7 +201,7 @@ class ReleaseTests(unittest.TestCase):
         with mock.patch.object(ns["os"], "geteuid", return_value=0), \
                 mock.patch.object(ns["os"].path, "lexists", return_value=False), \
                 mock.patch.object(ns["pwd"], "getpwnam", return_value=types.SimpleNamespace(pw_uid=1001)), \
-                mock.patch.object(ns["sys"], "argv", ["install.sh", "--version", "v1.0.0-rc.8"] + (["--plan", "--guided-fresh-plan"] if plan_only else ["--interactive"])), \
+                mock.patch.object(ns["sys"], "argv", ["install.sh", "--version", "v1.0.0-rc.8"] + (["--plan"] if plan_only else ["--interactive"])), \
                 mock.patch.object(ns["subprocess"], "check_output", side_effect=output), \
                 mock.patch.object(ns["subprocess"], "run", side_effect=run), \
                 mock.patch("builtins.open", side_effect=[io.StringIO(answer + "\n"), io.StringIO(),
@@ -215,45 +216,44 @@ class ReleaseTests(unittest.TestCase):
                 return calls, "exit " + str(exc.code)
 
     def test_guided_install_approval_sequence_and_fail_closed(self):
-        calls, error = self.exercise_guided_install("INSTALL user-1001")
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001")
         self.assertIsNone(error)
-        self.assertEqual(calls, ["native-prepare-plan", "native-prepare-plan", "install-stage",
-                                 "native-prepare-apply", "native-prereq-plan", "native-prereq-verify",
+        self.assertEqual(calls, ["native-scoped-fresh-plan", "native-scoped-fresh-plan", "install-stage",
                                  "install-activate", "install-status", "doctor", "oauth-status"])
 
     def test_guided_install_decline_and_changed_plan(self):
         calls, error = self.exercise_guided_install("NO")
         self.assertIn("OPERATOR_APPROVAL_REQUIRED", error)
         self.assertIn("not approved", error)
-        self.assertEqual(calls, ["native-prepare-plan"])
-        calls, error = self.exercise_guided_install("INSTALL user-1001", drift=True)
+        self.assertEqual(calls, ["native-scoped-fresh-plan"])
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", drift=True)
         self.assertIn("plan changed", error)
         self.assertNotIn("install-stage", calls)
 
     def test_missing_reader_and_reader_drift_never_stage(self):
-        calls, error = self.exercise_guided_install("INSTALL user-1001", missing_reader=True)
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", missing_reader=True)
         self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
-        self.assertEqual(calls, [])
-        calls, error = self.exercise_guided_install("INSTALL user-1001", reader_drift=True)
+        self.assertEqual(calls, ["native-scoped-fresh-plan"])
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", reader_drift=True)
         self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
-        self.assertEqual(calls, ["native-prepare-plan"])
+        self.assertEqual(calls, ["native-scoped-fresh-plan", "native-scoped-fresh-plan"])
 
     def test_complete_guided_preview_never_mutates(self):
         calls, error = self.exercise_guided_install("NO", plan_only=True)
         self.assertIsNone(error)
-        self.assertEqual(calls, ["native-prepare-plan"])
+        self.assertEqual(calls, ["native-scoped-fresh-plan"])
         calls, error = self.exercise_guided_install("NO", plan_only=True, missing_reader=True)
         self.assertIn("INSTALL_MISSING_PREREQUISITE", error)
-        self.assertEqual(calls, [])
+        self.assertEqual(calls, ["native-scoped-fresh-plan"])
 
     def test_oauth_deferred_and_failed_after_installed_postflight(self):
-        calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y")
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", oauth_answer="y")
         self.assertIsNone(error)
         self.assertEqual(calls[-4:], ["doctor", "oauth-status", "oauth-setup", "oauth-status"])
-        calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y", oauth_origin="https://example.test")
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", oauth_answer="y", oauth_origin="https://example.test")
         self.assertIsNone(error)
         self.assertEqual(calls[-6:], ["doctor", "oauth-status", "oauth-setup", "oauth-status", "oauth-set-origin", "oauth-status"])
-        calls, error = self.exercise_guided_install("INSTALL user-1001", oauth_answer="y", oauth_origin="https://example.test", oauth_error=True)
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", oauth_answer="y", oauth_origin="https://example.test", oauth_error=True)
         self.assertEqual(error, "exit 2")
         self.assertEqual(calls.count("install-activate"), 1)
         self.assertEqual(calls[-2:], ["oauth-set-origin", "oauth-status"])
@@ -261,8 +261,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(calls.count("oauth-set-origin"), 1)
 
     def test_guided_install_incomplete_native_never_activates(self):
-        calls, error = self.exercise_guided_install("INSTALL user-1001", native_ready=False)
-        self.assertIn("INSTALL_PHASE_UNVERIFIED: NATIVE_READBACK", error)
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", native_ready=False)
+        self.assertIn("INSTALL_PHASE_UNVERIFIED: STAGE", error)
         self.assertNotIn("install-activate", calls)
 
     def test_embedded_guided_installer_keeps_explicit_plan_and_approvals(self):
@@ -270,9 +270,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("--interactive", source)
         self.assertIn('open("/dev/tty", "r")', source)
         self.assertIn('native plan changed after approval; review again', source)
-        self.assertIn('existing Native journal', source)
-        self.assertLess(source.index('"native-prepare-apply"'), source.index('"install-activate"'))
-        self.assertLess(source.index('"native-prereq-verify"'), source.index('"install-activate"'))
+        main = source.split("def main():", 1)[1]
+        self.assertIn("legacy installation and upgrade unsupported", main)
+        self.assertIn("scoped_review(candidate, args.project) != scoped", main)
+        self.assertNotIn('"native-prepare-apply"', main)
+        self.assertLess(main.index('install_phase("STAGE"'), main.index('install_phase("ACTIVATE"'))
+
 
     def test_s25_doctor_requires_initialized_and_activated_controller(self):
         # Stage writes files, not SQLite. Doctor is observation-only.

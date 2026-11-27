@@ -48,7 +48,7 @@ func TestPR177D3PlanObservationUsesReadOnlyPredicates(t *testing.T) {
 		{"missing native", false, false, false, true, state.RecoveryBlocked, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &planReadFixture{target: target, drift: tc.drift, failCheck: tc.failCheck}
+			f := &scopedPlanReadFixture{planReadFixture: &planReadFixture{target: target, drift: tc.drift, failCheck: tc.failCheck}}
 			w := known()
 			if tc.badUUID {
 				w.box.UUID = "other"
@@ -70,7 +70,7 @@ func TestPR177D3PlanObservationUsesReadOnlyPredicates(t *testing.T) {
 			if (out.ProofSHA256 != "") != (tc.kind == state.RecoverySettle) {
 				t.Fatal(out)
 			}
-			if tc.kind == state.RecoverySettle && f.checks != 1 {
+			if tc.kind == state.RecoverySettle && f.scopedChecks != 1 {
 				t.Fatal("missing writer preflight")
 			}
 			if _, e = s.Reconcile(ctx, state.RecoveryRequest{Layer: target.Layer, OriginalID: target.ID}); !errors.Is(e, state.ErrInvalid) {
@@ -88,6 +88,9 @@ type scopedPlanReadFixture struct {
 
 func (f *scopedPlanReadFixture) CheckScopedPlanRecoveryProof(context.Context, state.RecoveryTarget, state.RecoveryProof) error {
 	f.scopedChecks++
+	if f.failCheck {
+		return state.ErrResourceLocked
+	}
 	return nil
 }
 func TestP1ScopedPlanNeverFallsBackToLegacyChecker(t *testing.T) {
@@ -95,7 +98,7 @@ func TestP1ScopedPlanNeverFallsBackToLegacyChecker(t *testing.T) {
 	target := original("box_start")
 	target.LifecyclePinStatus = "LEGACY_UNPINNED"
 	legacy := &planReadFixture{target: target}
-	svc := Service{ReadStore: legacy, Native: known(), Layer: target.Layer, ScopedMode: true}
+	svc := Service{ReadStore: legacy, Native: known(), Layer: target.Layer}
 	out, e := svc.InspectPlan(ctx, target)
 	if e != nil || out.Kind != state.RecoveryBlocked || legacy.checks != 0 {
 		t.Fatal(out, e, legacy.checks)

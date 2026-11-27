@@ -64,15 +64,10 @@ func (s *Store) StageCreateBinding(ctx context.Context, id, project, name string
 	if e != nil {
 		return false, e
 	}
-	if schema != 0 && schema != 2 || schema == 2 && b.ACL != peerscope.QuarantineACL || schema == 0 && b.ACL == peerscope.QuarantineACL {
+	if schema != 2 || b.ACL != peerscope.QuarantineACL {
 		return false, ErrResourceLocked
 	}
-	var clear bool
-	if schema == 2 {
-		clear, err = scopedCreateBindingAvailableTx(ctx, tx, project, b)
-	} else {
-		clear, err = legacyCreateBindingAvailableTx(ctx, tx, project, b)
-	}
+	clear, err := scopedCreateBindingAvailableTx(ctx, tx, project, b)
 	if err != nil || !clear {
 		return false, err
 	}

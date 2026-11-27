@@ -10,7 +10,6 @@ import (
 )
 
 func TestN3LifecycleRecoveryPin(t *testing.T) {
-	t.Run("legacy", func(t *testing.T) { lifecycleRecoveryPinMode(t, false) })
 	t.Run("scoped", func(t *testing.T) { lifecycleRecoveryPinMode(t, true) })
 }
 

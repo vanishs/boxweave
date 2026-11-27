@@ -41,14 +41,9 @@ type ObservationStore interface {
 type Service struct {
 	ReadStore ObservationStore
 
-	Store  *state.Store
-	Native Observer
-	Layer  string
-	// ScopedMode is installation-selected, never an MCP input.
-	ScopedMode bool
-	// PeerWitness is the installed, root-authenticated read-only PRS RPC.
-	// No plan, approval assertion or root request parameters come from MCP.
-	PeerWitness            func(context.Context, string) (state.RootPeerResult, error)
+	Store                  *state.Store
+	Native                 Observer
+	Layer                  string
 	ScopedPeerWitness      func(context.Context, string) (state.ScopedPeerRootReceipt, error)
 	ScopedLifecycleWitness func(context.Context, string) (state.ScopedLifecycleRecoveryProof, error)
 }
@@ -207,10 +202,7 @@ func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result
 	return Result{View: latest, Recovery: &record}, nil
 }
 func (s Service) commitRecovery(ctx context.Context, r state.RecoveryRequest, t state.RecoveryTarget, p state.RecoveryProof) (state.RecoveryRecord, error) {
-	if s.ScopedMode {
-		return s.Store.CommitScopedRecovery(ctx, r, t, p)
-	}
-	return s.Store.CommitRecovery(ctx, r, t, p)
+	return s.Store.CommitScopedRecovery(ctx, r, t, p)
 }
 
 func finishRecoveryObservation(v View, kind, reason string) (View, state.RecoveryProof) {
@@ -247,6 +239,12 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	if t.Action == "operation_recover" {
 		return finish(state.RecoveryBlocked, "RECOVERY_OF_RECOVERY_UNSUPPORTED")
 	}
+	// A fresh-only controller cannot adopt a Legacy original, even if
+	// an exact native name or successful old receipt remains observable.
+	if (t.Action == "box_create" || t.Action == "box_delete") && !t.ScopedLifecycle ||
+		t.Action == "box_peer_set" && !t.ScopedPeer {
+		return finish(state.RecoveryBlocked, "SCOPED_ORIGINAL_REQUIRED")
+	}
 	if t.Action == "box_create" && t.State == "SUCCEEDED" && t.CreatePinRequired && t.CreatePinStaged && t.OwnedState == "OWNED" {
 		return s.observeCreatePinRepair(ctx, t, v)
 	}
@@ -268,10 +266,7 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 		return s.observeScopedLifecycle(ctx, t, v)
 	}
 	if t.Action == "box_peer_set" {
-		if t.ScopedPeer {
-			return s.observeScopedPeer(ctx, t, v)
-		}
-		return s.observeLegacyPeer(ctx, t, v)
+		return s.observeScopedPeer(ctx, t, v)
 	}
 	if t.DependentDelete && (s.reader() == nil || s.reader().CheckDependentDeleteRecovery(ctx, t) != nil) {
 		return finish(state.RecoveryBlocked, "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED")
@@ -325,15 +320,11 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	if t.Name == "" || t.Resource != "box:"+t.Name {
 		return finish(state.RecoveryBlocked, "EXACT_ORIGINAL_OWNERSHIP_UNPROVED")
 	}
-	if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
-		return s.observeLegacyUnboundCreate(ctx, t, v)
-	}
+
 	if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" {
 		return finish(state.RecoveryBlocked, "EXACT_ORIGINAL_OWNERSHIP_UNPROVED")
 	}
-	if t.Action == "box_delete" {
-		return s.observeLegacyDelete(ctx, t, v)
-	}
+
 	box, etag, e := s.Native.GetExactBox(ctx, t.Name, t.UUID)
 	if e != nil || box.UUID != t.UUID || box.Project != s.Layer {
 		return finish(state.RecoveryBlocked, "EXACT_NATIVE_UUID_UNVERIFIED")

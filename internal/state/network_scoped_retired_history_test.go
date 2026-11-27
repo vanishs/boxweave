@@ -58,15 +58,14 @@ func n3ScopedOwnedFixture(t *testing.T) (*Store, OwnedBox, string) {
 	}
 	return s, box, tok.ID
 }
-func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
+func n3DeleteOwned(t *testing.T, s *Store, box OwnedBox, tokenID string) Receipt {
 	t.Helper()
 	ctx := context.Background()
-	s, box, tokenID := n3ScopedOwnedFixture(t)
 	const project = "user-1001"
 	raw, _ := json.Marshal(struct {
 		BoxID string `json:"box_id"`
 	}{box.UUID})
-	del, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tokenID, TokenID: tokenID, Key: "n3-history-delete-one", RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
+	del, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tokenID, TokenID: tokenID, Key: "n3-history-delete-" + box.Name, RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -79,7 +78,12 @@ func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
 	if e = s.FinalizeVerifiedScopedDelete(ctx, del.ID, box); e != nil {
 		t.Fatal(e)
 	}
-	return s, box, del
+	return del
+}
+func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
+	t.Helper()
+	s, box, token := n3ScopedOwnedFixture(t)
+	return s, box, n3DeleteOwned(t, s, box, token)
 }
 func TestPR178N3ScopedRetiredHistory(t *testing.T) {
 	ctx := context.Background()

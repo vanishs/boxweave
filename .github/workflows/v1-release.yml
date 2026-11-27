@@ -145,10 +145,17 @@ jobs:
           tmp_db="$db_parent/ledger.sqlite"
           "release-assets/$name" status -db "$tmp_db" -project no-project \
             -incus-socket /unavailable-incus > "$db_parent/status.json"
-          python3 - "$db_parent/status.json" <<'PY'
-          import json, sys
+          python3 - "$db_parent/status.json" "$tmp_db" <<'PY'
+          import json, pathlib, sqlite3, sys
+          from contextlib import closing
           state = json.load(open(sys.argv[1], encoding="utf-8"))
           assert state["ready"] is False, "unexpected native host readiness in isolated CI"
+          with closing(sqlite3.connect(pathlib.Path(sys.argv[2]).as_uri() + "?mode=ro", uri=True)) as db:
+              assert db.execute("SELECT version FROM schema_version").fetchall() == [(7,)]
+              tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+              assert {"owned_boxes", "operations", "operation_resource_claims", "network_bindings", "network_address_fences"}.issubset(tables)
+              assert not any(t.startswith(("network_ipv4_retirement", "network_ipv4_compaction")) for t in tables)
+              assert db.execute("SELECT count(*) FROM operations").fetchone() == (0,)
           PY
           go test -count=1 ./...
           sha256sum "release-assets/$name"
@@ -224,11 +231,24 @@ jobs:
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
       - name: Real nested independent Agent/Incus verifier
         shell: bash
+        env:
+          P1B_S25_SCOPED: '1'
+          P1B_S25_EXACT_HEAD: ${{ github.sha }}
         run: |
           set -euo pipefail
-          sh scripts/s25_bridgehead_lab.sh | tee "$RUNNER_TEMP/native-s25-gate.log"
-          grep -Fxq 'S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS' "$RUNNER_TEMP/native-s25-gate.log"
-          grep -Fxq 'S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS' "$RUNNER_TEMP/native-s25-gate.log"
+          sh -n scripts/pr191_s25_evidence_check.sh
+          python3 scripts/test_pr191_s25_evidence_check.py
+          python3 scripts/test_pr191_s2_witness_map.py
+          sh scripts/s25_bridgehead_lab.sh 2>&1 | tee "$RUNNER_TEMP/native-s25-gate.log"
+          sh scripts/pr191_s25_evidence_check.sh "$RUNNER_TEMP/native-s25-gate.log" "$P1B_S25_EXACT_HEAD"
+          python3 scripts/pr191_s2_witness_map.py --log "$RUNNER_TEMP/native-s25-gate.log" --source "$P1B_S25_EXACT_HEAD" --lane s25 --ci-receipt "$RUNNER_TEMP/pr191-s25-lane.json"
+      - name: Retain sanitized lane locator
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr191-s2-s25-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pr191-s25-lane.json
+          retention-days: 7
+          if-no-files-found: error
 
   candidate:
     name: v1-exact-source-two-arch-manifest

@@ -116,81 +116,44 @@ func TestP1ScopedAddressHoldsPreserveUnknownClaims(t *testing.T) {
 	}
 }
 
-func TestP1ScopedAddressHoldsRefuseLegacyRetirement(t *testing.T) {
+func TestP1ScopedAddressHoldsRetainRetiredIdentity(t *testing.T) {
 	ctx := context.Background()
-	s := newStore(t)
-	_, b, pin, retired := retireFixture(t, s)
-	// Before archive, both readers include the retained exact IPv4/IPv6/MAC.
-	h, err := s.ReadScopedCreateAddressHolds(ctx, b.Project, pin.Bridge)
-	if err != nil || !h.IPs[netip.MustParseAddr(pin.IPv4)] || !h.IPs[netip.MustParseAddr(pin.IPv6)] || !h.MACs[pin.MAC] {
-		t.Fatal(h, err)
+	s, b, _ := n3RetiredFixture(t)
+	ledger, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, "incusbr-1001")
+	if e != nil || len(ledger.Retired) != 1 {
+		t.Fatal(ledger, e)
 	}
-	if err = retireWithProof(s, ctx, retired, strings.Repeat("a", 64)); err != nil {
-		t.Fatal(err)
+	pin := ledger.Retired[0]
+	h, e := s.ReadScopedCreateAddressHolds(ctx, b.Project, ledger.Bridge)
+	if e != nil || !h.IPs[netip.MustParseAddr(pin.IPv4)] || !h.IPs[netip.MustParseAddr(pin.IPv6)] || !h.MACs[pin.MAC] {
+		t.Fatal(h, e)
 	}
-	legacy, err := s.ReadCreateAddressHolds(ctx, b.Project, pin.Bridge)
-	if err != nil || legacy.IPs[netip.MustParseAddr(pin.IPv4)] {
-		t.Fatal("legacy archive witness changed", legacy, err)
+	if e = s.RetireVerifiedIPv4(ctx, b.Project, pin.DeleteID, nil); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("old release admitted", e)
 	}
-	for _, scope := range []struct{ project, bridge string }{{b.Project, pin.Bridge}, {"user-1001", "incusbr-1001"}} {
-		if _, err = s.ReadScopedCreateAddressHolds(ctx, scope.project, scope.bridge); !errors.Is(err, ErrResourceLocked) {
-			t.Fatal("mixed legacy history accepted", scope, err)
-		}
+	_, actor, e := s.IssueToken(ctx, time.Hour)
+	if e != nil {
+		t.Fatal(e)
 	}
-}
-
-func TestP1ScopedReservationRefusesLegacyArchiveQueueAndCompaction(t *testing.T) {
-	ctx := context.Background()
-	for _, table := range []string{"network_ipv4_retirements", "network_ipv4_retirement_queue", "network_ipv4_compactions"} {
-		t.Run(table, func(t *testing.T) {
-			s := newStore(t)
-			_, b, _, retired := retireFixture(t, s)
-			var err error
-			switch table {
-			case "network_ipv4_retirements":
-				err = retireWithProof(s, ctx, retired, strings.Repeat("a", 64))
-			case "network_ipv4_retirement_queue":
-				_, err = s.db.Exec("INSERT OR IGNORE INTO network_ipv4_retirement_queue(delete_operation_id,project,attempt_order) VALUES(?,?,1)", retired.DeleteOperationID, b.Project)
-			case "network_ipv4_compactions":
-				_, err = s.db.Exec("INSERT INTO network_ipv4_compactions(project,delete_operation_id,plan_sha256,prepared_at) VALUES(?,?,?,1)", b.Project, retired.DeleteOperationID, strings.Repeat("b", 64))
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			var n int
-			if err = s.db.QueryRow("SELECT count(*) FROM " + table).Scan(&n); err != nil || n != 1 {
-				t.Fatal(n, err)
-			}
-			project, bridge, name := "user-1001", "incusbr-1001", "scoped-next"
-			if _, err = s.ReadScopedCreateAddressHolds(ctx, project, bridge); !errors.Is(err, ErrResourceLocked) {
-				t.Fatal("mixed legacy state accepted", err)
-			}
-			if _, err = s.ReadCompleteScopedNetworkAuditLedger(ctx, project, bridge); !errors.Is(err, ErrResourceLocked) {
-				t.Fatal("mixed history audit accepted", err)
-			}
-			_, actor, err := s.IssueToken(ctx, time.Hour)
-			if err != nil {
-				t.Fatal(err)
-			}
-			raw, err := json.Marshal(ScopedCreateIntent{Schema: 2, Project: project, Bridge: bridge, Name: name, CPU: 1, MemoryMiB: 1024, DiskGiB: 10, Options: json.RawMessage("{}")})
-			if err != nil {
-				t.Fatal(err)
-			}
-			r, err := s.Admit(ctx, Admission{Layer: project, ActorID: actor.ID, TokenID: actor.ID, Key: "p1-scoped-mixed-legacy", RequestID: "create", Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err = s.Claim(ctx, r.ID); err != nil {
-				t.Fatal(err)
-			}
-			pin := VerifiedCreateBinding{bridge, peerscope.QuarantineACL, "02:16:3e:11:22:44", "10.243.18.44", "fd43:18::44"}
-			if ok, e := s.StageCreateBinding(ctx, r.ID, project, name, pin); ok || !errors.Is(e, ErrResourceLocked) {
-				t.Fatal("mixed history staged", ok, e)
-			}
-			if err = s.db.QueryRow("SELECT count(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", r.ID).Scan(&n); err != nil || n != 0 {
-				t.Fatal("partial reservation", n, err)
-			}
-		})
+	in := ScopedCreateIntent{Schema: 2, Project: b.Project, Bridge: ledger.Bridge, Name: "next", CPU: 1, MemoryMiB: 1024, DiskGiB: 10, Options: json.RawMessage("{}")}
+	raw, e := json.Marshal(in)
+	if e != nil {
+		t.Fatal(e)
+	}
+	rec, e := s.AdmitScoped(ctx, Admission{Layer: b.Project, ActorID: actor.ID, TokenID: actor.ID, Key: "p1-retired-slot-reuse-refused", RequestID: "create", Action: "box_create", ResourceKey: "box:next", SafeIntent: raw})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Claim(ctx, rec.ID); e != nil {
+		t.Fatal(e)
+	}
+	old := VerifiedCreateBinding{ledger.Bridge, peerscope.QuarantineACL, pin.MAC, pin.IPv4, pin.IPv6}
+	if ok, e := s.StageCreateBinding(ctx, rec.ID, b.Project, "next", old); e != nil || ok {
+		t.Fatal("retired pin reused", ok, e)
+	}
+	var n int
+	if e = s.db.QueryRow("SELECT count(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", rec.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
 	}
 }
 
@@ -231,41 +194,6 @@ func TestP1ScopedPinRepairRetainsOriginal(t *testing.T) {
 	if _, e = s.ReadCompleteScopedNetworkAuditLedger(ctx, in.Project, in.Bridge); e != nil {
 		t.Fatal(e)
 	}
-}
-
-func TestP1ScopedPinRepairRefusesMixedHistory(t *testing.T) {
-	ctx := context.Background()
-	s, orig, in, pin := p1CreateFixture(t, true)
-	pin.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
-	if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, pin); e != nil {
-		t.Fatal(e)
-	}
-	req, target := a4Request(t, s, orig.ID)
-	_, _, _, retired := retireFixture(t, s)
-	if e := retireWithProof(s, ctx, retired, strings.Repeat("a", 64)); e != nil {
-		t.Fatal(e)
-	}
-	if _, e := s.ReadOriginalCreatePin(ctx, target); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal("mixed history read", e)
-	}
-	if _, e := s.db.Exec("DELETE FROM network_address_fences WHERE box_uuid=? AND family='ipv4'", p1UUID); e != nil {
-		t.Fatal(e)
-	}
-	p := RecoveryProof{Kind: RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED", NativeID: target.NativeID, UUID: p1UUID, Fingerprint: "synthetic-exact-pin", CreateBinding: pin}
-	if e := s.CheckCreatePinRepair(ctx, target, p); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal("mixed history preflight", e)
-	}
-	if _, e := s.CommitRecovery(ctx, req, target, p); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal("mixed history repair", e)
-	}
-	var n int
-	if e := s.db.QueryRow("SELECT count(*) FROM network_address_fences WHERE box_uuid=?", p1UUID).Scan(&n); e != nil || n != 1 {
-		t.Fatal(n, e)
-	}
-	if e := s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=?", orig.ID).Scan(&n); e != nil || n != 0 {
-		t.Fatal(n, e)
-	}
-	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
 }
 
 func TestP1ScopedPinRepairRefusesDuplicateTerminalClaim(t *testing.T) {

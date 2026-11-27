@@ -33,6 +33,40 @@ unaccepted candidate. WAN is a separate named gate: earlier real Box
 positive and Hosted UNVERIFIED remain distinct; no automatic equivalence
 or waiver. R5 closes P1 only with mandatory P1 evidence.
 
+Owner-approved P1/P2 boundary: full offline retirement migration belongs
+to P2, with UNKNOWN archival, interruption/resume, purge and foreign
+preservation obligations intact. Minimum P1 dependencies and the two
+blocked core Install regressions remain P1. No acceptance waiver.
+
+### Install legacy-oracle applicability (owner-approved review)
+
+PR #191 comment 7211274131 and aggregate-13 establish:
+
+- TestS4B2ConntrackScopeMustComeFromFullSQLiteLedger: legacy shared-ACL
+  positive expectation obsolete. Complete scoped identity and exact pair
+  selection remain required.
+- TestS4B2RootAuditRefusesSQLiteAndNativeInterleaving: old shared-ACL
+  success and read counts obsolete. Stable complete scoped evidence,
+  rejection on inconsistent evidence, no false success or unintended
+  effects and no replay remain required.
+- The third legacy cancellation/unpinned PASS alone is not sufficient
+  calibration because the old reader unconditionally refuses.
+
+Existing 21 passing groups provide constituent coverage. The existing
+TestPR178N4InstalledPartialACL uses a real protected ledger and native
+execution, but tests partial ACK/recovery, not the full interleaving
+obligation; it was SKIP in aggregate-13. Combined real ledger/native
+interleaving remains UNVERIFIED. Review operations
+f5cfcf0a06f9c3df275afd9851e36161 and a694069fab4a33de85012ac36d64b363.
+Preserve original test failures and all retained obligations. No skip,
+deletion, gate waiver or legacy revival. Legitimate platform review of
+the earlier refused write is recommended, not submitted or resolved.
+No retry or delegation of refused action. P1 R2/R3 remains OPEN.
+
+### Deferred Install evidence — development only
+
+Owner decision (2026-11-27): P1 implementation is considered development-complete for scheduling; proceed with independent P2 development. This explicitly defers the unresolved Install composed witness in #194, not a PASS, waiver, or permission to repeat a refused operation. The existing 577 PASS / 66 SKIP / 2 FAIL aggregate and Race exit 1 remain recorded. Retain the original failed tests and all safety assertions. Exact-candidate regression, native and CI evidence, C04 hosted equivalence if needed, and old-gate applicability/replacement remain open before formal P1 acceptance, merge or release. This Schema 7 development checkpoint is not an accepted or release candidate. See [#194](https://github.com/vanishs/boxweave/issues/194) and [R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7212654941).
+
 ## Coverage ledger
 
 For each affected original acceptance ID, test function or CI marker capture: baseline file/job/line and original evidence link; required behavior; applicability; disposition RETAINED, REPLACED, OBSOLETE_LEGACY or OPEN/BLOCKED; current test and explicit witness; exact source/binary/fixture/actor; Box result and independent CI run/attempt/job; residual limitation. Record scope decisions separately from observations. Keep existing mandatory acceptance IDs; #170 reconciles all A/SDK/BH/TC and S5 gates with this crosswalk. Do not change signoff format or count just to remove work.

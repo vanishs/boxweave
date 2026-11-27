@@ -19,9 +19,7 @@ type ScopedNetworkAuditBinding struct {
 	ACL string
 }
 
-// ScopedNetworkAuditLedger is an atomic SQLite snapshot of a fully converted
-// Project. ReadCompleteNetworkAuditLedger remains the conservative v1 shared-
-// ACL implementation. This new endpoint is NOT wired to MCP/Root mutation.
+// ScopedNetworkAuditLedger is an atomic schema-7 snapshot including retained identities.
 type ScopedNetworkAuditLedger struct {
 	Project, Bridge string
 	Boxes           []ScopedNetworkAuditBinding
@@ -29,10 +27,8 @@ type ScopedNetworkAuditLedger struct {
 }
 
 // ReadCompleteScopedNetworkAuditLedger requires a complete, nonempty Project
-// with one exact derived ACL for EVERY owned Box. Current v1 databases
-// (shared ACL, partially migrated, deleted/retired historical rows) fail
-// closed. Historical retirement migration requires a separate reviewed
-// provenance contract; this reader never silently discards prior leases.
+// with exact derived ACLs and retained Create/Delete lineage. No historical
+// lease is discarded. Older schemas are rejected when opening the ledger.
 func (s *Store) ReadCompleteScopedNetworkAuditLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
 	var zero ScopedNetworkAuditLedger
 	if s == nil || s.db == nil || !strings.HasPrefix(project, "user-") ||
@@ -102,6 +98,9 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 			return zero, ErrResourceLocked
 		}
 	}
+	if err = checkScopedRetiredForwardHistory(ctx, tx, project); err != nil {
+		return zero, err
+	}
 	p, err := readScopedTerminalPeerPolicyTx(ctx, tx, project, bridge)
 	if err != nil || len(p.Active) != 0 {
 		return zero, ErrResourceLocked
@@ -122,9 +121,6 @@ func readCompleteScopedNetworkAuditLedgerModeTx(ctx context.Context, tx *sql.Tx,
 	// A Scoped ledger may never borrow Legacy retirement or compaction
 	// history. The transitional guard refuses any mixed state before
 	// ordinary live audit as well as retirement.
-	if err := requireScopedNoLegacyRetirementTx(ctx, tx); err != nil {
-		return zero, err
-	}
 
 	rows, err := tx.QueryContext(ctx,
 		"SELECT uuid,name,incarnation FROM owned_boxes WHERE project=? AND state='OWNED' ORDER BY uuid", project)
@@ -278,6 +274,14 @@ func readCompleteScopedNetworkAuditLedgerModeTx(ctx context.Context, tx *sql.Tx,
 	}
 	if err != nil {
 		return zero, err
+	}
+	// Project rows on a different bridge are not covered by the bridge scan.
+	// Refuse them rather than silently accepting an extra historical lease.
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM network_address_fences WHERE project=? AND bridge!=?", project, bridge).Scan(&foreign); err != nil {
+		return zero, err
+	}
+	if foreign != 0 {
+		return zero, ErrResourceLocked
 	}
 	if len(seen) != 2*(len(claimed)+len(historical)) {
 		return zero, ErrResourceLocked

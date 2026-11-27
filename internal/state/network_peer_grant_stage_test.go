@@ -3,7 +3,6 @@ package state
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
 )
@@ -40,27 +39,30 @@ func s4b3GrantFixture(t *testing.T) (*Store, string) {
 }
 
 func TestS4B3DurableGrantStageNoNativeEffect(t *testing.T) {
-	s, id := s4b3GrantFixture(t)
+
 	ctx := context.Background()
-	if err := s.StagePeerGrant(ctx, id); err != nil {
-		t.Fatal(err)
+	s, r, id := pr178ScopedReadyToStage(t, true)
+	if e := s.StageScopedPeerOriginal(ctx, id); e != nil {
+		t.Fatal(e)
 	}
 	var desired int
 	var status, linked, src4, dst6 string
-	err := s.db.QueryRowContext(ctx, `SELECT desired,status,operation_id,source_ipv4,target_ipv6
-  FROM peer_grants WHERE project='user-1001'`).Scan(&desired, &status, &linked, &src4, &dst6)
-	if err != nil || desired != 1 || status != "PENDING" || linked != id ||
-		src4 != "10.243.18.11" || dst6 != "fd43:18::12" {
-		t.Fatalf("staged peer grant lost exact identity: %d %s %s %s %s %v", desired, status, linked, src4, dst6, err)
+	e := s.db.QueryRow("SELECT desired,status,operation_id,source_ipv4,target_ipv6 FROM peer_grants WHERE source_uuid=? AND target_uuid=?", purePeerUUID(1), purePeerUUID(2)).Scan(&desired, &status, &linked, &src4, &dst6)
+	if e != nil || desired != 1 || status != "PENDING" || linked != id || src4 != "10.43.18.11" || dst6 != "fd43:18::12" {
+		t.Fatal(desired, status, linked, src4, dst6, e)
 	}
-	rec, err := s.Get(ctx, id)
-	if err != nil || rec.State != "ADMITTED" {
-		t.Fatalf("staging misreported native success: %+v %v", rec, err)
+	rec, e := s.Get(ctx, id)
+	if e != nil || rec.State != "ADMITTED" || rec.NativeOperationID != "" {
+		t.Fatal(rec, e)
 	}
-	if err := s.StagePeerGrant(ctx, id); !errors.Is(err, ErrResourceLocked) {
-		t.Fatalf("one original staged twice: %v", err)
+	if _, e = r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); e == nil {
+		t.Fatal("unclaimed original")
+	}
+	if e = s.StageScopedPeerOriginal(ctx, id); e == nil {
+		t.Fatal("staged twice")
 	}
 	t.Log("S4_B3_GRANT_STAGED_INERT_SQLITE_PENDING_NO_NATIVE_SUCCESS=PASS")
+
 }
 
 func TestS4B3GrantStageFailsClosedOnActorAndNetworkDrift(t *testing.T) {
@@ -99,20 +101,22 @@ func TestS4B3GrantStageFailsClosedOnActorAndNetworkDrift(t *testing.T) {
 }
 
 func TestS4B3RegrantOnlyExactRevokedIncarnation(t *testing.T) {
-	s, id := s4b3GrantFixture(t)
-	_, err := s.db.Exec(`INSERT INTO peer_grants(project,source_uuid,source_incarnation,target_uuid,target_incarnation,desired,status,
- source_ipv4,target_ipv4,source_ipv6,target_ipv6) VALUES(?,?,?,?,?,0,'REVOKED',?,?,?,?)`,
-		"user-1001", s4b2RootSrc, s4b2RootSrc, s4b2RootDst, s4b2RootDst,
-		"10.243.18.11", "10.243.18.12", "fd43:18::11", "fd43:18::12")
-	if err != nil {
-		t.Fatal(err)
+
+	ctx := context.Background()
+	s, r, id := pr178ScopedOriginalFixtureMode(t, true, "ready-regrant")
+	if e := s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+		t.Fatal(e)
 	}
-	if err := s.StagePeerGrant(context.Background(), id); err != nil {
-		t.Fatal(err)
+	p, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge)
+	if e != nil || !p.Regrant || len(p.RevokedBefore) != 1 || len(p.RevokedAfter) != 0 || p.Intent.SourceIncarnation != purePeerUUID(1) || p.Intent.TargetIncarnation != purePeerUUID(2) {
+		t.Fatal(p, e)
 	}
-	var status, linked string
-	if err := s.db.QueryRow("SELECT status,operation_id FROM peer_grants WHERE project='user-1001'").Scan(&status, &linked); err != nil || status != "PENDING" || linked != id {
-		t.Fatalf("exact revoked regrant did not retain new operation: %s %s %v", status, linked, err)
+	if _, e = s.db.Exec("UPDATE peer_grants SET target_incarnation='foreign' WHERE operation_id=?", id); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); e == nil {
+		t.Fatal("reused incarnation")
 	}
 	t.Log("S4_B3_REGRANT_EXACT_REVOKED_UUID_AND_LEASE_ONLY=PASS")
+
 }

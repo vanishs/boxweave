@@ -8,9 +8,6 @@ import (
 // Availability is only an in-transaction preflight. The caller retains
 // the same transaction, credential check, and exclusive claim insertion.
 func scopedCreateBindingAvailableTx(ctx context.Context, tx *sql.Tx, project string, b VerifiedCreateBinding) (bool, error) {
-	if err := requireScopedNoLegacyRetirementTx(ctx, tx); err != nil {
-		return false, err
-	}
 	var n int
 	if err := tx.QueryRowContext(ctx, `SELECT
   (SELECT COUNT(*) FROM network_address_fences WHERE bridge=? AND ((family='ipv4' AND address=?) OR (family='ipv6' AND address=?) OR (project!=? AND state!='RELEASED')))+

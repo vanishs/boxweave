@@ -4,13 +4,51 @@ Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY
 
 ## Current P1 recovery ledger
 
-**Current executable R2/R3 pointer:** existing BDH task history in owned
+**Current development disposition — owner-directed deferral:** Owner decision (2026-11-27): P1 implementation is considered development-complete for scheduling; proceed with independent P2 development. This explicitly defers the unresolved Install composed witness in #194, not a PASS, waiver, or permission to repeat a refused operation. The existing 577 PASS / 66 SKIP / 2 FAIL aggregate and Race exit 1 remain recorded. Retain the original failed tests and all safety assertions. Exact-candidate regression, native and CI evidence, C04 hosted equivalence if needed, and old-gate applicability/replacement remain open before formal P1 acceptance, merge or release. This Schema 7 development checkpoint is not an accepted or release candidate. See [#194](https://github.com/vanishs/boxweave/issues/194) and [R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7212654941).
+
+The R5 pointer and stage rows below preserve the historical acceptance state; they are not the active development objective. Replan P2 against the published checkpoint. Preserve #194 and inherited final acceptance obligations without resetting R5 history.
+
+**Current executable R5 pointer:** /root/pr191-r5-phase-history,
+work_ref pr191-r5, revision10 REVIEW_BLOCKERS. Four independent review
+groups RECORDED, no ready or working group; inherited Install BLOCKED,
+integrated-candidate and p1-exit waiting. Exact candidate gates remain.
+Use `python3 dev/bwdev --json task next /root/pr191-r5-phase-history --expect-work-ref pr191-r5`.
+Actual Race original 302139a752474f6d82309ce837a87c3c terminal guest
+exit1, both streams consumed, 577 PASS/66 SKIP/2 FAIL, no reported
+DATA RACE warnings; unchanged source. Log SHA256
+2b29956c31ff5918197222e4b63617f7761c28f1000bc607bc62d735cec4997b.
+Not an aggregate PASS. Current checkpoint
+/tmp/pr191-r5-checkpoint-consumed.json and Finish Gate
+/tmp/pr191-r5-finish-consumed.json (REVIEW_REQUIRED, pending_output=[]).
+Revision10 digest 41c18534bdbd6b934ad4bf7f6868d0f9d9cd77a0fb158eb62cf796a760c6ca75.
+Source/installed/retirement independent review 6035dd73f53a992ec93f248829a09aa1,
+6063cda155b5a97ce9ab872902ea1158, 029ee936999f9db124a039260d48fc34,
+4b0a3c1f145233b127d21b2706696675. C01/C03/C05/C11 not full PASS;
+C02 and C04 local bounded PASS; C10 inspected runtime/DDL only.
+e233220 CI 7/7 and N2 28/28 success, both former 403 jobs actual success.
+Not current dirty product exact-head CI. No gate removal, no P1 close.
+
+**Preserved R4 pointer:** owned Box
+9d374e18-196a-493d-bf1f-2d582589f04d, /root/pr191-p1-replan,
+active history /root/pr191-r4-phase-history, work_ref pr191-r4.
+Use `python3 dev/bwdev --json task next /root/pr191-r4-phase-history --expect-work-ref pr191-r4`.
+Revision8 REVIEW_BLOCKERS: consumer-source, local-native and wan-c04
+RECORDED within local evidence scope. Inherited Install remains BLOCKED;
+candidate-ci waits on it and replacement-exit waits for candidate-ci.
+Separate CI-only commit e233220 undergoing hosted validation; not current
+product acceptance. Original R2/R3 history preserved below.
+No further scope waiver or product acceptance.
+
+**Preserved R2/R3 pointer:** existing BDH task history in owned
 Box 9d374e18-196a-493d-bf1f-2d582589f04d, workspace
 /root/pr191-p1-replan, history /root/pr191-r23-phase-history.
 On resume reconcile candidate/evidence and use
 `python3 dev/bwdev --json task next /root/pr191-r23-phase-history`.
-Initial actual revision4 CONTINUE: startup-native, consumer-source-parity.
-Install core regressions remain BLOCKED; final local exit waits on them.
+Latest actual revision10 REVIEW_BLOCKERS: runtime/schema local,
+consumer-source-parity and independent clean startup RECORDED.
+Only original Install core regressions BLOCKED; final local exit waits
+on them. Local rebuilt candidate startup evidence is not hosted CI or
+recursive isolation proof. Do not treat projection as acceptance.
 Do not replace the whole-stage objective with the next individual task.
 Reuse task transition projection, preserve mandatory gates. P2 offline
 migration scope decision unchanged; no product code published by this
@@ -27,7 +65,7 @@ R0 assessed published 363ee542c41a748fde5a59dd63b247ac534d4a52.
 | R1 | COMPLETE (preparation): Scoped fixtures, retained negatives and full State regression. |
 | R2 | IN PROGRESS: core runtime/CLI/installer cutover locally verified; final R2/R3/C/E joint exit open. |
 | R3 | IN PROGRESS: direct schema 7, old SQL removed, four-open refusal and targeted tests PASS; regression/consumer gate open. |
-| R4 | OPEN: affected native/consumer proof; WAN separate C04 gate. |
+| R4 | IN PROGRESS (parallel, owner-directed): source consumer calibration; exact candidate native gates and C04 remain open. |
 | R5 | OPEN: independent integrated candidate review and exact-head CI. |
 
 Historical R0 evidence refresh: original read-only audits
@@ -58,6 +96,111 @@ Historical R0 workspace: same owned Box 9d374e18-196a-493d-bf1f-2d582589f04d,
 d2338b3 (D37 test), not published. Policy a3a01ea already represented
 in 363ee54. Defer helper; D37 only if it closes a specific remaining
 witness gap. No reset, force or automatic integration.
+
+### R4 local WAN and remaining gate review
+
+258 current product input files unchanged: manifest SHA256
+574ad8cd3d58f6006bc80b0ea8e0c19738885e6006b434418defc819d0ff17c1.
+Installed rebuilt binary db7c43c55509f5f5c9bcc8c06e11f896db778bd32ae2bdfab13f9542671d9943.
+Real public IPv4 HTTPS example.com on 0/200
+(3409ea76bbc6785181f7c0bc502aa637), off Update
+b226a80b1e67c5105319a15cea0cec38, off 28/000
+(3bc33c998c25c95b088dfef79eb55f79), restore
+8eed43c1b4d2c05ad5fc7d81c81ad11f, restored 0/200
+(00a06672af0e19e397f2964d8eb6d20e). Outer b32293a421004581d4298e4957ac4cd9
+exit0; independent protected SQLite original/exit/order/UUID/integrity
+PASS 8776e181ea1133a660f187c96b95aae2. Receipt digest
+ce3931901f61f4a1264eeb4d4c1d42ee37f354baae9997a58675a9d34e2b86c7.
+Local C04 WAN evidence only; no full native/hosted acceptance.
+See PR comment 7212059093. Workload retained.
+
+Prior remote f431bac all7 and N2 28/28 success, not current product.
+Isolated seven CI-only files verified f15d8e3bf86bd0134b2514508305f8f8;
+exact tree c225ceacdc596382a914722c646e9b0120537449, export
+e5f1fa7513d50362cc2a49c74a445152 (131258 bytes,5 pages); published
+e233220b3c3a9fa214e79d31e468fc43fcde3832 with parent lease.
+Separate CI observed 1 success,4 running,2 queued.
+08c42a814efa30f6c43ee6e012fe0ecb exit0: N2 262 ordered checks/28 modes
+and path coverage retained; S25 52 old PR check lines and two release
+markers; old S2 PR/release/publish dependencies intact; 37 tests,
+format1408/YAML48/shell/diff PASS. Historical WAL jobs
+140233828965 and 140233829066 pre/final SUCCEEDED consistent.
+Revision8 no independent ready required work. Remaining candidate CI
+and replacement exit depend on unresolved Install combined evidence.
+No denied action replay, waiver, product publication or R4 exit claim.
+
+### R4 independent installed workload
+
+R4 resumed using guarded active history pr191-r4, rev4 then rev6.
+Latest BDH-only remote f431bac CI initially 6/7 success, N2 running;
+not the current product candidate. Exact authorized clean lab
+9124a75d-b3df-4b10-af2a-972aa6eab566 installed rebuilt candidate
+db7c43c55509f5f5c9bcc8c06e11f896db778bd32ae2bdfab13f9542671d9943.
+Image prep 6a5780ac54f71806109a211e0169e67d exit0, official Ubuntu
+image fingerprint 990054afd62769257b8d386635a09182191ec230480bcf99267574d186209bf5.
+Actual local MCP discovery 23 tools, Create 3d2af399cb3716347ceb0d142c52770b,
+Tracking 5876c4908dcf37cc174f715b7827163e, native
+b2e8d652-4181-4ef6-87a1-1f4d0150f036, guest UUID
+53bdf3e6-34ba-46b3-a7a2-db2ca8ea6ff0, running exact native UUID
+verified (9fd0905eecf6015317c805492b307052/d946cb6ce46dee54d8540fbd55a17b7a).
+Actual Exec adaa901cea3b6a396a489a42da54a8bc, tracking
+76b7dda747d14ef0fe79e3abbf79f7b4, native
+11a40054-adb0-405f-b11f-5616866d91f0, both original streams ended,
+no truncation, guest exit0, Ubuntu 24.04.5/curl available
+(49d4aa2bbf20ba544a58c3f4493c69b9 exit0). Local functional smoke
+RECORDED, independent not whole native C03/C04 or hosted proof.
+Retain Box, no parent socket or configuration changes; WAN task now
+WORKING; consumer source still WORKING.
+
+### R4 continuation and hosted APT prerequisite correction
+
+Owner challenged premature termination after first R4 correction.
+The prior R4 checkpoint did not establish that all independent work was
+blocked. Do not equate pending verification or an unfinished task with
+a blocker. R2/R3 Install obligation still explicitly BLOCKED; R4 remains
+active and independent work may continue.
+
+Original jobs 140327573272 and 140327574298 both failed before product
+acceptance at the same Microsoft optional repository HTTP 403. CI needs
+Ubuntu and signed Zabbly dependencies, not Microsoft product packages.
+Source-only correction in N2/S25: select only an exact standalone noble
+Microsoft product source for preservation outside active APT sources,
+only inside the existing disposable hosted CI guards. Refuse mixed,
+ambiguous, untrusted source files; retain all required source signatures,
+exact Incus pin and review, and strict refresh error handling. No access
+to the refused repository, signature bypass or live Host source edit.
+Two private selection tests, five existing signed-refresh tests, 14
+consumer tests, shell syntax, format1408/YAML48/diff PASS (5ebee3a229691f809722d374c2f6405d).
+Actual hosted remediation remains UNVERIFIED until exact CI run. No
+product Go change or acceptance gate removal. Preserve local checkpoint.
+
+### R2/R3 exit review and R4 parallel entry
+
+Owner directed R2/R3 review and R4 start. Verified saved worktree
+checkpoint 73453fdbd75c2e898ec8426eabc4ce86d884d7d7dd22f25c8a533f7866c1c129,
+aggregate-13 and candidate-13 hashes (3be6bf033b07a9f886eed302b628394d).
+R2/R3 local runtime/schema, installed startup and source mapping accepted
+within their evidenced scope only. Final local exit BLOCKED: two original
+Install failures and missing combined evidence; task revision10 retained.
+No full PASS or scope waiver. R4 may advance independent reversible work,
+not remove dependent gates or publish a failing candidate. Latest remote
+d614359 CI 5/7; N2 and S25 failed, previously diagnosed APT 403.
+Not current dirty candidate CI.
+
+R4 first source consumer correction: require Exec WAL final state to
+agree with pre-restart state, in addition to exact original/native IDs.
+Contradictory synthetic transcript admitted before fix (63301db3c32e6446fcb927eec6355a8a).
+Correct positive fixtures; missing-marker calibration now removes all
+actual full matches rather than one generated example. 14 map, 4 N2
+identity, 4 S25 evidence tests pass (5d246931f8dbd2edf87b7fbe0b01e2e6);
+format initially failed because gofmt missing from PATH, not code format.
+Rerun pinned toolchain checks. No Go change or native PASS claim.
+
+Next R4: preserve old S2/release and N2 gates until complete reviewed
+replacement; exact current candidate 23-lane and C04 evidence still
+requires a passing coherent candidate and applicable fixtures. Hosted
+APT prerequisite repair is independent of Install regression resolution.
+P2 offline migration unchanged; R5 remains gated. No merge/release.
 
 ### Finite remaining cutover work
 
@@ -132,6 +275,353 @@ That operation exit128 only at missing Git author; commit operation
 and old unit expectation failures corrected without dropping approval/drift
 and no-activation negatives. No native installation/packet proof for R2.
 
+### Install oracle disposition
+
+Owner-approved applicability review recorded in CONSOLIDATION_ACCEPTANCE.md.
+Old positive contracts obsolete, retained combined evidence still open.
+Existing installed partial-ACL test is not equivalent; aggregate-13
+skipped it. Revision10 REVIEW_BLOCKERS; 577 PASS/66 SKIP/2 FAIL unchanged.
+No code or test edits. Platform review pending user submission; no
+repeat investigation absent new evidence or legitimate resolution.
+
+### Independent clean-lab installed startup result
+
+Native plan 15bf416ee81fb31ebceb1fed3d2e61d0 exit0: signed Incus
+1:7.6-ubuntu24.04-202611072126, plan SHA256
+56c6cf67a558cfe808bedb104377831e78e32724ab8fdad042245cc804f80d95.
+Bootstrap 550ea77dd8da1ae58d83071d18fcdc0a exit0: inner client/server
+7.6 active, new-daemon-ready, /21 pool 2045; no existing installation.
+Wrapper read-only scoped plan 39ac2fcbae05a0b2ae7b062b2417b329 exit0;
+exact plan, candidate and derived restricted Project confirmed.
+Actual wrapper apply 8dfb6535e239de5015b0bbdc69f1227c exit0:
+STAGE, ACTIVATE, INSTALLED_STATUS; three units active, exact installed
+binary db7c43c55509f5f5c9bcc8c06e11f896db778bd32ae2bdfab13f9542671d9943,
+schema7, integrity OK, zero originals. Actual ready/mcp/native true
+and localhost-only listener (406888338696611f8d8cdc9f756c700c); that
+combined command exit1 due to private fixture permissions, not service.
+Read-only diagnosis 9de4a5701babc34d4f7878c19f749478: correct private-file
+refusal, fixture mode incorrect. Correct fixture mode0600 only.
+0ed2ca02fefc8c6b8942b14cc36af58d exit0: exact old schema refusal,
+unchanged bytes/no sidecar; retired runtime refusal; ordinary service
+restart with new PID, same digest/schema, integrity and ready true,
+zero operations. No nested workload or hosted CI claimed. AppArmor
+unconfined, quota enforcement unverified; no security setting override.
+Revision10 REVIEW_BLOCKERS: startup local evidence RECORDED; original
+two Install failures still BLOCKED. Not a coherent passing aggregate
+or exact remote CI candidate. R4/R5 stay open. No product push.
+
+### Independent clean-lab startup attempt
+
+Owner requests completion of both remaining tasks. Prior explicit Install
+conversion refusal remains in force; no alternate execution or waiver.
+Clean lab UUID 9124a75d-b3df-4b10-af2a-972aa6eab566 only. Network
+preflight de0979156d894c4bfc6192141c3098eb exit0; GitHub/Go/Zabbly
+reachable. Build deps and base clone 20b58d93f9f966b1e0facb51fa4630ba
+exit0. Public base 75e6aeb, product-only diff excluding all test edits,
+249234 bytes SHA256
+7b11db691749fa33cc1be659b1c928a58ab59dbd77c9df8a70ba5cb61ccab75b;
+gzip archive 55859 bytes SHA256
+cf4b05fd0a52ac65aa912c3cb9f0654f3338a4ba0e9ae265f7b7e416994d43ae.
+Two independent exclusive file creates with matching readbacks
+5d566ff95e22d69ec4b05f4751030046 and 8e00ec00cb851633a53f291181a4ea8d.
+Manual two-part transfer, no new BDH tooling. Both archive and expanded
+patch hashes verified; Go official metadata SHA checked and go1.26.9
+build exit0 c3c8fa7dc34f0a73ae52613d607ccd17. Candidate new binary SHA256
+db7c43c55509f5f5c9bcc8c06e11f896db778bd32ae2bdfab13f9542671d9943.
+Rebuilt dirty-source candidate, NOT original candidate-13 binary or
+exact remote commit; embedded base commit metadata denotes base only.
+Reconstructed textual git diff digest differed; actual sorted 258
+non-test product file path/content SHA manifest identical on both
+workspaces: 574ad8cd3d58f6006bc80b0ea8e0c19738885e6006b434418defc819d0ff17c1
+(459e6b8b4c8a63359ba2dafd6cb5120a / 64f5f0d38e8ae7f04e2241c784d30c28).
+Independent local startup only; prior aggregate two FAIL unchanged.
+Native plan original 15bf416ee81fb31ebceb1fed3d2e61d0 admitted; inspect
+original before any further native effect. No hosted runner identity
+substitution, host modification or blocked Install regression replay.
+Task history rev9 startup-native WORKING; remaining Install BLOCKED.
+
+### Owner-authorized clean lab provision
+
+Owner authorized a new clean test Box, not modification of any existing
+installation. Created pr191-p1-clean-lab, UUID/incarnation
+9124a75d-b3df-4b10-af2a-972aa6eab566, Project user-1001,
+original Create 9fabfe8b255f3887cbb109ee8411b21d SUCCEEDED; native
+receipt 94f8675b-b4cf-421a-9746-df58fec8341c. Requested explicit
+images:ubuntu/24.04, 4 CPU, 4096 MiB, 30 GiB, standard nesting option
+allowed in current Project. No privileged, interception or AppArmor
+override. Actual guest preflight 495736fdb74768bf1d5b12dc116ccf01
+exit0: Ubuntu 24.04.5 LTS, nproc4, memory.max 4294967296;
+native configured disk 30GiB, physical quota enforcement UNVERIFIED,
+no Incus or BoxWeave installation, ledger, unit or prerequisite manifest.
+Guest AppArmor unconfined; UID/GID mappings observed but no verified
+recursive confinement or inner native readiness. No inner Incus or
+candidate installed; no old Box or Host configuration modified.
+Clean inventory prerequisite satisfied, startup-native acceptance
+still blocked pending supported environment capability and verified
+candidate. Original two Install failures unchanged; no alternate
+execution of prior refused conversion. Phase revision7 retained.
+New Box reserved for independent authorized functional validation,
+not a replacement for hosted N2/S25.
+
+### R2/R3 consumer source closure and blocker review
+
+Resume from rev6. Prior orchestration call limit observed, threshold and
+scope unknown; see learning inbox and PR comment 7210732641.
+Historical N2 run 45912024502 (22 mapped jobs) and S25 job 140288933978
+(75e6aeb) compared against current 72-marker map, 23 lanes: 134/144
+distinct lane requirements matched; 10 new schema7-only checks missing
+as expected from old schema. Prior source/binary schema refusal checks
+retained; not current installed proof. Actual new N2 trigger regression
+11 missing path cases then 13/13 map tests pass, op
+f0f6fd73c252540413684d18be3b0651. Final 29 related Python tests,
+format1406/YAML48/shell/diff pass, 7ba6d573f8f52df05e48d072f8001506.
+No Go changes; retain aggregate-13 577 PASS/66 SKIP/2 FAIL.
+
+Latest BDH head d614359 CI 5/7 success; N2 27/28 (sdk-compat job
+140327574298) and S25 job 140327573272 fail at APT repository 403,
+before product acceptance. No signature-check change or new native PASS.
+Clean fixture review: main lab and three other existing P0/WAN/Scoped
+labs have schema6 installations (c4513291fea942c242f130870c197d49,
+24e895634ba1049ac5fec298e5b74ec9,6025eb9ac4863416edcaf3cf7b375dbd).
+No overwrite, cleanup, or runner-identity substitution.
+
+Phase-wide revision7 REVIEW_BLOCKERS: local runtime/schema and consumer
+source parity recorded; two original Install failures and clean exact
+candidate installed startup blocked. Review of remaining R2/R3 exit
+requires both and coherent aggregate; no independent mandatory local
+task identified. R4 actual native consumer cutover/C04 remains later.
+Next: legitimate resolution of original Install regression blockage,
+verified candidate and authorized clean fixture, then local exit review.
+No prior denied action replay, no waiver, no new BDH code, no claim of
+current quota exhaustion. R2/R3 OPEN; product remains local only.
+
+### R2/R3 exact candidate CLI and schema consumer
+
+Existing candidate-13 SHA256
+8bd7a575fe5e04ac9d36efa0b642e1b5aefdd59426e1dbdefffd5a854a6eb105
+reused; no Go source change or repeat aggregate. Linked-symbol inventory
+66fec5f45f643c8fbb02ccb7ccf47094 / 803f6ed5650f87a8ddcb01b5be398b16:
+old NativePeerRootServe, native IPv4 compaction/review execution absent;
+shared listener, historical refusal stubs and maintenance unit text
+remain. No old table references in tracked non-test Go search. Symbol
+scan is bounded, not proof of all reachability or final P2/P3 cleanup.
+
+30644e777841e96af0dfc934fc65ca43 exit0: actual candidate status AND Doctor
+refuse all seven private invalid DB layouts; original bytes unchanged,
+no sidecars. Old serve mode and three retired CLI command names refuse
+before creating ledger. Evidence dir /tmp/pr191-r23-cli13-mhmqrd_y.
+No installed service or native effects. Strengthened existing installed
+schema verifier and N2 crosswalk: require exact status error per layout,
+no generic failure or altered DB; retain original Doctor oracle. New
+status oracle calibration + 7 actual status repeats:
+35dc2a7ba16d7e97adb71930f4a686c2 exit0, 8 schema tests, 12 map tests,
+1406 format, 48 YAML. Current candidate new ledger/reopen twice:
+34b9272b5c4dd32a4a34d86512aaaa06 exit0, 23 non-internal tables, exact
+schema 7, required claims/history tables retained, old DDL absent,
+integrity OK, zero operations. Ready false, MCP ledger readiness true,
+native ready false; not installed startup. Evidence
+/tmp/pr191-r23-fresh13-uptrjgsa.
+
+R2/R3 exit not achieved: unchanged Go aggregate 577 PASS/66 SKIP/2 FAIL;
+two previously explicitly refused Install conversions remain blocked.
+Positive installed startup and exact candidate native/consumer cutover
+not executed. Do not replay denied write, skip failures or claim native
+PASS. Full offline retirement remains P2; old gate retirement and final
+native equivalence R4. No new BDH tools or changes; existing fixtures,
+binary and historical full aggregate reused. No quota exhaustion claim.
+
+### R2/R3 Forward-history correction and CI evidence consumer
+
+Owner-approved P1/P2 boundary implemented (d6b7d9ca6f9918b68cb990f6c891016d
+exit 0): full offline retirement migration P2; minimum P1 dependencies
+and both blocked Install regressions remain P1. No waiver.
+
+Concrete Forward defect: 17e4060291dac062135b8d179ab07d1f exit 1, changed
+host_port accepted by ReadScopedRetirementLedger. Restore exact original
+Create/Delete intent, native receipt, identity and typed claim proof
+in same read-only Scoped snapshot; no Legacy DDL. Normal revoked and
+no-dispatch cancelled rows accepted, port/device/owner/receipt drift
+refused. a5e28c776b6440c818d02bdd2fcf3189 7/7 selected PASS;
+6347576f8bf5047a0c8925e89c92fce7 8/8 top-level race tests PASS.
+No installed native retirement claimed.
+
+84f8cf30b2a3ef3a68a969daaa0d18d6 exit 1: seven already-deleted Legacy
+files still indexed. Stage those exact deletions. No format bypass.
+154a7844a234214c1eafd3efba5d8ad5 guest exit 1: format 1406, YAML48,
+vet and candidate build PASS; binary SHA256
+8bd7a575fe5e04ac9d36efa0b642e1b5aefdd59426e1dbdefffd5a854a6eb105.
+Aggregate /tmp/pr191-r23-aggregate-13/go-test.log 323004 bytes SHA256
+e1f2d89d9377345f67b92c254bfafed67f3f003f24140261a3e763db12dd2a4b.
+No source drift; 645 top-level, 577 PASS, 66 SKIP, same two Install
+failures: TestS4B2ConntrackScopeMustComeFromFullSQLiteLedger and
+TestS4B2RootAuditRefusesSQLiteAndNativeInterleaving. No new Go failure.
+
+C/E: exact ACK originals twice, WAL cut/restart/native ID and order;
+N2/S25/RC S25 sanitized CI lane locator after original checks.
+23-lane receipt index rejects missing/duplicate/wrong-map/source/context,
+reused digest and mixed originals. Does not authenticate CI or establish
+semantic equivalence. Old N2/S2 gates retained; see crosswalk dispositions.
+R4 actual replacement and C04 pending. d1db37b62621dc8cb6479eda26c55777
+exit 0: 31 direct ignored Go probe builds, module and format/YAML PASS.
+60b071afb8a45b2dab93af0a36d8f9f5 exit 0: 111 related Python tests
+(19 S25, 66 Scoped, 12 map/receipt, 4 identity, 6 offline, 4 roundtrip),
+shell syntax, tracked format, YAML and diff check. Source calibration
+only; no exact-head hosted run.
+
+R2/R3 OPEN: two pre-existing platform-blocked Install conversions and
+known failing aggregate prevent verified product publication. Independent
+Forward and consumer source work completed. Preserve original refusal,
+do not weaken gates or claim native acceptance. Old gate cutover requires
+actual candidate/review. BDH index reused, no comparative benefit or new
+promotion. No quota exhaustion claim, merge or release.
+
+### Owner-approved scope sequencing (2026-11-26)
+
+Owner approved P1 runtime/schema/core regression scope and P2 full offline
+retirement migration. Preserve all necessary P1 dependencies and final
+maintenance evidence, no gate weakening. See plan and acceptance.
+Blocked Install conversions remain P1 OPEN. Continue unrelated safe work.
+
+### R2/R3 continuation: recorded learning and exact lane crosswalk
+
+Owner requested record first, then continue product work. Learning inbox
+and execution log updated without new BDH tools or candidate promotion:
+479943fc401700926e266f699e16a19a exit 0. Safety refusal hypothesis remains
+unconfirmed; no retry of the refused Install write. Other work continued.
+
+C/E source work: map all 72 original S2 requirements to 22 N2 modes plus
+S25 (48 direct, 24 explicit replacements pending review), retain the six
+ordered operation_list witnesses. Read-only lane consumer and aggregate
+index validate source, candidate identity, distinct lane transcripts and
+required exact lines; no forged old aggregate, no inference of native PASS
+from untrusted logs. Added checks to current N2/S25 and release S25, and
+source verification. All prior per-mode checks and old S2 consumers remain.
+S25 records actual candidate digest; distinct N2 digests are exposed,
+not silently treated as one executable. Six unmapped N2 modes retain
+their full original checks.
+
+5c91e08d975da8a9f749efc7527f6dcb exit 0: 107 related Python tests
+(19 S25, 66 Scoped, 8 crosswalk, 4 N2 identity, 6 offline, 4 roundtrip),
+shell syntax and 48 tracked YAML files no duplicate keys. Source-gate
+wiring and updated crosswalk documentation: b83b9dd90928dc678b9ece1ed3476315
+exit 0, 16 source tests. Prior full Go aggregate is unchanged; no Go edits.
+
+Remaining actual dependency: two Install conversions are still blocked
+by the earlier explicit platform safety refusal; no verified override.
+R2/R3 cannot publish a known failing candidate. The multi-lane source
+consumer is now ready for independent native evidence review; old S2
+single-run gates and two legacy N2 modes remain in force until complete
+replacement/obsolete-contract disposition. Existing offline retirement
+supports only reviewed Legacy; its UNKNOWN archive and foreign-resource
+oracles must not be retired as equivalent to Scoped live drain. P2 full
+offline conversion remains an explicit obligation. Exact-head CI, C04
+public WAN and R4/R5 remain open. No new runtime or acceptance waiver.
+
+Manual Finish Gate: recorded known original exit results and bounded
+verification. Independent source mapping and calibration performed before
+checkpoint; no active test execution claimed. Do not replay the blocked
+write or claim quota exhaustion. Candidate remains unpublished, preserve
+the original workspace and obtain legitimate review of blocked action.
+
+### R2/R3 continued C/E source verification (2026-11-26)
+
+The prior Install write was explicitly blocked by OpenAI tool safety, not an
+observed BoxWeave admission failure. Platform rationale is unavailable:
+possible false positive, not established. Preserve the refusal; do not
+retry the denied action via another transport or representation. Prefer
+pure fixtures and read-only checks for future verification, with actual
+native effects restricted to existing reviewed disposable environments.
+Request platform review of the original error with redacted context.
+No measured false-positive reduction or BDH promotion claimed.
+
+Independent C/E work in the original Box:
+- Shared S2.5 PR/release consumer retains 55 exact markers, two original
+  lines, explicit Legacy disposition, and exact single source binding.
+  Release selects existing Scoped producer and retains both original
+  release witnesses. 55c03a8cec1e9d63c8a78bdaac53c815 exit 0: four tests,
+  including omission of every required marker. No native run or release.
+- N2 installed Doctor requires exact schema 7 and seven refusal layouts
+  (five retained, future and partial added). Source tests 7/7,
+  ede6f4a146e7dc345b42cb914afbebd7 exit 0; native pending.
+- Candidate f0e77f29ac553791c18c252403e478c623a110de10b458db06b99af22b954afc
+  ran status twice on a fresh private offline DB, no Incus socket:
+  f05fcb614a0de2e86fad6c7ae3087644 exit 0, 24 tables, schema 7, zero
+  Operations, retained tables present, old retirement/compaction absent,
+  both not ready. Add checks to existing dual-arch CI smoke. Not native
+  service startup or proof of both architectures.
+- N2 transcript binds source, built and installed candidate digest, before
+  native witness checks. Read-only consumer rejects missing, duplicate,
+  malformed or mismatched identities. 9e7db02013316d394f43df305e150af3
+  exit 0: identity 4, S25 4, schema 7 tests, shell syntax and workflow YAML.
+- Rechecked exact 72-marker union: 48 direct, 24 changed,
+  85f5a4adde9a36c0d1e71c46a8b8b3db exit 0. Old S2 consumers and release
+  route remain intact until exact multi-lane replacement. Legacy N2 offline
+  interrupted archive/purge, foreign preservation and exact UNKNOWN
+  disposition remain open; existing Scoped retirement is not complete
+  equivalence. No fake aggregate or WAN waiver.
+
+R2/R3 OPEN: two Install conversions require legitimate resolution of the
+explicit refusal; S2/N2 convergence remains incomplete. Last full regression
+31 State failures resolved, two Install failures remain. No Go change in
+this continuation, no product publication, merge or release.
+
+### R2/R3 resumed outcome-group checkpoint (2026-11-26)
+
+Box pr188-h0-lab, /root/pr191-p1-replan, local HEAD 9c76b33,
+remote head 75e6aeb (7/7 CI success on non-product remediation only).
+History/retirement: 16/17 selected tests passed in 94219e0c50d4b092302ad37d000d4c82
+(exit 1, log SHA256 03f0eacc335ceb31c67ed1ed1acfd3d70a4f533f0fdb4749cdb617e676789231).
+Remaining concurrent Create test corrected to real Project admission fence
+(one admission winner, retired address refused and fresh address accepted);
+7bcf3ab4c615cf904f6a536015454634 exit 0. All ten baseline history failures
+now individually have passing source witnesses. Full aggregate still required.
+Retired queue/archive/reuse/compaction APIs refuse before callbacks; existing
+Scoped Delete atomic fault and UNKNOWN tests retain the transactional oracle.
+History includes 2048 exact synthetic retired rows with tail corruption,
+257+1 retained rows, real Scoped admission, peer tombstones, restart, held
+identities and forward history digest change. A new negative found a real
+wrong-bridge same-Project fence omission (ef49ff7d72ddc20554d344b383067bbc
+exit 1); fixed full-project fence scan, 0614b5537869fffa09d010552d21686d
+exit 0. No native claims from SQLite/synthetic receipts.
+Peer 17 baseline State failures converted to Scoped original, stage/claim,
+proof, terminal policy and read-only recovery. d6caaf8f1410ea078297d9e3eefd87ad
+exit 0, 17/17 selected, no skip, log SHA256
+a6f21bb0cbd002ffbe025a2b01ac7a53f40e061d13b312a3ff6e4a80bb8ca451.
+Old markers retained for corresponding State assertions, not native proof.
+Dependent Delete/recovery: all four baseline failures converted and passing.
+Actual defect: legacy peer child intent/dispatch could not satisfy Scoped
+Root execution. Canonical schema-2 child with exact parent/child claims and
+events, only linked parent excluded from project-wide barrier, no grant
+children, no replay, terminal lineage retained.  ebc12b42d74d4a5c5b5bcefb3b9552e0
+linked cleanup/forged link refusal; 38b2873c321b4c0817e5061bfad9f145 atomic
+Delete recovery (legacy review refused); 042a755cd37b868b6791680a4d10f070
+two A4 tests; f82c8004daf9e6216e4a4bff1781851d lost child ACK, parent stays
+UNKNOWN and cannot dispatch. All exit 0; source/SQLite tests only.
+
+Full current Go regression 44c60c8bd944644214ab71b6e60a1ee9 exit 1,
+source_drift=False, 645 reported top-level records (577 pass, 66 skip,
+2 fail); ten packages pass; State 140.410s PASS. Log
+/tmp/pr191-r23-aggregate-12/go-test.log SHA256
+dd55fcedc6a3fd8ce01ce68fdc2536807dde8624752e38f7e4ad9d490a9cf8f2.
+Only remaining failures TestS4B2ConntrackScopeMustComeFromFullSQLiteLedger
+and TestS4B2RootAuditRefusesSQLiteAndNativeInterleaving: old shared ledger
+positive witnesses refused before native callback. New Scoped Store fixture
+compiles, test-write action blocked by tool safety check; do not bypass.
+No test deletion, skip or relaxed predicate to force green. Further C/E
+consumer wiring remains required (old direct serve and single-run
+72-marker evidence consumers still incompatible, exact native gates open).
+Updated live MCP descriptions to actual Scoped-only behavior, schema-7
+candidate comment. Static verification a9ac8697d60d5c76e89c657bce5db8cd
+exit 0: format, diff check, vet, modules, build, 58 uninstall tests,
+8 evidence-audit and 10 scoped-acceptance tests, shell syntax. Candidate
+SHA256 f0e77f29ac553791c18c252403e478c623a110de10b458db06b99af22b954afc
+(not a deployed/accepted binary). Existing PR comment 7209225391.
+Learning: reuse aggregate navigation and exact receipts, keep raw log and
+exit status; avoid oversized argv (>4096 bytes); never bypass safety refusal
+or conflicting original resource lock. No new BDH improvement/promotion.
+R2/R3 OPEN/BLOCKED on Installer witness conversion; no product push, merge
+or release. Minimum C/E and exact-head native evidence remain open.
+
 ### Resume P1 R2/R3 directly
 
 Current local HEAD `9c76b3394f85d8b4545b9db82b2dd2b7328fd504`,
@@ -163,7 +653,7 @@ producers and consumers), fresh schema/no-write refusal, binary startup,
 72-marker crosswalk and aggregate source checks. R4/R5 including WAN remain
 mandatory and open. Use the [batch helper](../../dev/skills/verification/SKILL.md#go-failure-navigation-candidate)
 and one active ledger; no extra stage or user command for routine fixes.
-Owner paused product development for remediation; next command is P1 R2/R3.
+R2/R3 resumed; latest checkpoint above supersedes prior failure count. Preserve original workspace; do not reset or promote incomplete evidence.
 
 ### R2/R3 local schema-7 checkpoint (2026-11-26)
 

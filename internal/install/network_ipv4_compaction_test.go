@@ -86,8 +86,8 @@ func TestIPv4RetirementInstallerUnitIsolation(t *testing.T) {
 		t.Fatal("ordinary exact Peer uses retirement socket")
 	}
 	p := Plan{Project: "user-1001", RetirementTarget: &NativePrepareTarget{Project: "user-1001", Network: "bwbr0", ACL: "bw-peer"}}
-	if !strings.Contains(unit(p), "Wants="+nativeRetirementUnitName) {
-		t.Fatal("missing helper dependency")
+	if strings.Contains(unit(p), nativeRetirementUnitName) || !strings.Contains(unit(p), "Wants="+scopedLifecycleUnitName) {
+		t.Fatal("legacy retirement dependency must not be installed")
 	}
 	p.RetirementTarget = nil
 	if strings.Contains(unit(p), nativeRetirementUnitName) {
