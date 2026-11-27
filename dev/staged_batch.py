@@ -13,6 +13,7 @@ from pathlib import Path
 from harness.verification import CHECKS
 
 APPEND_DOCS = {
+    "dev/LEARNING_INBOX.md",
     "docs/development/CONSOLIDATION_PROGRESS.md",
     "docs/development/CONSOLIDATION_ACCEPTANCE.md",
     "docs/development/RETIREMENT_INVENTORY.md",
@@ -86,6 +87,50 @@ def export(root, parent, tree, compact=True):
     if len(encoded(payload)) > MAX_EXPORT:
         raise BatchError("Export too large; use bounded reviewed transfer")
     return payload
+
+
+def framed_export(payload, max_rows=6, max_bytes=65536):
+    """Index immutable text frames for caller-selected bounded delivery.
+
+    Offsets are relative to the byte after the index newline. A frame is
+    not a commit or a receipt. The caller still verifies the complete tree.
+    """
+    if not 1 <= max_rows <= 100 or not 1024 <= max_bytes <= MAX_EXPORT:
+        raise BatchError("Invalid delivery frame bounds")
+    identity = {key: sha(payload[key]) for key in ("parent", "base", "tree")}
+    rows = payload["rows"]
+    if not rows or len({r["path"] for r in rows}) != len(rows):
+        raise BatchError("Empty or duplicate delivery rows")
+    frames, index, group = [], [], []
+    offset = 0
+
+    def pack(items):
+        return encoded(dict(identity, rows=items))
+
+    def flush():
+        nonlocal offset, group
+        raw = pack(group)
+        if len(raw) > max_bytes:
+            raise BatchError("Single row exceeds frame bound; use reviewed ordinary export")
+        index.append(dict(number=len(index)+1, offset=offset, bytes=len(raw),
+                          sha256=hashlib.sha256(raw).hexdigest(), rows=len(group)))
+        frames.append(raw)
+        offset += len(raw)
+        group = []
+
+    for row in rows:
+        if group and (len(group) == max_rows or len(pack(group + [row])) > max_bytes):
+            flush()
+        group.append(row)
+    if group:
+        flush()
+    header = encoded(dict(identity, schema=1, kind="STAGED_EXPORT_FRAMES",
+                          scope="LOCAL_EXPORT_ONLY", rows=len(rows), body_bytes=offset,
+                          payload_sha256=hashlib.sha256(encoded(payload)).hexdigest(),
+                          frames=index))
+    if len(header) > 32768 or len(header)+1+offset > MAX_EXPORT:
+        raise BatchError("Framed export exceeds bounded index or total size")
+    return header + b"\n" + b"".join(frames)
 
 
 def commands(root, payload, packages, registered):
@@ -174,12 +219,23 @@ def main():
     parser.add_argument("--go-package", action="append", default=[])
     parser.add_argument("--check", action="append", choices=sorted(CHECKS), default=[])
     parser.add_argument("--timeout", type=int, default=240)
+    parser.add_argument("--framed-export", action="store_true",
+                        help="Emit an indexed export after local verification")
+    parser.add_argument("--frame-rows", type=int, default=6)
+    parser.add_argument("--frame-bytes", type=int, default=65536)
     args = parser.parse_args()
     try:
+        if args.framed_export and not (1 <= args.frame_rows <= 100 and
+                                       1024 <= args.frame_bytes <= MAX_EXPORT):
+            raise BatchError("Invalid delivery frame bounds")
         root = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").decode().strip()).resolve()
         result, code = run(root, args.parent, args.tree, args.evidence,
                            args.go_package, args.check, args.timeout)
-        print(encoded(result).decode("ascii"))
+        if code == 0 and args.framed_export:
+            # The existing private record.json retains all verification facts.
+            sys.stdout.buffer.write(framed_export(result["export"], args.frame_rows, args.frame_bytes))
+        else:
+            print(encoded(result).decode("ascii"))
         return code
     except (BatchError, OSError, subprocess.CalledProcessError, UnicodeError) as exc:
         print(json.dumps(dict(status="REFUSED", reason=str(exc)[:240])))

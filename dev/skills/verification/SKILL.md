@@ -109,6 +109,26 @@ identity; create a tree from the stated base only after reviewing all rows;
 require returned remote tree equal the exact staged tree, then commit and
 advance only with an expected-parent lease, never force. If reconstruction
 or evidence fails, stop publication and preserve the original worktree.
+For multi-batch delivery where rereading the entire original export would
+be wasteful, add --framed-export to the same staged_batch.py command.
+Choose explicit --frame-rows and --frame-bytes from the ordinary transport
+budget (defaults 6 rows and 65536 bytes, not a platform quota contract).
+On actual local exit zero, stdout begins with an ASCII JSON index and
+one newline; each frame is a consecutive ASCII JSON object with the same
+parent/base/tree and distinct export rows. The index has frame number,
+offset relative to the byte after the newline, byte count, SHA256 and
+row count, plus total body bytes, rows and canonical export hash. Retain
+the original Operation and index. With authorized byte-range output reads,
+read only the necessary exact ranges, verify frame length/digest/identity,
+and account for every frame and distinct path before tree assembly.
+If range reads or hash verification are unavailable, use the ordinary
+verified export route; do not probe limits, retry uncertain mutations,
+or claim a frame is a commit. Compare exact complete remote Git tree,
+then use the existing non-force expected-parent lease. Preserve successful
+checks and the original receipt on interruption; review ambiguous writes
+rather than automatically repeat them. Single small exports need no frame
+overhead. Private record.json remains the complete local check record.
+
 Logs are private; do not publish raw logs. A staged-tree result is local,
 not independent CI/native acceptance. Record measured nested calls, bytes
 and rework; do not infer general productivity from one trial.

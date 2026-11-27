@@ -1,4 +1,5 @@
 """Staged batch and compact append export regression."""
+import hashlib
 import json
 import subprocess
 import sys
@@ -45,6 +46,53 @@ class StagedBatchTests(unittest.TestCase):
         old = self.git("cat-file", "blob", row["base_blob"]).decode()
         self.assertEqual(old + row["append"], full["rows"][0]["content"])
         self.assertLess(len(batch.encoded(small)), len(batch.encoded(full)))
+
+    def test_framed_export_exact_reconstruction_and_selective_reads(self):
+        for i in range(8):
+            self.write("file-%02d.txt" % i, "unicode: " + chr(0x6c34) * 80)
+        self.git("add", ".")
+        payload = batch.export(self.root, *batch.snapshot(self.root))
+        raw = batch.framed_export(payload, 3, 2200)
+        self.assertEqual(raw, batch.framed_export(payload, 3, 2200))
+        header, body = raw.split(b"\n", 1)
+        index = json.loads(header)
+        self.assertEqual(index["body_bytes"], len(body))
+        self.assertEqual(index["rows"], len(payload["rows"]))
+        rebuilt, end = [], 0
+        for number, frame in enumerate(index["frames"], 1):
+            self.assertEqual(frame["number"], number)
+            self.assertEqual(frame["offset"], end)
+            self.assertLessEqual(frame["rows"], 3)
+            self.assertLessEqual(frame["bytes"], 2200)
+            part = body[end:end+frame["bytes"]]
+            self.assertEqual(hashlib.sha256(part).hexdigest(), frame["sha256"])
+            parsed = json.loads(part)
+            for key in ("parent", "base", "tree"):
+                self.assertEqual(parsed[key], payload[key])
+            self.assertEqual(len(parsed["rows"]), frame["rows"])
+            rebuilt.extend(parsed["rows"])
+            end += frame["bytes"]
+        self.assertEqual(end, len(body))
+        result = dict(payload, rows=rebuilt)
+        self.assertEqual(result, payload)
+        self.assertEqual(hashlib.sha256(batch.encoded(result)).hexdigest(),
+                         index["payload_sha256"])
+        last = index["frames"][-1]
+        offset = len(header)+1+last["offset"]
+        self.assertEqual(raw[offset:offset+last["bytes"]], body[last["offset"]:])
+        self.assertLess(last["bytes"], len(raw))
+
+    def test_frame_bounds_and_duplicate_refusal(self):
+        payload = batch.export(self.root, *batch.snapshot(self.root))
+        for rows, size in ((0, 65536), (101, 65536), (1, 1023), (1, batch.MAX_EXPORT+1)):
+            with self.assertRaises(batch.BatchError):
+                batch.framed_export(payload, rows, size)
+        with self.assertRaises(batch.BatchError):
+            batch.framed_export(dict(payload, rows=payload["rows"]*2))
+        self.write("large.txt", "x"*2000)
+        self.git("add", "large.txt")
+        with self.assertRaisesRegex(batch.BatchError, "Single row"):
+            batch.framed_export(batch.export(self.root, *batch.snapshot(self.root)), 1, 1024)
 
     def test_nonappend_full_and_deletion_refusal(self):
         self.write(self.doc, "replacement")

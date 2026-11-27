@@ -27,3 +27,17 @@ Local reduction 59.0%; not a measured whole-task productivity gain.
 Original checkpoint PR comment 7206258372; BDH-L015 candidate.
 Next real D31 trial with actual local checks and remote tree verification.
 Independent review and CI pending; no automatic promotion.
+
+## P2 delivery refinement (2026-11-27)
+
+Optional framed export indexes deterministic immutable byte ranges for
+ordinary multi-batch deliveries; verified original exit and complete
+range hashes, identity, distinct rows, remote exact tree and expected
+parent lease remain mandatory. No platform budget assumption, retry
+automation, new connector, or product effect. A caller without suitable
+range/hash capability uses the existing ordinary export. Private check
+record retained. See verification Skill and L015 cycle in learning inbox.
+Nine focused regressions and 24 Eval pass; same historical 13-row R4
+export 193197 B versus 194537 B framed. One-time frame reads model
+66.4% fewer payload bytes versus the prior three complete rereads; no
+claim of general speed or independent Agent utility.

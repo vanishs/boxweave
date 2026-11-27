@@ -300,3 +300,43 @@ history reads. Smaller necessary independent batches and existing local
 source checks reduce waste; an actual limit must not be interpreted as
 permission to retry uncertain effects. Defer further BDH implementation
 until authorized; current owner request resumes P1.
+
+### Cycle 2026-11-27 — P2 delivery framing (owner invoked)
+
+Evidence window: P2 R0-R5; exact signed product head 09152ff14b0fb75e73b0492d2a1d171bcc87499d,
+[R5](https://github.com/vanishs/boxweave/pull/191#issuecomment-7228099703).
+Prior cycle scope/Finish Gate guidance supported explicit R3/R5 signoff
+and preservation of H/C04/RC obligations; no comparative intervention
+or whole-task efficiency measurement. Staged export reused throughout
+P2. R4 original e042a393a3e87f183beac920131e0436 had 13 rows and one
+observed batch tool-call limit, then two full rereads for subsets.
+Existing [L015 revision 2](learning/BDH-L015/00000002.json) records the
+distinct recurrence. No claim of exact platform quota. L012/L014
+asset-drift audit findings remain open, not accepted or silently fixed.
+
+Revisited BDH plan, R0 research, dual-loop and agent-agnostic direction.
+Select one bounded existing-asset change: indexed delivery frames,
+plus append-only inbox delta. Prefer deterministic Git/Python and
+original read-only output, not client adapters, runtime bridges,
+schedulers, new MCP, or automatic dispatch. Existing frame-free export
+and exact tree/parent lease unchanged. Reject oversize rows, duplicate
+paths and invalid bounds. Use for multi-batch delivery only.
+Historical exact R4 export reconstructed 193197 B; four frames plus
+854 B index total 194537 B (+0.7%). Three full reads previously
+579591 B; framed once would reduce bytes 66.4% before range overlap,
+not a measured whole-task saving. 4d42c6ae6dd8abc21bb597536f2580af
+exit0 comparison and Eval 24/24; actual nonempty focused 9/9
+c0eaa3baee18e9c246cc06e72f9afcbc exit0. Final full harness and
+exact-tree actual delivery to be recorded in PR. Bound learn attach
+refused dirty source fc9b57ff9dd70dbd4e2c631459da6fed; preserve rev2,
+attach reviewed clean-source evidence at next authorized checkpoint,
+do not fake clean binding or create a second source SHA only for status.
+
+Forward priorities: (1) observe actual framing on multi-file P3
+checkpoints and compare all calls/bytes/attention; (2) use consolidated
+CI read and failure index when applicable, review L012 asset drift
+before any promotion; (3) L014/V4/V5 remain deferred pending legitimate
+changed capability and independent utility evidence, no quota probing
+or safety refusal retry. No new product or harness architecture.
+P2 signed in its bounded scope; P3 R0 ready, await explicit stage
+instruction. Inherited H/C04/C01/final C11 and actual RC proof open.
