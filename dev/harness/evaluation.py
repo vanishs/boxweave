@@ -57,6 +57,10 @@ def _evaluate(root):
         elif kind == "finish-gate":
             ids = [workflow.finish_gate(**case["observations"])]
             ok = ids == case["expected_states"]
+        elif kind == "task-continuation":
+            decision = tasks.continuation(case["spec"])
+            ids = [decision["decision"]] + [row["id"] for row in decision["actionable"]]
+            ok = ids == case["expected_states"]
         elif kind == "task":
             ids = tasks.ready(case["spec"])
             ok = ids == case["expected_ready"]

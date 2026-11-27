@@ -63,6 +63,32 @@ dependency. Do not generate extra tasks just to avoid ending a blocked
 phase. If repeated work does not reduce the remaining critical path,
 replan the next stage; preserve all mandatory proof and owner decisions.
 
+## Phase-wide continuation (candidate)
+
+For a multi-slice phase, bind existing task history to the **whole
+requested phase**, not today's edit or test. Reconcile its finite exit
+ledger, exact candidate, mandatory obligations, dependencies and evidence
+on resume. Missing history requires initialization from actual evidence
+or an equivalent complete manual ledger, never an empty ready list.
+
+At each meaningful checkpoint, including a small success or local
+failure, use the continuation projection already returned by task
+transition, or `bwdev task next HISTORY` in the same save batch where
+possible. CONTINUE means execute the next required safe action now;
+do not report and wait. The projection includes WORKING, ready PENDING,
+blocked and waiting dependencies. REVIEW_BLOCKERS requires examining
+each remaining dependency and independent work; REVIEW_EXIT requires
+comparison with the complete phase exit criteria. Neither authorizes
+stopping or claims PASS. Only actual observed inability, missing
+authorization or exact dependency failure justifies BLOCKED; never
+retry a refused action. RECORDED is evidence navigation, not acceptance.
+
+Before final response, save the latest phase-wide decision, exact next
+action and explicit stop reason with the existing checkpoint/PR.
+Reuse records, avoid redundant history reads, and do not invent optional
+work. An actual platform boundary or owner stop remains valid.
+This is advisory, not a client termination hook.
+
 ## Finish Gate (candidate)
 
 For history discovery, prefer exact original Operation IDs and the current

@@ -84,6 +84,11 @@ to fill a blocked stage; no PASS for unmet mandatory gates.
 
 ### Joint R2/R3 execution (remaining work)
 
+Use the [phase-wide continuation projection](../../dev/skills/task-resume/SKILL.md#phase-wide-continuation-candidate)
+from the existing task history after each material checkpoint. The live
+ledger must point to all remaining R2/R3 gates; a local blocker or one
+completed slice cannot end the pass while another required action is ready.
+
 Use the three outcome groups in the [live ledger](CONSOLIDATION_PROGRESS.md#current-p1-recovery-ledger),
 not one task per failed test. These are internal work packages, not new
 stages or owner commands.

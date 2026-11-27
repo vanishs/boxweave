@@ -62,7 +62,8 @@ def summary(args, root, finishing=False):
     if data["source"] != source:
         issues.append("Task revision source differs; reconcile before continuing")
     result = {"work_ref": data["work_ref"], "source": source, "task_revision": data["revision"],
-              "tasks": data["tasks"], "ready": data["ready"], "issues": issues}
+              "tasks": data["tasks"], "ready": data["ready"], "issues": issues,
+              "continuation": data["continuation"]}
     if args.checkpoint:
         cp = checkpoint.read_checkpoint(args.checkpoint)
         if args.repo and cp["source"]["repository"] != args.repo:

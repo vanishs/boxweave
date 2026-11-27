@@ -64,6 +64,27 @@ def ready(data):
             and all(rows[d]["state"] == "RECORDED" for d in row["depends_on"])]
 
 
+def continuation(data):
+    """Cheap phase-wide navigation from existing caller-recorded task history."""
+    rows = validate(data)
+    pending = ready(data)
+    runnable = [row for row in rows.values() if row["state"] == "WORKING"]
+    runnable += [rows[key] for key in pending]
+    blocked = [{"id": row["id"], "note": row["note"]} for row in rows.values()
+               if row["state"] == "BLOCKED"]
+    waiting = [{"id": row["id"],
+                "on": [key for key in row["depends_on"] if rows[key]["state"] != "RECORDED"]}
+               for row in rows.values() if row["state"] == "PENDING" and row["id"] not in pending]
+    return {
+        "decision": "CONTINUE" if runnable else ("REVIEW_BLOCKERS" if blocked or waiting else "REVIEW_EXIT"),
+        "actionable": [{key: row[key] for key in ("id", "state", "acceptance")} for row in runnable],
+        "blocked": blocked,
+        "waiting": waiting,
+        "recorded_count": sum(row["state"] == "RECORDED" for row in rows.values()),
+        "note": "Caller-recorded task graph only; review original Operations, evidence and full phase scope. No stop, acceptance or authority granted.",
+    }
+
+
 def register(parser):
     sub = parser.add_subparsers(dest="action", required=True)
     init = sub.add_parser("init", help="Create local task history from a JSON spec")
@@ -160,6 +181,7 @@ def run(args, root):
         "status": "OBSERVED", "revision": data["revision"], "work_ref": data["work_ref"],
         "objective": data["objective"],
         "ready": eligible, "tasks": data["tasks"] if args.action != "next" else [],
+        "continuation": continuation(data),
         "source": data.get("source"), "current_source": observe(root),
         "note": "RECORDED is a task note, not verified evidence or acceptance. Local revisions only; persist and reconcile through Git/PR.",
     }, 0

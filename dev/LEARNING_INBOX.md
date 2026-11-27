@@ -181,3 +181,33 @@ The original historical report owns actual commands, IDs and results. These obse
   actual nested attempts per closed group, verified C-ID exits, and
   handoff continuity, not document/commit counts. Do not reopen deferred
   transfer integration absent new evidence; no promotion.
+
+## Phase-wide continuation correction (2026-11-26, #191)
+
+Observed repeat premature end after candidate CLI checks:
+[prior record](https://github.com/vanishs/boxweave/pull/191#issuecomment-7210337994).
+No actual tool quota boundary established. The existing Finish Gate
+already forbids early stop but depends on invocation; material work
+used ad hoc prose, not a phase-wide actionable task history. Full
+finish needs clean delivery evidence, and is unsuitable as the cheap
+next-action query. Do not replace it or add a scheduler.
+
+Extend existing task next/transition/status with a continuation
+projection, also exposed in workflow summary. CONTINUE includes
+WORKING and independent ready PENDING; REVIEW_BLOCKERS shows exact
+waiting dependencies and blocked notes; REVIEW_EXIT requires real
+acceptance review. Reuse transition output; no new call solely to
+repeat it. No permission, platform stop hook or gate relaxation.
+
+Red regression 80a1c222d5ea39bce912aefd540cabc3 exit1 (missing projection);
+green f7184ecb6716e0c9c9cb467f5f55c6d4 exit0 (9 task tests, Eval24);
+797983b2cfaf81a7c13731374309725c exit0 (136 BDH tests, Eval24, format1413,
+YAML48). Actual activation aae7c05dd6320b586bf18a03c2a2595e exit0 in
+original P1 Box: history /root/pr191-r23-phase-history revision4,
+latest SHA256 815b3ef92a3a89f9f13f9fe32bbc20c9c347f438426ca41ef97532563b5fe9eb.
+CONTINUE: startup-native and consumer-source-parity; Install core
+regressions BLOCKED, candidate-local-exit waits on those three.
+Local runtime/schema evidence recorded, not full native acceptance.
+Owner requested correction before P1 continuation; no product change.
+Candidate behavior regression and one real navigation observed;
+future ordinary development adherence and net time savings unproven.

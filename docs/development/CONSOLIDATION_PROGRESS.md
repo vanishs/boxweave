@@ -4,6 +4,19 @@ Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY
 
 ## Current P1 recovery ledger
 
+**Current executable R2/R3 pointer:** existing BDH task history in owned
+Box 9d374e18-196a-493d-bf1f-2d582589f04d, workspace
+/root/pr191-p1-replan, history /root/pr191-r23-phase-history.
+On resume reconcile candidate/evidence and use
+`python3 dev/bwdev --json task next /root/pr191-r23-phase-history`.
+Initial actual revision4 CONTINUE: startup-native, consumer-source-parity.
+Install core regressions remain BLOCKED; final local exit waits on them.
+Do not replace the whole-stage objective with the next individual task.
+Reuse task transition projection, preserve mandatory gates. P2 offline
+migration scope decision unchanged; no product code published by this
+workflow correction. See dev/LEARNING_INBOX.md for evidence.
+
+
 Active [R0-R5 plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active).
 R0 assessed published 363ee542c41a748fde5a59dd63b247ac534d4a52.
 [Prior convergence audit](https://github.com/vanishs/boxweave/pull/191#issuecomment-7207100365).

@@ -514,6 +514,113 @@
       "expected_states": [
         "HANDOFF_READY"
       ]
+    },
+    {
+      "id": "task-continuation-blocked-with-independent",
+      "kind": "task-continuation",
+      "spec": {
+        "work_ref": "fixture",
+        "objective": "finite phase",
+        "tasks": [
+          {
+            "id": "blocked",
+            "state": "BLOCKED",
+            "depends_on": [],
+            "acceptance": "required blocked",
+            "note": "fixture observation"
+          },
+          {
+            "id": "dependent",
+            "state": "PENDING",
+            "depends_on": [
+              "blocked"
+            ],
+            "acceptance": "required dependent",
+            "note": "fixture observation"
+          },
+          {
+            "id": "independent",
+            "state": "PENDING",
+            "depends_on": [],
+            "acceptance": "required independent",
+            "note": "fixture observation"
+          }
+        ]
+      },
+      "expected_states": [
+        "CONTINUE",
+        "independent"
+      ]
+    },
+    {
+      "id": "task-continuation-working-without-pending",
+      "kind": "task-continuation",
+      "spec": {
+        "work_ref": "fixture",
+        "objective": "finite phase",
+        "tasks": [
+          {
+            "id": "current",
+            "state": "WORKING",
+            "depends_on": [],
+            "acceptance": "required current",
+            "note": "fixture observation"
+          }
+        ]
+      },
+      "expected_states": [
+        "CONTINUE",
+        "current"
+      ]
+    },
+    {
+      "id": "task-continuation-only-blocked",
+      "kind": "task-continuation",
+      "spec": {
+        "work_ref": "fixture",
+        "objective": "finite phase",
+        "tasks": [
+          {
+            "id": "blocked",
+            "state": "BLOCKED",
+            "depends_on": [],
+            "acceptance": "required blocked",
+            "note": "fixture observation"
+          },
+          {
+            "id": "dependent",
+            "state": "PENDING",
+            "depends_on": [
+              "blocked"
+            ],
+            "acceptance": "required dependent",
+            "note": "fixture observation"
+          }
+        ]
+      },
+      "expected_states": [
+        "REVIEW_BLOCKERS"
+      ]
+    },
+    {
+      "id": "task-continuation-all-recorded",
+      "kind": "task-continuation",
+      "spec": {
+        "work_ref": "fixture",
+        "objective": "finite phase",
+        "tasks": [
+          {
+            "id": "done",
+            "state": "RECORDED",
+            "depends_on": [],
+            "acceptance": "required done",
+            "note": "fixture observation"
+          }
+        ]
+      },
+      "expected_states": [
+        "REVIEW_EXIT"
+      ]
     }
   ]
 }

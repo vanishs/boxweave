@@ -176,6 +176,12 @@ python3 dev/bwdev --json task next /tmp/my-task-history
 python3 dev/bwdev --json task transition /tmp/my-task-history inspect --expect 1 --to WORKING --note 'Read the original evidence'
 ```
 
+For multi-slice phases, reuse the projection returned by task transitions
+or run `task next` at each material checkpoint and before ending. The additive `continuation` projection lists WORKING
+and ready PENDING actions, blockers and waiting dependencies:
+CONTINUE, REVIEW_BLOCKERS, or REVIEW_EXIT. A successful read is not
+permission to stop. See [phase-wide continuation](skills/task-resume/SKILL.md#phase-wide-continuation-candidate).
+
 Task states are PENDING, WORKING, BLOCKED and RECORDED. RECORDED only records a claimed result and reference, never product acceptance. Publish each revision exclusively; reconcile divergent copies through Git/PR. No distributed claims, automatic native replay, remote sync or proof of evidence authenticity.
 
 ## Verification toolbox (v0.3)

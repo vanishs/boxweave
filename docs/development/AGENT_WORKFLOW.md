@@ -106,6 +106,11 @@ historical evidence. Do not add compatibility merely for old tests.
 Use ordinary deletion-capable Git or reviewed exact-tree publication
 when a source export helper cannot represent a removal.
 
+Use the existing phase-wide task history and
+[continuation projection](../../dev/skills/task-resume/SKILL.md#phase-wide-continuation-candidate)
+at each meaningful boundary; select the next action from the whole
+requested stage, not a newly narrowed slice. REVIEW_BLOCKERS and
+REVIEW_EXIT require review, not automatic handoff.
 Use the [Finish Gate](../../dev/skills/task-resume/SKILL.md#finish-gate-candidate)
 before ending the authorized task. A checkpoint, report, local commit,
 pending CI, test failure or estimated budget pressure is not a stop reason

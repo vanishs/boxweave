@@ -150,3 +150,5 @@ P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transp
 - P1b-06d10: 72/72 map and five private Doctor layouts verified in Box eafdca12c4857424d570aeb8ce74af9a exit0. Actual installed proof pending; original gates retained.
 
 - P1b-06d11: S25 139851764466 PASS; combined Update ACK WAL conversion source tests 01634b3c0d95bc0d05747e7148670571 exit0; actual CI pending.
+
+- 2026-11-26 #191: phase-wide continuation correction; original local P1 state preserved; 136 BDH tests and 24 Eval cases pass; real P1 history revision4 CONTINUE. See dev/LEARNING_INBOX.md. No product gate changed.
