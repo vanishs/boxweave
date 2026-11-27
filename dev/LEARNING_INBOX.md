@@ -104,3 +104,20 @@ The original historical report owns actual commands, IDs and results. These obse
 - [Finish Gate and compact resume candidate](../docs/development/BDH_FINISH_GATE_CHECKPOINT.md): owner-authorized bounded workflow refinement; regression and Eval evidence, independent review and real-task benefit pending.
 
 - [BDH-L015](learning/BDH-L015/00000001.json): [staged batch candidate](../docs/development/BDH_STAGED_BATCH_CHECKPOINT.md); actual D30 byte comparison, real-task reuse and independent review pending.
+
+
+## Improvement cycle continuity
+
+- Cycle 2026-11-26-01 (retrospective starting checkpoint): PR #191,
+  evidence D24-D31; prior candidate [BDH-L015](learning/BDH-L015/00000001.json).
+  [Implementation](../docs/development/BDH_STAGED_BATCH_CHECKPOINT.md)
+  and [actual reuse](https://github.com/vanishs/boxweave/pull/191#issuecomment-7206324169).
+  Product head 93774b943be882fb15fddd93164a38f7231d1ed0. Local tests
+  passed and actual staged delivery used the candidate; export reduction
+  85.5% on D31, not a whole-task speed claim. Independent CI/review open.
+  Historical plan and research review remains due in the next full cycle.
+  Forward candidates: inspect shared fixture callers before conversion;
+  reduce repeated remote publication orchestration if permitted and
+  measured; reassess V4/V5 residuals from the development plan when
+  new evidence supports reopening. Resume P1 from verified current
+  head; retain all native and final exact-head gates. No promotion.

@@ -48,6 +48,10 @@ v1 authority. This is a choice, not an extra mandatory workflow.
   use `verify run` and `verify inspect` as described in the toolbox.
   A separate work plan is useful for material or ambiguous work, not a
   prerequisite for a focused check. Use `--brief` only where supported.
+- Explicit owner request "BDH优化" (BDH optimization): run one
+  [BDH improvement cycle](skills/harness-improver/SKILL.md#owner-invoked-improvement-cycle-candidate)
+  on the active authorized task branch. A quotation or discussion of the
+  phrase is not an execution request. Review-only requests remain read-only.
 - Owner-requested improvement review: start at the learning inbox; use
   the compact existing review view where available, then exact current
   records and original evidence. No implementation without owner scope.
