@@ -47,7 +47,7 @@ func bh018InjectedAtomicFixture(t *testing.T) (*Store, OwnedBox, Admission, stri
 func bh018InjectedAdmitVerifying(t *testing.T, s *Store, in Admission) string {
 	t.Helper()
 	ctx := context.Background()
-	r, err := s.Admit(ctx, in)
+	r, err := s.AdmitScoped(ctx, in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestBH018AtomicFinalizationRollsBackEverythingOnEventInsertFailure(t *testi
 		t.Fatalf("unverified final unexpectedly unlocked: %+v %v", r, err)
 	}
 	intent.Key = "bh018-after-rollback-separate-new-command"
-	if _, err := s.Admit(ctx, intent); !errors.Is(err, ErrResourceLocked) {
+	if _, err := s.AdmitScoped(ctx, intent); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("rolled back final lost UNKNOWN lock: %v", err)
 	}
 }
@@ -156,7 +156,7 @@ func TestBH018AtomicFinalizationSurvivesDatabaseReopenAndRecovery(t *testing.T) 
 		t.Fatalf("original idempotency replay changed: %+v %v", same, err)
 	}
 	intent.Key = "bh018-after-confirmed-final-new-command"
-	if _, err := reopened.Admit(ctx, intent); err != nil {
+	if _, err := reopened.AdmitScoped(ctx, intent); err != nil {
 		t.Fatalf("verified terminal still holds ownership lock: %v", err)
 	}
 }

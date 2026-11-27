@@ -127,3 +127,5 @@ P1-06d29: [Scoped protocol fixtures and alternate-pool proof](CONSOLIDATION_P1_0
 P1-06d30: [generic Scoped admission fixture checkpoint](CONSOLIDATION_P1_06D30_CHECKPOINT.md). Source-only State/Control full tests PASS; no native or P1 closure claim.
 
 P1-06d31: [Scoped lifecycle pin recovery witness](CONSOLIDATION_P1_06D31_CHECKPOINT.md). Source candidate; no native or P1 closure claim.
+
+P1-06d32: [Scoped recovery receipt and worker fault witnesses](CONSOLIDATION_P1_06D32_CHECKPOINT.md). Independent CI and hosted WAN remain open.

@@ -15,7 +15,7 @@ import (
 func TestBH018WorkerLostFinalCommitAcknowledgementCannotOverwriteTerminal(t *testing.T) {
 	ctx := context.Background()
 	s, box, intent, db := bh018InjectedAtomicFixture(t)
-	rec, err := s.Admit(ctx, intent)
+	rec, err := s.AdmitScoped(ctx, intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestBH018WorkerLostFinalCommitAcknowledgementCannotOverwriteTerminal(t *tes
 		t.Fatalf("original idempotency changed after lost reply: %+v err=%v", replay, err)
 	}
 	intent.Key = "bh018-after-lost-final-reply-new-command"
-	if _, err := reopened.Admit(ctx, intent); err != nil {
+	if _, err := reopened.AdmitScoped(ctx, intent); err != nil {
 		t.Fatalf("committed original still falsely holds resource lock: %v", err)
 	}
 }

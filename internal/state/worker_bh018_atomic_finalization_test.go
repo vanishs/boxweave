@@ -32,7 +32,7 @@ func bh018AtomicFixture(t *testing.T, s *Store) (Admission, OwnedBox, string, st
 		Key: "bh018-exec-original", RequestID: "original", Action: "box_exec",
 		ResourceKey: "box:" + box.Name, BoxUUID: box.UUID,
 		Incarnation: box.Incarnation, SafeIntent: []byte(`{"cmd":"fixture"}`)}
-	rec, err := s.Admit(ctx, intent)
+	rec, err := s.AdmitScoped(ctx, intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestBH018AtomicFinalizationNoPartialReceiptOnSQLiteAbort(t *testing.T) {
 		t.Fatalf("unknown original must remain locked: %+v err=%v", got, err)
 	}
 	intent.Key = "bh018-distinct-new-command"
-	if _, err := s.Admit(ctx, intent); err == nil {
+	if _, err := s.AdmitScoped(ctx, intent); err == nil {
 		t.Fatal("recovery improperly unlocked uncertain original native command")
 	}
 }
@@ -148,7 +148,7 @@ func TestBH018AtomicFinalizationSurvivesStoreCloseReopen(t *testing.T) {
 		t.Fatalf("second finalization changed immutable terminal: %v", err)
 	}
 	intent.Key = "bh018-different-new-command"
-	if _, err := s.Admit(ctx, intent); err != nil {
+	if _, err := s.AdmitScoped(ctx, intent); err != nil {
 		t.Fatalf("committed final falsely locked fresh command: %v", err)
 	}
 }
@@ -210,7 +210,7 @@ func TestBH018WorkerRejectsForgedAtomicExecCompletionSignal(t *testing.T) {
 		Key: "bh018-forged-committed-control", RequestID: "original",
 		Action: "box_exec", ResourceKey: "box:independent", BoxUUID: "second",
 		Incarnation: "second", SafeIntent: []byte(`{"fixture":1}`)}
-	original, err := s.Admit(ctx, b)
+	original, err := s.AdmitScoped(ctx, b)
 	if err != nil {
 		t.Fatal(err)
 	}

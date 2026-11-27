@@ -528,3 +528,5 @@ P1-06d29: [Scoped protocol fixtures and alternate-pool proof](CONSOLIDATION_P1_0
 P1-06d30: [generic Scoped admission fixture checkpoint](CONSOLIDATION_P1_06D30_CHECKPOINT.md). 17 files, 57 calls, original assertions unchanged; full State/Control BOX_VERIFIED, independent CI pending. No legacy-specific witness retirement.
 
 P1-06d31: [Scoped lifecycle pin and generic recovery fixtures](CONSOLIDATION_P1_06D31_CHECKPOINT.md). Keep Legacy assertions; staged verification and independent CI evidence tracked in PR.
+
+P1-06d32: [Scoped recovery receipts and worker faults](CONSOLIDATION_P1_06D32_CHECKPOINT.md). Source candidate; retain all prior witnesses and native gates.

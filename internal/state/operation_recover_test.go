@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vanishs/boxweave/internal/peerscope"
 )
 
 const rNative = "12345678-1234-4abc-8def-123456789abc"
@@ -50,10 +53,94 @@ func recoveryOriginal(t *testing.T, s *Store, action, uuid string) (RecoveryRequ
 	}
 	return r, target
 }
+
+// The legacy fixture remains available to explicit transitional witnesses.
+func recoveryOriginalMode(t *testing.T, s *Store, action string, scoped bool) (RecoveryRequest, RecoveryTarget) {
+	t.Helper()
+	if !scoped {
+		return recoveryOriginal(t, s, action, rUUID)
+	}
+	ctx := context.Background()
+	_, tok, e := s.IssueToken(ctx, time.Hour)
+	if e != nil {
+		t.Fatal(e)
+	}
+	in := ScopedCreateIntent{Schema: 2, Project: "user-1001", Bridge: "incusbr-1001", Name: "owned", CPU: 1, MemoryMiB: 1024, DiskGiB: 10, Internet: true, BootAutostart: true, Options: json.RawMessage("{}")}
+	raw, e := json.Marshal(in)
+	if e != nil {
+		t.Fatal(e)
+	}
+	a := Admission{Layer: in.Project, ActorID: tok.ID, TokenID: tok.ID, Key: "generic-scoped-create-fixture", Action: "box_create", RequestID: "create", ResourceKey: "box:owned", SafeIntent: raw}
+	c, e := s.AdmitScoped(ctx, a)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Claim(ctx, c.ID); e != nil {
+		t.Fatal(e)
+	}
+	pin := VerifiedCreateBinding{in.Bridge, peerscope.QuarantineACL, "02:16:3e:11:22:33", "10.243.18.11", "fd43:18::11"}
+	if ok, e := s.StageCreateBinding(ctx, c.ID, in.Project, in.Name, pin); e != nil || !ok {
+		t.Fatal(ok, e)
+	}
+	if e = s.NativeAck(ctx, c.ID, "synthetic-create-receipt"); e != nil {
+		t.Fatal(e)
+	}
+	pin.ACL, e = peerscope.ACLName(in.Project, in.Bridge, rUUID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.FinalizeVerifiedScopedCreate(ctx, c.ID, in.Project, in.Name, rUUID, pin); e != nil {
+		t.Fatal(e)
+	}
+	a.Key, a.Action, a.RequestID = "original-recovery-fixture-key", action, "original"
+	a.BoxUUID, a.Incarnation, a.SafeIntent = rUUID, rUUID, []byte(`{"box_id":"`+rUUID+`"}`)
+	orig, e := s.AdmitScoped(ctx, a)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Claim(ctx, orig.ID); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.NativeAck(ctx, orig.ID, rNative); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Unknown(ctx, orig.ID, "VERIFYING", "TEST_ORIGINAL_UNKNOWN"); e != nil {
+		t.Fatal(e)
+	}
+	r := RecoveryRequest{Layer: in.Project, ActorID: tok.ID, TokenID: tok.ID, OriginalID: orig.ID, Key: "new-recovery-request-key-001", WorkRef: "s5a2/test"}
+	target, e := s.ReadRecoveryTarget(ctx, r.Layer, orig.ID)
+	if e != nil || target.ScopedLifecycle || target.ScopedPeer {
+		t.Fatal(target, e)
+	}
+	if (action == "box_start" || action == "box_stop") && (target.LifecyclePinStatus != "PINNED" || target.LifecycleBinding != pin) {
+		t.Fatal(target)
+	}
+	return r, target
+}
+
+func recoveryCommitMode(s *Store, scoped bool) func(context.Context, RecoveryRequest, RecoveryTarget, RecoveryProof) (RecoveryRecord, error) {
+	if scoped {
+		return s.CommitScopedRecovery
+	}
+	return s.CommitRecovery
+}
+
 func recoverProof(t RecoveryTarget) RecoveryProof {
 	return RecoveryProof{Kind: RecoverySettle, Reason: "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED", NativeID: t.NativeID, UUID: t.UUID, Fingerprint: "test-proof"}
 }
+func recoverProofWithPin(t RecoveryTarget) RecoveryProof {
+	p := recoverProof(t)
+	p.LifecycleBinding = t.LifecycleBinding
+	return p
+}
+
 func TestS5A2RecoveryAtomicReceiptAndReplay(t *testing.T) {
+	for _, scoped := range []bool{false, true} {
+		t.Run(fmt.Sprint(scoped), func(t *testing.T) { recoveryAtomicReceiptAndReplay(t, scoped) })
+	}
+}
+
+func recoveryAtomicReceiptAndReplay(t *testing.T, scoped bool) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	if e := os.Chmod(dir, 0700); e != nil {
@@ -64,9 +151,9 @@ func TestS5A2RecoveryAtomicReceiptAndReplay(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, target := recoveryOriginal(t, s, "box_start", rUUID)
+	r, target := recoveryOriginalMode(t, s, "box_start", scoped)
 	// Simulated lost COMMIT response: discard return before reopening DB.
-	first, e := s.CommitRecovery(ctx, r, target, recoverProof(target))
+	first, e := recoveryCommitMode(s, scoped)(ctx, r, target, recoverProofWithPin(target))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -117,15 +204,21 @@ func TestS5A2RecoveryAtomicReceiptAndReplay(t *testing.T) {
 	}
 }
 func TestS5A2RecoveryCommitFaultRollsBackBoth(t *testing.T) {
+	for _, scoped := range []bool{false, true} {
+		t.Run(fmt.Sprint(scoped), func(t *testing.T) { recoveryCommitFaultRollsBackBoth(t, scoped) })
+	}
+}
+
+func recoveryCommitFaultRollsBackBoth(t *testing.T, scoped bool) {
 	s := newStore(t)
 	ctx := context.Background()
-	r, target := recoveryOriginal(t, s, "box_stop", rUUID)
+	r, target := recoveryOriginalMode(t, s, "box_stop", scoped)
 	// Test-only fault inside the same SQLite transaction, after the original
 	// terminal UPDATE but before its recovery receipt event can commit.
 	if _, e := s.db.Exec(`CREATE TRIGGER s5a2_fail BEFORE INSERT ON operation_events WHEN NEW.safe_detail LIKE 'SETTLED:%' BEGIN SELECT RAISE(ABORT,'injected recovery event fault'); END`); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := s.CommitRecovery(ctx, r, target, recoverProof(target)); e == nil {
+	if _, e := recoveryCommitMode(s, scoped)(ctx, r, target, recoverProofWithPin(target)); e == nil {
 		t.Fatal("fault not observed")
 	}
 	if got, e := s.ReadRecoveryTarget(ctx, r.Layer, target.ID); e != nil || got != target {
@@ -137,16 +230,22 @@ func TestS5A2RecoveryCommitFaultRollsBackBoth(t *testing.T) {
 	if _, e := s.db.Exec("DROP TRIGGER s5a2_fail"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := s.CommitRecovery(ctx, r, target, recoverProof(target)); e != nil {
+	if _, e := recoveryCommitMode(s, scoped)(ctx, r, target, recoverProofWithPin(target)); e != nil {
 		t.Fatal(e)
 	}
 }
 func TestS5A2RecoveryConcurrentSameKeyAndDifferentKey(t *testing.T) {
+	for _, scoped := range []bool{false, true} {
+		t.Run(fmt.Sprint(scoped), func(t *testing.T) { recoveryConcurrentSameKeyAndDifferentKey(t, scoped) })
+	}
+}
+
+func recoveryConcurrentSameKeyAndDifferentKey(t *testing.T, scoped bool) {
 	for _, same := range []bool{true, false} {
 		t.Run(fmt.Sprint(same), func(t *testing.T) {
 			s := newStore(t)
 			ctx := context.Background()
-			r, target := recoveryOriginal(t, s, "box_start", rUUID)
+			r, target := recoveryOriginalMode(t, s, "box_start", scoped)
 			type result struct {
 				v RecoveryRecord
 				e error
@@ -158,7 +257,10 @@ func TestS5A2RecoveryConcurrentSameKeyAndDifferentKey(t *testing.T) {
 				if !same {
 					req.Key = fmt.Sprintf("distinct-recovery-key-%03d", i)
 				}
-				wg.Go(func() { v, e := s.CommitRecovery(ctx, req, target, recoverProof(target)); results <- result{v, e} })
+				wg.Go(func() {
+					v, e := recoveryCommitMode(s, scoped)(ctx, req, target, recoverProofWithPin(target))
+					results <- result{v, e}
+				})
 			}
 			wg.Wait()
 			close(results)
@@ -264,11 +366,17 @@ func TestS5A2RecoveryExecEvidenceAndDeleteAtomic(t *testing.T) {
 	}
 }
 func TestS5A2RecoveryRefusalAndLocalParity(t *testing.T) {
+	for _, scoped := range []bool{false, true} {
+		t.Run(fmt.Sprint(scoped), func(t *testing.T) { recoveryRefusalAndLocalParity(t, scoped) })
+	}
+}
+
+func recoveryRefusalAndLocalParity(t *testing.T, scoped bool) {
 	ctx := context.Background()
 	s := newStore(t)
-	r, target := recoveryOriginal(t, s, "box_exec", rUUID)
+	r, target := recoveryOriginalMode(t, s, "box_exec", scoped)
 	p := RecoveryProof{Kind: RecoveryApproval, Reason: "ORIGINAL_NATIVE_RECEIPT_UNAVAILABLE"}
-	got, e := s.CommitRecovery(ctx, r, target, p)
+	got, e := recoveryCommitMode(s, scoped)(ctx, r, target, p)
 	if e != nil || got.Disposition != "APPROVAL_REQUIRED" || got.Receipt.State != "FAILED" {
 		t.Fatalf("refusal %+v %v", got, e)
 	}
@@ -277,7 +385,7 @@ func TestS5A2RecoveryRefusalAndLocalParity(t *testing.T) {
 		t.Fatalf("refusal modified original %+v %v", current, e)
 	}
 	local := RecoveryRequest{Layer: r.Layer, LocalReviewer: "local-operator", OriginalID: target.ID, Key: r.Key}
-	reviewed, e := s.CommitRecovery(ctx, local, target, p)
+	reviewed, e := recoveryCommitMode(s, scoped)(ctx, local, target, p)
 	if e != nil || reviewed.Receipt.ID == got.Receipt.ID {
 		t.Fatalf("local parity / key isolation %+v %v", reviewed, e)
 	}
@@ -285,7 +393,7 @@ func TestS5A2RecoveryRefusalAndLocalParity(t *testing.T) {
 		t.Fatal(e)
 	}
 	r.Key = "revoked-recovery-request-new"
-	if _, e = s.CommitRecovery(ctx, r, target, p); !errors.Is(e, ErrRevoked) {
+	if _, e = recoveryCommitMode(s, scoped)(ctx, r, target, p); !errors.Is(e, ErrRevoked) {
 		t.Fatalf("revoked before commit: %v", e)
 	}
 }

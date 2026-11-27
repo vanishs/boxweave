@@ -49,7 +49,7 @@ func TestBH018ExactTerminalSpecialExitPersistsAndReleasesClaimWithoutReplay(t *t
 				BoxUUID: "bh018-uuid", Incarnation: "bh018-uuid",
 				SafeIntent: []byte(`{"argv_hash":"test-original"}`),
 			}
-			original, err := store.Admit(ctx, intent)
+			original, err := store.AdmitScoped(ctx, intent)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +96,7 @@ func TestBH018ExactTerminalSpecialExitPersistsAndReleasesClaimWithoutReplay(t *t
 				t.Fatalf("original replay issued a command or lost provenance: %+v %v", replay, err)
 			}
 			intent.Key = "different-new-command-allowed-after-exact-terminal-002"
-			if _, err := store.Admit(ctx, intent); err != nil {
+			if _, err := store.AdmitScoped(ctx, intent); err != nil {
 				t.Fatalf("verified finished Guest Exec permanently locked owned Box: %v", err)
 			}
 			if effectCalls != 1 {
