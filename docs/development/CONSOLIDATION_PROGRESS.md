@@ -526,3 +526,5 @@ P1-06d27/d28: [pin repair and exact schema DDL isolation](CONSOLIDATION_P1_06D27
 P1-06d29: [Scoped protocol fixtures and alternate-pool proof](CONSOLIDATION_P1_06D29_CHECKPOINT.md). Alternate pool exact 738b269 native CI_VERIFIED job 140222397266; supersedes earlier BLOCKED/PENDING. Hosted public WAN and final exact-head gates remain OPEN. Fixture conversion Box PASS; independent CI pending.
 
 P1-06d30: [generic Scoped admission fixture checkpoint](CONSOLIDATION_P1_06D30_CHECKPOINT.md). 17 files, 57 calls, original assertions unchanged; full State/Control BOX_VERIFIED, independent CI pending. No legacy-specific witness retirement.
+
+P1-06d31: [Scoped lifecycle pin and generic recovery fixtures](CONSOLIDATION_P1_06D31_CHECKPOINT.md). Keep Legacy assertions; staged verification and independent CI evidence tracked in PR.

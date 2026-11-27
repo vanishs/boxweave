@@ -35,7 +35,7 @@ func TestProcessCrashUnknownNoReplay(t *testing.T) {
 			SafeIntent: []byte(`{"kind":"test"}`),
 			RequestID:  "initial",
 		}
-		r, err := s.Admit(ctx, a)
+		r, err := s.AdmitScoped(ctx, a)
 		if err != nil {
 			panic(err)
 		}
@@ -104,7 +104,7 @@ func TestProcessCrashUnknownNoReplay(t *testing.T) {
 			a := Admission{Layer: "L1", ActorID: ids.Token, TokenID: ids.Token,
 				Key: "process-crash-test-fixed-key", Action: "synthetic-operation-no-native-mutation",
 				SafeIntent: []byte(`{"kind":"test"}`), RequestID: "retry-id"}
-			replayed, err := s.Admit(ctx, a)
+			replayed, err := s.AdmitScoped(ctx, a)
 			if err != nil || !replayed.Duplicate || replayed.ID != r.ID || replayed.State != "UNKNOWN" {
 				t.Fatalf("idem after process crash: %+v %v", replayed, err)
 			}

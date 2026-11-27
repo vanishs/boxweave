@@ -20,7 +20,7 @@ func TestS5A2HTTPRecoveryRefusesCrossLayerAndUntrustedApproval(t *testing.T) {
 	}
 	seed := func(layer, key string) state.Receipt {
 		t.Helper()
-		r, e := st.Admit(ctx, state.Admission{Layer: layer, ActorID: token.ID, TokenID: token.ID, Key: key, Action: "operation_cancel", RequestID: "test-original", SafeIntent: []byte("{}")})
+		r, e := st.AdmitScoped(ctx, state.Admission{Layer: layer, ActorID: token.ID, TokenID: token.ID, Key: key, Action: "operation_cancel", RequestID: "test-original", SafeIntent: []byte("{}")})
 		if e != nil {
 			t.Fatal(e)
 		}
