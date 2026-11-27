@@ -17,7 +17,43 @@ This is the initial crosswalk for the single pre-release consolidation PR. Compl
 | C11 | Every retired workflow/test/marker mapped to retained behavior plus equivalent new witness or explicit obsolete Legacy-only requirement. Preserve release S2/S2.5 native gates, exact signature/asset checks and required quality; test new triggers and negative calibration, not just green aggregate. | P0-P5 |
 | C12 | Fresh checkout and independent code review, BDH activation/resume, learning audit and applicable Eval, no stale active references; actual reuse/outcome only if observed. Exact final CI and coverage crosswalk, no unresolved release-critical regression. #170 receives new source/contract and evidence limits. | P4/P5 |
 
+## Active P2-P5 acceptance routing
+
+As of the 2026-11-27 P1 development closeout, the C01-C12 contract above
+is unchanged. [R5 integrated review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7216191395)
+on 0e903a2 confirms P1 development complete, formal acceptance deferred.
+Use the [active plan](CONSOLIDATION_PLAN.md#active-delivery-plan-p2-p5-2026-11-27)
+and [handoff ledger](CONSOLIDATION_PROGRESS.md#active-p2-p5-handoff).
+Earlier P1 history below is retained.
+
+| Gate | Baseline disposition | Next acceptance |
+| --- | --- | --- |
+| C01 | FAIL, two Install tests; quality/S1/dual arch red | P5 exact aggregate; preserve H obligation |
+| C02 | P1 scoped schema7/startup/refusal evidence PASS within scope | P2/P5 affected exact installed revalidation |
+| C03 | P1 installed 23-tool and PR S2 crosswalk PASS within scope | P3 navigation/contract, P5 final |
+| C04 | Peer/Forward and local WAN PASS; hosted WAN UNVERIFIED | P5 independent positive or approved bounded equivalence |
+| C05 | Recovery/ACK/WAL/no replay evidence PASS within scope; H partial | P3/P5 retained original and H composition |
+| C06 | Fresh/negative constituent proof exists | P2 one complete installed contract |
+| C07 | Normal retirement/reinstall PASS; offline Scoped missing | P2 full supported offline/normal, archive/resume/purge |
+| C08 | Not accepted for consolidated target | P3 full operator contract |
+| C09 | S25 functional PASS; limitations retained | P2/P5 independent nested scope; #170 physical limits |
+| C10 | Runtime/DDL and old-state refusal evidenced within P1 scope | P2-P5 remaining caller/artifact inventory |
+| C11 | PR S2 PASS 72 markers/23 jobs; release S2 and old N2 open | P2 R3/R4, P4 exact mapping, P5 final |
+| C12 | Not started; historical BDH evidence retained | P4/P5 independent exact review and actual workflow use |
+
+Do not use successful PR S2 as release, WAN or all-N2 proof. Actual
+job 140419352217 verifies current fresh Legacy refusal and normal
+Scoped retirement; full offline legacy behavior must be either explicitly
+obsolete or covered by the supported Scoped equivalent, including
+preservation of retained originals and foreign resources. No omission
+of unique generic behavior. C06/C07 may be accepted in their own scope
+without calling inherited P1 H PASS. Every mandatory unresolved
+obligation blocks final P5 acceptance; development sequencing is not
+an acceptance waiver. #170 remains separate; no unapproved publish.
+
 ## Active P1 recovery interpretation
+
+Historical execution interpretation; active routing is above.
 
 Use [R0-R5](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
 and the [live ledger](CONSOLIDATION_PROGRESS.md#current-p1-recovery-ledger).

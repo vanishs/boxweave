@@ -25,7 +25,240 @@ There are no supported production users or data to migrate before the first stab
 4. When CI reports a concrete failure, inspect the actual job/log and exact SHA, reproduce in the Box where possible, determine product vs fixture vs environment vs infrastructure cause, fix the still-applicable defect on the current branch, rerun the failing and adjacent cases, and submit the correction. Do not weaken tests to make green; if an older failure is already fixed, link the fixing commit and fresh evidence. Continue unaffected work; stop dependent work on unresolved safety failures. Do not spin waiting for CI or discard failure evidence.
 5. At each phase checkpoint update progress, inventory and acceptance mapping. Use ordinary BDH Solve/Evolve loops and record applicable learning dispositions with evidence; independently review reusable changes, regression and Eval before promotion. Continue until the requested scope is complete or genuine blocker/budget boundary. Final exact HEAD must pass all applicable independent gates; previous green runs are not final acceptance.
 
+## Active delivery plan: P2-P5 (2026-11-27)
+
+P1 development is closed by owner direction. Product checkpoint ff3c20e;
+acceptance baseline 0e903a2a5d69ca35287109d4a1ef9c35bc2688c7.
+[R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7216191395)
+and [independent H review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7216012723)
+establish bounded evidence, not formal P1 PASS. See the
+[handoff ledger](CONSOLIDATION_PROGRESS.md#active-p2-p5-handoff).
+
+Execution contract:
+
+- P2 R0 is READY, not started. Incoming Agent prepares read-only and
+  waits for the owner. "P2 R0" starts that stage; "P2" starts the full
+  phase. Each R has two or three outcome instructions. Complete routine
+  fixes and verification autonomously; reassess dependencies at each exit,
+  combine tightly dependent slices where justified and record why.
+  Use phase-wide continuation and Finish Gate. No extra command per test.
+- Use the exact published baseline in an isolated worktree of the existing
+  owned Box; preserve old P1 worktree/history. Verify native fixture identity
+  and authority before effects. Continue independent development while CI
+  runs; record exact proof, actual blockers and next action. Do not repeat
+  unchanged failures or manufacture work. Scope/equivalence decisions and
+  real Host effects need separate authority.
+- Carry P1 H (retained composed witness and test disposition), C04 (hosted
+  WAN positive or owner-approved bounded equivalence), C11 (release S2 and
+  old N2 gates) and C01/final CI. H remains a P1 acceptance obligation,
+  not new P2 product scope. Historical refusal is not a product oracle;
+  no repeat, delegation or bypass of refused operations. Closing #194
+  is not proof. Reuse only legitimately obtained applicable evidence.
+- P2 supplies one installed contract; P3 aligns operator/internal callers;
+  P4 consolidates proven consumers; P5 independently validates all gates.
+  Full Scoped offline retirement is P2 C07. Keep one Draft PR, no merge,
+  tag, release or #170 changes without separate authority. BDH development
+  only by explicit owner request. No new product features or gate waivers.
+
+### P2 — single installed lifecycle and retirement contract
+
+**R0 — Investigate critical path**
+1. Reconcile exact source, N2 26/28, S2/S25 PASS and existing normal
+   retirement evidence. Trace install.sh, uninstall_core.py, internal
+   install/observer, CLI, units and packaged wrappers. Confirm actual
+   offline dependencies, release S2 setup and authorized clean fixtures.
+2. Freeze C06/C07/P2-C09/C10/C11 exits and shortest R1-R4 sequence:
+   fresh, populated, stale/declined, foreign/mixed, nested, stopped,
+   interrupted, purge/reinstall. Reuse existing proof; record scope
+   decisions and inherited H/C04 separately.
+
+**R1 — Fresh installation and serve**
+1. Align reviewed Scoped fresh wrapper, stage/activate, guard/helper,
+   readiness and packaged manifest. Preserve compatible Incus reuse,
+   signed dependencies, exact preimage, stale/declined/old-state refusal,
+   OAuth continuation and existing password; no adoption/reset.
+2. Verify focused positive/negative checks and affected installed proof.
+   Reuse unchanged schema/Forward/S25 evidence. Exit: single supported
+   fresh contract, no upgrade feature or second installer.
+
+**R2 — Scoped offline retirement**
+1. Trace common observer/archive/purge and Legacy-only offline eligibility.
+   Define minimum supported stopped-controller scope with exact identity,
+   independently observed native scope and durable original/archive proof.
+   Keep uncertain/unsupported cases fail-closed; bounded power original
+   archival is not settlement.
+2. Implement and verify coherent Scoped/common slices preserving UNKNOWN,
+   claims, foreign resources, interruption/resume, mixed/stale refusal and
+   archive integrity. No version-only fix or Legacy execution restoration.
+   Exit: verified source candidate and retained negative tests.
+
+**R3 — Installed retirement lifecycle**
+1. Verify actual normal and supported offline plan/review, interruption/
+   resume, exact original/archive and native poststate, foreign preservation,
+   purge/reinstall and inherited LXC policy in authorized disposable labs.
+   Reuse current normal proof where unaffected; exercise new offline path.
+2. Disposition old N2 legacy/legacy-offline lanes only with explicit
+   obsolete-oracle decisions and equivalent generic maintenance/UNKNOWN
+   witnesses. Keep old gates until then. Exit: C07 evidence or named gaps.
+
+**R4 — Installed and release consumers**
+1. Convert release S2 to proven installed Scoped contract. PR-only
+   crosswalk binds PR #191/pull_request and cannot run unchanged for
+   release. Bind exact candidate/source/event/artifacts; preserve 72
+   requirements, native S2/S25 gates, signatures and publish dependencies.
+2. Verify negative calibration and applicable independent CI without
+   tag/publish. Any release-only proof needing separate authority stays
+   open. Exit: N2 and release S2 dispositions evidenced, no fake green.
+
+**R5 — P2 acceptance**
+1. Independently review C06/C07 and P2 parts of C09/C10/C11, artifact
+   identity, supported lifecycle and required negatives.
+2. Correct defects and revalidate. Distinguish P2 implementation exit
+   from inherited formal gates; record exact P3 entry and open obligations.
+
+### P3 — operator contract, diagnostics and recovery
+
+**R0 — Inventory actual surface**
+1. Enumerate actual CLI dispatch, help, flags, wrapper/unit callers and
+   installed 23-tool MCP discovery. Classify public, fixed internal,
+   retained Incus dependency lifecycle and obsolete Legacy paths.
+2. Bind C08 and P3 parts of C03/C05/C10/C11 to P2 proof; identify finite
+   R1-R4 work and targeted tests, not an arbitrary command-count goal.
+
+**R1 — CLI and service entries**
+1. Align fresh serve/maintenance, public command/flag contract and fixed
+   systemd/wrapper calls; remove only obsolete dispatch after caller
+   proof. Preserve Incus native prepare/rollback/reconciliation distinct
+   from obsolete BoxWeave upgrade/rollback.
+2. Verify built binary help, actual positive/negative invocations,
+   old-path refusal/no effect and packaging callers. Exit: one contract.
+
+**R2 — Doctor and maintenance**
+1. Align root/restricted diagnostics to schema 7, exact identity, capacity,
+   native state and original evidence. Keep read-only inspection, truthful
+   unavailable/UNKNOWN and redaction.
+2. Verify healthy, stale, unavailable, malformed/mixed and foreign fixtures.
+   Exit: actionable evidence, no false health or mutation.
+
+**R3 — Recover and MCP navigation**
+1. Align reviewed recovery, typed errors and navigation with Scoped
+   originals; preserve authorization, stale/declined review, claim safety,
+   no redispatch and output privacy. Retain 23 tools and SDK contract.
+2. Verify capacity parity (host_status/Doctor), selected actual recovery
+   and refusal with original IDs, exit and independent poststate.
+   Reuse unaffected ACK/WAL/SDK proof. No new MCP tool.
+
+**R4 — Caller convergence**
+1. Update affected tests, units, wrappers, examples and operator docs;
+   map old leaves/oracles to retained behavior or obsolete requirement.
+2. Run focused/adjacent and applicable independent installed checks;
+   fix concrete issues. Exit: no unaccounted live old caller.
+
+**R5 — P3 acceptance**
+1. Independently review C08 and P3 parts of C03/C05/C10/C11, actual
+   operator inventory, diagnostic/recovery and negatives.
+2. Correct and revalidate; publish coherent evidence and P4 cleanup
+   inventory with remaining obligations, no waiver.
+
+### P4 — engineering, tests, docs and BDH
+
+**R0 — Finite cleanup ledger**
+1. Reconcile P2/P3 proofs and actual Go/SQL/CLI/systemd/embedded scripts,
+   workflows/triggers, tests/markers and docs. Classify active, retained
+   negative, historical, replacement pending and obsolete.
+2. Prioritize smallest useful reductions and C10/C11/C12; retain all
+   inherited gaps including H. Exit: finite caller/witness ledger.
+
+**R1 — Retire residual bodies and duplicated tests**
+1. Remove only proven unreachable obsolete bodies or redundant tests
+   after caller/equivalent-witness review. Keep shared Scoped helpers,
+   fail-closed refusal and historical evidence; no filename-based removal.
+2. Verify build, affected tests, reachability and negative calibration.
+   H test disposition/real composition stays required; no retry of
+   refused action. Exit: accounted retirement, retained coverage.
+
+**R2 — Workflow and release plumbing**
+1. Reuse P2 installed contract and witness checks; align triggers and
+   exact provenance. Preserve quality-gate, dual architecture, release
+   S2/S25, signature/asset checks, stable inventory and #170 scope.
+2. Verify docs-only/mixed/release classification, nonempty discovery,
+   missing/wrong/duplicate proof refusal and applicable actual CI.
+   Exit: no unaccounted live gate or weakened acceptance.
+
+**R3 — Live docs and BDH synchronization**
+1. Align install/retire, Doctor/Recover, MCP and examples to verified
+   behavior; archive stale phase material without erasing failures.
+2. Synchronize existing BDH entry/index/profiles/skills/Eval and resume
+   paths, preserve eight systems and dual loops. Follow agent-agnostic
+   evolution; no per-Agent adapter, new product tool or speculative feature.
+
+**R4 — Engineering and observed use**
+1. Run existing deterministic checks and applicable Eval; observe ordinary
+   activation/resume and work-bound learning when available. Retain #193
+   R3/R4 fresh-use, R6 utility NOT MET, L014 REOPENs and V5 unless proven.
+2. Record actual costs, scope and deferrals; separate owner-triggered BDH
+   optimization from synchronization. Exit: accurate use evidence,
+   not assumed efficiency or equal Agent capabilities.
+
+**R5 — P4 acceptance**
+1. Independently review C10/C11 and engineering C12, caller/marker
+   dispositions, live docs, actual workflow use and retained gates.
+2. Fix and revalidate; freeze P5 candidate and unclosed ledger.
+
+### P5 — independent final acceptance and #170 handoff
+
+**R0 — Freeze final candidate**
+1. Resolve exact remote head/base and independent clean checkout; reconcile
+   C01-C12, P1 H/C04/C11, phase exits, original operations, authority and
+   actual CI. Reuse only valid scope/identity evidence.
+2. Freeze final matrix/artifact identities and request necessary owner
+   equivalence/physical authority. Exit: executable matrix and explicit
+   blockers, not assumed proof.
+
+**R1 — Independent source and retirement audit**
+1. Review full diff, shipped inputs, dispatch, schema, ownership, no
+   Legacy fallback, packaging, public/internal contract and fail-closed
+   invariants. Trace retired callers and shared helpers.
+2. Correct genuine defects and invalidate affected evidence. Exit:
+   independent review with no undisposed release-critical defect.
+
+**R2 — Installed and native functional proof**
+1. Verify exact clean installed candidate, 23 MCP tools, CLI, ownership,
+   lifecycle, nested functional scope, retirement/purge/reinstall, actual
+   packet/recovery and no-replay. Reuse exact unaffected proof.
+2. Close C04 via legitimate independent WAN positive or owner-approved
+   bounded equivalence, not assumed environment cause. Separate local
+   HTTPS toggle from Hosted UNVERIFIED; keep physical/reboot/LAN/IPv6/
+   storage and recursive-isolation limitations explicit for #170.
+
+**R3 — Full exact-candidate regression and CI**
+1. Run applicable format/vet/module/race/Python/build, CGO SQLite,
+   amd64/arm64, required quality and independent CI; verify actual jobs
+   and artifacts. H composed proof and test disposition must be valid,
+   not old failure, skipped or vacuous PASS.
+2. Correct issues, revalidate affected proof and require final exact
+   head. No publish trigger. Exit: mandatory gates PASS or named
+   FAIL/BLOCKED/UNVERIFIED with next legitimate action.
+
+**R4 — Evidence and #170 handoff**
+1. Reconcile every C01-C12 and old marker/leaf with exact evidence,
+   retained behavior or explicit obsolete disposition. Reassess H,
+   C04 and C11 on actual proof; review bounded BDH/utility status.
+2. Prepare #170 handoff with exact source/artifacts, supported contract,
+   limitations and remaining release-specific obligations. Keep stable
+   upgrade/rollback and physical acceptance distinct, no silent transfer.
+
+**R5 — Final independent verdict**
+1. PASS only when all mandatory #191 gates and independent review are
+   satisfied on final candidate; otherwise precise remaining obligations.
+2. Persist final evidence/readiness and preserve workspaces/history.
+   Keep Draft and await separate merge authorization; publication in #170.
+
 ## P1 convergence recovery: R0-R5 (active)
+
+Historical entry retained for existing links. P1 development is closed;
+use the active P2-P5 plan above. Original exits and formal P1 obligations
+remain unchanged.
 
 Owner direction 2026-11-26: actual convergence, not more D checkpoints.
 These R labels apply to P1, not BDH PR193 or later P2-P5. Start from the
@@ -147,8 +380,8 @@ stages or owner commands.
 
 ## Overall consolidation stages (one PR)
 
-P1 uses active R0-R5 above; the table retains overall scope. Necessary
-dependencies may move into P1 without closing later phases.
+The active P2-P5 plan above controls execution. The table retains overall
+scope; P1 development is closed, formal acceptance open.
 
 | Stage | Work and exit checkpoint |
 | --- | --- |

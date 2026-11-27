@@ -24,7 +24,31 @@ Initial source audit at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. This is a se
 
 P0 must also search the entire checkout for alternative mode flags, old protocol/role/data fixtures, hard-coded RC tags, obsolete journal paths, old compatibility claims and disconnected CI-only code. A name match alone is not a deletion proof. No measured deletion count or fully verified dependency graph yet.
 
+## P1 closeout and P2-P5 disposition refresh (2026-11-27)
+
+Source review at 0e903a2; this is the active priority overlay on the
+seed inventory above, not a new deletion authorization.
+
+| Current anchor | Disposition / phase |
+| --- | --- |
+| install.sh reviewed fresh path and cmd/boxweave/main.go | P2 retain/reconcile fresh stage/activate/guard/manifest. Existing installer rejects Legacy and existing installation. P3 review flags/help and internal callers; do not restore upgrade/rollback. |
+| scripts/uninstall_core.py scoped_drain_capture, scoped_main, purge_main | P2 RETAIN normal path; current N2 scoped-retirement PASS including Legacy fresh refusal and purge/reinstall. Reuse unaffected proof. |
+| offline_scope_blockers / offline_plan / offline_resume_main | P2 REPLACE Legacy-only offline mode/lease/ACL predicates with justified Scoped contract. Preserve bounded original/claim, archive, native and foreign scope and interrupted resume; version-only fix is insufficient. Keep fail-closed for unsupported cases. |
+| native-prepare-* and native-migrate-* CLI | P3 RETAIN/REVIEW separately authorized Incus dependency lifecycle; do not delete by name or equate with obsolete BoxWeave migration. |
+| Two S4B2 Install failures and third vacuous cancellation test | H deferred P1 acceptance: old positive/read-count oracles obsolete; real Scoped identity and composed reader/native behavior still required. Preserve tests/evidence until legitimate equivalent proof and disposition. |
+| network_audit_ledger.go and retired callers | P4 review actual remaining callers and negative refusal, shared helpers and shipped reachability; do not restore retired reader or remove needed proof. |
+| scripts/pr191_s2_ci_gate.py, v1-s2-native.yml | RETAIN actual exact PR #191 crosswalk PASS (72/23). Consumer explicitly binds pull_request/event/source, not release. |
+| v1-release.yml native-s2-gate and accept_s2_native.sh | P2 R4 REPLACE old startup with current installed Scoped candidate and exact release-event provenance. Preserve S2/S25, signatures and publish dependencies; no release trigger in this task. |
+| v1-n2-installed-lifecycle.yml | P2 R3/R4 disposition two failing Legacy lanes only after retained witnesses; 26 Scoped jobs PASS. P4 consolidate verified consumers. |
+| Required quality, dual arch and stable publication | RETAIN, P4 negative scope calibration and P5 exact final acceptance; #170 owns separate stable publication. |
+| MANUAL_INSTALL.md, DOCTOR_RECOVER.md, dependency lifecycle and BDH assets | P3/P4 align actual target, archive historical examples; preserve agent-agnostic direction, open utility gates and evidence. |
+
+No arbitrary deletion/count goals. Preserve source/evidence in Git.
+See [active delivery plan](CONSOLIDATION_PLAN.md#active-delivery-plan-p2-p5-2026-11-27).
+
 ## Active retirement sequence
+
+Historical initial sequence; use the current overlay above.
 
 The [R0-R5 recovery plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
 supersedes historical ordering holds, not safety requirements. In R0

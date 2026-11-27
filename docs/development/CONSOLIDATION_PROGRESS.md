@@ -2,7 +2,69 @@
 
 Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY.md) | [acceptance](CONSOLIDATION_ACCEPTANCE.md). Topic branch: `feat/v1-pre-release-consolidation-20261124`, base v1 at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. Owner requested one PR, Box-first iterative work and independent CI in parallel. P0 preflight is closed; P1 product implementation has begun with behavior-preserving helper extraction.
 
+## Active P2-P5 handoff
+
+Owner decision 2026-11-27: end P1 development, publish any remaining
+verified work, replan P2-P5 and prepare the next Agent to wait for a
+start command. **P1 development CLOSED; formal acceptance DEFERRED.**
+P2 R0 READY, not started. See the [active delivery plan](CONSOLIDATION_PLAN.md#active-delivery-plan-p2-p5-2026-11-27).
+
+### Exact baseline and preserved workspace
+
+- PR #191 Draft, topic feat/v1-pre-release-consolidation-20261124.
+  Product checkpoint ff3c20e; reviewed head
+  0e903a2a5d69ca35287109d4a1ef9c35bc2688c7, tree
+  65b5302c9e55117f0812e96a7208ead04430856c. Canonical v1 9d07665.
+- Owned Box pr188-h0-lab, 9d374e18-196a-493d-bf1f-2d582589f04d,
+  Project user-1001, Running, 4 CPU/4096 MiB. Preserve
+  /root/pr191-p1-replan, pr191-r2-r3, local HEAD 9c76b339 (128 dirty
+  entries). Exact remote fetch and file/mode audit: 1399 identical,
+  10 documents differ only by already-published newer text, one identical
+  shell blob has correct executable mode remotely, no local-only paths,
+  one newer remote BDH document. Original 6393a8aae7744495e904908f39937812
+  and c4ef157cd2235ceb2107b4f39d75a9c8 exit0. No unpublished product bytes
+  in the active P1 workspace; no stale tree push.
+- New isolated planning worktree /root/pr191-p2-ready created from the
+  exact reviewed head (3728c6151d2a461c0aa7f2b4f18cc7ef exit0).
+  Resolve actual post-documentation head on resume. Do not reset old
+  worktrees or publish unrelated historical experiments. Retain clean
+  installed lab 9124a75d-b3df-4b10-af2a-972aa6eab566 and its proof;
+  verify target before reuse. No fixture mutations in this replan.
+
+### Finite remaining acceptance ledger
+
+| Item | Current disposition | Next owner / action |
+| --- | --- | --- |
+| A/B/C/D/G | Verified applicable fixes | Reuse; revalidate affected final candidate |
+| E | PR S2 exact crosswalk PASS, 23 jobs/72 markers | P2 R4 release S2 and P4 consumer cleanup |
+| F | Legacy fresh refusal/no effect and normal Scoped retirement PASS; old N2 legacy/offline still FAIL | P2 R2-R4 full Scoped offline and explicit gate disposition |
+| H | Root cause independently confirmed; no new Scoped defect found; two fails and vacuous third test remain | P1 deferred acceptance; retain real reader/native composition and all regression obligations until valid proof |
+| C04 | Local WAN toggle PASS, hosted independent TLS UNVERIFIED | P5 R2 or earlier legitimate evidence; owner-approved bounded equivalence only |
+| I / C01 | Exact full acceptance not PASS | P5 final full source/race/dual arch/native/quality gates |
+
+Baseline CI: S2 45973479532 PASS (job 140419353531), Forward
+45973479456 PASS, S25 45973479743 PASS; N2 45973479370 26/28
+(legacy/legacy-offline fail), S1 45973479340, quality 45973479368 and
+dual arch 45973479429 fail on two original Install assertions. Latest
+Scoped retirement 140419352217 PASS with fresh Legacy refusal/no effect;
+Scoped S2 140419352235 schema7/23 tools PASS, WAN UNVERIFIED.
+[Integrated R5](https://github.com/vanishs/boxweave/pull/191#issuecomment-7216191395)
+and [GLM review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7216012723).
+No new product bug established. Do not count closed issue #194 or
+historical tool refusal as a product acceptance result.
+
+| Phase | Development state | First command |
+| --- | --- | --- |
+| P0 | COMPLETE | None |
+| P1 | CLOSED for development; formal acceptance deferred | No repeat investigation |
+| P2 | READY; awaiting owner | P2 R0 |
+| P3 | NOT STARTED; depends on installed contract | P3 R0 |
+| P4 | NOT STARTED; depends on verified operator contract | P4 R0 |
+| P5 | NOT STARTED; depends on coherent candidate | P5 R0 |
+
 ## Current P1 recovery ledger
+
+Historical P1 ledger; preserved for evidence, not active development.
 
 **Current development disposition — owner-directed deferral:** Owner decision (2026-11-27): P1 implementation is considered development-complete for scheduling; proceed with independent P2 development. This explicitly defers the unresolved Install composed witness in #194, not a PASS, waiver, or permission to repeat a refused operation. The existing 577 PASS / 66 SKIP / 2 FAIL aggregate and Race exit 1 remain recorded. Retain the original failed tests and all safety assertions. Exact-candidate regression, native and CI evidence, C04 hosted equivalence if needed, and old-gate applicability/replacement remain open before formal P1 acceptance, merge or release. This Schema 7 development checkpoint is not an accepted or release candidate. See [#194](https://github.com/vanishs/boxweave/issues/194) and [R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7212654941).
 
