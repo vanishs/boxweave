@@ -223,6 +223,38 @@ The original historical report owns actual commands, IDs and results. These obse
   and source work, retain exact candidate CI and C04. No promotion.
   Remote c258 changes docs; do not overwrite concurrent history.
 
+- Cycle 2026-11-26-05 (owner invoked): #191 parent e233220b3c3a9fa214e79d31e468fc43fcde3832.
+  Cycle04 scope guard actually reused in R5; nevertheless R5 response
+  ended while Race original pending and three phase review groups still
+  ready/working (7212289648). Two wait expiries were not cancellation or
+  an observed client quota limit. Existing Finish Gate was not invoked;
+  primary failure is execution discipline, not established causal code bug.
+  One bounded gap: supplied checkpoint original IDs did not project
+  pending output into workflow status/finish without repeated manual flags.
+  Reuse client-owned checkpoint and existing Finish Gate; no tracker,
+  scheduler, connector adapter or transfer changes. Research/deferrals
+  revisited: Beads-like external state, Agentless bounded validation,
+  no changed V4/V5 prerequisite; defer new infrastructure.
+  Optional output_review PENDING/CONSUMED/NOT_REQUIRED; omitted
+  conservatively unreviewed. Union checkpoint and explicit pending IDs,
+  retain independent remote review and existing acceptance.
+  Red/green 98d0c9f961b750a16e65a8ae034ed9e6; 137 regression tests,
+  24 Eval, format1416 PASS 1a38a06ce1c1ecf3b4171a09d5ee7504.
+  Actual original Race 302139a752474f6d82309ce837a87c3c terminal guest
+  exit1, both streams consumed, unchanged source and same two failures
+  (577 PASS/66 SKIP/2 FAIL, zero reported DATA RACE warnings).
+  Historical pending checkpoint reconstructed for calibration, not an
+  actual saved prior checkpoint; projected original without duplicate
+  CLI flag (4fa8a677a7c2d2524577a576b0ba0be9). Real consumed checkpoint
+  and active phase revision10 reviewed with Finish Gate
+  (07bd766ed5c52af8de1fd5fc027a2a84): pending_output=[], no ready or
+  working, REVIEW_REQUIRED/REVIEW_BLOCKERS. Four review groups recorded,
+  original Install blocker and dependent exact candidate/P1 exit retained.
+  No automatic termination enforcement, remote proof or comparative
+  productivity claim; setup costs include new tests and two checkpoints.
+  Next product action: legitimate resolution of retained Install evidence
+  obligation, then coherent exact candidate gates. No replay or waiver.
+
 ## Phase-wide continuation correction (2026-11-26, #191)
 
 Observed repeat premature end after candidate CLI checks:

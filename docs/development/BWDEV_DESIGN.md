@@ -163,6 +163,11 @@ of omitted facts, external persistence, independent recurrence or authority.
 The Finish Gate candidate additionally reports CONTINUE_OR_RESOLVE for ready
 or WORKING tasks and caller-reported unread required original outputs.
 Use --operations-reviewed and repeat --pending-output ID as applicable.
+Checkpoint original_operations may carry caller-reported output_review:
+PENDING, CONSUMED, or NOT_REQUIRED. Omitted is unreviewed. Status/resume
+exposes pending IDs; finish unions them with explicit pending flags.
+This neither remotely validates an exit nor clears the independent
+original Operation review requirement.
 Missing review or pending output cannot pass; HANDOFF_READY is advisory.
 It cannot enforce invocation on an external Agent surface.
 

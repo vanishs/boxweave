@@ -126,7 +126,15 @@ and the receipts already held; do not add repetitive list/poll calls.
    assert quota exhaustion without evidence. Honor explicit owner stop.
    If required work remains ready and no such boundary is present,
    continue the same authorized pass; never request a routine continue.
-3. For structured delivery, use existing bwdev finish with
+3. At admission/checkpoint, keep each required original Operation in the
+   existing checkpoint. An optional caller-reported `output_review`
+   is PENDING, CONSUMED, or NOT_REQUIRED (only when no output is required);
+   absent means unreviewed. Record CONSUMED only after required original
+   terminal streams and guest exit have been observed. Preserve prior
+   checkpoint revisions. Status/resume projects unresolved IDs;
+   finish combines them with explicit --pending-output flags. Never
+   infer proof or permission from this field.
+   For structured delivery, use existing bwdev finish with
    --operations-reviewed after this review (including no Operations);
    repeat --pending-output ORIGINAL_ID for each known unread required
    output. CONTINUE_OR_RESOLVE directs the caller to resolve evidence or

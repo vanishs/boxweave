@@ -156,7 +156,8 @@ def summary(args, root, finishing=False):
         if code:
             issues.append("Exact-head CI needs review")
     if finishing:
-        pending = getattr(args, "pending_output", [])
+        pending = sorted(set(getattr(args, "pending_output", [])) |
+                         set(result.get("checkpoint", {}).get("pending_output", [])))
         reviewed = getattr(args, "operations_reviewed", False)
         working = [row["id"] for row in data["tasks"] if row["state"] == "WORKING"]
         if not reviewed:

@@ -133,8 +133,11 @@ references, not authentication of external evidence or automatic promotion.
 
 Use bwdev finish with --work-history DIRECTORY and --operations-reviewed
 for structured delivery review after reviewing original required outputs;
-repeat --pending-output ID for unresolved required output,
-rather than legacy reason-only learning flags. The complete work history,
+repeat --pending-output ID for unresolved required output, including IDs
+not yet in the checkpoint. The checkpoint's optional per-original
+output_review (PENDING, CONSUMED, NOT_REQUIRED) supplies the same
+projection; omitted means unreviewed. Use structured feedback rather
+than legacy reason-only learning flags. The complete work history,
 objective, checkpoint attempt and exact repository/source must agree. This is an advisory
 record check, not proof of remote persistence, completeness of observations,
 native acceptance, or independent learning efficacy.

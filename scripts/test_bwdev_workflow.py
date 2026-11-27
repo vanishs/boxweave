@@ -137,6 +137,35 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(unread["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
                 self.assertEqual(unread["finish_gate"]["pending_output"], ["fixture-original"])
                 args.pending_output = []
+                saved = json.loads(cp.read_text())
+                saved["original_operations"] = [{"operation_id": "original-unreviewed"},
+                    {"operation_id": "original-pending", "output_review": "PENDING"},
+                    {"operation_id": "original-consumed", "output_review": "CONSUMED"},
+                    {"operation_id": "original-no-output", "output_review": "NOT_REQUIRED"}]
+                cp.write_text(json.dumps(saved))
+                status, _ = workflow.summary(args, root)
+                self.assertEqual(status["checkpoint"]["pending_output"],
+                                 ["original-pending", "original-unreviewed"])
+                args.pending_output = ["explicit-pending", "original-pending"]
+                blocked, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)
+                self.assertEqual(blocked["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
+                self.assertEqual(blocked["finish_gate"]["pending_output"],
+                                 ["explicit-pending", "original-pending", "original-unreviewed"])
+                for original in saved["original_operations"]:
+                    original["output_review"] = "CONSUMED"
+                cp.write_text(json.dumps(saved))
+                args.pending_output = []
+                reviewed, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)  # original remote evidence still requires review
+                self.assertEqual(reviewed["finish_gate"]["pending_output"], [])
+                self.assertEqual(reviewed["finish_gate"]["decision"], "REVIEW_REQUIRED")
+                saved["original_operations"][0]["output_review"] = "invented"
+                cp.write_text(json.dumps(saved))
+                with self.assertRaisesRegex(HarnessError, "output_review"):
+                    workflow.summary(args, root)
+                saved["original_operations"] = []
+                cp.write_text(json.dumps(saved))
                 args.expect_work_ref = "different-phase"
                 with self.assertRaisesRegex(HarnessError,"work_ref"):
                     workflow.summary(args, root, finishing=True)
