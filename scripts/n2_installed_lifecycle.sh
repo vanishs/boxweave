@@ -101,6 +101,26 @@ if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1 || test "${P1B_S2_ALTPOOL:-0}" = 1; th
   fi
 fi
 if test "${PR178_SCOPED_N2:-0}" = 1; then
+  if test "${PR182_SCOPED_RETIREMENT:-0}" = 1; then
+    # Retired positive Legacy plan becomes explicit refusal/no-effect proof.
+    sudo incus project show "$project" > "$work/legacy-project-before"
+    sudo incus profile show default --project "$project" > "$work/legacy-profile-before"
+    if sudo sh install.sh --plan --guided-fresh-plan --local-binary "$work/candidate-a" --sha256 "$first" > "$work/legacy-refusal.log" 2>&1; then
+      echo "retired Legacy plan unexpectedly accepted" >&2
+      exit 1
+    fi
+    grep -Fq 'scoped fresh only: legacy installation and upgrade unsupported' "$work/legacy-refusal.log"
+    test ! -e /var/lib/boxweave
+    test ! -e /var/lib/boxweave-native-prereq-v1.json
+    test ! -e /var/lib/boxweave-scoped-peer-v2
+    test ! -e /usr/local/bin/boxweave
+    sudo incus project show "$project" > "$work/legacy-project-after"
+    sudo incus profile show default --project "$project" > "$work/legacy-profile-after"
+    cmp "$work/legacy-project-before" "$work/legacy-project-after"
+    cmp "$work/legacy-profile-before" "$work/legacy-profile-after"
+    test -z "$(sudo incus list --all-projects -c n -f csv)"
+    echo P1B_SCOPED_LEGACY_FRESH_PLAN_REFUSED_NO_EFFECT=PASS
+  fi
   sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$work/candidate-a" --sha256 "$first" > "$work/scoped-plan.txt"
   grep -Eq '^scoped_fresh_review_sha256=[a-f0-9]{64}$' "$work/scoped-plan.txt"
   grep -Fxq "project=$project" "$work/scoped-plan.txt"

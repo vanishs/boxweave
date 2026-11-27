@@ -383,6 +383,7 @@ jobs:
             exit 0
           fi
           if test "$PR182_SCOPED_RETIREMENT" = 1; then
+            grep -Fxq P1B_SCOPED_LEGACY_FRESH_PLAN_REFUSED_NO_EFFECT=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "PR188_H4A_INSTALLED_BUSY_AND_REPLAY=PASS SCOPED_V2" "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq PR188_H4B_INSTALLED_CHURN_RETENTION=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Fxq "PR188_H2A_FOREIGN_ACL_PRE_DISPATCH_REFUSED=PASS" "$RUNNER_TEMP/n2-installed.log"
