@@ -4,42 +4,95 @@ Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY
 
 ## Current P1 recovery ledger
 
-Active sequence: [R0-R5](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active).
-Audit snapshot: published a3b3ad0dd6c50756e3663963730a658343609846;
-[convergence audit](https://github.com/vanishs/boxweave/pull/191#issuecomment-7207100365).
-Refresh observations at R0 entry, not by rereading the full history.
+Active [R0-R5 plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active).
+R0 assessed published 363ee542c41a748fde5a59dd63b247ac534d4a52.
+[Prior convergence audit](https://github.com/vanishs/boxweave/pull/191#issuecomment-7207100365).
 
-| Stage | Status / remaining deliverable |
+| Stage | Status / exit |
 | --- | --- |
-| R0 | READY: prior audit reusable; reconcile current facts, precise dependency/acceptance map and WAN decision. |
-| R1 | OPEN: minimum cutover dependencies and witness disposition. |
-| R2 | OPEN: actual Scoped-only runtime; 16 non-test ScopedPeerFresh matching lines at audit. |
-| R3 | OPEN: fresh direct schema; version 6, nine old-table reference files at audit. |
-| R4 | OPEN: affected native/consumer gates; historical N2 28/28, hosted WAN UNVERIFIED. |
-| R5 | OPEN: independent exact-candidate review, clean native and mandatory CI. |
+| R0 | COMPLETE (planning only): finite cutover sequence and gate placement below. |
+| R1 | READY: two instructions below; minimum dependency dispositions and preparations. |
+| R2 | OPEN: remove runtime selection and obsolete execution. |
+| R3 | OPEN: direct fresh schema 7 candidate; remove three old tables, preserve retained state and no-write refusal. |
+| R4 | OPEN: affected native/consumer proof; WAN separate C04 gate. |
+| R5 | OPEN: independent integrated candidate review and exact-head CI. |
 
-Counts are diagnostics, not arbitrary targets. Audit: 134 commits, 436 files,
-+56704/-2058 across entire PR (including BDH); D32-D36 +735/-167 without
-runtime mode or schema convergence; N2 4 to 28 modes. Of 35 workflow runs
-for five heads, 8 cancelled, 21 success, 5 queued, 1 running at audit.
-Actual prior N2 run 45912024502 all 28 PASS (including WAL rerun);
-alternate-pool native PASS. D14 real Box MCP IPv4 on/off/on at 92ffeda
-retained as historical evidence; Hosted cause not confirmed. At audit,
-current quality/S1/Forward/S25 PASS; N2/dual queued, S2 running.
-No final-head or retirement waiver inferred.
+Evidence refresh: original read-only audits
+b4d9a961885b13e47b44e6fb5cacdd93 and
+9d38d803cfba2c20b5e36414ded20a86 exit0. Work-ref UNKNOWN list empty
+at observation (not global absence proof). Remote 363ee54 seven runs:
+quality/S1 running, five queued. Earlier a3b3ad0 N2 45918809967:
+1 success, 2 running, 25 queued. Historical 738b269 N2 45912024502
+28/28 success including WAL rerun 140233828965. Existing source/schema
+matches unchanged; do not repeat valid historical acceptance.
+72-marker map and later follow-ups retained: 48 direct, 24 changed;
+the alternate pool, combined Update WAL, two-controller and schema
+refusal/review-route witnesses have historical replacement evidence
+(see crosswalk follow-ups); still verify final exact candidate.
+No claim of final-head native PASS.
 
-Existing owned development Box 9d374e18-196a-493d-bf1f-2d582589f04d;
-clean local branch bdh-reuse-batch-20261126 at /root/pr191-p1-d36:
-a3a01ea (policy docs), 60448ba (committed batch candidate), d2338b3
-(D37 source test). Preserve these commits; focused tests only, aggregate
-validation/publication incomplete. Policy docs reused in replan; reconcile
-overlap before any subsequent publication. No reset or force.
+Publication feasibility: local temporary index removed one historical
+Markdown path without changing checkout; expected tree
+c4826405bd597d7a5879a32b82eda81708e2f1ef. GitHub create_tree with explicit
+null blob SHA returned the identical tree; no commit or ref move and
+no actual tracked deletion. Use normal Git if available, otherwise
+reviewed exact-tree entries including deletions, verify tree and lease
+the observed parent. No new BDH tool required.
 
-Next command: **P1 R0**. Reuse prior evidence; select only decisive
-investigation. R0 must close with finite concrete tasks or a named blocker
-and necessary owner decision. On each later stage update this table and
-next actions in place; link evidence rather than append duplicate summaries.
-P0 remains closed; P2-P5 remain open. No merge/release.
+Workspace: same owned Box 9d374e18-196a-493d-bf1f-2d582589f04d,
+ /root/pr191-p1-replan, clean at 363ee54 after one fetch. Preserve
+ /root/pr191-p1-d36 local 60448ba (BDH committed-range helper) and
+d2338b3 (D37 test), not published. Policy a3a01ea already represented
+in 363ee54. Defer helper; D37 only if it closes a specific remaining
+witness gap. No reset, force or automatic integration.
+
+### Finite remaining cutover work
+
+| Group / stage | Actual dependency and retained oracle |
+| --- | --- |
+| A / R1-R2 | C03-C05,C10: server, box_tools, peer_tools, operation_tools/recover; recovery Service and plan/apply. Scoped only; retain identity, default deny, replay, reviewed UNKNOWN and independent poststate. |
+| B / R1-R3 | C02,C05,C10: store/schema and nine old-table files in audit. Remove old SQL and empty-table guard only with version refusal; keep bindings, fences, held addresses and claims. Verify Open, OpenExistingRecovery, diagnostic and network read-only entries. |
+| C / R1-R3 | C02,C04,C10: install.sh, local.go unit, main.go serve, diagnostic_observe.go, recover_plan/apply, scoped_drain, uninstall_core.py. Scoped default, retain old-artifact refusal, fresh review, root/guard/ledger, maintenance identity. Update schema-6 assertions/fixtures. Broad installer/CLI cleanup stays P2/P3. |
+| D / R1-R4 | C02-C05,C11: 58 Go test files match Admit/CommitRecovery/mode setup, not 58 mandatory rewrites. Classify shared behavior versus obsolete-only expectations; reuse Scoped fixtures and proofs. Preserve negatives. |
+| E / R1-R4 | C03-C05,C11: accept_s2_native.sh and ten direct-serve fault scripts, S25/release workflows, s2_p3 audit/manifest. Route candidate to installed Scoped producers, verify exact-source/job evidence against 72-marker map; no fake aggregate. Disposition legacy/legacy-offline N2 modes; retain generic lifecycle/retirement proof. Preserve quality/signatures/final CI. Other cleanup stays P4. |
+| F / R4-R5 | C04,C11: actual public IPv4 MCP on/off/on, independent ACL/NIC and unrelated-flow denial. Exact new candidate evidence required; separate from reversible local cutover. |
+
+Counts are diagnostic, not quotas. Actual callers and behavior decide
+removal. R2/R3 and minimum C/E wiring may land in one coherent locally
+verified batch; no knowingly broken intermediate publication. R1 need
+not pre-run R4 or add parallel compatibility tests.
+
+### WAN and clean-environment decision
+
+D34 job 140240813611 succeeded as a diagnostic, not WAN PASS.
+Prebootstrap Docker ACTIVE, FORWARD DROP, Docker jump PRESENT,
+nft accept/drop/other 0/1/0; before/after 2/1/0, DROP 2 to 27,
+source TCP/443 conntrack zero, host TLS PASS; four guest attempts
+DNS positive, TCP/TLS zero, timeout. Hosted public positive UNVERIFIED.
+Supports a pre-existing forwarding conflict, not exact attribution.
+Read-only lab 9b71009f-a41d-411a-9739-85db5adc12de observation
+8b06884660f2c77d3e2ba58f9728bd56 exit0: Incus 7.6, Docker inactive,
+BoxWeave and scoped-lifecycle active, forwarding=1, two projects,
+one running instance. Populated, not a clean candidate fixture.
+D14 actual on/off/on is historical evidence at 92ffeda only.
+Use a clean authorized native environment for new schema and R4/R5;
+do not overwrite existing lab or change global firewall. If current
+independent positive and Hosted negative persist, request explicit
+bounded equivalence (BH009 precedent, not transferable approval).
+No decision required to start reversible R1-R3; final gate stays OPEN.
+
+### Next command: P1 R1
+
+1. Disposition A-E actual blockers using the existing crosswalk; prepare
+   minimum caller/fixture/consumer changes for combined R2/R3. Reuse
+   current workspace; no new BDH or redundant native campaign.
+2. Verify focused source/consumer negative calibration, commit coherent
+   local slices, and update this ledger with exact residual prerequisites
+   and combined cutover order. No CI for every edit; submit a coherent
+   candidate at a meaningful boundary. R1 does not require R4/R5 PASS.
+
+R0 is complete as research/replan, not product acceptance.
+P0 closed; P2-P5 open. No merge/release.
 
 ## Historical phase status (superseded)
 
