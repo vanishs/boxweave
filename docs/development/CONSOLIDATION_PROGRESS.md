@@ -7,7 +7,27 @@ Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY
 Owner decision 2026-11-27: end P1 development, publish any remaining
 verified work, replan P2-P5 and prepare the next Agent to wait for a
 start command. **P1 development CLOSED; formal acceptance DEFERRED.**
-P2 R0 READY, not started. See the [active delivery plan](CONSOLIDATION_PLAN.md#active-delivery-plan-p2-p5-2026-11-27).
+P2 R0 completed; R1 source checkpoint, independent CI pending. See the [active delivery plan](CONSOLIDATION_PLAN.md#active-delivery-plan-p2-p5-2026-11-27).
+
+### P2 R0/R1 checkpoint
+
+R0 investigation and finite exit ledger:
+[PR #191 R0](https://github.com/vanishs/boxweave/pull/191#issuecomment-7216753691).
+At 36b2654, S2/S25/Forward PASS; N2 26/28, known Legacy-only
+failures; S1/quality/dual-architecture remain red on inherited H.
+Independent clean-lab Box is now populated, preserved, not a fresh fixture.
+
+R1 identified unequal postflight validation: explicit apply did not share
+the interactive wrapper's installed identity and restricted Doctor checks.
+Both now require Scoped manifest mode, exact candidate digest and
+Project/user, active service and no pending restart, matching version/commit
+and Doctor configuration readiness. OAuth remains interactive only;
+historical upgrade helpers are not made reachable. Regression checks
+cover both entry paths, failed postflight, stale/declined review,
+prerequisites and existing OAuth preservation. No Go runtime change
+or P1 H disposition. Independent fresh/installed verification of changed
+wrapper remains required; reuse hosted Forward/N2/S25 lanes without
+waiving any known gates. R2 remains separate Scoped offline retirement.
 
 ### Exact baseline and preserved workspace
 
@@ -57,7 +77,7 @@ historical tool refusal as a product acceptance result.
 | --- | --- | --- |
 | P0 | COMPLETE | None |
 | P1 | CLOSED for development; formal acceptance deferred | No repeat investigation |
-| P2 | READY; awaiting owner | P2 R0 |
+| P2 | R1 source checkpoint; independent installed CI pending | P2 R2 after stage review |
 | P3 | NOT STARTED; depends on installed contract | P3 R0 |
 | P4 | NOT STARTED; depends on verified operator contract | P4 R0 |
 | P5 | NOT STARTED; depends on coherent candidate | P5 R0 |

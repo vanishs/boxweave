@@ -808,25 +808,26 @@ def main():
         installed_status = install_phase("INSTALLED_STATUS", [str(candidate), "install-status", "-project", args.project,
                         "-service-user", args.service_user, "-incus-socket", str(sock)], capture=True)
         print(json.dumps(installed_status), flush=True)
+        if (installed_status.get("binary_sha256") != sha or
+                installed_status.get("native_project") != args.project or
+                installed_status.get("service_user") != args.service_user or
+                installed_status.get("scoped_peer_mode") != "SCOPED_PEER_FRESH_V2" or
+                installed_status.get("service_active") is not True or
+                installed_status.get("restart_required") is not False):
+            raise phase_unverified("INSTALLED_STATUS")
+        installed = "/usr/local/bin/boxweave"
+        identity = ["runuser", "-u", args.service_user, "--", installed]
+        doctor = install_phase("CONTROLLER_DOCTOR", identity + ["doctor", "-project", args.project], capture=True)
+        print("Doctor:", json.dumps(doctor), flush=True)
+        if (doctor.get("version") != installed_status.get("version") or
+                doctor.get("commit") != installed_status.get("build_commit") or
+                (not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source)) or
+                not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready"))):
+            raise phase_unverified("CONTROLLER_DOCTOR")
+        policy = doctor.get("diagnostic", {}).get("forward_policy", {})
+        effective = policy.get("reason") if policy.get("state") == "OBSERVED" else "unverified"
+        print("RUNNING_SERVICE_FORWARD_POLICY=" + str(effective))
         if guided:
-            if (installed_status.get("binary_sha256") != sha or
-                    installed_status.get("native_project") != args.project or
-                    installed_status.get("service_user") != args.service_user or
-                    installed_status.get("service_active") is not True or
-                    installed_status.get("restart_required") is not False):
-                raise phase_unverified("INSTALLED_STATUS")
-            installed = "/usr/local/bin/boxweave"
-            identity = ["runuser", "-u", args.service_user, "--", installed]
-            doctor = install_phase("CONTROLLER_DOCTOR", identity + ["doctor", "-project", args.project], capture=True)
-            print("Doctor:", json.dumps(doctor), flush=True)
-            if (doctor.get("version") != installed_status.get("version") or
-                    doctor.get("commit") != installed_status.get("build_commit") or
-                    (not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source)) or
-                    not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready"))):
-                raise phase_unverified("CONTROLLER_DOCTOR")
-            policy = doctor.get("diagnostic", {}).get("forward_policy", {})
-            effective = policy.get("reason") if policy.get("state") == "OBSERVED" else "unverified"
-            print("RUNNING_SERVICE_FORWARD_POLICY=" + str(effective))
             print("GUIDED_INSTALL_COMPLETE: native config ready; packet/quota/PRS acceptance remains separate", flush=True)
             args.oauth_password_configured = doctor.get("diagnostic", {}).get("ledger", {}).get("oauth", {}).get("password_configured")
             optional_oauth(identity, args)

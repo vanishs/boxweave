@@ -124,7 +124,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-24.04", s2)
         self.assertIn("runs-on: ubuntu-24.04", s25)
 
-    def exercise_guided_install(self, answer, drift=False, native_ready=True, missing_reader=False, reader_drift=False, plan_only=False, oauth_answer='n', oauth_origin='', oauth_error=False):
+    def exercise_guided_install(self, answer, drift=False, native_ready=True, missing_reader=False, reader_drift=False, plan_only=False, oauth_answer='n', oauth_origin='', oauth_error=False, explicit=False, status_override=None, doctor_override=None, existing_oauth=False):
         content = (ROOT / "install.sh").read_text()
         embedded = content.split("<<'PY_BOXWEAVE_INSTALL'\n", 1)[1].rsplit("\nPY_BOXWEAVE_INSTALL", 1)[0]
         ns = {}
@@ -166,18 +166,20 @@ class ReleaseTests(unittest.TestCase):
                     result["ReviewSHA256"] = "f" * 64
                 return json.dumps(result)
             if action == "install-status":
-                return json.dumps({"binary_sha256": hashlib.sha256(candidate).hexdigest(),
+                return json.dumps({**{"binary_sha256": hashlib.sha256(candidate).hexdigest(),
                                    "native_project": target["project"], "service_user": "boxweave",
                                    "service_active": True, "restart_required": False,
-                                   "version": "1.0.0-rc.8", "build_commit": source})
+                                   "version": "1.0.0-rc.8", "build_commit": source,
+                                   "scoped_peer_mode": "SCOPED_PEER_FRESH_V2"}, **(status_override or {})})
             if action == "oauth-status":
-                password = "oauth-setup" in calls
-                origin = oauth_origin if "oauth-set-origin" in calls and not oauth_error else ""
+                password = existing_oauth or "oauth-setup" in calls
+                origin = ("https://existing.example.test" if existing_oauth else
+                          oauth_origin if "oauth-set-origin" in calls and not oauth_error else "")
                 return json.dumps({"Enabled": bool(origin) and password, "Origin": origin,
                                    "PasswordConfigured": password})
             if action == "doctor":
-                return json.dumps({"ready": True, "mcp_ready": True, "native": {"ready": True},
-                                   "version": "1.0.0-rc.8", "commit": source})
+                return json.dumps({**{"ready": True, "mcp_ready": True, "native": {"ready": True},
+                                   "version": "1.0.0-rc.8", "commit": source}, **(doctor_override or {})})
             raise AssertionError(argv)
 
         def run(argv, **kwargs):
@@ -206,10 +208,13 @@ class ReleaseTests(unittest.TestCase):
         ns["select_release"] = lambda *_: (candidate, "1.0.0-rc.8", source, hashlib.sha256(candidate).hexdigest())
         # The temporary candidate must use a real Path, not our host-path mapper.
         ns["Path"] = lambda raw: fake_path(raw) if str(raw).startswith(("/var/", "/usr/", "/etc/")) else Path(raw)
+        mode = (["--apply", "--project", target["project"], "--confirm-host-sha256", "e" * 64,
+                 "--scoped-fresh-review-sha256", approval] if explicit else
+                ["--plan"] if plan_only else ["--interactive"])
         with mock.patch.object(ns["os"], "geteuid", return_value=0), \
                 mock.patch.object(ns["os"].path, "lexists", return_value=False), \
                 mock.patch.object(ns["pwd"], "getpwnam", return_value=types.SimpleNamespace(pw_uid=1001)), \
-                mock.patch.object(ns["sys"], "argv", ["install.sh", "--version", "v1.0.0-rc.8"] + (["--plan"] if plan_only else ["--interactive"])), \
+                mock.patch.object(ns["sys"], "argv", ["install.sh", "--version", "v1.0.0-rc.8"] + mode), \
                 mock.patch.object(ns["subprocess"], "check_output", side_effect=output), \
                 mock.patch.object(ns["subprocess"], "run", side_effect=run), \
                 mock.patch("builtins.open", side_effect=[io.StringIO(answer + "\n"), io.StringIO(),
@@ -228,6 +233,29 @@ class ReleaseTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(calls, ["native-scoped-fresh-plan", "native-scoped-fresh-plan", "install-stage",
                                  "install-activate", "install-status", "doctor", "oauth-status"])
+
+    def test_explicit_apply_has_same_installed_postflight_without_oauth(self):
+        calls, error = self.exercise_guided_install("NO", explicit=True)
+        self.assertIsNone(error)
+        self.assertEqual(calls, ["native-scoped-fresh-plan", "native-scoped-fresh-plan",
+                                 "install-stage", "install-activate", "install-status", "doctor"])
+
+    def test_both_install_modes_fail_closed_on_postflight_drift(self):
+        for explicit in (False, True):
+            for override in ({"binary_sha256": "0" * 64}, {"scoped_peer_mode": ""},
+                             {"service_active": False}, {"restart_required": True}):
+                with self.subTest(explicit=explicit, status=override):
+                    calls, error = self.exercise_guided_install(
+                        "INSTALL SCOPED user-1001", explicit=explicit, status_override=override)
+                    self.assertIn("INSTALL_PHASE_UNVERIFIED: INSTALLED_STATUS", error)
+                    self.assertEqual(calls[-1], "install-status")
+            for override in ({"commit": "f" * 40}, {"ready": False}, {"native": {"ready": False}}):
+                with self.subTest(explicit=explicit, doctor=override):
+                    calls, error = self.exercise_guided_install(
+                        "INSTALL SCOPED user-1001", explicit=explicit, doctor_override=override)
+                    self.assertIn("INSTALL_PHASE_UNVERIFIED: CONTROLLER_DOCTOR", error)
+                    self.assertEqual(calls[-1], "doctor")
+                    self.assertNotIn("oauth-status", calls)
 
     def test_guided_install_decline_and_changed_plan(self):
         calls, error = self.exercise_guided_install("NO")
@@ -267,6 +295,13 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(calls[-2:], ["oauth-set-origin", "oauth-status"])
         self.assertEqual(calls.count("oauth-setup"), 1)
         self.assertEqual(calls.count("oauth-set-origin"), 1)
+
+    def test_guided_install_preserves_existing_oauth_password_and_origin(self):
+        calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", existing_oauth=True)
+        self.assertIsNone(error)
+        self.assertEqual(calls[-2:], ["doctor", "oauth-status"])
+        self.assertNotIn("oauth-setup", calls)
+        self.assertNotIn("oauth-set-origin", calls)
 
     def test_guided_install_incomplete_native_never_activates(self):
         calls, error = self.exercise_guided_install("INSTALL SCOPED user-1001", native_ready=False)
