@@ -1468,3 +1468,36 @@ exceptional inherited-policy native proof needs authorized clean
 nested fixture. BDH plan b93b46ef1e81d3abcb4bc4f7e4001874 reused
 installed-lifecycle route; L012/L014 review-required remains open,
 no BDH promotion.
+
+### P2 R3 continuation — N2 trigger and fixture calibration
+
+Head 5a3af5a: exact-source Forward 46055735367 and S25 46055735392
+PASS; S2 46055735366 pending at observation. S1 46055735388,
+quality 46055735328 and dual arch 46055735426 retain the same two
+inherited H failures (actual logs checked, five failed jobs). No N2
+PR-triggered run returned by the available commit-scoped interface.
+Actual PR diff 527 files; matching workflow path is present (position
+2 in local sorted diff). Pinned actionlint 1.7.7 validates the original
+workflow (f746a1559334a68406ef1c13b523a3e8); missing run cause not
+established. Do not infer workflow invalidity, skipped gate or PASS.
+
+Consolidate 143 individual N2 trigger patterns into 10 dependency
+families/exact files, programmatically checking each old pattern is
+covered; retain same-repository/base and all 31 jobs and assertions.
+Pure documentation paths remain excluded. This conservative broadened
+trigger is a candidate, not proof of the missing-run root cause.
+Adapt the exact trigger tests to evaluate patterns rather than literal
+filenames; preserve existing receipt ordering and 72/23 S2 coverage.
+Tighten offline active and foreign refusals to require the specific
+oracle and unchanged native state; restart observation waits only
+within a bounded window for full coverage plus exact retained original.
+
+Local regression a61b1c8cbbe799a35ef57acdd987b74a exit0:
+14 S2 map, 4 identity, 3 CI gate, 64 uninstaller Python tests;
+actionlint, format (1415 files), YAML (48), import PASS.
+Actual Native lanes remain pending. Existing LXC labs preserved;
+no target installation or destructive action undertaken. No legacy
+gate retirement, H/C04/C01 waiver or R4 advancement. Learning:
+literal-path tests can miss equivalent wildcard coverage; keep
+behavioral trigger checks and distinguish missing CI metadata from
+a confirmed trigger failure. No new BDH asset/promotion.

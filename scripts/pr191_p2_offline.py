@@ -78,11 +78,15 @@ def stage_original(project, testbin, box):
     original = re.search(r"PR177_D4_COMPLETED_ORIGINAL=([0-9a-f]{32})", staged).group(1)
     assert instance(project, "d4-a")["status"] == "Stopped"
     run("systemctl", "start", u.UNIT.name)
-    for _ in range(30):
-        result = json.loads(run(str(u.BINARY), "doctor", "-maintenance", "-project", project))
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        observed = subprocess.run([str(u.BINARY), "doctor", "-maintenance", "-project", project],
+                                  capture_output=True, text=True, timeout=60)
+        result = json.loads(observed.stdout)
         matches = [x for x in (result.get("ledger") or {}).get("nonterminal_or_unknown_originals", [])
                    if x["id"] == original]
-        if matches and matches[0]["state"] == "UNKNOWN":
+        if observed.returncode == 0 and result["coverage"] == "BOUNDED_SOURCES_OBSERVED" and matches and matches[0]["state"] == "UNKNOWN":
+            assert len(matches) == 1
             assert matches[0]["box_uuid"] == box and matches[0]["native_receipt"] is True
             assert matches[0]["claim_protection"] == "RETAINED" and matches[0]["recorded_claims"] == 1
             break
@@ -180,7 +184,9 @@ def exceptional(project, receipt, digest, work, box):
     run("incus", "network", "acl", "create", "p2-r3-foreign", "--project", "default")
     foreign = run("incus", "query", "/1.0/network-acls/p2-r3-foreign?project=default")
     denied, bad = plan(project)
-    assert denied.returncode != 0 and (bad is None or not bad["ready"])
+    assert denied.returncode == 2 and bad and not bad["ready"], (denied.stderr, bad)
+    assert any("SCOPED_OFFLINE_ARCHIVE_PROOF_UNVERIFIED" in x or "DRAIN_ROOT_ACL_INVENTORY_NOT_EXCLUSIVE" in x
+               for x in bad["blockers"]), bad["blockers"]
     assert run("incus", "query", "/1.0/network-acls/p2-r3-foreign?project=default") == foreign
     unchanged(before)
     assert instance(project, "d4-a")["config"]["volatile.uuid"] == box
@@ -267,8 +273,11 @@ def missing_ack(project, receipt, digest):
 def main(project, receipt, digest, mode):
     work = exact_fixture(project, receipt, digest)
     assert mode in ("empty", "settled", "original")
+    active_pid = pid(u.UNIT.name)
     denied, _ = plan(project)
-    assert denied.returncode != 0 and not u.AUDIT.exists() and not u.SCOPED_FENCE.exists()
+    assert denied.returncode == 1 and "owned service not proven inactive: " + u.UNIT.name in denied.stderr
+    assert pid(u.UNIT.name) == active_pid and not native_names()
+    assert not any(os.path.lexists(p) for p in (u.AUDIT, u.SCOPED_DRAIN, u.SCOPED_FENCE, u.RETIRED))
     print("P2_R3_SCOPED_OFFLINE_ACTIVE_REFUSED=PASS", flush=True)
     box = seed(project, receipt) if mode != "empty" else None
     run("systemctl", "stop", u.UNIT.name)

@@ -75,6 +75,7 @@ class WitnessMap(unittest.TestCase):
     def test_n2_cutover_runtime_changes_trigger_native_review(self):
         workflow=(Path(__file__).resolve().parents[1]/".github/workflows/v1-n2-installed-lifecycle.yml").read_text()
         paths=re.findall(r"^      - ([^\n]+)$",workflow.split("  workflow_dispatch:",1)[0],re.M)
+        paths=[p.strip("\"'") for p in paths]
         for path in ("cmd/boxweave/main.go","internal/state/store.go",
                      "internal/state/schema_entrypoint_refusal_test.go",
                      "internal/state/network_create_lineage.go",
@@ -84,10 +85,21 @@ class WitnessMap(unittest.TestCase):
                      "internal/state/lifecycle_recovery_pin.go",
                      "internal/state/scoped_drain.go",
                      "internal/control/box_tools.go",
-                     "internal/control/delete_dependencies.go"):
+                     "internal/control/delete_dependencies.go",
+                     "internal/install/network_peer_scoped_offline.go",
+                     "internal/install/network_peer_scoped_offline_archive.go",
+                     "internal/native/peer_static_binding.go",
+                     "scripts/pr191_p2_offline.py", "scripts/uninstall_core.py",
+                     "install.sh", "uninstall.sh", "go.mod", "go.sum",
+                     ".github/workflows/v1-n2-installed-lifecycle.yml",
+                     ".github/workflows/v1-s2-native.yml"):
             with self.subTest(path=path):
                 self.assertTrue(any(fnmatchcase(path,p) for p in paths),
                                 "N2 path filter omits cutover dependency")
+        for path in ("docs/development/CONSOLIDATION_PROGRESS.md", "README.md"):
+            self.assertFalse(any(fnmatchcase(path,p) for p in paths),
+                             "documentation-only path unexpectedly schedules installed jobs")
+
 
     def test_each_required_line_missing(self):
         for lane in LANES:
@@ -261,8 +273,10 @@ class WitnessMap(unittest.TestCase):
             self.assertIn("pr191-s2-s25-attempt-",s)
         for name in ("v1-n2-installed-lifecycle.yml","v1-pr191-s25-scoped.yml"):
             s=(root/name).read_text().split("permissions:",1)[0]
+            patterns = [p.strip().strip("'\"") for p in re.findall(r"^      - (.+)$", s, re.M)]
             for file in ("scripts/s2_p3_evidence_audit.py","scripts/s2_p3_scoped_acceptance.json"):
-                self.assertIn(file,s)
+                self.assertTrue(any(fnmatchcase(file,p) for p in patterns),
+                                f"{name} does not trigger on {file}")
 
     def test_wan_replacement_not_public_positive(self):
         self.assertNotIn("S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS",requirements(ROWS,"scoped-s2-native"))
