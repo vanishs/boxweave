@@ -20,7 +20,7 @@ func TestActivityOfficialMCPThreeViewsAndSameLayerTakeover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original, err := st.Admit(ctx, state.Admission{
+	original, err := st.AdmitScoped(ctx, state.Admission{
 		Layer: testScopedProject, ActorID: tok.ActorID, TokenID: tok.ID,
 		Key: "activity-mcp-original-20261119-01", RequestID: "activity-original",
 		Action: "box_exec", SafeIntent: []byte("{}"), ResourceKey: "box:owned",
@@ -37,7 +37,7 @@ func TestActivityOfficialMCPThreeViewsAndSameLayerTakeover(t *testing.T) {
 	if err = st.Unknown(ctx, original.ID, "DISPATCHING", "SIMULATED_REPLY_LOST"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = st.Admit(ctx, state.Admission{
+	if _, err = st.AdmitScoped(ctx, state.Admission{
 		Layer: "foreign", ActorID: tok.ActorID, TokenID: tok.ID,
 		Key: "activity-mcp-foreign-20261119-01", RequestID: "foreign",
 		Action: "box_exec", SafeIntent: []byte("{}"), ResourceKey: "box:secret",

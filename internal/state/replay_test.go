@@ -26,7 +26,7 @@ func TestS2ReplayAfterNativeDeleteOrUnknownWithoutReadback(t *testing.T) {
 		SafeIntent: []byte(`{"box_id":"fixed-box-uuid"}`),
 		WorkRef:    "s2/work", AgentRef: "agent-first",
 	}
-	receipt, err := s.Admit(ctx, in)
+	receipt, err := s.AdmitScoped(ctx, in)
 	if err != nil {
 		t.Fatal(err)
 	}

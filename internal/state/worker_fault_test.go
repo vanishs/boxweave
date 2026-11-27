@@ -35,7 +35,7 @@ func TestS2NativeAckEventRollbackRetainsOriginalUnknown(t *testing.T) {
 		BoxUUID: "native-uuid-ack-test", Incarnation: "native-uuid-ack-test",
 		SafeIntent: []byte(`{"box_id":"native-uuid-ack-test","cpu":2}`),
 	}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestS2NativeAckEventRollbackRetainsOriginalUnknown(t *testing.T) {
 		t.Fatalf("reopening lost original unknown/replay lock: %+v %v", again, err)
 	}
 	a.Key = "s2-native-ack-lost-sqlite-002"
-	if _, err = reopened.Admit(ctx, a); !errors.Is(err, ErrResourceLocked) {
+	if _, err = reopened.AdmitScoped(ctx, a); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("second native dispatch admitted after fault: %v", err)
 	}
 }
@@ -150,7 +150,7 @@ func TestS2SQLiteKilledDuringUncommittedNativeAck(t *testing.T) {
 		BoxUUID: "native-uuid-kill", Incarnation: "native-uuid-kill",
 		SafeIntent: []byte(`{"box_id":"native-uuid-kill","cpu":2}`),
 	}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestS2SQLiteKilledDuringUncommittedNativeAck(t *testing.T) {
 		t.Fatalf("original replay after SIGKILL: %+v %v", again, err)
 	}
 	a.Key = "s2-killed-uncommitted-native-ack-002"
-	if _, err = reopened.Admit(ctx, a); !errors.Is(err, ErrResourceLocked) {
+	if _, err = reopened.AdmitScoped(ctx, a); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("crash permitted a second native effect: %v", err)
 	}
 }

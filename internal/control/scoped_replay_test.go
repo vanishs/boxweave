@@ -22,7 +22,7 @@ func p1bSeedScopedCreate(t *testing.T, ctx context.Context, st *state.Store, tok
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := st.Admit(ctx, state.Admission{Layer: project, ActorID: tok.ActorID, TokenID: tok.ID, Key: key, RequestID: "source-fixture", Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw})
+	r, err := st.AdmitScoped(ctx, state.Admission{Layer: project, ActorID: tok.ActorID, TokenID: tok.ID, Key: key, RequestID: "source-fixture", Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw})
 	if err != nil {
 		t.Fatal(err)
 	}

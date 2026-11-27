@@ -29,7 +29,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	}
 	admit := func(actor Token, key, agent string) Receipt {
 		t.Helper()
-		r, err := s.Admit(ctx, Admission{
+		r, err := s.AdmitScoped(ctx, Admission{
 			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
 			Key: key, RequestID: "original", Action: "box_exec",
 			SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
@@ -44,7 +44,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	second := admit(a, "s2-original-intent-0002", "agent-b")
 	foreign := admit(b, "s2-original-intent-0001", "agent-b")
 
-	duplicate, err := s.Admit(ctx, Admission{
+	duplicate, err := s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-original-intent-0001",
 		RequestID: "transport-retry", Action: "box_exec",
 		SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
@@ -56,7 +56,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	}
 	// A legacy client may retry without optional work/Agent metadata.
 	// It must receive the original immutable attribution and safe next read.
-	legacy, err := s.Admit(ctx, Admission{
+	legacy, err := s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-original-intent-0001",
 		RequestID: "legacy-transport-retry", Action: "box_exec",
 		SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
@@ -66,7 +66,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 		legacy.Action != "box_exec" || legacy.NextAction.Kind != "READ_OPERATION" {
 		t.Fatalf("legacy retry erased original evidence: %+v %v", legacy, err)
 	}
-	_, err = s.Admit(ctx, Admission{
+	_, err = s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-original-intent-0001",
 		RequestID: "relabel-attempt", Action: "box_exec",
 		SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
@@ -80,7 +80,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 			t.Fatalf("unsafe work/agent label accepted: %q", bad)
 		}
 	}
-	if _, err := s.Admit(ctx, Admission{
+	if _, err := s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-bad-label-0000001",
 		RequestID: "invalid", Action: "test", SafeIntent: []byte("{}"),
 		WorkRef: "hidden\nsecret",
@@ -152,7 +152,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 		Key: "s2-persistent-original-key", Action: "box_create",
 		SafeIntent: []byte(`{"sanitized":"create"}`), RequestID: "first",
 		WorkRef: "lab/crash-recovery", AgentRef: "runner-1"}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 		t.Fatalf("failed original evidence recovery: %+v err=%v", got, err)
 	}
 	a.RequestID = "client-after-crash"
-	again, err := reopened.Admit(ctx, a)
+	again, err := reopened.AdmitScoped(ctx, a)
 	if err != nil || !again.Duplicate || again.ID != r.ID ||
 		again.TrackingID != r.TrackingID {
 		t.Fatalf("retransmitted native create risk: %+v %v", again, err)
@@ -203,7 +203,7 @@ func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *te
 	}
 	admit := func(i int) string {
 		t.Helper()
-		r, err := s.Admit(ctx, Admission{
+		r, err := s.AdmitScoped(ctx, Admission{
 			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
 			Key:    fmt.Sprintf("history-stable-original-%03d", i),
 			Action: "box_exec", RequestID: fmt.Sprintf("stable-%03d", i),
@@ -320,7 +320,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	}
 	ids := make([]string, 0, 5)
 	for i := 0; i < 5; i++ {
-		rec, err := s.Admit(ctx, Admission{
+		rec, err := s.AdmitScoped(ctx, Admission{
 			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
 			Key:    fmt.Sprintf("s2-live-state-cursor-%02d", i),
 			Action: "box_exec", RequestID: fmt.Sprintf("req-%02d", i),

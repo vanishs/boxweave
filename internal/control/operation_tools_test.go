@@ -19,7 +19,7 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := st.Admit(ctx, state.Admission{
+	receipt, err := st.AdmitScoped(ctx, state.Admission{
 		Layer: testScopedProject, ActorID: adminInfo.ID, TokenID: adminInfo.ID,
 		Key: "mcp-s2-read-original-key-01", RequestID: "original",
 		Action: "box_create", SafeIntent: []byte(`{"name":"safe-test"}`),
@@ -168,7 +168,7 @@ func TestS2MCPQueuedCancelOriginalReceiptNeverIssuesNativeID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := st.Admit(ctx, state.Admission{
+	target, err := st.AdmitScoped(ctx, state.Admission{
 		Layer: testScopedProject, ActorID: tok.ID, TokenID: tok.ID,
 		Key: "s2-original-queued-exec-0001", Action: "box_exec",
 		RequestID: "queued-before-worker", SafeIntent: []byte(`{"guest_command_digest":"safe"}`),
@@ -251,7 +251,7 @@ func TestS2MCPOriginalDeleteReplaysAfterBoxGoneWithoutNativeRead(t *testing.T) {
 	}
 	boxID := "native-uuid-stale"
 	key := "s2-deleted-original-key-00001"
-	original, err := store.Admit(ctx, state.Admission{
+	original, err := store.AdmitScoped(ctx, state.Admission{
 		Layer: testScopedProject, ActorID: actor.ID, TokenID: actor.ID, Key: key,
 		Action: "box_delete", RequestID: "original-delete",
 		ResourceKey: "box:deleted-name", BoxUUID: boxID, Incarnation: boxID,
@@ -325,7 +325,7 @@ func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			original, err := st.Admit(ctx, state.Admission{
+			original, err := st.AdmitScoped(ctx, state.Admission{
 				Layer: testScopedProject, ActorID: actor.ID, TokenID: actor.ID,
 				Key: "s2-inflight-read-original-key", RequestID: "read-before-revocation",
 				Action: "box_exec", SafeIntent: []byte(`{"test":"no native effect"}`),

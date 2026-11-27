@@ -27,7 +27,7 @@ func TestS4OAuthGrantActorReplayAfterTerminalAndCredentialIsolation(t *testing.T
 	input := Admission{Layer: "test-s4", ActorID: before.ActorID, TokenID: before.ID,
 		Key: "s4-refresh-original-key-000001", Action: "box_exec",
 		SafeIntent: []byte(`{"argv":["true"]}`), RequestID: "first"}
-	original, err := s.Admit(ctx, input)
+	original, err := s.AdmitScoped(ctx, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestS4OAuthGrantActorReplayAfterTerminalAndCredentialIsolation(t *testing.T
 	if err := s.RevokeOAuthGrant(ctx, pair.GrantID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Admit(ctx, input); !errors.Is(err, ErrRevoked) {
+	if _, err := s.AdmitScoped(ctx, input); !errors.Is(err, ErrRevoked) {
 		t.Fatalf("revoked grant admitted/replayed: %v", err)
 	}
 }
@@ -93,7 +93,7 @@ func TestS4OAuthRefreshQueuedClaimAndForeignActor(t *testing.T) {
 	queued := Admission{Layer: "test-s4", ActorID: old.ActorID, TokenID: old.ID,
 		Key: "s4-refresh-queued-original-00001", Action: "box_exec",
 		SafeIntent: []byte(`{"argv":["true"]}`), RequestID: "original"}
-	rec, err := s.Admit(ctx, queued)
+	rec, err := s.AdmitScoped(ctx, queued)
 	if err != nil {
 		t.Fatal(err)
 	}

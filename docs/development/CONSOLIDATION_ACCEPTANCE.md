@@ -123,3 +123,5 @@ P1-06d25/d26: [controller status and Legacy lifecycle isolation](CONSOLIDATION_P
 P1-06d27/d28: [pin repair and exact schema DDL isolation](CONSOLIDATION_P1_06D27_D28_CHECKPOINT.md). Box verification PASS, independent CI pending. Schema 6 unchanged. No retirement waiver.
 
 P1-06d29: [Scoped protocol fixtures and alternate-pool proof](CONSOLIDATION_P1_06D29_CHECKPOINT.md). Alternate pool exact 738b269 native CI_VERIFIED job 140222397266; supersedes earlier BLOCKED/PENDING. Hosted public WAN and final exact-head gates remain OPEN. Fixture conversion Box PASS; independent CI pending.
+
+P1-06d30: [generic Scoped admission fixture checkpoint](CONSOLIDATION_P1_06D30_CHECKPOINT.md). Source-only State/Control full tests PASS; no native or P1 closure claim.

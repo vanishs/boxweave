@@ -79,7 +79,7 @@ func TestExecArchiveMissingDeletedBoxIsStructuredAndForeignScopeDenied(t *testin
 	ownedBox := strings.Repeat("b", 32)
 	foreignBox := strings.Repeat("c", 32)
 	admit := func(layer, box, key string) state.Receipt {
-		r, e := st.Admit(ctx, state.Admission{Layer: layer, ActorID: tok.ActorID, TokenID: tok.ID,
+		r, e := st.AdmitScoped(ctx, state.Admission{Layer: layer, ActorID: tok.ActorID, TokenID: tok.ID,
 			Key: key, RequestID: key, Action: "box_exec", SafeIntent: []byte("{}"),
 			BoxUUID: box, Incarnation: box, ResourceKey: "box:" + box})
 		if e != nil {

@@ -40,7 +40,7 @@ func TestS3FileCreateAtomicTerminalAndOriginalIdempotency(t *testing.T) {
 		ResourceKey: "box:" + box.Name, BoxUUID: box.UUID,
 		Incarnation: box.Incarnation,
 	}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestS3FileCreateUncertainEffectLocksNativeBoxAndNeverReplays(t *testing.T) 
 		ResourceKey: "box:" + box.Name, BoxUUID: box.UUID,
 		Incarnation: box.Incarnation,
 	}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestS3FileCreateUncertainEffectLocksNativeBoxAndNeverReplays(t *testing.T) 
 	}
 	a.Key = "s3-file-create-unknown-0002"
 	a.RequestID = "s3-other"
-	if _, err := s.Admit(ctx, a); !errors.Is(err, ErrResourceLocked) {
+	if _, err := s.AdmitScoped(ctx, a); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("new idempotency key bypassed original UNKNOWN native Box: %v", err)
 	}
 	a.Key = "s3-file-create-unknown-0001"
@@ -111,7 +111,7 @@ func TestS3FileCreateVerifiedNoEffectDoesNotLockBox(t *testing.T) {
 		ResourceKey: "box:" + box.Name, BoxUUID: box.UUID,
 		Incarnation: box.Incarnation,
 	}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestS3FileCreateVerifiedNoEffectDoesNotLockBox(t *testing.T) {
 	}
 	a.Key = "s3-file-existing-original-0002"
 	a.RequestID = "s3-new"
-	if _, err := s.Admit(ctx, a); err != nil {
+	if _, err := s.AdmitScoped(ctx, a); err != nil {
 		t.Fatalf("proven no-effect leaked original Box lock: %v", err)
 	}
 }
@@ -155,7 +155,7 @@ func TestS3FileCreateAmbiguousWorkerEffectRemainsLocked(t *testing.T) {
 		ResourceKey: "box:" + box.Name, BoxUUID: box.UUID,
 		Incarnation: box.Incarnation,
 	}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestS3FileCreateAmbiguousWorkerEffectRemainsLocked(t *testing.T) {
 	}
 	a.Key = "s3-file-transport-original-0002"
 	a.RequestID = "s3-new"
-	if _, err := s.Admit(ctx, a); !errors.Is(err, ErrResourceLocked) {
+	if _, err := s.AdmitScoped(ctx, a); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("ambiguous native original lost its lock: %v", err)
 	}
 }

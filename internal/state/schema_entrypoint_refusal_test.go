@@ -39,7 +39,7 @@ func TestIncompatibleSchemaPreservesOriginalAcrossEntryPoints(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			original, err := s.Admit(ctx, Admission{
+			original, err := s.AdmitScoped(ctx, Admission{
 				Layer: "fixture-layer", ActorID: tok.ID, TokenID: tok.ID,
 				Key: "schema-original-unknown-001", Action: "test-schema",
 				SafeIntent: []byte(`{"fixture":true}`), RequestID: "schema-fixture",
