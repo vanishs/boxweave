@@ -71,6 +71,17 @@ ledger, exact candidate, mandatory obligations, dependencies and evidence
 on resume. Missing history requires initialization from actual evidence
 or an equivalent complete manual ledger, never an empty ready list.
 
+On an owner-directed phase change, reconcile the full new phase exit
+ledger before querying continuation. Use a distinct phase work_ref and
+one active history; preserve prior revisions and explicitly carry any
+unmet obligations into the new graph. Do not interpret an older phase's
+empty ready list as a stop decision for the current phase. Supply
+`--expect-work-ref ACTIVE_REF` on task next/status/transition/replan
+and workflow status/resume/finish; a mismatch requires reconciliation,
+not a handoff. Derive ACTIVE_REF from the authorized current task, not
+from the history being checked. Equivalent manual routes must perform
+the same identity comparison.
+
 At each meaningful checkpoint, including a small success or local
 failure, use the continuation projection already returned by task
 transition, or `bwdev task next HISTORY` in the same save batch where

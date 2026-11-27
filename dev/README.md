@@ -176,6 +176,13 @@ python3 dev/bwdev --json task next /tmp/my-task-history
 python3 dev/bwdev --json task transition /tmp/my-task-history inspect --expect 1 --to WORKING --note 'Read the original evidence'
 ```
 
+On a phase change reconcile and activate the whole new exit ledger with a
+distinct work_ref, retaining unresolved earlier obligations. Pass
+`--expect-work-ref ACTIVE_REF` to task next/status/transition/replan and
+workflow status/resume/finish (the flag is optional for existing callers).
+The expected identity comes from current scope, not the selected history.
+A mismatch refuses projection or mutation; this is not a stop hook.
+
 For multi-slice phases, reuse the projection returned by task transitions
 or run `task next` at each material checkpoint and before ending. The additive `continuation` projection lists WORKING
 and ready PENDING actions, blockers and waiting dependencies:

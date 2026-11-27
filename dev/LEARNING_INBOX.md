@@ -32,6 +32,24 @@ Manual bootstrap queue and conventions. An active PR/issue may hold the canonica
 
 Candidate fields: stable ID, work ref and source/evidence link, bounded observation, cause (or hypothesis), affected versions/environment, proposed asset or existing asset to update, validation plan, risk/change class, status and next step. Dispositions: candidate, verified, active, deferred, stale, deprecated, rejected, no-new-asset. A verified historical fact is not a verified new procedure. Larger unrelated improvements are separate tasks; no need to block product delivery for them. Use [learning skill](skills/continuous-learning/SKILL.md).
 
+### Platform safety refusal observation (deferred; #191)
+
+- Original evidence: [checkpoint](https://github.com/vanishs/boxweave/pull/191#issuecomment-7209278701),
+  [investigation](https://github.com/vanishs/boxweave/pull/191#issuecomment-7209413770).
+  An Install regression test-write request was explicitly refused by the tool
+  safety layer. The internal rationale is unavailable; false positive is a
+  hypothesis, not a confirmed diagnosis. Distinguish this from ordinary
+  invalid admission, resource locks, transport errors and guest test failures.
+- Disposition: deferred workflow observation, no new tool or permission.
+  For future work prefer deterministic pure fixtures, read-only evidence
+  consumers and already reviewed native lab boundaries. Preserve an explicit
+  safety refusal; do not retry the denied action through alternate tools,
+  encoding or transport. Seek platform review if necessary. Continue
+  independent authorized product tasks without bypassing or weakening gates.
+- Reconsider after a supported review or further independent real-work
+  observations; measure actual refusal type, scope and cost before any
+  improvement or promotion. The two Install conversions remain blocked.
+
 ## Initial seed from actual prior work
 
 | ID | Observation / source | Disposition and next step |
@@ -182,6 +200,29 @@ The original historical report owns actual commands, IDs and results. These obse
   handoff continuity, not document/commit counts. Do not reopen deferred
   transfer integration absent new evidence; no promotion.
 
+- Cycle 2026-11-26-04 (owner invoked): #191 remote c258c67870a8e8249330b41bc10bdd1092968bfb.
+  Since prior correction, actual R2/R3 revision10 remained active when
+  owner started R4; two premature endings with independent work
+  (7211474650, 7211564275). No observed quota boundary. Existing DAG
+  mechanism worked for its supplied scope; wrong active scope was the
+  missing invariant. Reuse existing task identity and shared CLI, not
+  another tracker/client hook. Consistent with agent-agnostic direction,
+  existing Beads-like ready query and checkpoint guidance. No V4/V5
+  prerequisite change; defer transfer and further tooling.
+  Add explicit expected work_ref to queries, transitions, replan and
+  workflow status/resume/finish; retain old CLI compatibility.
+  Red then green 65a8565ad57967aa076fdc7a78b03331; full 137 BDH
+  regressions, Eval24, format1408 PASS 8f13a0b6e9d4c387f007a8ded3d4a662.
+  Actual stale R2/R3 history refused with expected pr191-r4; new
+  active R4 graph revision3 CONTINUE, two ready groups, inherited
+  blocker and waiting dependencies preserved (5ca7313d9a6dd99baa86a73bd739fb56).
+  No stop hook or automatic acceptance. Setup/activation costs not
+  recovered; 1 actual scoped comparison, not a productivity trial.
+  Product reuse: release old S2 and legacy N2 gates still active
+  (87c2d13750f46ddbfe9dcfe7fdd13c95). Continue applicable local native
+  and source work, retain exact candidate CI and C04. No promotion.
+  Remote c258 changes docs; do not overwrite concurrent history.
+
 ## Phase-wide continuation correction (2026-11-26, #191)
 
 Observed repeat premature end after candidate CLI checks:
@@ -211,3 +252,19 @@ Local runtime/schema evidence recorded, not full native acceptance.
 Owner requested correction before P1 continuation; no product change.
 Candidate behavior regression and one real navigation observed;
 future ordinary development adherence and net time savings unproven.
+
+## Tool orchestration boundary observation (2026-11-26, #191)
+
+Prior pass reported "Code Mode exceeded the maximum number of tool calls"
+while reading historical N2 CI jobs in a large batch. Confirmed 16 job
+comparisons returned and a subsequent user turn could access GitHub in
+the same conversation. This is not evidence of a BoxWeave server quota,
+a GitHub rate-limit response, account exhaustion, or a permanently blocked
+conversation. Per-script versus per-turn limit and exact threshold remain
+unknown; earlier 20/70 estimates are hypotheses, not platform contracts.
+Do not probe by exhausting quota or attempt to circumvent it. Preserve
+observed results before costly reads, count nested calls and avoid repeated
+history reads. Smaller necessary independent batches and existing local
+source checks reduce waste; an actual limit must not be interpreted as
+permission to retry uncertain effects. Defer further BDH implementation
+until authorized; current owner request resumes P1.

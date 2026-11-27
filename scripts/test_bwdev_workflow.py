@@ -137,6 +137,10 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(unread["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
                 self.assertEqual(unread["finish_gate"]["pending_output"], ["fixture-original"])
                 args.pending_output = []
+                args.expect_work_ref = "different-phase"
+                with self.assertRaisesRegex(HarnessError,"work_ref"):
+                    workflow.summary(args, root, finishing=True)
+                args.expect_work_ref = "fixture/handoff"
                 result, code = workflow.summary(args, root, finishing=True)
                 self.assertEqual(code, 0, result)
                 self.assertEqual(result["finish_gate"]["decision"], "HANDOFF_READY")

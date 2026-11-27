@@ -54,7 +54,8 @@ def finish_gate(ready, working, pending_output, operations_reviewed, issues):
 
 
 def summary(args, root, finishing=False):
-    data, _ = tasks.run(argparse.Namespace(action="status", directory=args.history), root)
+    data, _ = tasks.run(argparse.Namespace(action="status", directory=args.history,
+                                          expect_work_ref=getattr(args, "expect_work_ref", None)), root)
     source = observe(root)
     issues = []
     if not source["commit"] or source["worktree"] != "clean":
@@ -201,6 +202,7 @@ def register_start(parser):
 
 def register_summary(parser):
     parser.add_argument("history")
+    parser.add_argument("--expect-work-ref", help="Require the active phase/work identity")
     parser.add_argument("--checkpoint")
     parser.add_argument("--evidence", action="append", default=[])
     parser.add_argument("--inbox")

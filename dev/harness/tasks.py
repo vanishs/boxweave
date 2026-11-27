@@ -94,13 +94,17 @@ def register(parser):
     replan.add_argument("directory")
     replan.add_argument("spec")
     replan.add_argument("--expect", type=int, required=True)
+    replan.add_argument("--expect-work-ref", help="Require the active phase/work identity")
     replan.add_argument("--note", required=True)
     for action in ("status", "next"):
-        sub.add_parser(action).add_argument("directory")
+        query = sub.add_parser(action)
+        query.add_argument("directory")
+        query.add_argument("--expect-work-ref", help="Require the active phase/work identity")
     update = sub.add_parser("transition", help="Publish a new local revision")
     update.add_argument("directory")
     update.add_argument("task_id")
     update.add_argument("--expect", type=int, required=True)
+    update.add_argument("--expect-work-ref", help="Require the active phase/work identity")
     update.add_argument("--to", choices=sorted(STATES), required=True)
     update.add_argument("--note", required=True)
     update.add_argument("--checkpoint", help="Reference to a saved checkpoint")
@@ -127,6 +131,9 @@ def run(args, root):
         data = latest(directory)
         if data.get("kind") != "task" or data.get("schema_version") != 1:
             raise HarnessError("Unsupported task record kind/version")
+        expected_ref = getattr(args, "expect_work_ref", None)
+        if expected_ref is not None and data.get("work_ref") != expected_ref:
+            raise HarnessError("Task history work_ref differs from active scope; reconcile phase history")
         rows = validate(data)
         if "improvement" in data:
             raise HarnessError("Use learn episode to inspect or advance selected improvement histories")

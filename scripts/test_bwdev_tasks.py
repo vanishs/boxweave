@@ -68,6 +68,19 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(r["revision"],4)
         self.assertEqual(records.latest(self.directory)["revision"],4)
 
+    def test_next_refuses_stale_phase_history(self):
+        self.invoke("init",str(self.spec))
+        self.invoke("transition","a","--expect","1","--to","BLOCKED","--note","old phase blocker")
+        for action in ("next","status"):
+            with self.assertRaisesRegex(HarnessError,"work_ref"):
+                self.invoke(action,"--expect-work-ref","next-phase")
+            result=self.invoke(action,"--expect-work-ref","test")
+            self.assertEqual(result["continuation"]["decision"],"REVIEW_BLOCKERS")
+        with self.assertRaisesRegex(HarnessError,"work_ref"):
+            self.invoke("transition","a","--expect","2","--to","PENDING",
+                        "--note","wrong scope","--expect-work-ref","next-phase")
+        self.assertEqual(records.latest(self.directory)["revision"],2)
+
     def test_next_all_recorded_requires_exit_review(self):
         self.invoke("init",str(self.spec))
         for i,(key,state) in enumerate((("a","WORKING"),("a","RECORDED"),("b","WORKING"),("b","RECORDED")),1):
