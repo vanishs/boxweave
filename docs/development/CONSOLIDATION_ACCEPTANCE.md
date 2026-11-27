@@ -131,3 +131,5 @@ P1-06d31: [Scoped lifecycle pin recovery witness](CONSOLIDATION_P1_06D31_CHECKPO
 P1-06d32: [Scoped recovery receipt and worker fault witnesses](CONSOLIDATION_P1_06D32_CHECKPOINT.md). Independent CI and hosted WAN remain open.
 
 P1-06d33: [recovery observation isolation](CONSOLIDATION_P1_06D33_CHECKPOINT.md). No change to original proof predicates or acceptance gates.
+
+P1-06d34: [host forwarding diagnostic comparison](CONSOLIDATION_P1_06D34_CHECKPOINT.md). No network policy changes or native gate waiver.

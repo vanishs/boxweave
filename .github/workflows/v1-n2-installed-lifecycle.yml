@@ -89,6 +89,7 @@ on:
       - scripts/s2_gc_delete_proxy.go
       - scripts/s2_mcp_quota_probe.go
       - scripts/pr191_scoped_s2_native.py
+      - scripts/pr191_wan_host_observe.py
       - scripts/pr191_scoped_schema_refusal.py
       - scripts/test_pr191_scoped_schema_refusal.py
       - scripts/test_pr191_scoped_s2_native.py

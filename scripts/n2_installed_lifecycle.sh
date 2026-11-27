@@ -30,6 +30,11 @@ chmod 0755 "$work"
 commit="$(git rev-parse HEAD)"
 test "$commit" = "${N2_EXACT_HEAD:?}"
 echo "N2_INSTALL_SOURCE=$commit"
+# Observe the pre-existing runner environment before native bootstrap.
+# This is read-only diagnostic evidence, never a WAN positive control.
+if test "${P1B_S2_NATIVE:-0}" = 1; then
+  sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_wan_host_observe.py prebootstrap
+fi
 for version in a b; do
   CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-dev.n2-$version -X main.commit=$commit -buildid=" -o "$work/candidate-$version" ./cmd/boxweave
 done

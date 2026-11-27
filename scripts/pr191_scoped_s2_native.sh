@@ -129,6 +129,7 @@ wan_snapshot() {
   else
     echo "P1B_SCOPED_WAN_HOST_CONNTRACK $phase UNVERIFIED"
   fi
+  sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_wan_host_observe.py "$phase"
   touch "$work/wan-$phase.release"
 }
 wan_snapshot before

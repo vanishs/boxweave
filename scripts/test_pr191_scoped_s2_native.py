@@ -6,6 +6,25 @@ import unittest
 from pr191_scoped_s2_native import KEYS, MAIN, verify_history, verify_originals, verify_public_wan, by_key
 
 
+class HostForwardObservationTests(unittest.TestCase):
+    def test_forward_docker_jump_and_policy(self):
+        from pr191_wan_host_observe import summarize_forward
+        self.assertEqual(summarize_forward("-P FORWARD DROP\n-A FORWARD -j DOCKER-USER\n"), ("DROP", "PRESENT"))
+        self.assertEqual(summarize_forward("-P FORWARD ACCEPT\n-A FORWARD -m comment --comment 'DOCKER-USER' -j ACCEPT\n"), ("ACCEPT", "ABSENT"))
+        self.assertEqual(summarize_forward("-P FORWARD DROP\n-A FORWARD -m comment --comment '-j DOCKER-USER' -j DROP\n"), ("DROP", "ABSENT"))
+        for bad in ("", "-P FORWARD DROP\n-P FORWARD ACCEPT", "-P INPUT DROP", "-P FORWARD DROP\n-A FORWARD 'broken"):
+            self.assertEqual(summarize_forward(bad), ("UNVERIFIED", "UNVERIFIED"))
+
+    def test_nft_only_ipv4_forward_base_chain_policies(self):
+        import json
+        from pr191_wan_host_observe import summarize_nft
+        rows = [{"chain": {"family": f, "hook": h, "policy": p}} for f,h,p in
+                (("ip","forward","drop"),("inet","forward","accept"),("ip6","forward","drop"),("ip","input","drop"))]
+        self.assertEqual(summarize_nft(json.dumps({"nftables": rows})), {"ACCEPT":1,"DROP":1,"OTHER":0})
+        self.assertIsNone(summarize_nft("{"))
+        self.assertIsNone(summarize_nft('{"nftables":{}}'))
+
+
 class ScopedS2OracleTests(unittest.TestCase):
     project = "user-1002"
     actor = "a" * 32
