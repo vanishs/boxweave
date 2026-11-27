@@ -51,6 +51,7 @@ Bootstrap registry, read directly by bwdev context. These paths are canonical re
 | tool.installed-lifecycle | Native lifecycle, only authorized clean test fixture | [script](../scripts/n2_installed_lifecycle.sh), [test scenarios](../scripts/n2_installed_lifecycle.py) | Existing |
 | tool.ci-scope | Source vs docs CI classification | [classifier](../scripts/ci_change_scope.py), [quality policy](../docs/process/QUALITY_GATES.md) | Existing |
 | verification.acceptance | Mandatory product tests | [acceptance](../docs/verification/ACCEPTANCE.md), [continuity](../docs/verification/CONTINUITY_ACCEPTANCE.md) | Existing |
+| knowledge.agent-agnostic-evolution | Explicit BDH optimization, architecture review, cross-Agent utility | [evolution direction and research](../docs/development/BDH_AGENT_AGNOSTIC_EVOLUTION.md) | Design direction; utility unproven |
 | knowledge.reliable-evolve | Material feedback and candidate review | [v0.6 plan](../docs/development/BDH_V06_RELIABLE_EVOLVE_PLAN.md) | Candidate |
 | knowledge.proactive-improvement | Evolve Loop residual friction, improvement execution and independent utility evaluation | [v0.7 plan](../docs/development/BDH_V07_PROACTIVE_IMPROVEMENT_PLAN.md), [investigation](../docs/development/BDH_V07_IMPROVEMENT_RESEARCH.md) | Candidate |
 | knowledge.consolidation | Pre-release consolidation PR, runtime retirement and CI conversion | [plan](../docs/development/CONSOLIDATION_PLAN.md), [progress](../docs/development/CONSOLIDATION_PROGRESS.md) | Initial |

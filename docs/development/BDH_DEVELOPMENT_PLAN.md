@@ -10,6 +10,8 @@ feat/v1-bdh-proactive-improvement-20261125. Do not open another PR.
 Parent #191 stays paused at 3494ae8a35c50c386686c9d9d675c1ae37e1b1b7.
 Retain the BDH (BoxWeave Development Harness) name and bwdev CLI.
 
+**Forward scope after limited #193 integration (2026-11-26):** #191 is the active parent PR. Earlier #193 execution instructions below are historical; retain their evidence and open gates. Future owner-invoked improvement cycles follow the [agent-agnostic evolution direction](BDH_AGENT_AGNOSTIC_EVOLUTION.md) and existing improver Skill. Do not build per-Agent adapters or a second runtime harness. Cross-Agent tests may be used when actually available and authorized; no dedicated integration project is required.
+
 ## 1. Goal and boundaries
 
 The user tells the Agent what to do, not how to use BDH. Help even a

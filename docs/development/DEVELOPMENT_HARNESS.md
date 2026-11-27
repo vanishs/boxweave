@@ -4,6 +4,8 @@
 
 **Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [canonical bootstrap](../../dev/BOOTSTRAP.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.5.1](BWDEV_DESIGN.md) capabilities in the [developer toolbox](../../dev/README.md) are implemented. No change to product runtime or its tool catalog.
 
+**Forward direction (2026-11-26, #191):** [agent-agnostic capability compensation](BDH_AGENT_AGNOSTIC_EVOLUTION.md) refines this architecture without replacing the eight systems or dual loops. Use shared contracts and optional assistance, not Agent-specific adapters; evolve through explicit owner-triggered bounded improvements. Prior utility gates remain open.
+
 ## Universal activation and dual loops
 
 Apply the [portable bootstrap](../../dev/BOOTSTRAP.md) to every BoxWeave

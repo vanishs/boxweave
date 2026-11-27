@@ -60,14 +60,19 @@ of the phrase as requests or turn ordinary learning into automatic coding.
 2. Revisit [development plan](../../../docs/development/BDH_DEVELOPMENT_PLAN.md),
    [R0 research](../../../docs/development/BDH_R0_REUSE_RESEARCH.md),
    [dual-loop plan](../../../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md)
-   and relevant follow-up research/deferrals. Use existing learning
+   and the [agent-agnostic evolution direction](../../../docs/development/BDH_AGENT_AGNOSTIC_EVOLUTION.md)
+   for capability compensation, evidence and scope. Prefer shared optional
+   mechanisms, not client-specific adapters. Use existing learning
    review and opportunity commands as applicable. Recheck original
    deferral reason, trigger, changed prerequisites and current evidence.
    Do not reopen merely because an item is old. Reuse or adapt mature
    mechanisms before inventing new ones.
 3. Choose one small improvement or tightly related group using recurrence,
    expected benefit, cost, risk and testability. Define a baseline,
-   comparison scope and unchanged acceptance oracle first. Record why
+   comparison scope and unchanged acceptance oracle first. Evaluate
+   capability (delivery, intervention, false finish) before efficiency;
+   consider removal/simplification and native equivalent routes. Do not
+   require a different Agent or new runtime for every cycle. Record why
    alternatives remain deferred or rejected. If no valuable change is
    justified, record no-new-asset and continue the product task.
 4. Implement and verify under the existing improver and verification
