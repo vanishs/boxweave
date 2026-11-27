@@ -1699,3 +1699,35 @@ phase histories, handoffs, verification and research are preserved under
 [BOX_RECONCILIATION_20261127](BOX_RECONCILIATION_20261127/README.md).
 Earlier acceptance obligations H, C04, C01 and C11 remain open; P3 R0 is
 not started. This inventory is not a release or merge authorization.
+
+### P3 R0 complete / R1 CLI contract candidate
+
+Owner defers H until the OpenAI Support response and a new instruction;
+C04 remains P5. See [R0 inventory](https://github.com/vanishs/boxweave/pull/191#issuecomment-7229390282).
+Baseline d9a1eddc5f174ae1e7175257e424a4b262432690, tree
+129947b3dc91df6d214489cde584e64d6291a684. Current owned Box/worktree
+reused. R1 replaces the shared 41-flag parser with a classified 45-entry
+active CLI inventory, command-specific accepted flags and successful
+help. Unknown names and three retired BoxWeave mutation names fail
+before generic parsing; legacy mode=false still refuses. Six fixed
+internal entries, root/restricted workers, generated unit arguments,
+all 16 Incus dependency leaves and P2 offline/normal scoped callers
+remain. Existing explicit scope assertion stays for current service/
+wrapper consumers. Installer help omits five obsolete selectors but
+preserves their refusal before candidate access. Existing legacy helper
+bodies and historical uninstaller recognition remain for R4/P4
+caller/evidence disposition; no historical source/test deletion.
+
+Local CLI full package and vet PASS (70ac6b8ca5553298b30ba5149622c588);
+actual CGO binary help/refusals, eight adjacent Install tests and 102
+Python installer/uninstaller/manifest tests PASS
+(afc0780ff378adce6bd4f428be2eea6d; initial Python invocation lacked
+PYTHONPATH, corrected). Final parser/installer-help revision CLI package,
+vet, 2 wrapper contract tests and shell/diff checks PASS
+(5ba865dda0be0a79acb20e86fb56049d). Actual help probe build is a local
+candidate, not installed/release proof. Old generic recovery action
+description corrected, reviewed plan/apply/guided and scoped GC
+authority unchanged; R3 owns recovery-specific contract. Final
+exact staged-tree and independent CI evidence are separate. H two
+tests untouched; no installation/recovery/native maintenance effects
+or waiver. R2 Doctor and maintenance classification remains next.

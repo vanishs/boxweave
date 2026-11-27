@@ -25,15 +25,16 @@ var (
 	commit  = "unverified"
 )
 
-func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-scoped-fresh-plan|native-scoped-retirement-plan|native-scoped-retirement-resume-plan|native-scoped-retirement-restore|native-scoped-retirement-guard|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-retirement-check|native-prepare-rollback|native-prepare-archive|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
-}
 func run() error {
 	if len(os.Args) < 2 {
 		usage()
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if len(os.Args) == 2 && (command == "--help" || command == "-h" || command == "-help") {
+		usage()
+		return nil
+	}
 	if e := install.CheckOfflineRetirementCommand(command); e != nil {
 		return e
 	}
@@ -83,6 +84,14 @@ func run() error {
 		}
 		return recoverWorker()
 	}
+	if retiredCLICommand(command) {
+		return errors.New("scoped fresh only: legacy installation mutation unsupported")
+	}
+	spec, ok := cliCommands[command]
+	if !ok {
+		usage()
+		return errors.New("unsupported command")
+	}
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
 	db := f.String("db", "/var/lib/boxweave/ledger.sqlite", "protected local SQLite path")
 	socket := f.String("incus-socket", "/var/lib/incus/unix.socket.user", "restricted Incus Unix socket")
@@ -100,7 +109,7 @@ func run() error {
 	scopedFresh := f.Bool("scoped-peer-fresh", true, "assert fresh-only scoped Peer v2")
 	scopedReview := f.String("scoped-fresh-review-sha256", "", "exact local scoped fresh review digest")
 	approve := f.Bool("approve-stage", false, "explicitly authorize staging service files; no automatic start")
-	approveLocal := f.Bool("approve-local", false, "host-local root authorization to activate, upgrade or rollback")
+	approveLocal := f.Bool("approve-local", false, "explicit host-local root authorization for the selected reviewed action")
 	nativePackageVersion := f.String("incus-package-version", "", "exact signed Ubuntu Incus package version (for fresh bootstrap)")
 	nativePlanSHA := f.String("native-plan-sha256", "", "operator-reviewed native APT simulation digest")
 	approveNative := f.Bool("approve-native-bootstrap", false, "approve exact signed APT plan on an empty local host")
@@ -117,7 +126,7 @@ func run() error {
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
 	ackNativeDowntime := f.Bool("acknowledge-native-downtime", false, "accept exact native daemon stop/restart on a verified zero-consumer host")
 
-	recoveryAction := f.String("action", "inspect", "manual recover diagnose|reconcile, inspect|challenge|release, create-*, delete-* or gc-*")
+	recoveryAction := f.String("action", "", "explicit scoped Exec log review: gc-inspect|gc-challenge|gc-release")
 	recoveryStream := f.String("stream", "", "original stdout|stderr only for locally reviewed Exec log GC")
 	recoveryKey := f.String("recovery-key", "", "distinct durable key for the safe reconcile action")
 	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
@@ -129,6 +138,7 @@ func run() error {
 
 	maintenance := f.Bool("maintenance", false, "doctor: root-local read-only maintenance evidence")
 	summary := f.Bool("summary", false, "doctor: concise operator summary on stderr; JSON unchanged")
+	f = commandFlagSet(f, spec)
 	if err := f.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -231,12 +241,6 @@ func run() error {
 			return state.ErrInvalid
 		}
 	}
-	switch command {
-	case "native-scoped-retirement-plan", "native-scoped-retirement-resume-plan", "native-scoped-retirement-restore", "native-scoped-retirement-guard", "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
-	default:
-		usage()
-		return errors.New("unsupported command")
-	}
 	if command == "native-scoped-retirement-plan" || command == "native-scoped-retirement-resume-plan" ||
 		command == "native-scoped-retirement-restore" || command == "native-scoped-retirement-guard" {
 		if os.Geteuid() != 0 {
@@ -294,14 +298,11 @@ func run() error {
 	if command == "install-stage" && *scopedReview == "" {
 		return errors.New("scoped fresh review required")
 	}
-	if command == "upgrade" || command == "rollback" || command == "install-commit" {
-		return errors.New("scoped fresh only: legacy installation mutation unsupported")
-	}
 	// One fail-closed root-local mutex for every installer or native dependency
 	// mutation, including a reviewed UNKNOWN claim release. Read-only status
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
-	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
+	case "install-stage", "install-activate",
 		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback", "native-prepare-archive",
 		"native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
@@ -600,6 +601,9 @@ func run() error {
 }
 func main() {
 	if err := run(); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		fmt.Fprintln(os.Stderr, "boxweave:", err)
 		os.Exit(1)
 	}

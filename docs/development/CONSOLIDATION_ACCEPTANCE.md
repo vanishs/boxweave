@@ -348,3 +348,16 @@ release asset provenance remain UNVERIFIED until separately approved.
 Do not use release branch creation to test without release authority.
 H two Install tests, C04 hosted public WAN, C01/final quality and
 C11 final release evidence remain open. R5 separate independent review.
+
+### P3 R1 CLI entry contract candidate
+
+C08/P3-C10: classified exact active parser (45 generic, six fixed
+internal dispatch entries), unknown and obsolete command rejection,
+per-command help and irrelevant flag rejection, retained typed default
+and explicit false, fixed worker argument refusal and absence of a
+new SQLite file in negative parser tests. Actual local CLI and
+installer wrapper help checked. Retain C06/C07 existing caller
+contracts, scoped selector for active service consumers, all reviewed
+Incus dependency commands and P2 installed gates. Full independent
+candidate CI remains required; no formal C08/P1 or C11 acceptance.
+Recover/Doctor behavior and capacity parity remain R2/R3 work.

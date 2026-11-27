@@ -187,3 +187,16 @@ S25 checker. Historical accept_s2_native.sh and non-191 caller remain
 for P4 inventory; no source fixture deletion. Release-specific
 producer/consumer code BOX_VERIFIED; independent PR CI pending;
 actual release-only evidence OPEN. No release/quality/signature waiver.
+
+### P3 R1 operator parser disposition
+
+Three obsolete BoxWeave mutation names (upgrade/rollback/install-commit)
+are explicit early refusals, not active CLI help or maintenance dispatch.
+Retain the refusal and negative calibration. Keep native-prepare-rollback
+and native-migrate-* separate: these are reviewed Incus dependency
+lifecycle, not BoxWeave migration. Current generated serve/guard/lifecycle
+unit and wrapper/scoped offline/drain entries retain their actual flags.
+Old guided install helper bodies/tests have no current main dispatch;
+record their historical-only candidate disposition for R4/P4, not a
+blanket deletion. Historical uninstaller recognition and original
+retirement paths need separate reachability/evidence classification.
