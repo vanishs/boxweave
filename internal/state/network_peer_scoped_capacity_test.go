@@ -11,6 +11,14 @@ import (
 // Seed synthetic terminal audit history only, not native proof or actual grants.
 func pr178SeedPolicyHistory(t *testing.T, s *Store, id string, count int) {
 	t.Helper()
+	// Pure Scoped history already contains the completed sibling (and
+	// for revoke, the completed A->B grant). Seed only the remaining
+	// synthetic events so every existing capacity boundary stays exact.
+	var existing int
+	if e := s.db.QueryRow("SELECT count(*) FROM operation_events WHERE state='SUCCEEDED' AND safe_detail IN ('SCOPED_PEER_V2_GRANT_KERNEL_VERIFIED','SCOPED_PEER_V2_REVOCATION_KERNEL_VERIFIED')").Scan(&existing); e != nil || existing < 1 || existing > 2 || count <= existing {
+		t.Fatal("unexpected fixture history", existing, count, e)
+	}
+	count -= existing
 	_, err := s.db.Exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<?)
  INSERT INTO operations(id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,intent_digest,safe_intent,box_uuid,incarnation,state,created_at,updated_at)
  SELECT printf('capacity-%d',n.i),o.tracking_id,o.request_id,o.layer,o.actor_id,o.token_id,printf('capacity-%d',n.i),o.action,o.intent_digest,o.safe_intent,o.box_uuid,o.incarnation,'SUCCEEDED',o.created_at,o.updated_at FROM n,operations o WHERE o.id=?`, count, id)

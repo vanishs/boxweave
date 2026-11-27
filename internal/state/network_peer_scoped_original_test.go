@@ -2,103 +2,47 @@ package state
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"os"
 	"testing"
-	"time"
 )
 
-// Construct only a DB-level v2 original, not an installed MCP or Root
-// dispatcher. The old controller never issues this intent schema.
-// A complete synthetic v1 history is installed through the REAL legacy
-// SQLite terminal original APIs before any v2 original is admitted. No
-// actual native kernel success is inferred from this test fixture.
+// Use actual Scoped creation, admission and terminal SQLite history.
+// Synthetic Root receipts are not a native kernel witness.
 func pr178ScopedOriginalFixture(t *testing.T, allow bool) (*Store, *Store, string) {
 	return pr178ScopedOriginalFixtureMode(t, allow, "pending")
 }
 func pr178ScopedOriginalFixtureMode(t *testing.T, allow bool, mode string) (*Store, *Store, string) {
 	t.Helper()
 	ctx := context.Background()
-	s := pr178ScopedStoreFixture(t)
-	src, dst, third := s4b2RootSrc, s4b2RootDst, s4b2RootThird
-	pr178LegacyVerifiedPeerFixture(t, s, third, src,
-		"10.243.18.13", "10.243.18.11", "fd43:18::13", "fd43:18::11", true)
+	s, _, old := n3ScopedOwnedFixture(t)
+	purePeerComplete(t, s, purePeerAdmit(t, s, old, "sibling", 3, 1, true))
 	if !allow || mode == "ready-revoke" || mode == "ready-regrant" {
-		pr178LegacyVerifiedPeerFixture(t, s, src, dst,
-			"10.243.18.11", "10.243.18.12", "fd43:18::11", "fd43:18::12", true)
+		purePeerComplete(t, s, purePeerAdmit(t, s, old, "initial-grant", 1, 2, true))
 	}
 	if mode == "ready-regrant" {
-		pr178LegacyVerifiedPeerFixture(t, s, src, dst,
-			"10.243.18.11", "10.243.18.12", "fd43:18::11", "fd43:18::12", false)
+		purePeerComplete(t, s, purePeerAdmit(t, s, old, "initial-revoke", 1, 2, false))
 	}
-	_, tok, e := s.IssueToken(ctx, time.Hour)
-	if e != nil {
-		t.Fatal(e)
-	}
-	intent := ScopedPeerOriginalIntent{Schema: 2, Project: "user-1001", Bridge: "bwbr0",
-		SourceUUID: src, SourceIncarnation: src, TargetUUID: dst, TargetIncarnation: dst, Allow: allow}
-	raw, e := json.Marshal(intent)
-	if e != nil {
-		t.Fatal(e)
-	}
-	claims, e := scopedPeerResourceClaims(intent)
-	if e != nil {
-		t.Fatal(e)
-	}
-	receipt, e := s.Admit(ctx, Admission{
-		Layer: intent.Project, ActorID: tok.ID, TokenID: tok.ID,
-		Key:       "pr178-scoped-peer-original-unique-12345",
-		RequestID: "pr178-scoped-peer-test", Action: "box_peer_set", SafeIntent: raw,
-		BoxUUID: src, Incarnation: src, ResourceKey: "peer-guard:" + intent.Bridge,
-		ResourceKeys: []string{claims[0], claims[1], claims[2], claims[3]},
-	})
-	if e != nil {
-		t.Fatal(e)
-	}
+	token := purePeerNewToken(t, s)
+	receipt := purePeerAdmit(t, s, token, "next", 1, 2, allow)
 	if mode == "pending" {
-		if allow {
-			_, e = s.db.Exec(`INSERT INTO peer_grants
-    (project,source_uuid,source_incarnation,target_uuid,target_incarnation,
-    desired,status,source_ipv4,target_ipv4,source_ipv6,target_ipv6,operation_id)
-    VALUES('user-1001',?,?,?,?,1,'PENDING','10.243.18.11','10.243.18.12',
-    'fd43:18::11','fd43:18::12',?)`, src, src, dst, dst, receipt.ID)
-		} else {
-			_, e = s.db.Exec(`UPDATE peer_grants SET desired=0,status='PENDING',operation_id=?
-    WHERE project='user-1001' AND source_uuid=? AND target_uuid=?
-    AND status='CONFIRMED' AND desired=1`, receipt.ID, src, dst)
-		}
-		if e != nil {
+		if e := s.StageScopedPeerOriginal(ctx, receipt.ID); e != nil {
 			t.Fatal(e)
 		}
 	}
-	var seq int
-	var name, path string
-	if e = s.db.QueryRow("PRAGMA database_list").Scan(&seq, &name, &path); e != nil {
-		t.Fatal(e)
-	}
-	if e = os.Chmod(path, 0600); e != nil {
-		t.Fatal(e)
-	}
-	r, e := OpenNetworkAuditReadOnly(path)
-	if e != nil {
-		t.Fatal(e)
-	}
-	t.Cleanup(func() { _ = r.Close() })
-	return s, r, receipt.ID
+	return s, purePeerReadOnly(t, s), receipt.ID
 }
 func TestPR178ScopedOriginalReadOnlyDirectionGrantAndRevoke(t *testing.T) {
 	for _, allow := range []bool{true, false} {
 		t.Run(map[bool]string{true: "grant", false: "revoke"}[allow], func(t *testing.T) {
 			s, r, id := pr178ScopedOriginalFixture(t, allow)
 			ctx := context.Background()
-			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0"); e == nil {
+			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge); e == nil {
 				t.Fatal("unclaimed scoped original gained root permission")
 			}
 			if e := s.Claim(ctx, id); e != nil {
 				t.Fatal(e)
 			}
-			proof, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0")
+			proof, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge)
 			if e != nil {
 				t.Fatal("scoped root original not verified", e)
 			}
@@ -127,22 +71,22 @@ func TestPR178ScopedOriginalReadOnlyDirectionGrantAndRevoke(t *testing.T) {
 			}
 			// The old v1 proof MUST never accept a v2 operation, even with
 			// a legitimate already-pinned legacy ACL name on the same bridge.
-			if _, e := r.ReadRootPeerGrant(ctx, id, "user-1001", "bwbr0", "bw-s4b2"); e == nil {
+			if _, e := r.ReadRootPeerGrant(ctx, id, "user-1001", purePeerBridge, "bw-s4b2"); e == nil {
 				t.Fatal("old shared-ACL Root accepted v2 original")
 			}
-			if _, e := r.ReadRootPeerRevocation(ctx, id, "user-1001", "bwbr0", "bw-s4b2"); e == nil {
+			if _, e := r.ReadRootPeerRevocation(ctx, id, "user-1001", purePeerBridge, "bw-s4b2"); e == nil {
 				t.Fatal("old revoke-only Root accepted v2 original")
 			}
-			if _, e := r.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", "bwbr0"); e == nil {
+			if _, e := r.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", purePeerBridge); e == nil {
 				t.Fatal("DISPATCHING original accepted as UNKNOWN recovery")
 			}
-			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1002", "bwbr0"); e == nil {
+			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1002", purePeerBridge); e == nil {
 				t.Fatal("foreign tenant asked for someone else's grant")
 			}
 			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "other"); e == nil {
 				t.Fatal("foreign bridge asked for scoped native proof")
 			}
-			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0"); e != nil {
+			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge); e != nil {
 				t.Fatal("read-only proof unexpectedly consumed original", e)
 			}
 		})
@@ -157,10 +101,10 @@ func TestPR178ScopedOriginalUNKNOWNReadOnlyNeverDispatch(t *testing.T) {
 	if _, e := s.db.Exec("UPDATE operations SET state='UNKNOWN' WHERE id=?", id); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0"); e == nil {
+	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge); e == nil {
 		t.Fatal("UNKNOWN original was approved for native write")
 	}
-	proof, e := r.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", "bwbr0")
+	proof, e := r.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", purePeerBridge)
 	if e != nil || !proof.RecoveryOnly || len(proof.After) != 2 {
 		t.Fatal("UNKNOWN should be read-only and retain original Project", e)
 	}
@@ -168,26 +112,26 @@ func TestPR178ScopedOriginalUNKNOWNReadOnlyNeverDispatch(t *testing.T) {
 func TestPR178ScopedOriginalFailsClosedForOriginalAndLedgerDrift(t *testing.T) {
 	scenarios := []struct{ name, sql string }{
 		{"unknown-native-grant", "UPDATE peer_grants SET status='UNKNOWN' WHERE status='PENDING'"},
-		{"wrong-pending-address", "UPDATE peer_grants SET source_ipv4='10.243.18.99' WHERE status='PENDING'"},
+		{"wrong-pending-address", "UPDATE peer_grants SET source_ipv4='10.43.18.99' WHERE status='PENDING'"},
 		{"extra-missing-pending", "UPDATE peer_grants SET status='REVOKED' WHERE status='PENDING'"},
 		{"unlinked-pending", "UPDATE peer_grants SET operation_id='' WHERE status='PENDING'"},
-		{"forged-v2-schema", "UPDATE operations SET safe_intent=replace(safe_intent,'\"schema\":2','\"schema\":1')"},
-		{"uncanonical-intent", "UPDATE operations SET safe_intent=' { } '"},
-		{"wrong-original-action", "UPDATE operations SET action='box_start'"},
-		{"wrong-actor", "UPDATE operations SET actor_id=''"},
-		{"wrong-layer", "UPDATE operations SET layer='foreign'"},
-		{"wrong-source", "UPDATE operations SET box_uuid='foreign'"},
-		{"invalid-resource", "UPDATE operations SET resource_key='acl:default/bw-s4b2'"},
-		{"missing-guard-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'peer-guard:%'"},
-		{"missing-own-acl", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%'"},
-		{"missing-target-claim", "DELETE FROM operation_resource_claims WHERE resource_key='box:" + s4b2RootDst + "'"},
+		{"forged-v2-schema", "UPDATE operations SET safe_intent=replace(safe_intent,'\"schema\":2','\"schema\":1') WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"uncanonical-intent", "UPDATE operations SET safe_intent=' { } ' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"wrong-original-action", "UPDATE operations SET action='box_start' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"wrong-actor", "UPDATE operations SET actor_id='' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"wrong-layer", "UPDATE operations SET layer='foreign' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"wrong-source", "UPDATE operations SET box_uuid='foreign' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"invalid-resource", "UPDATE operations SET resource_key='acl:default/bw-s4b2' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"missing-guard-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'peer-guard:%' AND operation_id IN (SELECT id FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED')"},
+		{"missing-own-acl", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%' AND operation_id IN (SELECT id FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED')"},
+		{"missing-target-claim", "DELETE FROM operation_resource_claims WHERE resource_key='box:" + s4b2RootDst + "' AND operation_id IN (SELECT id FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED')"},
 		{"extra-foreign-claim", `INSERT INTO operation_resource_claims(operation_id,layer,resource_key)
-   SELECT id,layer,'box:foreign' FROM operations`},
-		{"revoked-credential", "UPDATE credentials SET revoked=1"},
+   SELECT id,layer,'box:foreign' FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED'`},
+		{"revoked-credential", "UPDATE credentials SET revoked=1 WHERE id IN (SELECT token_id FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED')"},
 		{"missing-sibling", "DELETE FROM network_bindings WHERE box_uuid='" + s4b2RootThird + "'"},
 		{"partially-migrated-acl", "UPDATE network_bindings SET acl='bw-s4b2' WHERE box_uuid='" + s4b2RootThird + "'"},
 		{"foreign-address", "UPDATE network_address_fences SET state='QUARANTINED' WHERE address='fd43:18::11'"},
-		{"confirmed-peer-drift", "UPDATE peer_grants SET source_ipv4='10.243.18.98' WHERE status='CONFIRMED'"},
+		{"confirmed-peer-drift", "UPDATE peer_grants SET source_ipv4='10.43.18.98' WHERE status='CONFIRMED'"},
 		{"stale-native-incarnation", "UPDATE peer_grants SET target_incarnation='foreign' WHERE status='CONFIRMED'"},
 		{"unknown-sibling-peer", "UPDATE peer_grants SET status='UNKNOWN' WHERE status='CONFIRMED'"},
 	}
@@ -197,10 +141,14 @@ func TestPR178ScopedOriginalFailsClosedForOriginalAndLedgerDrift(t *testing.T) {
 			if e := s.Claim(context.Background(), id); e != nil {
 				t.Fatal(e)
 			}
-			if _, e := s.db.Exec(tc.sql); e != nil {
+			res, e := s.db.Exec(tc.sql)
+			if e != nil {
 				t.Fatal(e)
 			}
-			got, e := r.ReadRootScopedPeerOriginal(context.Background(), id, "user-1001", "bwbr0")
+			if n, e := res.RowsAffected(); e != nil || n == 0 {
+				t.Fatal("tamper did not change target", n, e)
+			}
+			got, e := r.ReadRootScopedPeerOriginal(context.Background(), id, "user-1001", purePeerBridge)
 			if e == nil || len(got.After) != 0 {
 				t.Fatalf("drift gave forged scoped Root proof: %+v", got)
 			}
@@ -215,18 +163,18 @@ func TestPR178ScopedOriginalOtherActivePeerAndCancelRefused(t *testing.T) {
 	}
 	ctx2, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, e := r.ReadRootScopedPeerOriginal(ctx2, id, "user-1001", "bwbr0"); !errors.Is(e, context.Canceled) {
+	if _, e := r.ReadRootScopedPeerOriginal(ctx2, id, "user-1001", purePeerBridge); !errors.Is(e, context.Canceled) {
 		t.Fatal("cancelled ledger proof accepted", e)
 	}
 	if _, e := s.db.Exec(`INSERT INTO operations
  (id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,
  intent_digest,safe_intent,resource_key,box_uuid,incarnation,state,created_at,updated_at)
  SELECT 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',tracking_id,request_id,layer,actor_id,token_id,
- 'unique-other-key',action,intent_digest,safe_intent,'peer-guard:bwbr0',
+ 'unique-other-key',action,intent_digest,safe_intent,'peer-guard:incusbr-1001',
  box_uuid,incarnation,'UNKNOWN',created_at,updated_at FROM operations WHERE id=?`, id); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0"); e == nil {
+	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge); e == nil {
 		t.Fatal("unknown sibling operation was ignored")
 	}
 }

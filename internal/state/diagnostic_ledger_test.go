@@ -55,7 +55,7 @@ func TestPR177D2ScopedUnknownAndFailedRecoveryHistory(t *testing.T) {
 		t.Fatal(e)
 	}
 	snap := DiagnosticSnapshot{store: s}
-	l, e := snap.ReadLedger(ctx, target.Layer, "SCOPED_V2", "bwbr0")
+	l, e := snap.ReadLedger(ctx, target.Layer, "SCOPED_V2", purePeerBridge)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -86,12 +86,12 @@ func TestPR177D2CapacityAndRedactedOAuth(t *testing.T) {
 		t.Fatal(e)
 	}
 	snap := DiagnosticSnapshot{store: s}
-	l, e := snap.ReadLedger(ctx, "user-1001", "SCOPED_V2", "bwbr0")
+	l, e := snap.ReadLedger(ctx, "user-1001", "SCOPED_V2", purePeerBridge)
 	if e != nil || !l.OAuth.Enabled {
 		t.Fatal(l, e)
 	}
 	raw, e := json.Marshal(l)
-	if e != nil || strings.Contains(string(raw), "private.example") || strings.Contains(string(raw), "secret-password-hash") || strings.Contains(string(raw), "bwbr0") || strings.Contains(string(raw), "safe_intent") {
+	if e != nil || strings.Contains(string(raw), "private.example") || strings.Contains(string(raw), "secret-password-hash") || strings.Contains(string(raw), purePeerBridge) || strings.Contains(string(raw), "safe_intent") {
 		t.Fatal("redaction failed", e)
 	}
 	t.Log("D2_CAPACITY_RESERVE_AND_OAUTH_REDACTION_PASS")

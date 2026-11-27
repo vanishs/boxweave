@@ -11,8 +11,8 @@ R0 assessed published 363ee542c41a748fde5a59dd63b247ac534d4a52.
 | Stage | Status / exit |
 | --- | --- |
 | R0 | COMPLETE (planning only): finite cutover sequence and gate placement below. |
-| R1 | READY: two instructions below; minimum dependency dispositions and preparations. |
-| R2 | OPEN: remove runtime selection and obsolete execution. |
+| R1 | COMPLETE (preparation): Scoped fixtures, retained negatives and full State regression. |
+| R2 | READY: actual runtime cutover, coupled with R3 and minimum C/E wiring. |
 | R3 | OPEN: direct fresh schema 7 candidate; remove three old tables, preserve retained state and no-write refusal. |
 | R4 | OPEN: affected native/consumer proof; WAN separate C04 gate. |
 | R5 | OPEN: independent integrated candidate review and exact-head CI. |
@@ -81,17 +81,34 @@ independent positive and Hosted negative persist, request explicit
 bounded equivalence (BH009 precedent, not transferable approval).
 No decision required to start reversible R1-R3; final gate stays OPEN.
 
-### Next command: P1 R1
+### R1 outcome and residual cutover
 
-1. Disposition A-E actual blockers using the existing crosswalk; prepare
-   minimum caller/fixture/consumer changes for combined R2/R3. Reuse
-   current workspace; no new BDH or redundant native campaign.
-2. Verify focused source/consumer negative calibration, commit coherent
-   local slices, and update this ledger with exact residual prerequisites
-   and combined cutover order. No CI for every edit; submit a coherent
-   candidate at a meaningful boundary. R1 does not require R4/R5 PASS.
+Base 188fb680; same Box/workspace, branch pr191-r1-cutover.
+Source commits 88efab9, 65657ac, c1f08fc, 24affea; source tree
+60f50b931d4bf3cda33430c574fb4f20c30245db.
+15 test files +127/-247; deleted shared Legacy peer-history fixture.
+Retained Scoped originals, Forward, claims, capacity and diagnostics;
+refusal negatives target exact originals and retained schema objects.
+Targeted tests PASS; old bridge and capacity failures repaired.
+Full State 155.040s, vet, diff and clean HEAD exit0:
+c5a1e704d5f9ea87c5a417d9f507335e. Format PASS.
+No new Box/worktree or BDH tool; no production cutover yet.
 
-R0 is complete as research/replan, not product acceptance.
+### Next command: P1 R2
+
+1. Execute actual R2/R3 coupled cutover: remove Legacy mode and
+   execution, adopt direct schema 7, preserve v6 no-write refusal,
+   and convert minimum install/serve/recovery/drain and test/CI
+   consumers needed for a coherent candidate. Map obsolete-only
+   assertions before removal; retain real installed Scoped producer
+   evidence, exact source/job binding and 72-marker crosswalk.
+2. Verify build/startup, fresh schema, original v6 unresolved state
+   refusal, retained positives/negatives and aggregate source tests.
+   Publish only coherent verified tree. Update R2/R3 exits and actual
+   remaining witnesses. R4/R5 native/CI and independent WAN remain
+   mandatory; no new compatibility branch or preparation cycle.
+
+R0/R1 complete as planning/preparation, not product acceptance.
 P0 closed; P2-P5 open. No merge/release.
 
 ## Historical phase status (superseded)

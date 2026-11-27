@@ -19,7 +19,7 @@ func activityTestToken(t *testing.T, s *Store) Token {
 
 func activityAdmit(t *testing.T, s *Store, tok Token, layer, key, action, box, resource string, claims ...string) Receipt {
 	t.Helper()
-	rec, err := s.Admit(context.Background(), Admission{
+	rec, err := s.AdmitScoped(context.Background(), Admission{
 		Layer: layer, ActorID: tok.ID, TokenID: tok.ID,
 		Key: key, RequestID: key, Action: action,
 		SafeIntent: []byte("{}"), BoxUUID: box, Incarnation: "generation-1",
@@ -138,19 +138,10 @@ func TestActivityEvidenceReadsOrderedSanitizedEventsAndClaims(t *testing.T) {
 
 func TestActivityPeerEvidenceVerifiedLinkNotNativePermission(t *testing.T) {
 	ctx := context.Background()
-	s, id := s4b3GrantFixture(t)
-	if err := s.StagePeerGrant(ctx, id); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Claim(ctx, id); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AckSynchronousACL(ctx, id); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.FinalizeRootPeerGrant(ctx, id); err != nil {
-		t.Fatal(err)
-	}
+	s, _, token := n3ScopedOwnedFixture(t)
+	r := purePeerAdmit(t, s, token, "activity-evidence", 1, 2, true)
+	purePeerComplete(t, s, r)
+	id := r.ID
 	tok := activityTestToken(t, s)
 	result, err := s.ReadActivity(ctx, ActivityQuery{Layer: "user-1001",
 		Requester: tok.ID, View: "evidence", OperationID: id})

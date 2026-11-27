@@ -21,19 +21,19 @@ func TestS4B2NetworkMultiResourceAdmissionAndUnknownFence(t *testing.T) {
 		ResourceKey:  "box:alpha",
 		ResourceKeys: []string{"box:beta", "acl:default/bw-s4-test"},
 	}
-	a, err := s.Admit(ctx, first)
+	a, err := s.AdmitScoped(ctx, first)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The normalized set order is canonical, not an alternative key.
 	first.ResourceKeys = []string{"acl:default/bw-s4-test", "box:beta"}
-	same, err := s.Admit(ctx, first)
+	same, err := s.AdmitScoped(ctx, first)
 	if err != nil || !same.Duplicate || same.ID != a.ID {
 		t.Fatalf("unstable replay %+v %v", same, err)
 	}
 	altered := first
 	altered.ResourceKeys = []string{"box:beta"}
-	if _, err := s.Admit(ctx, altered); !errors.Is(err, ErrConflict) {
+	if _, err := s.AdmitScoped(ctx, altered); !errors.Is(err, ErrConflict) {
 		t.Fatalf("changed immutable lock-set was accepted: %v", err)
 	}
 	var count int
@@ -46,7 +46,7 @@ func TestS4B2NetworkMultiResourceAdmissionAndUnknownFence(t *testing.T) {
 		Action: "network-test-only", SafeIntent: []byte("second"),
 		ResourceKey: "box:gamma", ResourceKeys: []string{"acl:default/bw-s4-test"},
 	}
-	if _, err := s.Admit(ctx, conflicting); !errors.Is(err, ErrResourceLocked) {
+	if _, err := s.AdmitScoped(ctx, conflicting); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("shared ACL claim not held: %v", err)
 	}
 	if err := s.Claim(ctx, a.ID); err != nil {
@@ -55,19 +55,19 @@ func TestS4B2NetworkMultiResourceAdmissionAndUnknownFence(t *testing.T) {
 	if n, err := s.Recover(ctx); err != nil || n != 1 {
 		t.Fatalf("original claimed effect not kept as UNKNOWN: n=%d err=%v", n, err)
 	}
-	if _, err := s.Admit(ctx, conflicting); !errors.Is(err, ErrResourceLocked) {
+	if _, err := s.AdmitScoped(ctx, conflicting); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("UNKNOWN released shared ACL: %v", err)
 	}
 	independent := conflicting
 	independent.Key = "s4b2-independent-key-0001"
 	independent.ResourceKeys = []string{"acl:default/unrelated"}
-	if _, err := s.Admit(ctx, independent); err != nil {
+	if _, err := s.AdmitScoped(ctx, independent); err != nil {
 		t.Fatalf("independent unrelated resource was blocked: %v", err)
 	}
 	invalid := independent
 	invalid.Key = "s4b2-invalid-key-0000001"
 	invalid.ResourceKeys = []string{"host:unrestricted"}
-	if _, err := s.Admit(ctx, invalid); !errors.Is(err, ErrInvalid) {
+	if _, err := s.AdmitScoped(ctx, invalid); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("untyped host mutation claim accepted: %v", err)
 	}
 }

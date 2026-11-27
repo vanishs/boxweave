@@ -102,7 +102,7 @@ func TestS5A4ForwardRecoveryExactClaimsAndAtomicReceipt(t *testing.T) {
 	b4OwnedFixture(t, s, "user-1001", "a", s4b2RootSrc)
 	parent := b5DeleteAdmission(t, s, s4b2RootSrc, "a")
 	a := a4ForwardAdmission(parent, 24105)
-	original := a4Admit(t, s, a)
+	original := a4AdmitMode(t, s, a, true)
 	a4Unknown(t, s, original.ID, true)
 	r, target := a4Request(t, s, original.ID)
 	if !target.ForwardReady {
@@ -111,13 +111,13 @@ func TestS5A4ForwardRecoveryExactClaimsAndAtomicReceipt(t *testing.T) {
 	p := a4ForwardProof(target)
 	bad := p
 	bad.Forward.HostPort++
-	if _, e := s.CommitRecovery(ctx, r, target, bad); !errors.Is(e, ErrResourceLocked) {
+	if _, e := s.CommitScopedRecovery(ctx, r, target, bad); !errors.Is(e, ErrResourceLocked) {
 		t.Fatalf("changed proof accepted %v", e)
 	}
 	if _, e := s.db.Exec("CREATE TRIGGER a4_fault BEFORE INSERT ON operation_events WHEN NEW.safe_detail LIKE 'SETTLED:%' BEGIN SELECT RAISE(ABORT,'a4 fault'); END"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := s.CommitRecovery(ctx, r, target, p); e == nil {
+	if _, e := s.CommitScopedRecovery(ctx, r, target, p); e == nil {
 		t.Fatal("fault accepted")
 	}
 	f, e := s.GetForward(ctx, a.Layer, original.ID)
@@ -127,7 +127,7 @@ func TestS5A4ForwardRecoveryExactClaimsAndAtomicReceipt(t *testing.T) {
 	if _, e = s.db.Exec("DROP TRIGGER a4_fault"); e != nil {
 		t.Fatal(e)
 	}
-	a4Settle(t, s, r, target, p)
+	a4SettleMode(t, s, r, target, p, true)
 	f, e = s.GetForward(ctx, a.Layer, original.ID)
 	if e != nil || f.State != "CONFIRMED" {
 		t.Fatalf("forward %+v %v", f, e)
@@ -138,13 +138,13 @@ func TestS5A4ForwardRecoveryExactClaimsAndAtomicReceipt(t *testing.T) {
 	a.ForwardCreate = nil
 	a.ForwardDeleteID = original.ID
 	a.SafeIntent, _ = json.Marshal(map[string]string{"forward_id": original.ID})
-	del := a4Admit(t, s, a)
+	del := a4AdmitMode(t, s, a, true)
 	a4Unknown(t, s, del.ID, true)
 	r, target = a4Request(t, s, del.ID)
 	if !target.ForwardReady {
 		t.Fatal("delete lineage not resolved")
 	}
-	a4Settle(t, s, r, target, a4ForwardProof(target))
+	a4SettleMode(t, s, r, target, a4ForwardProof(target), true)
 	f, e = s.GetForward(ctx, a.Layer, original.ID)
 	if e != nil || f.State != "REVOKED" {
 		t.Fatalf("delete %+v %v", f, e)
@@ -157,7 +157,7 @@ func TestS5A4ForwardMissingAckOrDriftKeepsListener(t *testing.T) {
 			s := newStore(t)
 			b4OwnedFixture(t, s, "user-1001", "a", s4b2RootSrc)
 			a := a4ForwardAdmission(b5DeleteAdmission(t, s, s4b2RootSrc, "a"), 24106)
-			original := a4Admit(t, s, a)
+			original := a4AdmitMode(t, s, a, true)
 			a4Unknown(t, s, original.ID, kind != "missing-ack")
 			r, target := a4Request(t, s, original.ID)
 			p := a4ForwardProof(target)
@@ -184,7 +184,7 @@ func TestS5A4ForwardMissingAckOrDriftKeepsListener(t *testing.T) {
 				}
 				p.Fingerprint = ""
 			}
-			if _, e := s.CommitRecovery(ctx, r, target, p); e == nil {
+			if _, e := s.CommitScopedRecovery(ctx, r, target, p); e == nil {
 				t.Fatal("unsafe settlement")
 			}
 			f, e := s.GetForward(ctx, a.Layer, original.ID)

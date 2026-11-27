@@ -103,7 +103,7 @@ func TestPR177D0ExtensionOriginalCredentialRevocation(t *testing.T) {
 	if err = s.RevokeToken(ctx, oldToken); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = ro.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", "bwbr0"); !errors.Is(err, ErrRevoked) {
+	if _, err = ro.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", purePeerBridge); !errors.Is(err, ErrRevoked) {
 		t.Fatal("revoked original did not fail closed", err)
 	}
 	// A fresh authenticated recovery actor alone cannot re-authorize a

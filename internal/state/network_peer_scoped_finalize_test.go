@@ -13,9 +13,9 @@ func scopedTestReceipt(t *testing.T, r *Store, id string, unknown bool) ScopedPe
 	var p ScopedPeerOriginalProof
 	var e error
 	if unknown {
-		p, e = r.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", "bwbr0")
+		p, e = r.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", purePeerBridge)
 	} else {
-		p, e = r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0")
+		p, e = r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge)
 	}
 	if e != nil {
 		t.Fatal(e)

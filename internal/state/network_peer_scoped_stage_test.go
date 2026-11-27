@@ -39,7 +39,7 @@ func TestPR178V2StageScopedPeerGrantAndRevokeAtomic(t *testing.T) {
 			if e = s.Claim(ctx, id); e != nil {
 				t.Fatal(e)
 			}
-			proof, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0")
+			proof, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge)
 			if e != nil || proof.RecoveryOnly || len(proof.Inventory.Boxes) != 3 {
 				t.Fatal("native v2 staging failed Root SQLite original proof", e)
 			}
@@ -47,7 +47,7 @@ func TestPR178V2StageScopedPeerGrantAndRevokeAtomic(t *testing.T) {
 				!allow && (len(proof.Before) != 2 || len(proof.After) != 1) {
 				t.Fatal("scoped staged peer mutated unrelated C->A direction")
 			}
-			if _, e = r.ReadRootPeerGrant(ctx, id, "user-1001", "bwbr0", "bw-s4b2"); e == nil {
+			if _, e = r.ReadRootPeerGrant(ctx, id, "user-1001", purePeerBridge, "bw-s4b2"); e == nil {
 				t.Fatal("legacy Root B3 accepted v2 scoped operation")
 			}
 		})
@@ -66,7 +66,7 @@ func TestPR178V2StageScopedPeerRegrantOnlyExactTombstone(t *testing.T) {
 	if e := s.Claim(ctx, id); e != nil {
 		t.Fatal(e)
 	}
-	proof, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0")
+	proof, e := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge)
 	if e != nil || len(proof.After) != 2 || !proof.Regrant ||
 		len(proof.RevokedBefore) != 1 || len(proof.RevokedAfter) != 0 {
 		t.Fatal("regrant lost prior DROP tombstone or kept it after explicit grant", e)
@@ -76,32 +76,36 @@ func TestPR178V2StageScopedPeerRejectsUnsafeLedgerAndOriginal(t *testing.T) {
 	cases := []struct{ name, sql string }{
 		{"partial-tenant-ACL", "UPDATE network_bindings SET acl='bw-s4b2' WHERE box_uuid='" + s4b2RootThird + "'"},
 		{"quarantined-ipv6", "UPDATE network_address_fences SET state='QUARANTINED' WHERE address='fd43:18::13'"},
-		{"lost-A-peer-lease", "DELETE FROM network_address_fences WHERE address='10.243.18.11'"},
-		{"old-v1-original", "UPDATE operations SET safe_intent='{}'"},
-		{"wrong-guard-lock", "UPDATE operations SET resource_key='acl:default/bw-s4b2'"},
-		{"missing-scoped-ACL-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%'"},
-		{"missing-target-Box-claim", "DELETE FROM operation_resource_claims WHERE resource_key='box:" + s4b2RootDst + "'"},
+		{"lost-A-peer-lease", "DELETE FROM network_address_fences WHERE address='10.43.18.11'"},
+		{"old-v1-original", "UPDATE operations SET safe_intent='{}' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"wrong-guard-lock", "UPDATE operations SET resource_key='acl:default/bw-s4b2' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
+		{"missing-scoped-ACL-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%' AND operation_id IN (SELECT id FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED')"},
+		{"missing-target-Box-claim", "DELETE FROM operation_resource_claims WHERE resource_key='box:" + s4b2RootDst + "' AND operation_id IN (SELECT id FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED')"},
 		{"foreign-claim", `INSERT INTO operation_resource_claims(operation_id,layer,resource_key)
-     SELECT id,layer,'box:foreign' FROM operations`},
-		{"revoked-token", "UPDATE credentials SET revoked=1"},
-		{"wrong-actor", "UPDATE operations SET actor_id='foreign'"},
+     SELECT id,layer,'box:foreign' FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED'`},
+		{"revoked-token", "UPDATE credentials SET revoked=1 WHERE id IN (SELECT token_id FROM operations WHERE action='box_peer_set' AND state!='SUCCEEDED')"},
+		{"wrong-actor", "UPDATE operations SET actor_id='foreign' WHERE action='box_peer_set' AND state!='SUCCEEDED'"},
 		{"pending-sibling-peer", `INSERT INTO peer_grants
     (project,source_uuid,source_incarnation,target_uuid,target_incarnation,
      desired,status,source_ipv4,target_ipv4,source_ipv6,target_ipv6,operation_id)
     VALUES('user-1001','` + s4b2RootThird + `','` + s4b2RootThird + `','` + s4b2RootDst + `','` + s4b2RootDst + `',
-     1,'PENDING','10.243.18.13','10.243.18.12','fd43:18::13','fd43:18::12','other')`},
-		{"malformed-confirmed-peer", "UPDATE peer_grants SET source_ipv4='10.243.18.88' WHERE status='CONFIRMED'"},
+     1,'PENDING','10.43.18.13','10.43.18.12','fd43:18::13','fd43:18::12','other')`},
+		{"malformed-confirmed-peer", "UPDATE peer_grants SET source_ipv4='10.43.18.88' WHERE status='CONFIRMED'"},
 		{"reused-confirmed-pair", `INSERT INTO peer_grants
     (project,source_uuid,source_incarnation,target_uuid,target_incarnation,
      desired,status,source_ipv4,target_ipv4,source_ipv6,target_ipv6,operation_id)
     VALUES('user-1001','` + s4b2RootSrc + `','` + s4b2RootSrc + `','` + s4b2RootDst + `','` + s4b2RootDst + `',
-     1,'CONFIRMED','10.243.18.11','10.243.18.12','fd43:18::11','fd43:18::12','')`},
+     1,'CONFIRMED','10.43.18.11','10.43.18.12','fd43:18::11','fd43:18::12','')`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _, id := pr178ScopedReadyToStage(t, true)
-			if _, e := s.db.Exec(tc.sql); e != nil {
+			res, e := s.db.Exec(tc.sql)
+			if e != nil {
 				t.Fatal(e)
+			}
+			if n, e := res.RowsAffected(); e != nil || n == 0 {
+				t.Fatal("tamper did not change target", n, e)
 			}
 			if e := s.StageScopedPeerOriginal(context.Background(), id); e == nil {
 				t.Fatal("unsafe v2 staging modified network grants")

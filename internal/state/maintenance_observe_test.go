@@ -29,7 +29,7 @@ func TestH1AMaintenanceRetainedAndUnknown(t *testing.T) {
 	}
 	snap2 := DiagnosticSnapshot{store: s2}
 	u, e := snap2.ReadMaintenanceLedger(ctx, "user-1001")
-	if e != nil || u.Claims != 8 || u.NonterminalRecordedClaims != 5 || len(u.Originals) != 1 {
+	if e != nil || u.Claims != 25 || u.NonterminalRecordedClaims != 5 || len(u.Originals) != 1 {
 		t.Fatal(u, e)
 	}
 	found := false
