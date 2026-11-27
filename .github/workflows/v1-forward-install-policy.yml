@@ -53,12 +53,13 @@ jobs:
           grep -Fxq FORWARD_INSTALL_DISPOSABLE_SCOPE_PASS "$RUNNER_TEMP/forward-install.log"
           if test "$FORWARD_INSTALL_MODE" = fresh; then
             grep -Fxq FORWARD_INSTALL_FRESH_ALL_AND_LOOPBACK_MANAGEMENT=PASS "$RUNNER_TEMP/forward-install.log"
-            grep -Fxq FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_SCOPED_STALE_REVIEW_REFUSED_NO_EFFECT=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE_REFUSED_NO_EFFECT=PASS "$RUNNER_TEMP/forward-install.log"
             grep -Fxq FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_GRANT=PASS "$RUNNER_TEMP/forward-install.log"
             grep -Fxq FORWARD_INSTALL_EXTERNAL_POLICY_DENIAL=PASS "$RUNNER_TEMP/forward-install.log"
             grep -Fxq FORWARD_INSTALL_WILDCARD_HTTP_PACKET=PASS "$RUNNER_TEMP/forward-install.log"
             grep -Fxq FORWARD_INSTALL_PROJECT_PROXY_DENIAL=PASS "$RUNNER_TEMP/forward-install.log"
-            grep -Fxq FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_ROLLBACK=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_SCOPED_RETIREMENT_EXACT_NATIVE_PREIMAGE=PASS "$RUNNER_TEMP/forward-install.log"
           else
             grep -Fxq "FORWARD_INSTALL_INCOMPATIBLE_SCHEMA_PRESERVED=$FORWARD_INSTALL_MODE PASS" "$RUNNER_TEMP/forward-install.log"
           fi
