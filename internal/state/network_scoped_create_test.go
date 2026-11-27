@@ -26,7 +26,7 @@ func TestPR178ScopedCreateAtomicACLExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := Admission{Layer: project, ActorID: token.ID, TokenID: token.ID, Key: "n2-scoped-create-atomic", RequestID: "create", Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw}
-	rec, err := s.Admit(ctx, a)
+	rec, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestP1ScopedPinRepairRetainsOriginal(t *testing.T) {
 	if e := s.CheckCreatePinRepair(ctx, target, p); e != nil {
 		t.Fatal(e)
 	}
-	rec, e := s.CommitRecovery(ctx, req, target, p)
+	rec, e := s.CommitScopedRecovery(ctx, req, target, p)
 	if e != nil || rec.Disposition != "SETTLED" || rec.Receipt.ID == orig.ID {
 		t.Fatal(rec, e)
 	}
@@ -297,7 +297,7 @@ func TestP1ScopedPinRepairRefusesDuplicateTerminalClaim(t *testing.T) {
 	if e = s.CheckCreatePinRepair(ctx, target, proof); !errors.Is(e, ErrResourceLocked) {
 		t.Fatal("duplicate retained claim preflight accepted", e)
 	}
-	if _, e = s.CommitRecovery(ctx, req, target, proof); !errors.Is(e, ErrResourceLocked) {
+	if _, e = s.CommitScopedRecovery(ctx, req, target, proof); !errors.Is(e, ErrResourceLocked) {
 		t.Fatal("duplicate retained claim repair accepted", e)
 	}
 	var n int

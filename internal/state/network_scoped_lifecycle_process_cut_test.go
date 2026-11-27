@@ -101,7 +101,7 @@ func TestP1ScopedLifecycleActualProcessCut(t *testing.T) {
 					}
 					a := b5DeleteAdmission(t, s, p1UUID, in.Name)
 					a.Layer, a.SafeIntent = in.Project, []byte(`{"box_id":"`+p1UUID+`"}`)
-					original = a4Admit(t, s, a)
+					original = a4AdmitMode(t, s, a, true)
 					if err := s.Claim(ctx, original.ID); err != nil {
 						t.Fatal(err)
 					}

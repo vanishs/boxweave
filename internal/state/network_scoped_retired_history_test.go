@@ -26,7 +26,7 @@ func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
 		intent := ScopedCreateIntent{Schema: 2, Project: project, Bridge: bridge, Name: name, CPU: 1, MemoryMiB: 256, DiskGiB: 2, Options: json.RawMessage("{}")}
 		raw, _ := json.Marshal(intent)
 		a := Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-create-history-" + name, RequestID: name, Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw}
-		rec, e := s.Admit(ctx, a)
+		rec, e := s.AdmitScoped(ctx, a)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -58,7 +58,7 @@ func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
 	raw, _ := json.Marshal(struct {
 		BoxID string `json:"box_id"`
 	}{box.UUID})
-	del, e := s.Admit(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-history-delete-one", RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
+	del, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-history-delete-one", RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
 	if e != nil {
 		t.Fatal(e)
 	}

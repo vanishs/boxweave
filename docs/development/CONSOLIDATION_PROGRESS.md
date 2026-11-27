@@ -534,3 +534,5 @@ P1-06d32: [Scoped recovery receipts and worker faults](CONSOLIDATION_P1_06D32_CH
 P1-06d33: [recovery observation isolation](CONSOLIDATION_P1_06D33_CHECKPOINT.md). Legacy witnesses retained; independent CI required.
 
 P1-06d34: [host forwarding diagnostic comparison](CONSOLIDATION_P1_06D34_CHECKPOINT.md). Read-only evidence candidate; public WAN remains UNVERIFIED.
+
+- D35: [Explicit Scoped admission and recovery fixtures](CONSOLIDATION_P1_06D35_CHECKPOINT.md).

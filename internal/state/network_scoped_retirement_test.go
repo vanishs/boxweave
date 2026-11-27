@@ -62,7 +62,7 @@ func TestScopedRetirementLedgerRetainsTerminalClaims(t *testing.T) {
 		raw, _ := json.Marshal(struct {
 			BoxID string `json:"box_id"`
 		}{uuid})
-		rec, err := s.Admit(ctx, Admission{Layer: project, ActorID: token.ID, TokenID: token.ID, Key: "retire-" + box.Name, RequestID: box.Name, Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: uuid, Incarnation: box.Incarnation, SafeIntent: raw})
+		rec, err := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: token.ID, TokenID: token.ID, Key: "retire-" + box.Name, RequestID: box.Name, Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: uuid, Incarnation: box.Incarnation, SafeIntent: raw})
 		if err != nil {
 			t.Fatal(err)
 		}

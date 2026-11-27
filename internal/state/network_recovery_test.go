@@ -21,7 +21,15 @@ func a4ForwardAdmission(a Admission, port int) Admission {
 }
 func a4Admit(t *testing.T, s *Store, a Admission) Receipt {
 	t.Helper()
-	r, e := s.Admit(context.Background(), a)
+	return a4AdmitMode(t, s, a, false)
+}
+func a4AdmitMode(t *testing.T, s *Store, a Admission, scoped bool) Receipt {
+	t.Helper()
+	admit := s.Admit
+	if scoped {
+		admit = s.AdmitScoped
+	}
+	r, e := admit(context.Background(), a)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -64,8 +72,12 @@ func a4ForwardProof(t RecoveryTarget) RecoveryProof {
 }
 func a4Settle(t *testing.T, s *Store, r RecoveryRequest, target RecoveryTarget, p RecoveryProof) {
 	t.Helper()
+	a4SettleMode(t, s, r, target, p, false)
+}
+func a4SettleMode(t *testing.T, s *Store, r RecoveryRequest, target RecoveryTarget, p RecoveryProof, scoped bool) {
+	t.Helper()
 	ctx := context.Background()
-	first, e := s.CommitRecovery(ctx, r, target, p)
+	first, e := recoveryCommitMode(s, scoped)(ctx, r, target, p)
 	if e != nil || first.Disposition != "SETTLED" || first.Receipt.ID == target.ID || first.Receipt.NativeOperationID != "" {
 		t.Fatalf("settlement %+v %v", first, e)
 	}

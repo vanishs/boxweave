@@ -27,7 +27,7 @@ func TestPR178N3LifecycleWithTerminalPeerPolicy(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		rec, e := s.Admit(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: key, RequestID: key, Action: "box_peer_set", SafeIntent: raw, BoxUUID: a, Incarnation: a, ResourceKey: "peer-guard:" + bridge, ResourceKeys: claims[:4]})
+		rec, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: key, RequestID: key, Action: "box_peer_set", SafeIntent: raw, BoxUUID: a, Incarnation: a, ResourceKey: "peer-guard:" + bridge, ResourceKeys: claims[:4]})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -60,7 +60,7 @@ func TestPR178N3LifecycleWithTerminalPeerPolicy(t *testing.T) {
 	}
 	name, uuid := "n3-extra", "11111111-1111-4111-8111-000000000004"
 	raw, _ := json.Marshal(ScopedCreateIntent{Schema: 2, Project: project, Bridge: bridge, Name: name, CPU: 1, MemoryMiB: 1024, DiskGiB: 10, Options: json.RawMessage("{}")})
-	rec, e := s.Admit(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-terminal-extra-create", RequestID: "extra-create", Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw})
+	rec, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-terminal-extra-create", RequestID: "extra-create", Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -90,7 +90,7 @@ func TestPR178N3LifecycleWithTerminalPeerPolicy(t *testing.T) {
 		raw, _ := json.Marshal(struct {
 			BoxID string `json:"box_id"`
 		}{id})
-		rec, e := s.Admit(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: key, RequestID: key, Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: id, Incarnation: box.Incarnation, SafeIntent: raw})
+		rec, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: key, RequestID: key, Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: id, Incarnation: box.Incarnation, SafeIntent: raw})
 		if e != nil {
 			t.Fatal(e)
 		}

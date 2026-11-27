@@ -31,7 +31,7 @@ func p1CreateFixture(t *testing.T, ack bool) (*Store, Receipt, ScopedCreateInten
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := s.Admit(ctx, Admission{Layer: in.Project, ActorID: tok.ID, TokenID: tok.ID, Key: "p1b-create-recovery-fixture", RequestID: "fixture", Action: "box_create", ResourceKey: "box:" + in.Name, SafeIntent: raw})
+	r, e := s.AdmitScoped(ctx, Admission{Layer: in.Project, ActorID: tok.ID, TokenID: tok.ID, Key: "p1b-create-recovery-fixture", RequestID: "fixture", Action: "box_create", ResourceKey: "box:" + in.Name, SafeIntent: raw})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -118,7 +118,7 @@ func TestP1ScopedCreateCompletedRecoveryAtomic(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			bad := good
 			change(&bad)
-			if _, e := s.CommitRecovery(ctx, req, target, bad); e == nil {
+			if _, e := s.CommitScopedRecovery(ctx, req, target, bad); e == nil {
 				t.Fatal("forged settlement accepted")
 			}
 			p1AssertOriginal(t, s, orig.ID, "UNKNOWN", target.NativeID)
@@ -130,7 +130,7 @@ func TestP1ScopedCreateCompletedRecoveryAtomic(t *testing.T) {
 	if _, e = s.db.Exec("CREATE TRIGGER p1_abort BEFORE UPDATE ON operations WHEN NEW.state='SUCCEEDED' BEGIN SELECT RAISE(ABORT,'test final fault'); END"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.CommitRecovery(ctx, req, target, good); e == nil {
+	if _, e = s.CommitScopedRecovery(ctx, req, target, good); e == nil {
 		t.Fatal("fault did not roll back")
 	}
 	p1AssertOriginal(t, s, orig.ID, "UNKNOWN", target.NativeID)
@@ -149,7 +149,7 @@ func TestP1ScopedCreateCompletedRecoveryAtomic(t *testing.T) {
 	if _, e = s.db.Exec("DROP TRIGGER p1_abort"); e != nil {
 		t.Fatal(e)
 	}
-	a4Settle(t, s, req, target, good)
+	a4SettleMode(t, s, req, target, good, true)
 	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
 	ledger, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, in.Project, in.Bridge)
 	if e != nil || len(ledger.Boxes) != 1 || ledger.Boxes[0].ACL != final.ACL {
@@ -167,12 +167,12 @@ func TestP1ScopedCreateMissingACKStaysUnknown(t *testing.T) {
 	final := pin
 	final.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
 	bad := p1CompletedProof(t, target, "CREATE", final, strings.Repeat("a", 64))
-	if _, e := s.CommitRecovery(ctx, req, target, bad); e == nil {
+	if _, e := s.CommitScopedRecovery(ctx, req, target, bad); e == nil {
 		t.Fatal("missing ACK settled")
 	}
 	bad.Kind = RecoveryBind
 	bad.Reason = "CREATE_MARKER_EXACT_IDENTITY"
-	if _, e := s.CommitRecovery(ctx, req, target, bad); e == nil {
+	if _, e := s.CommitScopedRecovery(ctx, req, target, bad); e == nil {
 		t.Fatal("legacy bind accepted")
 	}
 	p1AssertOriginal(t, s, orig.ID, "UNKNOWN", "")
@@ -198,13 +198,13 @@ func TestP1ScopedDeleteCompletedRecoveryAtomic(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	a4Settle(t, s, createReq, createTarget, p1CompletedProof(t, createTarget, "CREATE", final, ScopedLifecycleOriginalSHA256(createProof)))
+	a4SettleMode(t, s, createReq, createTarget, p1CompletedProof(t, createTarget, "CREATE", final, ScopedLifecycleOriginalSHA256(createProof)), true)
 	a := b5DeleteAdmission(t, s, p1UUID, in.Name)
 	a.Layer = in.Project
 	a.SafeIntent, _ = json.Marshal(struct {
 		BoxID string `json:"box_id"`
 	}{p1UUID})
-	parent := a4Admit(t, s, a)
+	parent := a4AdmitMode(t, s, a, true)
 	if e := s.Claim(ctx, parent.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -239,18 +239,18 @@ func TestP1ScopedDeleteCompletedRecoveryAtomic(t *testing.T) {
 	}
 	bad := recoverProof(target)
 	bad.Fingerprint = "DELETE_SUCCESS:legacy"
-	if _, e = s.CommitRecovery(ctx, req, target, bad); e == nil {
+	if _, e = s.CommitScopedRecovery(ctx, req, target, bad); e == nil {
 		t.Fatal("instance absence without ACL proof settled")
 	}
 	bad = good
 	bad.ScopedLifecycle.Record.Binding.ACL = peerscope.QuarantineACL
-	if _, e = s.CommitRecovery(ctx, req, target, bad); e == nil {
+	if _, e = s.CommitScopedRecovery(ctx, req, target, bad); e == nil {
 		t.Fatal("wrong ACL settled")
 	}
 	if _, e = s.db.Exec("CREATE TRIGGER p1_abort BEFORE UPDATE ON operations WHEN NEW.state='SUCCEEDED' BEGIN SELECT RAISE(ABORT,'test final fault'); END"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.CommitRecovery(ctx, req, target, good); e == nil {
+	if _, e = s.CommitScopedRecovery(ctx, req, target, good); e == nil {
 		t.Fatal("fault did not roll back")
 	}
 	p1AssertOriginal(t, s, parent.ID, "UNKNOWN", target.NativeID)
@@ -264,7 +264,7 @@ func TestP1ScopedDeleteCompletedRecoveryAtomic(t *testing.T) {
 	if _, e = s.db.Exec("DROP TRIGGER p1_abort"); e != nil {
 		t.Fatal(e)
 	}
-	a4Settle(t, s, req, target, good)
+	a4SettleMode(t, s, req, target, good, true)
 	p1AssertOriginal(t, s, parent.ID, "SUCCEEDED", target.NativeID)
 	if _, e = s.OwnedBox(ctx, in.Project, p1UUID); !errors.Is(e, ErrNotFound) {
 		t.Fatal(e)
