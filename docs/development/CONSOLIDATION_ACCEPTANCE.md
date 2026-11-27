@@ -361,3 +361,16 @@ contracts, scoped selector for active service consumers, all reviewed
 Incus dependency commands and P2 installed gates. Full independent
 candidate CI remains required; no formal C08/P1 or C11 acceptance.
 Recover/Doctor behavior and capacity parity remain R2/R3 work.
+
+### P3 R2 observation contract candidate
+
+C08/P3-C03/C05/C10: keep compatibility JSON fields consumed by the
+installer, but ready is only exact current Scoped schema-7 preflight,
+not an authenticated MCP or packet/maintenance proof. Restricted
+observer can show SQLite-only budgets without claiming Root mode.
+Test root/restricted, stale schema, missing/foreign/mixed identity,
+listener mismatch, stopped service, static drift, source preservation,
+redaction, capacity digest drift and historical maintenance refusal.
+Existing H3B/H4B and installed maintenance/retirement evidence are
+retained requirements; revalidate changed code on exact installed
+candidate. Full source CI and final release evidence remain open.

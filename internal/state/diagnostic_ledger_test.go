@@ -72,6 +72,10 @@ func TestPR177D2ScopedUnknownAndFailedRecoveryHistory(t *testing.T) {
 	if e != nil || other.ActiveCount != 0 || other.HistoricalFailures != 0 {
 		t.Fatal(other, e)
 	}
+	foreign, e := snap.ReadLedger(ctx, "user-9999", "SCOPED_V2", "")
+	if e != nil || foreign.ForeignRows == 0 || foreign.ActiveCount != 0 || len(foreign.Active) != 0 {
+		t.Fatal(foreign, e)
+	}
 	t.Log("D2_UNKNOWN_RETAINED_BLOCKED_ATTEMPT_HISTORY_PASS")
 }
 func TestPR177D2CapacityAndRedactedOAuth(t *testing.T) {
@@ -131,5 +135,24 @@ func TestPR177D2ReleasedHistoryAndGuestExitSeparate(t *testing.T) {
 	b, e := json.Marshal(l)
 	if e != nil || strings.Contains(string(b), "private-output-path") {
 		t.Fatal("output path leaked", e)
+	}
+}
+
+func TestP3R2DiagnosticDigestBindsCapacityAndScope(t *testing.T) {
+	d := DiagnosticLedger{PeerCapacity: &DiagnosticPeerCapacity{}, ScopedIdentityCapacity: &ScopedIdentityCapacity{}}
+	before := d.ObservationDigest()
+	d.PeerCapacity.CompletedLedgerEvents++
+	if d.ObservationDigest() == before {
+		t.Fatal("peer epoch not bound")
+	}
+	before = d.ObservationDigest()
+	d.ForeignRows++
+	if d.ObservationDigest() == before {
+		t.Fatal("foreign scope not bound")
+	}
+	before = d.ObservationDigest()
+	d.ScopedIdentityCapacity = nil
+	if d.ObservationDigest() == before {
+		t.Fatal("identity coverage not bound")
 	}
 }

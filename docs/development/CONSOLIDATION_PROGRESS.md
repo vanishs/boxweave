@@ -1731,3 +1731,40 @@ authority unchanged; R3 owns recovery-specific contract. Final
 exact staged-tree and independent CI evidence are separate. H two
 tests untouched; no installation/recovery/native maintenance effects
 or waiver. R2 Doctor and maintenance classification remains next.
+
+### P3 R2 — current Scoped Doctor and Maintenance candidate
+
+Baseline 644a2fbb4ab7a40745aeecdcef9543ffd9c7487f; owner H freeze
+unchanged. R1 S1/quality/dual-arch failures are the same two inherited
+H tests (five jobs), Forward and S2.5 PASS; S2/N2 still running at
+inspection. No H change or waiver.
+
+Doctor distinguishes a proved historical installation (UNSUPPORTED_LEGACY)
+from incomplete and conflicting observations. Schema-7 preflight now
+requires verified current manifest/runtime/scope, active guard/lifecycle,
+ledger and local HTTP observation; restricted Root-only coverage remains
+separate from a fully proved mode. Legacy healthy projection removed.
+Read-only independent ledger/native observation can still report evidence
+when the exact Scoped controller is stopped or partially observed. Runtime
+argv agrees with R1's accepted flags and fixed loopback listener; infer
+the current Scoped default only from the same installed observer binary.
+Root classification requires the existing static unit contract.
+Scoped SQLite capacity is available to the restricted observer without
+pretending to observe Root policy; the cross-capture digest binds peer/
+identity capacity and foreign row count. Shared redacted count detects
+foreign ledger scope without exposing its identities. Missing Root policy
+cannot produce HEALTHY_OBSERVED. Maintenance retains historical/pinned
+adapter and artifact observations but refuses to claim current Scoped
+coverage for legacy or mixed identity; no retirement authorization or
+approval is derived from observation.
+
+Initial full CLI/Diagnostic/State (140s) and targeted Install/vet PASS
+(operation 7cd8c83395424a699419240d77df25d9). After refinements, full
+CLI/Diagnostic, selected D1-D3/maintenance/foreign/epoch State and
+Install regressions, all four package vets, format and 13 scope
+tests PASS (56d9de514abe21263dcce82a05b736b9). Full State initial
+revision and final targeted tests are distinct; full final candidate
+independent CI remains mandatory. Existing N2 H3B/H4B/postflight and
+retirement observations must revalidate affected behavior. H tests
+not rerun locally or modified. R3 owns reviewed Recover/navigation
+convergence. No product maintenance effects or deployment.

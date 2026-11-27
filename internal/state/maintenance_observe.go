@@ -165,22 +165,9 @@ func readMaintenanceLedger(ctx context.Context, tx *sql.Tx, project string) (Mai
 		}
 		return zero, e
 	}
-	// Count only: never reveal another Project's identities or intent.
-	foreignQueries := []string{
-		"SELECT count(*) FROM owned_boxes WHERE project!=?",
-		"SELECT count(*) FROM operations WHERE layer!=?",
-		"SELECT count(*) FROM operation_resource_claims WHERE layer!=?",
-		"SELECT count(*) FROM network_bindings WHERE project!=?",
-		"SELECT count(*) FROM network_address_fences WHERE project!=?",
-		"SELECT count(*) FROM peer_grants WHERE project!=?",
-		"SELECT count(*) FROM forward_claims WHERE project!=?",
-	}
-	for _, q := range foreignQueries {
-		var n int
-		if e = tx.QueryRowContext(ctx, q, project).Scan(&n); e != nil {
-			return zero, e
-		}
-		o.ForeignRows += n
+	o.ForeignRows, e = readDiagnosticForeignRows(ctx, tx, project)
+	if e != nil {
+		return zero, e
 	}
 	rows, e = tx.QueryContext(ctx, `SELECT o.id,o.action,o.state,o.box_uuid,o.incarnation,o.native_operation_id!='',(SELECT count(*) FROM operation_resource_claims c WHERE c.layer=o.layer AND c.operation_id=o.id)
  FROM operations o WHERE o.layer=? AND (o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING') ) ORDER BY o.id LIMIT ?`, project, maintenanceRowLimit+1)
@@ -370,4 +357,26 @@ func (o MaintenanceLedger) ObservationDigest() string {
 	}{o, o.Network, endpointInputs})
 	h := sha256.Sum256(raw)
 	return hex.EncodeToString(h[:])
+}
+
+func readDiagnosticForeignRows(ctx context.Context, tx *sql.Tx, project string) (int, error) {
+	total := 0
+	// Count only: never reveal another Project's identities or intent.
+	foreignQueries := []string{
+		"SELECT count(*) FROM owned_boxes WHERE project!=?",
+		"SELECT count(*) FROM operations WHERE layer!=?",
+		"SELECT count(*) FROM operation_resource_claims WHERE layer!=?",
+		"SELECT count(*) FROM network_bindings WHERE project!=?",
+		"SELECT count(*) FROM network_address_fences WHERE project!=?",
+		"SELECT count(*) FROM peer_grants WHERE project!=?",
+		"SELECT count(*) FROM forward_claims WHERE project!=?",
+	}
+	for _, q := range foreignQueries {
+		var n int
+		if e := tx.QueryRowContext(ctx, q, project).Scan(&n); e != nil {
+			return 0, e
+		}
+		total += n
+	}
+	return total, nil
 }

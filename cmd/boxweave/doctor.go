@@ -81,7 +81,7 @@ func doctorNativeWorker() error {
 	var l *state.DiagnosticLedger
 	if e == nil {
 		defer snap.Close()
-		if v, e := snap.ReadLedger(ctx, p.Project, "", "incusbr-"+strconv.Itoa(uid)); e == nil {
+		if v, e := snap.ReadLedger(ctx, p.Project, "SCOPED_V2", "incusbr-"+strconv.Itoa(uid)); e == nil {
 			l = &v
 		}
 	}
@@ -95,7 +95,7 @@ func doctorNative(ctx context.Context, a doctorArgs, identity install.Diagnostic
 	unavailable := func(code string) diagnostic.NativeObservation {
 		return diagnostic.ReadNativeObservation(ctx, r, native.Status{Project: a.Project, ErrorClass: code}, nil, nil)
 	}
-	if identity.InstalledIdentity != "VERIFIED" || a.DB != "/var/lib/boxweave/ledger.sqlite" || a.ServiceUser != "boxweave" || a.Socket != "/var/lib/incus/unix.socket.user" {
+	if !doctorScopedIdentity(identity) || a.DB != "/var/lib/boxweave/ledger.sqlite" || a.ServiceUser != "boxweave" || a.Socket != "/var/lib/incus/unix.socket.user" {
 		return unavailable("RESTRICTED_DIAGNOSTIC_ACTOR_UNVERIFIED")
 	}
 	p := doctorInstallPlan(a)
@@ -143,6 +143,39 @@ func doctorMCP(ctx context.Context, identity install.DiagnosticInstallation) dia
 	return diagnostic.Source{State: "OBSERVED", Reason: "LOCAL_HTTP_401_ONLY_AUTHENTICATED_MCP_NOT_CHECKED", EpochNS: time.Now().UnixNano()}
 }
 
+// A restricted observer can prove the exact current installed runtime
+// without Root-only journal access. This remains preflight, not full health.
+func doctorScopedIdentity(i install.DiagnosticInstallation) bool {
+	return i.Candidate == "SCOPED_V2" && i.Manifest == "VERIFIED" &&
+		i.InstalledIdentity == "VERIFIED" && i.Mode != "CONFLICT"
+}
+
+func doctorCurrentScope(i install.DiagnosticInstallation) bool {
+	if !doctorScopedIdentity(i) || i.Runtime != "VERIFIED" || i.ServiceUnit != "ACTIVE" {
+		return false
+	}
+	return i.Mode == "SCOPED_V2" ||
+		(i.Mode == "UNVERIFIED" && i.RootProof == "ROOT_AUTHORITY_REQUIRED" &&
+			i.Dependencies == "OBSERVED" && i.ScopedArtifacts == "PRESENT" &&
+			i.RootJournal == "PRESENT" && i.GuardUnit == "ACTIVE" &&
+			i.LifecycleUnit == "ACTIVE")
+}
+
+func doctorLedgerMode(i install.DiagnosticInstallation) string {
+	if doctorScopedIdentity(i) {
+		return "SCOPED_V2"
+	}
+	return "UNVERIFIED"
+}
+
+func doctorPreflightReady(status control.HostStatus, r diagnostic.Report) bool {
+	return doctorCurrentScope(r.Installation) &&
+		r.Installation.GuardUnit == "ACTIVE" && r.Installation.LifecycleUnit == "ACTIVE" &&
+		status.SchemaVersion == state.SchemaVersion && status.MCPReady &&
+		status.Native.Ready && r.Database.State == "OBSERVED" &&
+		r.Ledger != nil && r.Ledger.ForeignRows == 0 && r.MCP.State == "OBSERVED"
+}
+
 func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagnostic.Report) {
 	report := diagnostic.NewReport(a.Project)
 	legacy := control.HostStatus{Version: version, Commit: commit, GoVersion: report.GoVersion}
@@ -150,7 +183,7 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 	report.Installation = install.ObserveDiagnosticInstallation(instctx, doctorInstallPlan(a), a.DB)
 	report.ClassifyInstallation()
 	instcancel()
-	if report.Installation.Mode != "LEGACY" && report.Installation.Mode != "SCOPED_V2" {
+	if report.Installation.Mode != "SCOPED_V2" && report.Installation.Mode != "UNSUPPORTED_LEGACY" {
 		reason := report.Installation.Reason
 		if reason == "" {
 			reason = "ARCHITECTURE_UNVERIFIED"
@@ -180,14 +213,10 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 			} else {
 				report.AddIssue("database", "PROJECT_CAPACITY_UNVERIFIED", "ledger", "UNVERIFIED")
 			}
-			if l, err := snap.ReadLedger(dbctx, a.Project, report.Installation.Mode, bridge); err == nil {
+			if l, err := snap.ReadLedger(dbctx, a.Project, doctorLedgerMode(report.Installation), bridge); err == nil {
 				ledger = &l
 				report.ClassifyLedger(l)
 				report.ActivityCoverage.EpochNS = snap.EpochNS
-				legacy.AddressRetirement = l.LegacyRetirement
-				if l.LegacyRetirement != nil {
-					legacy.AddressRetirementPolicy = "LEGACY_IPV4_RETIREMENT"
-				}
 				if l.PeerCapacity != nil {
 					legacy.AddressRetirementPolicy = "SCOPED_RETAIN_IDENTITIES"
 					legacy.ScopedPeerCapacity = l.PeerCapacity
@@ -196,7 +225,7 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 			} else {
 				report.AddRoutedIssue("database", "LEDGER_OBSERVATION_UNVERIFIED", "ledger", "UNVERIFIED", "INSPECT_EVIDENCE")
 			}
-			if report.Installation.Mode == "SCOPED_V2" {
+			if doctorScopedIdentity(report.Installation) {
 				summary, e := snap.ScopedLedgerSummary(dbctx, a.Project, "incusbr-"+strings.TrimPrefix(a.Project, "user-"))
 				if e == nil {
 					report.ScopedLedger = &summary
@@ -233,7 +262,7 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 		after, err := state.OpenDiagnosticSnapshot(reCtx, a.DB)
 		same := false
 		if err == nil {
-			latest, err := after.ReadLedger(reCtx, a.Project, report.Installation.Mode, bridge)
+			latest, err := after.ReadLedger(reCtx, a.Project, doctorLedgerMode(report.Installation), bridge)
 			same = err == nil && latest.ObservationDigest() == ledger.ObservationDigest() && obs.LedgerDigest == ledger.ObservationDigest()
 			if after.Close() != nil {
 				same = false
@@ -310,7 +339,7 @@ func collectDoctor(ctx context.Context, a doctorArgs) (control.HostStatus, diagn
 		report.AddIssue("native", legacy.Native.ErrorClass, "project", "UNVERIFIED")
 	}
 	// Compatibility preflight only: partial evidence never certifies full health.
-	legacy.Ready = legacy.MCPReady && legacy.Native.Ready && report.Installation.Mode != "CONFLICT"
+	legacy.Ready = doctorPreflightReady(legacy, report)
 	return legacy, report
 }
 

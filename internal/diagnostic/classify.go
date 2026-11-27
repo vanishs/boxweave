@@ -77,6 +77,9 @@ func (r *Report) ClassifyLedger(l state.DiagnosticLedger) {
 	for _, a := range l.Activity.History {
 		r.classifyActivity(a, true)
 	}
+	if l.ForeignRows != 0 {
+		r.AddRoutedIssue("database", "FOREIGN_LEDGER_SCOPE", "ledger", "CONFIRMED", "HOST_REVIEW_REQUIRED")
+	}
 	if l.PeerCapacity != nil {
 		p := l.PeerCapacity
 		if !p.NewDirectionAvailable {
@@ -131,6 +134,9 @@ func (r *Report) ClassifyInstallation() {
 	i := r.Installation
 	if i.Mode == "CONFLICT" {
 		r.AddRoutedIssue("installation", "ARCHITECTURE_EVIDENCE_CONFLICT", "installation", "CONFIRMED", "HOST_REVIEW_REQUIRED")
+	}
+	if i.Mode == "UNSUPPORTED_LEGACY" {
+		r.AddRoutedIssue("installation", "LEGACY_INSTALLATION_UNSUPPORTED", "installation", "CONFIRMED", "INSPECT_INSTALLED_VERSION")
 	}
 	if i.ServiceUnit == "FAILED" || i.ServiceUnit == "INACTIVE" {
 		r.AddRoutedIssue("service", "CONTROLLER_"+i.ServiceUnit, "controller", "CONFIRMED", "HOST_REVIEW_REQUIRED")

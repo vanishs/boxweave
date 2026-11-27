@@ -43,6 +43,10 @@ func summarizeMaintenance(o maintenanceReport) maintenanceReadiness {
 	} else {
 		r.Installation = "STATIC_IDENTITY_ONLY"
 	}
+	if i.Mode != "SCOPED_V2" || i.Identity.Mode == "CONFLICT" {
+		r.Installation = "UNSUPPORTED_OR_UNVERIFIED"
+		hard("CURRENT_SCOPED_INSTALLATION_REQUIRED", "installation", "Preserve historical or mixed artifacts; use the exact original reviewed lifecycle")
+	}
 	if i.Preimage.State != "OBSERVED" {
 		hard("PREIMAGE_UNVERIFIED", "native_preimage", "Preserve original preparation journal; no reconstructed baseline")
 	}

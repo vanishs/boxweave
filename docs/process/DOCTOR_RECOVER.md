@@ -4,6 +4,22 @@ This guide describes the implementation introduced by PR #177; RC13 does not con
 2026-11-24. Use the exact installed build's help and manifest. One binary,
 two local CLI entries, unchanged 23-tool MCP catalog. See [current status](../INDEX.md).
 
+## PR #191 current Scoped candidate
+
+Schema 7 accepts only the current Scoped architecture. A verified historical
+installation is reported as `UNSUPPORTED_LEGACY`; mixed and incomplete
+evidence is not healthy. The compatibility `ready` field requires the exact
+current installed scope, runtime, active guard/lifecycle, schema, read-only
+ledger and local HTTP observation. It is still not authenticated MCP,
+packet or retirement proof. Root-only observations remain separate:
+a restricted observer can report SQLite-only scoped capacity and explicit
+coverage limits without claiming Root journal or kernel evidence.
+Foreign ledger rows are counted without exposing their identities.
+Maintenance retains historical artifact and pinned-observer evidence but
+does not certify current Scoped coverage from legacy/mixed state. Keep
+original receipts and use the matching reviewed lifecycle; no automatic
+migration, restart, deletion or replay.
+
 ## Diagnose without modifying the installation
 
 Use the exact confined Project, normally user-UID for the dedicated

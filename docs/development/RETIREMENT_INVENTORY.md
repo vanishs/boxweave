@@ -200,3 +200,13 @@ Old guided install helper bodies/tests have no current main dispatch;
 record their historical-only candidate disposition for R4/P4, not a
 blanket deletion. Historical uninstaller recognition and original
 retirement paths need separate reachability/evidence classification.
+
+### P3 R2 diagnostic disposition
+
+Legacy installation classification is retained only as unsupported
+historical/conflict evidence; no healthy current mode or legacy
+retirement-capacity projection in Doctor. Historical preparation
+journal, pinned RC13/RC14 adapter recognition and maintenance artifact
+inventory are retained for original evidence, not current health or
+authority. Current maintenance ledger remains Scoped-only. Revisit
+transitive old observations at P4; do not discard original artifacts.

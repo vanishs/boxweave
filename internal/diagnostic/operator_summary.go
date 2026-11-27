@@ -33,11 +33,11 @@ func Summarize(r Report, uid int) *OperatorSummary {
 		}
 	}
 	switch {
-	case r.Installation.Mode == "CONFLICT" || r.Installation.ServiceUnit == "FAILED" || r.Installation.ServiceUnit == "INACTIVE":
+	case r.Installation.Mode == "CONFLICT" || r.Installation.Mode == "UNSUPPORTED_LEGACY" || r.Installation.ServiceUnit == "FAILED" || r.Installation.ServiceUnit == "INACTIVE":
 		o.Status = "BLOCKED"
 	case o.ConfirmedIssues > 0:
 		o.Status = "DEGRADED"
-	case o.UnverifiedIssues > 0 || o.CoverageLimits > 0 || r.Database.State != "OBSERVED" || r.Native.State != "OBSERVED" || r.MCP.State != "OBSERVED" || r.ForwardPolicy.State != "OBSERVED" || r.ForwardDevices.State != "OBSERVED":
+	case r.Installation.Mode != "SCOPED_V2" || r.RootPolicy.State != "OBSERVED" || o.UnverifiedIssues > 0 || o.CoverageLimits > 0 || r.Database.State != "OBSERVED" || r.Native.State != "OBSERVED" || r.MCP.State != "OBSERVED" || r.ForwardPolicy.State != "OBSERVED" || r.ForwardDevices.State != "OBSERVED":
 		o.Status = "UNVERIFIED"
 	}
 	if uid != 0 && (o.CoverageLimits > 0 || r.RootPolicy.State != "OBSERVED") {

@@ -120,6 +120,7 @@ type DiagnosticLedger struct {
 	Activity               ActivityResult          `json:"-"`
 	OAuth                  DiagnosticOAuth         `json:"oauth"`
 	PeerCapacity           *DiagnosticPeerCapacity `json:"peer_capacity,omitempty"`
+	ForeignRows            int                     `json:"foreign_rows,omitempty"`
 	LegacyRetirement       *IPv4RetirementStatus   `json:"legacy_retirement,omitempty"`
 	RetiredIdentities      int                     `json:"retired_identities"`
 	RetiredLimit           int                     `json:"retired_limit,omitempty"`
@@ -339,6 +340,10 @@ func readDiagnosticLedgerTx(ctx context.Context, tx *sql.Tx, project, mode, brid
 		return out, e
 	}
 	if mode == "SCOPED_V2" {
+		out.ForeignRows, e = readDiagnosticForeignRows(ctx, tx, project)
+		if e != nil {
+			return out, e
+		}
 		cap, e := readDiagnosticPeerCapacity(ctx, tx, project)
 		if e != nil {
 			return out, e
@@ -413,15 +418,17 @@ func readDiagnosticLedgerTx(ctx context.Context, tx *sql.Tx, project, mode, brid
 // digest. Exclude volatile capture time and secrets, compare after scan.
 func (d DiagnosticLedger) ObservationDigest() string {
 	raw, _ := json.Marshal(struct {
-		N                                                       NativeNetworkLedger
-		F                                                       []DiagnosticForward
-		A                                                       []DiagnosticOperation
-		NOK                                                     bool
-		Truncated                                               bool
-		Holds                                                   string
-		HoldsOK                                                 bool
-		ForwardCount, ForwardUnknown, ActiveCount, RetiredCount int
-	}{d.Network, d.Forwards, d.Active, d.NetworkObserved, d.ForwardTruncated, d.HoldsDigest, d.HoldsObserved, d.ForwardConfirmed, d.ForwardUnresolved, d.ActiveCount, d.RetiredIdentities})
+		N                                                                    NativeNetworkLedger
+		F                                                                    []DiagnosticForward
+		A                                                                    []DiagnosticOperation
+		NOK                                                                  bool
+		Truncated                                                            bool
+		Holds                                                                string
+		HoldsOK                                                              bool
+		ForwardCount, ForwardUnknown, ActiveCount, RetiredCount, ForeignRows int
+		PeerCapacity                                                         *DiagnosticPeerCapacity
+		IdentityCapacity                                                     *ScopedIdentityCapacity
+	}{d.Network, d.Forwards, d.Active, d.NetworkObserved, d.ForwardTruncated, d.HoldsDigest, d.HoldsObserved, d.ForwardConfirmed, d.ForwardUnresolved, d.ActiveCount, d.RetiredIdentities, d.ForeignRows, d.PeerCapacity, d.ScopedIdentityCapacity})
 	h := sha256.Sum256(raw)
 	return hex.EncodeToString(h[:])
 }

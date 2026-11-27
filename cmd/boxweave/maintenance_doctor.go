@@ -52,6 +52,9 @@ func maintenanceSelfSHA() string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 func captureMaintenanceLedger(ctx context.Context, db, project, mode string) (*state.MaintenanceLedger, diagnostic.Source) {
+	if mode != "SCOPED_V2" {
+		return nil, diagnostic.Source{State: "UNVERIFIED", Reason: "CURRENT_SCOPED_LEDGER_REQUIRED"}
+	}
 	c, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	snap, e := state.OpenDiagnosticSnapshot(c, db)
@@ -78,7 +81,10 @@ func collectMaintenance(ctx context.Context, a doctorArgs) (o maintenanceReport)
 	instctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	o.Installation = install.ObserveMaintenanceInstallation(instctx, p, a.DB, self, commit)
 	cancel()
-	if o.Installation.Adapter == "UNSUPPORTED" || o.Installation.Mode == "UNVERIFIED" {
+	if o.Installation.Adapter == "UNSUPPORTED" || o.Installation.Mode != "SCOPED_V2" ||
+		o.Installation.Identity.Mode == "CONFLICT" {
+		o.Database.Reason = "CURRENT_SCOPED_INSTALLATION_REQUIRED"
+		o.Native.Evidence.Reason = "CURRENT_SCOPED_INSTALLATION_REQUIRED"
 		return o
 	}
 	var l *state.MaintenanceLedger
@@ -118,9 +124,6 @@ func collectMaintenance(ctx context.Context, a doctorArgs) (o maintenanceReport)
 		return o
 	}
 	rp := o.Installation.RootPolicy
-	if o.Installation.Mode == "LEGACY" {
-		o.RootLedgerComparison = "NOT_APPLICABLE"
-	}
 	if o.Installation.Mode == "SCOPED_V2" && rp.State == "OBSERVED" && rp.Sequence != nil && rp.ActiveDirections != nil && l.PeerCapacity != nil {
 		o.RootLedgerComparison = "MISMATCH"
 		if *rp.Sequence == l.PeerCapacity.CompletedLedgerEvents && *rp.ActiveDirections == l.PeerCapacity.ActiveDirections {
