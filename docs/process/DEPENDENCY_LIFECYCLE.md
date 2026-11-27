@@ -34,7 +34,7 @@ The nested L1 must independently pass the same `dir` project-quota/readback/Exec
 
 ## Host-local controlled reconciliation
 
-1. A local administrator explicitly invokes `boxweave install` or `boxweave upgrade`. Observe the existing daemon and its consumers before change; do not take over unrelated Incus instances just because they exist.
+1. A local administrator uses the matching reviewed installer wrapper for fresh Scoped installation. BoxWeave binary upgrade/rollback is unsupported by the current candidate; the separately reviewed Incus dependency lifecycle retains its own exact native commands. Observe the existing daemon and its consumers before change; do not take over unrelated Incus instances just because they exist.
 2. If Incus is absent, install a reviewed compatible version. If present and compatible, reuse it and provision only BoxWeave-controlled restricted Project/resources. If incompatible/outdated, plan a compatible upgrade and record version before and proposed after.
 3. For a daemon with foreign projects/consumers, upgrading/restarting it may disrupt unrelated workloads. Require **separate exact target/version-specific local authorization** and preflight/rollback checks. Never assume a generic install command grants permission to disrupt them.
 4. Verify signatures/checksums and repository provenance; do not use floating/untrusted installer URLs. Upgrade only approved managed prerequisites, preserve original storage/ownership, avoid unrelated package upgrades and avoid unreviewed downgrade/migration.
@@ -48,7 +48,7 @@ The nested L1 must independently pass the same `dir` project-quota/readback/Exec
 - **Persistence actually survives:** Check SQLite intent/operation/ownership/journal location, filesystem/mount durability and service permissions under the target installation, host restart and independently nested restart. A directory merely existing is not proof that the intended durable volume is mounted.
 - **Rollback and reporting:** Keep exact original and candidate binary identity, observed schema/dependency version and pre/post service health. If recovery of a previous binary or service restart fails, report **rollback failed** rather than success; an interrupted install remains BLOCKED/UNKNOWN where the actual state is not established.
 
-These are checks inside the existing local install/status/doctor/upgrade flow, not a new host backup/recovery product. See [upstream incident study](../history/research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+These are checks inside the reviewed install/status/doctor and Incus dependency lifecycle, not a BoxWeave upgrade path or new host backup/recovery product. See [upstream incident study](../history/research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
 
 ## Minimal test matrix
 

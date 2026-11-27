@@ -1,6 +1,9 @@
 #!/bin/sh
 # One-use GitHub-hosted S2.5 LAB. No shared Incus/production effects.
 set -eu
+# Current candidate runs only the reviewed Scoped witness; historical
+# Legacy lanes require their original pinned source. Refuse before effects.
+test "${P1B_S25_SCOPED:-0}" = 1
 test "$GITHUB_ACTIONS" = true
 test "$RUNNER_ENVIRONMENT" = github-hosted
 test "$(id -u)" != 0

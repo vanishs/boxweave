@@ -77,7 +77,14 @@ func scopedFreshPrepare(p Plan) error {
 }
 func scopedWriteExclusive(path, body string) error {
 	parent := filepath.Dir(path)
-	if err := os.MkdirAll(parent, 0755); err != nil {
+	// The public systemd unit directory has an explicit intended mode.
+	// A restrictive installer umask must not make its newly created
+	// directory unobservable to the service user. Never change an
+	// existing directory or private journal permissions.
+	created := false
+	if err := os.Mkdir(parent, 0755); err == nil {
+		created = true
+	} else if !errors.Is(err, os.ErrExist) {
 		return err
 	}
 	physical, err := filepath.EvalSymlinks(parent)
@@ -91,6 +98,13 @@ func scopedWriteExclusive(path, body string) error {
 	sys, ok := st.Sys().(*syscall.Stat_t)
 	if !ok || sys.Uid != 0 || !st.IsDir() || st.Mode().Perm()&0022 != 0 {
 		return errors.New("unsafe scoped unit parent")
+	}
+	if created {
+		// Only the new root-owned, non-symlink systemd directory; its
+		// files still respect the caller's umask.
+		if err := os.Chmod(parent, 0755); err != nil {
+			return err
+		}
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {

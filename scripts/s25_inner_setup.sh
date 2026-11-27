@@ -2,6 +2,8 @@
 # Runs only via box_exec inside the MCP-created unprivileged L1, never with
 # a parent Incus socket. All binary/script bytes are SHA256-bound.
 set -eu
+# No current Legacy fallback, including an accidentally omitted selector.
+test "${P1B_S25_SCOPED:-0}" = 1
 export DEBIAN_FRONTEND=noninteractive
 umask 077
 stage="$1"; binary_sha="$2"; agent_sha="$3"; package_proxy="$4"; simwan_sha="$5"

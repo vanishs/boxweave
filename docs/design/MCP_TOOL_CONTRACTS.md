@@ -1,6 +1,6 @@
 # MCP tool contracts
 
-**Current source (2026-11-24):** 23 registered Tools, SQLite schema 6. The dated S4/S5 paragraphs below describe the original design checkpoints, not pending implementation or current schema. For current installed wire schemas use tools/list. Scoped Peer v2 and evidence-bound recovery are now merged; see [N5](../history/development/V1_PR178_N5_DELIVERY_2026-11-23.md), [D4](../history/development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md), and [current status](../INDEX.md).
+**Current PR #191 candidate (2026-11-27):** 23 registered Tools, fresh-only Scoped v2, SQLite schema 7. Historical schema 6 and Legacy runtime are not supported by this candidate; no in-place migration or adoption. Dated S4/S5 records are historical requirements and evidence, not current installed signoff. The installed build identity and tools/list remain authoritative; see [current status](../INDEX.md) and [Doctor/Recover](../process/DOCTOR_RECOVER.md).
 
 Current contracts: live tools/list is authoritative for the installed build. Each logical mutation requires a caller-generated reusable idempotency key of 16..128 UTF-8 bytes. Recovery inspect does not require a key; reconciliation does. Activity and recovery are bounded original-operation interfaces, not a task engine or remote Host repair. See [catalog](MCP_TOOLS.md), [operations](OPERATIONS.md) and [Doctor/Recover](../process/DOCTOR_RECOVER.md).
 
@@ -12,7 +12,7 @@ The 23-tool catalog and successful structured responses are preserved. An MCP to
 - `RESOURCE_BUSY` / `NORMAL_WAIT`: poll the authorized exact original; the refused request was not admitted. A missing response never permits a new key.
 - `UNKNOWN_BLOCKER`: inspect the exact original through `operation_recover` before considering reconciliation. No implicit replay or release.
 - Capacity, name conflicts, dependency review and native preconditions have distinct or conservatively bounded codes. Missing or foreign identities remain non-enumerating.
-- `host_status.peer_mode` distinguishes Scoped v2 from Legacy; readiness and attention are bounded observations. Legacy Peer may require local approval. `operation_get.diagnostic` and `recovery_navigation` preserve original IDs. SAFE_RECOVER can point to evidence-bound reconciliation; local approval and unsupported paths do not become remote effects.
+- `host_status.peer_mode` reports the installed architecture; the current candidate supports only Scoped v2. Readiness and attention are bounded observations; historical modes require their matching installed contract, not a current fallback. `operation_get.diagnostic` and `recovery_navigation` preserve original IDs. SAFE_RECOVER can point to evidence-bound reconciliation; local approval and unsupported paths do not become remote effects.
 
 The handler checks UTF-8 byte length before admission, in addition to advertised schema character bounds. See [H4A acceptance](../development/PR188_H4A_BOX_ACCEPTANCE.md).
 

@@ -1805,3 +1805,34 @@ Python old positional mock failed for new env prefix, corrected exact
 caller fixture without changing assertions. Recheck
 21d14575697c59b0158331d995cd07aa: 106 Python, format, 13 CI scope
 tests, shell and diff checks PASS. R3 installed verification pending.
+
+### P3 R4 — caller convergence and S25 postflight repair candidate
+
+Baseline 52f1ce9013208470f10b07c8cf26e277cd46ac8a. See
+[P3 caller disposition](P3_CALLER_DISPOSITION.md). R3 Forward PASS;
+S1 failure log contains only the two frozen H tests. R3 S25
+140781584191 fails at outer CONTROLLER_DOCTOR: manifest, identity,
+runtime, dependencies, guard, lifecycle, SQLite, native and MCP observed;
+Scoped artifacts UNVERIFIED. Source shows the helper uses umask 077
+and scopedWriteExclusive used MkdirAll(0755), so the new systemd
+drop-in parent can be 0700. This explains the inaccessible Lstat;
+the exact failed runner directory mode was not separately captured.
+No startup retry or readiness weakening solves that predicate.
+
+Fix only newly created root-owned systemd metadata directory to the
+intended 0755 mode; preserve existing directory modes, file umask,
+exclusive write and private journal permissions. Root temp-fixture
+regression under 077 proves new 0755, file 0600, existing 0700 and
+exclusive original unchanged; no actual host installation. Current
+S25 outer/inner entrypoints now reject old or omitted mode before
+effects, existing PR/release Scoped callers unchanged. Add explicit
+obsolete CLI refusal calibration, not live audit/purge proof.
+Align six live docs with schema 7, current recovery and native
+dependency distinction. Historical bodies/workflows remain P4
+inventory, no deletion or H changes.
+
+Local verification 762a88127e6c0a295e8b1901dd6d56d6 exit0:
+root fixture PASS, CLI/Diagnostic full packages, selected Install
+D1-D4/P3/H1A/unit checks, vet, shell, 48 Python regressions and format.
+Actual S25 and dependent S2 exact-head independent proof remains
+mandatory. No formal R4/P3 signoff yet.

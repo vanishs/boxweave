@@ -1,7 +1,7 @@
 # UNKNOWN recovery — preserve the original
 
 1. Locate exact original via operation_list or box_activity_get; inspect operation_get, independent native evidence and actual guest exit/streams through operation_output_get.
-2. Use authenticated operation_recover mode=inspect. Supported reconcile requires a distinct reusable key, exact evidence and protected original scope; identity binding is not settlement. Native 404 or missing receipt does not prove absence.
+2. Use authenticated operation_recover mode=inspect. Supported reconcile requires a distinct reusable key, exact evidence and protected original scope. Current Scoped Create/Delete recovery requires the original durable native receipt, Root lifecycle journal and verified poststate; historical identity binding is not a current fallback or settlement. Native 404 or missing receipt does not prove absence.
 3. If MCP cannot prove the leaf, use [Doctor/Recover](DOCTOR_RECOVER.md). Local reviewed plan/apply is evidence-bound and never redispatches the original. Older leaf commands are version-specific; consult exact installed help.
 4. Partial proof, unavailable authority or foreign/native barriers leave original UNKNOWN/BLOCKED, protections intact. Report reason and safe next observation.
 

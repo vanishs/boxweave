@@ -385,3 +385,13 @@ Prior R2 N2 capacity parity, D4 no replay and SDK discovery are
 predecessor evidence, not R3 signoff. S25 CONTROLLER_DOCTOR regression
 and dependent S2 require independent revalidation; diagnostic retry
 is read-only and does not waive readiness.
+
+### P3 R4 caller contract candidate
+
+C08/P3-C10: current and historical callers classified in
+[P3 caller disposition](P3_CALLER_DISPOSITION.md). Retain all original
+current N2/S25 marker checks. Early current legacy-mode refusal and
+new metadata-directory umask regression pass locally. S25 failed
+artifacts observation is traced to a reproducible source permission
+mismatch; exact installed rerun is needed. No change to private journals,
+Root checks, H, C04 or other mandatory evidence. No formal acceptance.

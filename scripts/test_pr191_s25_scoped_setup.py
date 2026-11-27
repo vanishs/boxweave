@@ -23,6 +23,20 @@ class ScopedSetup(unittest.TestCase):
                 self.assertNotEqual(p.returncode, 0)
                 self.assertNotIn(b"=PASS", p.stdout)
 
+    def test_current_entrypoints_refuse_legacy_before_effects(self):
+        root = Path(__file__).resolve().parent
+        for name in ("s25_bridgehead_lab.sh", "s25_inner_setup.sh"):
+            for value in ("", "0", "invalid"):
+                env = dict(os.environ, P1B_S25_SCOPED=value)
+                # No host access or setup arguments; early selector guard.
+                p = subprocess.run(["sh", "-x", str(root / name)], env=env,
+                                   capture_output=True, timeout=5)
+                self.assertNotEqual(p.returncode, 0)
+                self.assertEqual(p.stdout, b"")
+                self.assertEqual(len(p.stderr.splitlines()), 2, p.stderr)
+                self.assertIn(b" = 1", p.stderr)
+
+
 
 class ScopedMountOracle(unittest.TestCase):
     def test_pre_bootstrap_and_post_bootstrap_mount_classification(self):

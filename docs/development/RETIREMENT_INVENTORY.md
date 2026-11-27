@@ -219,3 +219,11 @@ historical navigation, not new effects. Preserve Scoped MCP lifecycle
 reconciliation, current settle-only reviewed leaf, existing GC review
 and original UNKNOWN/claims. R4/P4 retain transitive caller/evidence
 disposition. No H composition changes.
+
+### P3 R4 caller and oracle mapping
+
+[P3 caller disposition](P3_CALLER_DISPOSITION.md) classifies active
+CLI/unit/wrapper/recovery, historical branches and tests. S25 current
+entrypoints are Scoped-only before any setup; retain old bodies for
+P4 transitive audit. Historical audit/purge CLI no-dispatch negatives
+are not a replacement for actual reader evidence. Keep H frozen.
