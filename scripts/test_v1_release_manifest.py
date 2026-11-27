@@ -112,7 +112,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("sh scripts/s25_bridgehead_lab.sh", s2)
         self.assertIn("sh scripts/s25_bridgehead_lab.sh", s25)
         self.assertNotIn("sh scripts/accept_s2_native.sh", s25)
-        self.assertIn("S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS", s25)
+        # The original packet/native evidence assertion moved into the
+        # shared transcript verifier, which must still run after the lab.
+        lab = 'sh scripts/s25_bridgehead_lab.sh 2>&1 | tee "$RUNNER_TEMP/native-s25-gate.log"'
+        check = 'sh scripts/pr191_s25_evidence_check.sh "$RUNNER_TEMP/native-s25-gate.log" "$P1B_S25_EXACT_HEAD"'
+        self.assertIn("set -euo pipefail", s25)
+        self.assertIn("python3 scripts/test_pr191_s25_evidence_check.py", s25)
+        self.assertLess(s25.index(lab), s25.index(check))
+        verifier = (ROOT / "scripts/pr191_s25_evidence_check.sh").read_text()
+        self.assertIn("grep -qx 'S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS'", verifier)
         self.assertIn("runs-on: ubuntu-24.04", s2)
         self.assertIn("runs-on: ubuntu-24.04", s25)
 
