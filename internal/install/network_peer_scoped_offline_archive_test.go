@@ -91,3 +91,33 @@ func TestP2OfflineEffectJournalRejectsGap(t *testing.T) {
 		t.Fatal("unrecorded prefix accepted")
 	}
 }
+
+func TestP2OfflineArchiveLedgerInventory(t *testing.T) {
+	file := func(name string) scopedOfflineArchivedFile {
+		var f scopedOfflineArchivedFile
+		f.Name = name
+		f.Info.SHA = strings.Repeat("a", 64)
+		return f
+	}
+	db, lock := file("ledger.sqlite"), file("ledger.sqlite.serve.lock")
+	for _, tc := range []struct {
+		name  string
+		files []scopedOfflineArchivedFile
+		ok    bool
+	}{
+		{"empty-sidecars", []scopedOfflineArchivedFile{db, lock}, true},
+		{"wal-shm", []scopedOfflineArchivedFile{db, lock, file("ledger.sqlite-wal"), file("ledger.sqlite-shm"), file("install-manifest.json")}, true},
+		{"missing-lock", []scopedOfflineArchivedFile{db}, false},
+		{"missing-ledger", []scopedOfflineArchivedFile{lock}, false},
+		{"duplicate-lock", []scopedOfflineArchivedFile{db, lock, lock}, false},
+		{"rollback-journal", []scopedOfflineArchivedFile{db, lock, file("ledger.sqlite-journal")}, false},
+		{"unrecognized-sidecar", []scopedOfflineArchivedFile{db, lock, file("ledger.sqlite-extra")}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, e := scopedOfflineLedgerDigests(tc.files)
+			if (e == nil) != tc.ok || tc.ok && (m[db.Name] != db.Info.SHA || m[lock.Name] != lock.Info.SHA) {
+				t.Fatal(m, e)
+			}
+		})
+	}
+}

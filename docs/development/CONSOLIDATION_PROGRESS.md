@@ -1523,3 +1523,53 @@ bash syntax, 22 evidence tests, actionlint, format and YAML PASS.
 CI launch and native proof pending. Learning: check all event types
 for missing PR runs and platform limits beyond syntax validation.
 No BDH promotion, no R4 or retirement gate waiver.
+
+### P2 R3 — actual N2 feedback and clean LXC fixture
+
+Exact bf36c5f N2 46058382872: 27/31 complete successful jobs.
+140706362774 settled populated offline full retirement PASS, actual
+identity b62c440b2f6255a87e8c3dba16de4d60d539681a305dd11d101d7cfc581dee83;
+140706362809 missing-ACK original retained and offline refused PASS.
+140706362693 exact UNKNOWN review, foreign ACL refusal PASS, archive
+created then progress refused before first new native effect.
+140706362716 active refusal PASS, cold original fingerprint changed
+after empty review. Both Legacy lanes still fail at unsupported fresh
+Legacy installation, not at a current supported runtime scenario.
+140706362734 and 140706362475 retain actual normal retirement,
+interrupted resume/purge, current scoped reinstall and generic reviewed
+recovery/no-replay/decline/partial original refusal.
+
+Correct two concrete source defects. Settled retirement previously used
+the live read-only SQLite connector even with controller stopped, which
+can modify WAL-index sidecars. Select existing strict validator on
+exclusive cold private capture when inactive; keep active live reader,
+same exact settled-inventory requirements, no changed authorization.
+Exceptional archive file inventory incorrectly classified the required
+ledger.sqlite.serve.lock as an unsupported sidecar. Bind and verify
+the exact persistent lock bytes alongside main/WAL/SHM; refuse missing,
+duplicate, rollback journal or unknown ledger-prefixed file. No original
+settlement, replay, lock release or weakening of root archive binding.
+
+Focused regression ee44ecb7c9fb475b314f005b173c89cb exit0: four
+state tests (incl new byte-preservation cold capture), five install
+tests (incl archive inventory positive and negatives), vet, format.
+Full affected state/install/CLI d5061d3b83172cdd4c030bef78e9a624:
+State and CLI PASS; Install FAIL only the two inherited H tests
+(6 subcases); no new package failure. Native exact-candidate rerun
+required, do not infer C07 PASS.
+
+Owner authorized a new Box for R3. Create 28269867c4c385cce54cf1eff940088e
+SUCCEEDED, native f054c452-0897-4eb2-bc39-c8a95bb17e49;
+pr191-p2-r3-lxc 91bd9fb7-ae4d-46c4-ab35-7ca6b7f069f9,
+user-1001, standard nesting, 4 CPU/4 GiB/24 GiB. Preflight
+5372fa4d8c80a95558fa1cc7192fd655 exit0: Ubuntu 24.04.5 LXC,
+no installed Incus/BoxWeave/retirement state, mapped UID/GID,
+AppArmor unconfined (functional-only, no recursion/isolation claim).
+Signed dependency installation 75bf430d8640d0a1f4f41a9cadb3c879 PASS;
+recognized inherited policy SHA256
+fcbd512cb8212c6f5720f28398f01e85ff96246aebb73e09cf449d2f3aa2c5b0
+unchanged. Exact previous source and Go 1.26.9/module cache
+aa6a5ff4109f1a8d32437848b3838936 PASS; signed Incus 7.6 package
+catalog 71f6c43499ac7922fae4f27d21f19188 PASS.
+Do not reset previous labs or spoof hosted-only fixture identity.
+Current candidate installed LXC witness not yet executed.

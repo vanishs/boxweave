@@ -64,6 +64,21 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 	if s == nil || s.db == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, ErrInvalid
 	}
+	return s.readScopedRetirementLedger(ctx, project, bridge)
+}
+
+// ReadScopedColdRetirementLedger uses the same strict settled inventory
+// verifier on an exclusive private copy. No SQLite connection is made to
+// the original stopped controller's DB/WAL/SHM.
+func (s *DiagnosticSnapshot) ReadScopedColdRetirementLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	if s == nil || s.store == nil || s.Capture != "SQLITE_EXCLUSIVE_COLD_COPY" {
+		return ScopedNetworkAuditLedger{}, ErrDiagnosticBusy
+	}
+	return s.store.readScopedRetirementLedger(ctx, project, bridge)
+}
+
+func (s *Store) readScopedRetirementLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	var zero ScopedNetworkAuditLedger
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return zero, err

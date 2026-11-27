@@ -14,6 +14,37 @@ import (
 	"strings"
 )
 
+type scopedOfflineArchivedFile struct {
+	Name string `json:"name"`
+	Info struct {
+		SHA string `json:"sha256"`
+	} `json:"info"`
+}
+
+// The persistent serve-lock is approved and archived alongside SQLite.
+// It is not a SQLite sidecar. Preserve and verify its exact bytes too;
+// reject any other ledger-prefixed entry, including rollback journals.
+func scopedOfflineLedgerDigests(files []scopedOfflineArchivedFile) (map[string]string, error) {
+	expected := map[string]string{}
+	for _, f := range files {
+		if strings.HasPrefix(f.Name, "ledger.sqlite") {
+			switch f.Name {
+			case "ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite.serve.lock":
+			default:
+				return nil, errors.New("offline archive ledger inventory invalid")
+			}
+			if expected[f.Name] != "" || !nativePeerGuardSHA256Valid(f.Info.SHA) {
+				return nil, errors.New("offline archive ledger inventory invalid")
+			}
+			expected[f.Name] = f.Info.SHA
+		}
+	}
+	if expected["ledger.sqlite"] == "" || expected["ledger.sqlite.serve.lock"] == "" {
+		return nil, errors.New("offline archive original ledger or serve lock missing")
+	}
+	return expected, nil
+}
+
 // The root-private archived review is the sole source of the exceptional
 // effect set. No caller-supplied path, UUID, ACL or replacement ledger.
 func scopedOfflineArchiveBinding(project, digest string) (ScopedOfflineReview, string, error) {
@@ -56,17 +87,12 @@ func scopedOfflineArchiveBinding(project, digest string) (ScopedOfflineReview, s
 		return zero, "", e
 	}
 	var plan struct {
-		Project string               `json:"project"`
-		Review  string               `json:"review_sha256"`
-		Offline bool                 `json:"offline_entry"`
-		Archive *ScopedOfflineReview `json:"offline_archive"`
-		UID     uint32               `json:"service_user_uid"`
-		Files   []struct {
-			Name string `json:"name"`
-			Info struct {
-				SHA string `json:"sha256"`
-			} `json:"info"`
-		} `json:"state_files"`
+		Project string                      `json:"project"`
+		Review  string                      `json:"review_sha256"`
+		Offline bool                        `json:"offline_entry"`
+		Archive *ScopedOfflineReview        `json:"offline_archive"`
+		UID     uint32                      `json:"service_user_uid"`
+		Files   []scopedOfflineArchivedFile `json:"state_files"`
 	}
 	if json.Unmarshal(b, &plan) != nil || !plan.Offline || plan.Project != project || plan.Review != fence.Review || plan.Archive == nil ||
 		plan.Archive.Project != project || plan.Archive.ReviewSHA256 != digest || len(plan.Archive.Targets) == 0 || len(plan.Archive.Originals) == 0 {
@@ -76,19 +102,11 @@ func scopedOfflineArchiveBinding(project, digest string) (ScopedOfflineReview, s
 	if e != nil || u.Uid != strconv.FormatUint(uint64(plan.UID), 10) || plan.UID == 0 || project != "user-"+u.Uid {
 		return zero, "", errors.New("offline archive service identity changed")
 	}
-	expected := map[string]string{}
-	for _, f := range plan.Files {
-		if strings.HasPrefix(f.Name, "ledger.sqlite") {
-			if (f.Name != "ledger.sqlite" && f.Name != "ledger.sqlite-wal" && f.Name != "ledger.sqlite-shm") || expected[f.Name] != "" || !nativePeerGuardSHA256Valid(f.Info.SHA) {
-				return zero, "", errors.New("offline archive ledger inventory invalid")
-			}
-			expected[f.Name] = f.Info.SHA
-		}
+	expected, e := scopedOfflineLedgerDigests(plan.Files)
+	if e != nil {
+		return zero, "", e
 	}
-	if expected["ledger.sqlite"] == "" {
-		return zero, "", errors.New("offline archive original ledger missing")
-	}
-	for _, name := range []string{"ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite-journal"} {
+	for _, name := range []string{"ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite-journal", "ledger.sqlite.serve.lock"} {
 		src := filepath.Join("/var/lib/boxweave", name)
 		dst := filepath.Join(fence.Archive, "state-"+name)
 		if expected[name] == "" {

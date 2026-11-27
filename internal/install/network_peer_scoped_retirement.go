@@ -198,6 +198,39 @@ func scopedRetirementReceiptSet(r nativePeerFreshJournalRecord, ledger state.Sco
 func scopedRetirementNativeRead(ctx context.Context, project string, resume bool) (scopedRetirementNative, error) {
 	return scopedRetirementNativeReadMode(ctx, project, resume, "")
 }
+
+// Offline planning must not create or change original SQLite sidecars.
+// Preserve the existing mutation-grade live reader for an active service;
+// use the identical settled-ledger validator on a cold copy when stopped.
+func scopedSettledRetirementLedger(ctx context.Context, project, bridge string) (state.ScopedNetworkAuditLedger, error) {
+	var zero state.ScopedNetworkAuditLedger
+	active, err := scopedRetirementUnitProperty(ctx, "boxweave.service", "ActiveState")
+	if err != nil {
+		return zero, err
+	}
+	switch active {
+	case "inactive":
+		if err := scopedRetirementInactive(ctx, "boxweave.service"); err != nil {
+			return zero, err
+		}
+		snap, err := state.OpenDiagnosticSnapshot(ctx, nativePeerRootInstalledDB)
+		if err != nil {
+			return zero, err
+		}
+		ledger, err := snap.ReadScopedColdRetirementLedger(ctx, project, bridge)
+		return ledger, errors.Join(err, snap.Close(), scopedRetirementInactive(ctx, "boxweave.service"))
+	case "active":
+		db, err := state.OpenNetworkAuditReadOnly(nativePeerRootInstalledDB)
+		if err != nil {
+			return zero, err
+		}
+		ledger, err := db.ReadScopedRetirementLedger(ctx, project, bridge)
+		return ledger, errors.Join(err, db.Close())
+	default:
+		return zero, errors.New("scoped retirement requires stable controller service state")
+	}
+}
+
 func scopedRetirementNativeReadMode(ctx context.Context, project string, resume bool, offlineDigest string) (scopedRetirementNative, error) {
 	var zero scopedRetirementNative
 	if os.Geteuid() != 0 {
@@ -244,12 +277,7 @@ func scopedRetirementNativeReadMode(ctx context.Context, project string, resume 
 		}
 		ledger = l.Inventory
 	} else {
-		db, err := state.OpenNetworkAuditReadOnly(nativePeerRootInstalledDB)
-		if err != nil {
-			return zero, err
-		}
-		defer db.Close()
-		ledger, err = db.ReadScopedRetirementLedger(ctx, r.Project, r.Bridge)
+		ledger, err = scopedSettledRetirementLedger(ctx, r.Project, r.Bridge)
 		if err != nil {
 			return zero, errors.New("SCOPED_RETIREMENT_LIVE_OR_UNSETTLED: clean up through MCP first; preserve original claims")
 		}
