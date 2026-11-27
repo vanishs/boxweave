@@ -77,3 +77,30 @@ and dependent-work delay if observable. Count nested calls, including failures,
 not just outer script calls. Compare against prior actual samples without
 claiming equivalent workload or measured savings unless controlled evidence
 exists. Candidate guidance, not a new product tool or automatic scheduler.
+
+## Staged source batch (candidate)
+
+For a reviewed, staged-only source slice in an authorized development
+checkout, use the candidate dev/staged_batch.py instead of reconstructing
+test/vet/format/export commands each time. Pass exact parent and staged
+tree, a fresh evidence directory outside checkout, explicit affected and
+adjacent Go packages (--go-package ./internal/state etc.) and any matching
+registered Python checks (--check bwdev/scope/recovery-fixture). The helper
+runs diff check, selected Go test -count=1 and vet, selected existing checks
+and format; stops on failure or source drift, retains private per-check
+logs and digests, emits compact status and text export only on local PASS.
+It does not stage, commit, dispatch native work or decide required checks.
+Do not use for binary/deletion/symlink or unstaged changes; retain the
+ordinary fallback and all applicable CI/native gates.
+
+For export rows with base_blob and append, read that exact path at the
+payload parent via authorized GitHub; require returned blob SHA equal
+base_blob, reconstruct exact text and remove delta fields. All other rows
+contain full content. Verify every page, original Operation exit and
+identity; create a tree from the stated base only after reviewing all rows;
+require returned remote tree equal the exact staged tree, then commit and
+advance only with an expected-parent lease, never force. If reconstruction
+or evidence fails, stop publication and preserve the original worktree.
+Logs are private; do not publish raw logs. A staged-tree result is local,
+not independent CI/native acceptance. Record measured nested calls, bytes
+and rework; do not infer general productivity from one trial.
