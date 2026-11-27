@@ -104,6 +104,17 @@ BOX_VERIFIED means source/fixture tests only.
 | S2_NATIVE_STALE_ETAG_ORIGINAL_UNKNOWN_AND_LOCKED | CI_VERIFIED d32939b 139837920269 P1B_SCOPED_UPDATE_TRANSPORT=PASS etag (also ack/postread), original held and native no duplicate, unchanged pinned ACL. |
 | S2_P0_GENERAL_UNKNOWN_STAGED_ROOT_CLI_DUAL_CONFIRMATION; S2_P0_GENERAL_UNKNOWN_AUDIT_DURABLE; S2_P0_GENERAL_UNKNOWN_LOCAL_RELEASE_NO_RETRY | Old generic challenge/release leaving UNKNOWN but permitting new work is obsolete for Scoped: recover.go requires reviewed route except specific GC. CI_VERIFIED installed reviewed D4 exact original settlement/no replay/audit and duplicate receipt (a65e5e2 job 139839963173); scoped lifecycle rollback completed-original recovery same job. BOX_VERIFIED new exact real Update UNKNOWN negative for old inspect/challenge/release route, no audit/claim/original/native change, installed CI_PENDING. GC-specific reviewed release is retained, not a blanket unlock. |
 
+## Active consumer disposition
+
+R0-R5 in [the plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
+now governs ordering. Move any S2/S2.5 consumer preventing actual P1
+cutover into R1 or the coherent R2-R4 batch, rather than wait for P4.
+Keep all required behavioral assertions, negative calibration and exact
+candidate provenance. Archive obsolete Legacy-only witnesses with
+rationale; never fake old markers. P4 handles unrelated cleanup only.
+The following historical mapping remains evidence; its P4 timing
+is superseded for cutover dependencies. No WAN or native waiver.
+
 ## Remaining consumers and disposition
 
 - All old S2/S2.5 producers, raw witness audit, grouped acceptance manifest,

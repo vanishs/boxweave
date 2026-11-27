@@ -35,6 +35,17 @@ that checkpoint and relevant acceptance rules rather than reloading long
 historical progress logs. Expand historical evidence only for a concrete
 gap, conflict, or required witness.
 
+For development follow [fast local reuse and strict acceptance](../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance):
+reuse authorized Box/worktree and Git objects; batch locally verified commits
+and publish at meaningful CI boundaries. Clean independent fixtures are
+reserved for gates that require them. Preserve remote freshness, original
+Operations and durable handoff.
+
+For staged development, use the active task plan and finite exit ledger;
+apply [adaptive stages](../docs/development/AGENT_WORKFLOW.md#outcome-first-adaptive-stages).
+At stage boundaries replan the next actions from evidence, not checkpoint
+counts. Do not expand scope merely because a dependency is blocked.
+
 ## Choose the shortest applicable route
 
 Use the authorized task checkout's [short task routes](INDEX.md#short-task-routes)

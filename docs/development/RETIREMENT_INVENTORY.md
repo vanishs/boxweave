@@ -24,6 +24,18 @@ Initial source audit at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. This is a se
 
 P0 must also search the entire checkout for alternative mode flags, old protocol/role/data fixtures, hard-coded RC tags, obsolete journal paths, old compatibility claims and disconnected CI-only code. A name match alone is not a deletion proof. No measured deletion count or fully verified dependency graph yet.
 
+## Active retirement sequence
+
+The [R0-R5 recovery plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
+supersedes historical ordering holds, not safety requirements. In R0
+classify each remaining live dependency by required behavior, actual
+consumer, disposition, proof and exact blocking stage. Remove obsolete
+execution in the coherent cutover; do not keep it solely to satisfy a
+historical implementation-specific test. Convert necessary install,
+CLI and CI consumers alongside it. Preserve historical Git/evidence;
+retain fail-closed old-state refusal. No bulk deletion, arbitrary count,
+new migration or compatibility shim. Keep the live ledger concise.
+
 ## P0 exit baseline and implementation hold points
 
 Baseline `1cfcd3da43bc47dfc42edac58d0041c02aa16e56` was independently built twice with identical binary digest, then installed, exercised, retired, purged and reinstalled in the isolated L1 native lab. See [progress and operation evidence](CONSOLIDATION_PROGRESS.md).

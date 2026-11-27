@@ -32,6 +32,13 @@ See [dual-loop plan](../../../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md)
 and [learning skill](../continuous-learning/SKILL.md).
 
 
+Prioritize actual product exit conditions over optimizing repeated
+activity that should be eliminated. Review task dependency/order,
+unnecessary evidence duplication and obsolete live consumers before
+automating a costly loop. See [adaptive stages](../../../docs/development/AGENT_WORKFLOW.md#outcome-first-adaptive-stages).
+Keep nonblocking improvements deferred; use the existing manual Git
+route for unsupported deletion/export instead of expanding BDH by default.
+
 ## Owner-invoked improvement cycle (candidate)
 
 An explicit owner request "BDH优化" or equivalent starts one bounded

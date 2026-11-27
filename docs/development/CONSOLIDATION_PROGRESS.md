@@ -2,6 +2,47 @@
 
 Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY.md) | [acceptance](CONSOLIDATION_ACCEPTANCE.md). Topic branch: `feat/v1-pre-release-consolidation-20261124`, base v1 at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. Owner requested one PR, Box-first iterative work and independent CI in parallel. P0 preflight is closed; P1 product implementation has begun with behavior-preserving helper extraction.
 
+## Current P1 recovery ledger
+
+Active sequence: [R0-R5](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active).
+Audit snapshot: published a3b3ad0dd6c50756e3663963730a658343609846;
+[convergence audit](https://github.com/vanishs/boxweave/pull/191#issuecomment-7207100365).
+Refresh observations at R0 entry, not by rereading the full history.
+
+| Stage | Status / remaining deliverable |
+| --- | --- |
+| R0 | READY: prior audit reusable; reconcile current facts, precise dependency/acceptance map and WAN decision. |
+| R1 | OPEN: minimum cutover dependencies and witness disposition. |
+| R2 | OPEN: actual Scoped-only runtime; 16 non-test ScopedPeerFresh matching lines at audit. |
+| R3 | OPEN: fresh direct schema; version 6, nine old-table reference files at audit. |
+| R4 | OPEN: affected native/consumer gates; historical N2 28/28, hosted WAN UNVERIFIED. |
+| R5 | OPEN: independent exact-candidate review, clean native and mandatory CI. |
+
+Counts are diagnostics, not arbitrary targets. Audit: 134 commits, 436 files,
++56704/-2058 across entire PR (including BDH); D32-D36 +735/-167 without
+runtime mode or schema convergence; N2 4 to 28 modes. Of 35 workflow runs
+for five heads, 8 cancelled, 21 success, 5 queued, 1 running at audit.
+Actual prior N2 run 45912024502 all 28 PASS (including WAL rerun);
+alternate-pool native PASS. D14 real Box MCP IPv4 on/off/on at 92ffeda
+retained as historical evidence; Hosted cause not confirmed. At audit,
+current quality/S1/Forward/S25 PASS; N2/dual queued, S2 running.
+No final-head or retirement waiver inferred.
+
+Existing owned development Box 9d374e18-196a-493d-bf1f-2d582589f04d;
+clean local branch bdh-reuse-batch-20261126 at /root/pr191-p1-d36:
+a3a01ea (policy docs), 60448ba (committed batch candidate), d2338b3
+(D37 source test). Preserve these commits; focused tests only, aggregate
+validation/publication incomplete. Policy docs reused in replan; reconcile
+overlap before any subsequent publication. No reset or force.
+
+Next command: **P1 R0**. Reuse prior evidence; select only decisive
+investigation. R0 must close with finite concrete tasks or a named blocker
+and necessary owner decision. On each later stage update this table and
+next actions in place; link evidence rather than append duplicate summaries.
+P0 remains closed; P2-P5 remain open. No merge/release.
+
+## Historical phase status (superseded)
+
 | Phase | Box / development status | CI / independent status |
 | --- | --- | --- |
 | P0 | COMPLETE — preflight/inventory and L1 rehearsal; precise L2 native capability blocker reproduced | Exact merged BDH source/quality/dual-arch PASS; full native S2/S2.5 remains OPEN/BLOCKED for P1/P2/P5 |

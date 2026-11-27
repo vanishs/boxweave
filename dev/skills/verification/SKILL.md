@@ -78,6 +78,14 @@ not just outer script calls. Compare against prior actual samples without
 claiming equivalent workload or measured savings unless controlled evidence
 exists. Candidate guidance, not a new product tool or automatic scheduler.
 
+## Batch boundary
+
+Follow the [fast development policy](../../../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance):
+focused checks before each local commit, affected aggregate regression at
+the combined candidate, independent CI/native evidence at meaningful
+boundaries. Retain exact final-head and clean-fixture gates; do not repeat
+unchanged valid evidence without an applicable reason.
+
 ## Staged source batch (candidate)
 
 For a reviewed, staged-only source slice in an authorized development

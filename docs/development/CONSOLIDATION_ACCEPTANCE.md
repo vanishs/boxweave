@@ -17,6 +17,22 @@ This is the initial crosswalk for the single pre-release consolidation PR. Compl
 | C11 | Every retired workflow/test/marker mapped to retained behavior plus equivalent new witness or explicit obsolete Legacy-only requirement. Preserve release S2/S2.5 native gates, exact signature/asset checks and required quality; test new triggers and negative calibration, not just green aggregate. | P0-P5 |
 | C12 | Fresh checkout and independent code review, BDH activation/resume, learning audit and applicable Eval, no stale active references; actual reuse/outcome only if observed. Exact final CI and coverage crosswalk, no unresolved release-critical regression. #170 receives new source/contract and evidence limits. | P4/P5 |
 
+## Active P1 recovery interpretation
+
+Use [R0-R5](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
+and the [live ledger](CONSOLIDATION_PROGRESS.md#current-p1-recovery-ledger).
+This changes execution order, not C01-C12 or final acceptance. Prior
+checkpoint statements are historical, not new blanket hold points.
+R0 must identify the exact dependency and behavioral oracle for each
+remaining mandatory gate. Historical evidence is reusable within its
+proven scope; run final applicable gates on the exact new candidate.
+A reversible source cutover may combine runtime/schema and minimum
+consumer changes; do not retire a required behavior without equivalent
+proof or explicit obsolete-contract disposition. Never merge an
+unaccepted candidate. WAN is a separate named gate: earlier real Box
+positive and Hosted UNVERIFIED remain distinct; no automatic equivalence
+or waiver. R5 closes P1 only with mandatory P1 evidence.
+
 ## Coverage ledger
 
 For each affected original acceptance ID, test function or CI marker capture: baseline file/job/line and original evidence link; required behavior; applicability; disposition RETAINED, REPLACED, OBSOLETE_LEGACY or OPEN/BLOCKED; current test and explicit witness; exact source/binary/fixture/actor; Box result and independent CI run/attempt/job; residual limitation. Record scope decisions separately from observations. Keep existing mandatory acceptance IDs; #170 reconciles all A/SDK/BH/TC and S5 gates with this crosswalk. Do not change signoff format or count just to remove work.

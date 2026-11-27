@@ -16,6 +16,15 @@ References: [workflow](../../../docs/development/AGENT_WORKFLOW.md), [nesting](.
 
 Optional v0.5: use bwdev profile or start --profile to observe task-specific prerequisites from [profiles](../../profiles.json). Presence of Incus/systemctl is not native readiness. Use existing authorized recipes and independent capability checks; the profile does not install or provision.
 
+## Reuse-first iteration
+
+Follow the [fast development policy](../../../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance).
+Retain worktree and pinned dependencies across slices; reconcile the remote
+at resume/publication boundaries. Reuse known immutable local objects.
+Bundle compatible local commands; avoid duplicate provisioning, fetching
+or dispatch while an original holds the resource. A clean fixture must
+be justified by its acceptance oracle, not by the number of slices.
+
 ## Bounded guest source transfer
 
 If large inline argv is refused at admission, distinguish an explicit refusal with no receipt from a lost acknowledgement. Read any original Operation before further effects; never replay uncertain work or bypass admission. For a new patch or source file in the owned isolated guest, use exclusive box_file_apply create, confirm terminal success and verified file readback, then execute a short explicit argv referencing the reviewed file in the correct checkout. Check actual guest exit and output, and inspect the changed files. Do not infer an exact size limit, overwrite a pre-existing file, or apply this as authorization on a Host. See [BDH-L014](../../learning/BDH-L014/00000003.json).

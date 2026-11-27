@@ -16,6 +16,12 @@ References: [checkpoint contract](../../../docs/development/TASK_CHECKPOINT_CONT
 Optional v0.5: use bwdev resume with original task history and explicit checkpoint; supply existing evidence and CI snapshot as available. Review REVIEW_REQUIRED items, preserve original operations, and export a sanitized handoff summary to the active PR. No replay or remote state authority.
 
 
+Prefer the same owned Box/worktree and preserved local commits.
+Record both observed remote base and local HEAD/tree; verify before reuse.
+Do not refetch known immutable objects or dispatch against a known busy
+original. An external pointer to local commits is not independent backup.
+See [fast development policy](../../../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance).
+
 ## Early checkpoint before call-budget pressure (candidate)
 
 The client may exhaust its tool-call budget without warning. Count actual
@@ -49,6 +55,13 @@ and whether a later continuation actually reused the checkpoint. Do not
 claim crash recovery or improved productivity from a saved record alone.
 No automatic scheduler, quota probe, new permission or product tool.
 
+
+At each phase boundary, use the active plan's finite exit ledger and
+[adaptive stages](../../../docs/development/AGENT_WORKFLOW.md#outcome-first-adaptive-stages).
+A ready task must advance a remaining exit condition or a necessary
+dependency. Do not generate extra tasks just to avoid ending a blocked
+phase. If repeated work does not reduce the remaining critical path,
+replan the next stage; preserve all mandatory proof and owner decisions.
 
 ## Finish Gate (candidate)
 

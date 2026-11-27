@@ -36,6 +36,67 @@ Before committing, run `make hooks` (once per clone) and `make verify`; inspect 
 - Use generic names and example domains in public docs. Escape untrusted text in console and log output; avoid recording private IPs or real service names.
 - Maintain user-visible documentation and machine-readable MCP schemas in English. Reply to the requester in their explicitly requested language or this conversation's language by default.
 
+## Fast development, strict acceptance
+
+Default to the existing authorized Box, worktree, local Git objects, toolchain,
+caches and verified fixture. Observe identity, ownership, dirty/staged work and
+original Operations at resume and meaningful changes, not before every edit.
+Reuse immutable context. Consult GitHub for changed or missing facts; fetch
+only when a required revision is absent or remote reconciliation is due.
+A cached ref is not proof of the live remote head.
+
+Group related inspection, edits and focused tests into bounded local operations.
+Avoid another Exec against a known busy resource while the original is pending;
+do independent reads or work on a genuinely independent authorized resource.
+Review and commit coherent, locally verified slices inside the Box. Accumulate
+compatible commits; run affected/adjacent regression on the combined exact
+candidate. Publish at a meaningful CI boundary: a native result needed for a
+decision, coherent stage, high-risk change needing independent evidence,
+durable handoff/backup requirement, or final acceptance. Do not submit every
+small edit or create a fresh Box/worktree for every checkpoint. No fixed batch size.
+
+Reuse populated labs for suitable iterative tests; use a clean independent
+fixture for fresh install, schema/absence, isolation, reproducibility or other
+gates whose oracle requires it. Preserve required native and exact-head CI.
+Cache hits, earlier SHA results and reused labs are not independent clean
+acceptance. Invalidate affected evidence on relevant change; reconcile drift
+or conflicting ownership. Never bypass admission, replay UNKNOWN, reset dirty
+work, or weaken a test.
+
+Local commits are not independent backup. Record local branch, base, HEAD/tree,
+original receipts, evidence and next action outside the Box; ensure actual bytes
+are durably stored when required. Prefer normal fast-forward publication of
+local commits. If only the authorized GitHub tree API works, a recorded
+aggregate commit may represent their exact final tree; retain local commits
+and mapping, verify remote tree and expected parent before advancing the ref.
+Do not pretend local commit IDs were published.
+
+## Outcome-first adaptive stages
+
+For a multi-stage task, define a finite remaining exit ledger in the
+active plan and at most three user-facing instructions per stage.
+Investigate decisive dependencies early, then implement against actual
+exit outcomes. At each boundary compare the remaining acceptance and
+critical path, invalidate affected evidence and adjust the next stage.
+Do not mistake commits, new tests, refactoring or record counts for
+completion. Preserve the approved product and mandatory safety gates.
+
+When blocked, classify the affected exit condition and resolve it or
+advance only necessary independent work. Defer optional improvements;
+do not manufacture work to avoid reporting a blocker. Repeated
+non-converging slices require replanning rather than another slice.
+Where replacing an architecture, disposition each retained behavior
+and remove obsolete live code/test consumers after equivalent evidence
+or as a reversible, independently verified cutover candidate. Retain
+historical evidence. Do not add compatibility merely for old tests.
+Use ordinary deletion-capable Git or reviewed exact-tree publication
+when a source export helper cannot represent a removal.
+
+One current ledger owns stage status; update it in place, link historical
+proof and next 1-3 actions. No repeated full-history prompts or separate
+progress registries. Ordinary work reuses BDH; a nonblocking BDH idea
+is a deferred candidate, not a new prerequisite.
+
 ## Development environment and Box lifecycle
 
 This is the default end-to-end developer workflow, not a new runtime feature or a requirement that BoxWeave already work to develop BoxWeave.
