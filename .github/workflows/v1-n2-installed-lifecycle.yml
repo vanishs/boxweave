@@ -27,12 +27,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-offline-empty, scoped-offline-settled, scoped-offline-original, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-update-ack-wal-before, scoped-update-ack-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec, scoped-stop-ack, scoped-overlap, scoped-altpool]
+        mode: [scoped, scoped-retirement, scoped-offline-empty, scoped-offline-settled, scoped-offline-original, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-update-ack-wal-before, scoped-update-ack-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec, scoped-stop-ack, scoped-overlap, scoped-altpool]
     env:
       RUNNER_ENVIRONMENT: github-hosted
-      PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
+      PR178_SCOPED_N2: '1'
       P2_R3_OFFLINE: ${{ matrix.mode == 'scoped-offline-empty' && 'empty' || matrix.mode == 'scoped-offline-settled' && 'settled' || matrix.mode == 'scoped-offline-original' && 'original' || '' }}
-      PR188_OFFLINE_RETIREMENT: ${{ matrix.mode == 'legacy-offline' && '1' || '0' }}
       PR182_SCOPED_RETIREMENT: ${{ matrix.mode == 'scoped-retirement' && '1' || '0' }}
       P1B_ACK_CUT: ${{ matrix.mode == 'scoped-create-ack' && 'create' || matrix.mode == 'scoped-delete-ack' && 'delete' || matrix.mode == 'scoped-update-ack' && 'update' || matrix.mode == 'scoped-update-ack-receipt' && 'update-receipt' || '' }}
       P1B_UPDATE_ACK_WAL: ${{ matrix.mode == 'scoped-update-ack-wal-before' && 'before' || matrix.mode == 'scoped-update-ack-wal-after' && 'after' || '' }}
@@ -60,7 +59,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Exact-head native bootstrap, install, outage, compatible upgrade, rollback and uninstall
+      - name: Exact-head native bootstrap, Scoped install, recovery and retirement
         shell: bash
         run: |
           set -euo pipefail
@@ -81,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$N2_EVIDENCE_LANE" in
-            legacy|legacy-offline|scoped-retirement|scoped-offline-empty|scoped-offline-settled|scoped-offline-original|scoped-update-ack|scoped-update-ack-receipt|scoped-noquota)
+            scoped-retirement|scoped-offline-empty|scoped-offline-settled|scoped-offline-original|scoped-update-ack|scoped-update-ack-receipt|scoped-noquota)
               echo "No historical S2 mapping; original full lane checks remain required"
               exit 0
               ;;

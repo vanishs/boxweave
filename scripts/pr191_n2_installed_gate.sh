@@ -2,6 +2,8 @@
 # Exact original N2 lane assertions, extracted from the workflow run block.
 # Read only the existing runner transcript. No native effects or fixture setup.
 set -euo pipefail
+test "${PR178_SCOPED_N2:-0}" = 1
+test "${PR188_OFFLINE_RETIREMENT:-0}" = 0
 for marker in WRAPPER REAL_OAUTH_RESUME INSTALLED_NO_EFFECT; do
   grep -Fxq "PR188_H3A_${marker}=PASS" "$RUNNER_TEMP/n2-installed.log"
 done
@@ -200,15 +202,6 @@ if test -n "$P1B_ACK_CUT"; then
   esac
   exit 0
 fi
-if test "$PR188_OFFLINE_RETIREMENT" = 1; then
-  grep -Fxq PR188_H2C_OFFLINE_POSTNATIVE_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
-  grep -Fxq PR188_H2C_OFFLINE_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
-  grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
-  for marker in EXACT_UNKNOWN_REVIEW ARCHIVED_UNKNOWN_UNCHANGED NATIVE_RETIRED FOREIGN_UNCHANGED; do
-    grep -Fxq "PR188_H2B_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
-  done
-  exit 0
-fi
 if test "$PR182_SCOPED_RETIREMENT" = 1; then
   grep -Fxq P1B_SCOPED_LEGACY_FRESH_PLAN_REFUSED_NO_EFFECT=PASS "$RUNNER_TEMP/n2-installed.log"
   grep -Fxq P2_R3_SCOPED_PROJECT_DRIFT_REFUSED_NO_EFFECT=PASS "$RUNNER_TEMP/n2-installed.log"
@@ -268,20 +261,5 @@ if test "$PR178_SCOPED_N2" = 1; then
   grep -Fxq 'N4_PARTIAL_RESTART_PHASE UNKNOWN' "$RUNNER_TEMP/n2-installed.log"
   exit 0
 fi
-grep -Fxq I2_GUIDED_LEGACY_PREVIEW_NO_EFFECT=PASS "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq I3_LEGACY_DRIFT_REFUSED_BEFORE_RETIREMENT=PASS "$RUNNER_TEMP/n2-installed.log"
-grep -Fq 'PR177_D3_INSTALLED_POSITIVE_PLAN=PASS LEGACY' "$RUNNER_TEMP/n2-installed.log"
-grep -Fq 'PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY=PASS LEGACY ' "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq "PR188_H3B_GUIDED_DECLINE_NO_EFFECT=PASS LEGACY" "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq "PR188_H4A_INSTALLED_BUSY_AND_REPLAY=PASS LEGACY" "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq "PR188_H4A_INSTALLED_UNKNOWN_NAVIGATION=PASS LEGACY" "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq PR177_D5_LEGACY_CLEANUP=PASS "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq 'PR177_D5_AUTHENTICATED_POSTCHECK=PASS LEGACY' "$RUNNER_TEMP/n2-installed.log"
-for marker in N2_INSTALLED_HELPER_ACTIVATION N2_INSTALLED_HELPER_OUTAGE_RECOVERY_NO_DELETE_REPLAY N2_SCHEMA6_UPGRADE_ROLLBACK N2_FULL_UNINSTALL_PRESERVES_ARCHIVE; do
-  grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
-done
-grep -Fxq N2_CLEAN_INSTALLED_LIFECYCLE_PASS "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq RC14_LEGACY_PURGE=PASS "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq RC14_FRESH_LEDGER=PASS "$RUNNER_TEMP/n2-installed.log"
-grep -Fxq RC14_LEGACY_TO_SCOPED_REINSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
+echo "unsupported N2 evidence mode" >&2
+exit 1

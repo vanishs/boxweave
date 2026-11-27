@@ -169,3 +169,11 @@ correction and I3 current Project drift oracle in new candidate.
 Assertion-by-assertion proposed Legacy disposition recorded in
 CONSOLIDATION_ACCEPTANCE.md; keep old gates until owner approval and
 actual retained normal/drift proof. No obsolete assertion marked PASS.
+
+2026-11-27 owner approved the assertion-level R3 Legacy-only gate
+disposition. e674d15 actual normal + three offline positives PASS;
+retained generic recovery/no-replay and negative evidence in acceptance
+crosswalk. Remove only legacy and legacy-offline active N2 entries;
+historical source/history stays available for P4. Keep all 29 Scoped
+lanes, original markers and negative controls; do not mark obsolete
+behavior PASS. Exact new-head revalidation required.

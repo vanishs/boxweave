@@ -284,3 +284,35 @@ names, source and exact earlier evidence until owner approval and all
 retained generic witnesses are verified. Final current normal regression,
 I3 equivalent CI and owner disposition outstanding. No P1 H, C04, C01
 or release gate waiver. Do not advance R4 or claim R3 signed.
+
+### R3 owner decision — retire only unsupported Legacy N2 requirements
+
+2026-11-27: owner explicitly authorized retirement of the two old
+Legacy N2 gates after equivalent retained assertions pass. The preceding
+assertion-level disposition is approved within this narrow scope. It is
+not a waiver of any retained generic requirement.
+
+Exact e674d15722e2d22692a939fe90b6bba8c5b73354 N2 46062127023:
+candidate 3e4b93c586ae9b655c054c621d0609e46d0f0bd2a5cf506ff62d19010293be46.
+Normal 140718649872 PASS (including I3 equivalent Project drift refusal,
+foreign refusal, interrupted resume, native restoration, full drain,
+archive/purge/resume and fresh ledger/token denial/reinstall workload).
+Normal transcript 0bb8d298e8d66bd92cff05c172e6dcfbb28e31b23406143ea0b649a94b576425.
+Offline empty 140718649957, settled 140718649912 and exact original
+140718650010 PASS; original transcript
+d6b25989f03c7644c4c9788f8d318e858a0da1f8307a60a02c8258ebcc13ec1a.
+The original lane again verifies exact UNKNOWN/claim archive, prefix
+resume, native poststate, unrelated resources, post-native resume,
+purge and fresh workload. Earlier 8786dc2 generic recovery, Delete ACK
+and missing-ACK negative proof remains recorded; current repeats must
+remain required. Prior current-candidate LXC proof covers functional
+empty retirement, not recursive isolation or populated exceptional LXC.
+
+Retire only legacy and legacy-offline matrix entries and their obsolete
+marker branches. All 29 remaining lane bodies and assertions are kept
+exactly, including current refusal of legacy installation, I3, C07,
+72 S2 markers / 23 producers (including S25), and unmapped mandatory
+N2 checks. Reject old fixture selectors before execution; historical
+fixture bodies remain for the P4 caller/source inventory. No success
+marker for retired behavior. No product runtime change, no C01/H/C04
+or release gate waiver. Independent exact new-head CI required.

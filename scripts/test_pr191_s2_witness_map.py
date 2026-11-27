@@ -63,12 +63,12 @@ class WitnessMap(unittest.TestCase):
     def test_workflow_lanes_exact_partition(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/v1-n2-installed-lifecycle.yml").read_text()
         modes = set(re.search(r"^        mode: \[(.+)\]$", workflow, re.M)[1].split(", "))
-        unmapped = {"legacy", "legacy-offline", "scoped-retirement",
+        unmapped = {"scoped-retirement",
                     "scoped-offline-empty", "scoped-offline-settled", "scoped-offline-original",
                     "scoped-update-ack", "scoped-update-ack-receipt", "scoped-noquota"}
         self.assertEqual(modes, (set(LANES) - {"s25"}) | unmapped)
         self.assertFalse((set(LANES) - {"s25"}) & unmapped)
-        self.assertIn("|".join(("legacy", "legacy-offline", "scoped-retirement",
+        self.assertIn("|".join(("scoped-retirement",
                                "scoped-offline-empty", "scoped-offline-settled", "scoped-offline-original",
                                "scoped-update-ack", "scoped-update-ack-receipt", "scoped-noquota")) + ")", workflow)
 
@@ -270,7 +270,13 @@ class WitnessMap(unittest.TestCase):
         self.assertLess(n2.index("run: bash scripts/pr191_n2_installed_gate.sh"),n2.index("--ci-receipt"))
         gate=(root.parents[1]/"scripts/pr191_n2_installed_gate.sh").read_text()
         self.assertIn("set -euo pipefail",gate)
-        self.assertIn("grep -Fxq RC14_LEGACY_TO_SCOPED_REINSTALL=PASS",gate)
+        self.assertNotIn("RC14_LEGACY_TO_SCOPED_REINSTALL=PASS",gate)
+        self.assertNotIn("PR188_H2B_$marker=PASS",gate)
+        self.assertIn("P2_R3_SCOPED_PROJECT_DRIFT_REFUSED_NO_EFFECT=PASS",gate)
+        self.assertIn("P1B_SCOPED_LEGACY_FRESH_PLAN_REFUSED_NO_EFFECT=PASS",gate)
+        self.assertIn("PR188_ROUNDTRIP_SCOPED_REINSTALL_WORKLOAD=PASS",gate)
+        self.assertIn("PR188_ROUNDTRIP_SCOPED_FRESH_LEDGER_OLD_TOKEN_DENIED=PASS",gate)
+        self.assertIn("test \"${PR178_SCOPED_N2:-0}\" = 1",gate)
         self.assertIn("P2_R3_SCOPED_OFFLINE_MISSING_ACK_REFUSED=PASS",gate)
         self.assertNotIn("continue-on-error:",n2)
         self.assertLess(n2.index("--ci-receipt"),n2.index("uses: actions/upload-artifact@v4"))

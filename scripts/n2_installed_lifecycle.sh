@@ -1,6 +1,10 @@
 #!/bin/sh
 # Exact-head clean-VM N2 installer lifecycle. Never run on a shared Host.
 set -eu
+# Owner-approved retirement of the two unsupported Legacy N2 lanes.
+# Retain historical fixture bodies for the P4 caller/source inventory.
+test "${PR178_SCOPED_N2:-0}" = 1
+test "${PR188_OFFLINE_RETIREMENT:-0}" = 0
 test "${GITHUB_ACTIONS:-}" = true
 test "${RUNNER_ENVIRONMENT:-}" = github-hosted
 test "$(id -u)" != 0

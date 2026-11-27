@@ -1617,3 +1617,19 @@ Project drift refusal/no-effect fixture and required marker to normal
 retirement lane; preserve every earlier gate and fixture. Owner decision
 for obsolete-only Legacy semantics remains required. See acceptance
 crosswalk; no lane removal or R4 advancement.
+
+### P2 R3 — owner-authorized obsolete N2 gate retirement
+
+e674d15 N2 46062127023 normal 140718649872 including new I3 equivalent
+PASS. Three offline positives 140718649957/912/140718650010 PASS.
+Thus normal handoff correction verified on actual installed candidate.
+Owner approved retire Legacy-only gate requirements after equivalent
+proof; see acceptance crosswalk. Scope limited to matrix/gate consumers
+and fail-closed old selectors, not historical fixture or product code
+deletion. Local 6afd9027929909a199d935cb60b0ac27 exit0: exact remaining
+29 lane order and unchanged active assertion bodies, retired selectors
+refused before setup, 24 evidence/quota tests, actionlint/shell/format.
+Learning: distinguish retired product requirements from retained
+generic safety proof; verify exact retained gate set. No new BDH asset.
+Current quality/S1/two-arch logs still fail only inherited H tests;
+retain formal acceptance blockers. No R4 advancement until R3 exit.
