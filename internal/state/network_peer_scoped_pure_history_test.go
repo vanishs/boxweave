@@ -166,3 +166,46 @@ func TestP1ScopedPurePeerHistoryRefusesDrift(t *testing.T) {
 		})
 	}
 }
+
+func TestP1ScopedPurePeerHistoryUnknownRecovery(t *testing.T) {
+	ctx := context.Background()
+	s, _, _ := n3ScopedOwnedFixture(t)
+	token := purePeerNewToken(t, s)
+	sibling := purePeerAdmit(t, s, token, "sibling", 3, 1, true)
+	purePeerComplete(t, s, sibling)
+	purePeerComplete(t, s, purePeerAdmit(t, s, token, "grant", 1, 2, true))
+	purePeerComplete(t, s, purePeerAdmit(t, s, token, "revoke", 1, 2, false))
+	orig := purePeerAdmit(t, s, token, "regrant", 1, 2, true)
+	if e := s.StageAndClaimScopedPeerOriginal(ctx, orig.ID); e != nil {
+		t.Fatal(e)
+	}
+	receipt := purePeerReceipt(t, s, orig)
+	if e := s.Unknown(ctx, orig.ID, "DISPATCHING", "TEST_LOST_ACK"); e != nil {
+		t.Fatal(e)
+	}
+	reader := purePeerReadOnly(t, s)
+	if _, e := reader.ReadRootScopedPeerOriginal(ctx, orig.ID, purePeerProject, purePeerBridge); e == nil {
+		t.Fatal("UNKNOWN authorized native redispatch")
+	}
+	proof, e := reader.ReadRootScopedPeerUnknownOriginal(ctx, orig.ID, purePeerProject, purePeerBridge)
+	if e != nil || !proof.RecoveryOnly || !proof.Regrant || len(proof.RevokedBefore) != 1 || len(proof.RevokedAfter) != 0 || ScopedPeerProofSHA256(proof) != receipt.ProofSHA256 {
+		t.Fatal("regrant UNKNOWN proof drift", e)
+	}
+	req, target := a4Request(t, s, orig.ID)
+	receipt.RecoveryOnly = true
+	p := RecoveryProof{Kind: RecoverySettle, Reason: "SCOPED_PEER_COMPLETED_NO_REPLAY", Fingerprint: "synthetic-pure-history", ScopedPeer: receipt}
+	bad := p
+	bad.ScopedPeer.ProofSHA256 = strings.Repeat("0", 64)
+	if _, e = s.CommitScopedRecovery(ctx, req, target, bad); e == nil {
+		t.Fatal("forged history receipt accepted")
+	}
+	a4SettleMode(t, s, req, target, p, true)
+	policy, e := s.ReadScopedTerminalPeerPolicy(ctx, purePeerProject, purePeerBridge)
+	if e != nil || len(policy.Active) != 2 || len(policy.Revoked) != 0 {
+		t.Fatal(policy, e)
+	}
+	var link string
+	if e = s.db.QueryRow("SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid=? AND target_uuid=?", purePeerUUID(3), purePeerUUID(1)).Scan(&link); e != nil || link != sibling.ID {
+		t.Fatal("sibling original changed", link, e)
+	}
+}

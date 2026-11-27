@@ -1685,3 +1685,17 @@ cross-run build identity and current-attempt release artifact provenance
 remain UNVERIFIED until separately authorized RC execution; do not
 manufacture release context or publish to test. Inherited H/C04/C01,
 final C11 and release-only proof explicitly open. R5 not started.
+
+### 2026-11-27 — P0/P1/P2 and BDH preservation audit
+
+P2 scoped development signed at 09152ff14b0fb75e73b0492d2a1d171bcc87499d:
+N2 46066576792 (29/29), S2 46066576966 (72 markers/23 jobs), S25
+46066576692 and Forward 46066576878 passed. See PR #191 comment
+7228099703. BDH framed export delivered at 720f3ba9d1b5ad24d64858e880794049dcbcb2ce
+(comment 7228231141).
+Reconciliation recovered the D37 pure-peer regression and committed-range
+BDH helper without replacing newer functionality. Historical source deltas,
+phase histories, handoffs, verification and research are preserved under
+[BOX_RECONCILIATION_20261127](BOX_RECONCILIATION_20261127/README.md).
+Earlier acceptance obligations H, C04, C01 and C11 remain open; P3 R0 is
+not started. This inventory is not a release or merge authorization.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local source-only staged batch. No remote dispatch or publication."""
+"""Local source-only staged or committed batch. No remote dispatch or publication."""
 import argparse
 import hashlib
 import json
@@ -47,6 +47,25 @@ def snapshot(root):
             or git(root, "ls-files", "--others", "--exclude-standard", "-z")):
         raise BatchError("Require staged-only worktree; preserve unstaged/untracked work")
     return parent, tree
+
+
+def committed_snapshot(root, parent, head, tree):
+    """Require a clean, exact linear local batch based on an observed remote SHA."""
+    parent, head, tree = sha(parent), sha(head), sha(tree)
+    if parent == head or snapshot(root) != (head, tree):
+        raise BatchError("Local committed HEAD or tree changed")
+    if git(root, "status", "--porcelain=v1", "-z"):
+        raise BatchError("Require clean committed worktree")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", parent, head],
+                      cwd=root).returncode != 0:
+        raise BatchError("Local batch diverges from expected publication parent")
+    if git(root, "rev-list", "--merges", parent + ".." + head).strip():
+        raise BatchError("Merged history requires reviewed manual route")
+    commits = [sha(x) for x in git(root, "rev-list", "--reverse",
+                                   parent + ".." + head).decode().splitlines()]
+    if not commits or commits[-1] != head:
+        raise BatchError("Incomplete local commit range")
+    return commits
 
 
 def export(root, parent, tree, compact=True):
@@ -133,7 +152,7 @@ def framed_export(payload, max_rows=6, max_bytes=65536):
     return header + b"\n" + b"".join(frames)
 
 
-def commands(root, payload, packages, registered):
+def commands(root, payload, packages, registered, committed_head=None):
     # Explicit packages only; caller selects affected and adjacent regressions.
     selected = sorted(set(packages))
     for package in selected:
@@ -144,7 +163,10 @@ def commands(root, payload, packages, registered):
     for row in payload["rows"]:
         if row["path"].endswith(".go") and "./" + str(Path(row["path"]).parent) not in selected:
             raise BatchError("Every changed Go package needs an explicit check")
-    result = [("diff-check", ["git", "diff", "--cached", "--check"])]
+    diff = ["git", "diff", "--cached", "--check"]
+    if committed_head:
+        diff = ["git", "diff", "--check", payload["parent"], committed_head]
+    result = [("diff-check", diff)]
     if selected:
         result += [("go-test", ["go", "test", "-count=1", *selected]),
                    ("go-vet", ["go", "vet", *selected])]
@@ -153,21 +175,28 @@ def commands(root, payload, packages, registered):
     return result
 
 
-def run(root, parent, tree, directory, packages, registered, timeout):
+def run(root, parent, tree, directory, packages, registered, timeout, committed_head=None):
     if not 1 <= timeout <= 600:
         raise BatchError("Timeout per check must be 1..600 seconds")
     expected = (sha(parent), sha(tree))
-    if snapshot(root) != expected:
-        raise BatchError("Parent or staged tree changed")
+    local_commits = committed_snapshot(root, parent, committed_head, tree) if committed_head else None
+
+    def unchanged():
+        if committed_head:
+            return committed_snapshot(root, parent, committed_head, tree) == local_commits
+        return snapshot(root) == expected
+
+    if not unchanged():
+        raise BatchError("Parent or source tree changed")
     payload = export(root, *expected)
-    checks = commands(root, payload, packages, registered)
+    checks = commands(root, payload, packages, registered, committed_head)
     directory = Path(directory).absolute()
     if directory.is_relative_to(root) or directory.parent.resolve(strict=True) != directory.parent:
         raise BatchError("Use fresh evidence directory outside checkout")
     directory.mkdir(mode=0o700)
     results = []
     for name, argv in checks:
-        if snapshot(root) != expected:
+        if not unchanged():
             raise BatchError("Source changed before check")
         start = time.monotonic()
         log_path = directory / (name + ".log")
@@ -191,10 +220,10 @@ def run(root, parent, tree, directory, packages, registered, timeout):
                             seconds=round(time.monotonic()-start, 3),
                             bytes=log_path.stat().st_size, sha256=digest.hexdigest()))
         try:
-            unchanged = snapshot(root) == expected
-        except BatchError:
-            unchanged = False
-        if not unchanged:
+            stable = unchanged()
+        except (BatchError, subprocess.CalledProcessError):
+            stable = False
+        if not stable:
             results[-1]["status"] = "SOURCE_CHANGED"
             break
         if status != "PASS":
@@ -203,6 +232,10 @@ def run(root, parent, tree, directory, packages, registered, timeout):
     record = dict(status="LOCAL_STAGED_PASS" if passed else "NOT_VERIFIED",
                   parent=parent, tree=tree, checks=results, directory=str(directory),
                   binding="STAGED_TREE_ONLY", native_ci="NOT_ESTABLISHED")
+    if committed_head:
+        record.update(local_head=committed_head, local_commits=local_commits,
+                      binding="LOCAL_COMMIT_RANGE",
+                      status="LOCAL_COMMITTED_PASS" if passed else "NOT_VERIFIED")
     with (directory / "record.json").open("xb") as f:
         os.chmod(f.name, 0o600)
         f.write(encoded(record) + b"\n")
@@ -215,6 +248,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--parent", required=True)
     parser.add_argument("--tree", required=True)
+    parser.add_argument("--committed-head", help="Exact clean local HEAD; parent is observed remote base")
     parser.add_argument("--evidence", required=True)
     parser.add_argument("--go-package", action="append", default=[])
     parser.add_argument("--check", action="append", choices=sorted(CHECKS), default=[])
@@ -230,7 +264,7 @@ def main():
             raise BatchError("Invalid delivery frame bounds")
         root = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").decode().strip()).resolve()
         result, code = run(root, args.parent, args.tree, args.evidence,
-                           args.go_package, args.check, args.timeout)
+                           args.go_package, args.check, args.timeout, args.committed_head)
         if code == 0 and args.framed_export:
             # The existing private record.json retains all verification facts.
             sys.stdout.buffer.write(framed_export(result["export"], args.frame_rows, args.frame_bytes))

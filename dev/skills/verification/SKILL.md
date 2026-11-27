@@ -178,3 +178,18 @@ Do not use the helper to run untrusted source or weaken a mandatory gate.
 Batch related edits in the same authorized worktree; avoid concurrent
 Exec on a busy Box. Reuse existing staged helper for verified publication,
 ordinary exact-tree Git for removals. No new product tool or scheduler.
+
+### Committed local batch (candidate)
+
+At a meaningful publication boundary, use the same helper with
+--committed-head EXACT_LOCAL_HEAD --parent OBSERVED_REMOTE_HEAD
+--tree EXACT_LOCAL_HEAD_TREE and fresh evidence directory. It requires a
+clean linear local commit range, verifies the aggregate diff, selected
+checks and exact HEAD/tree throughout, and emits LOCAL_COMMITTED_PASS
+plus ordered local commit IDs only for a passing batch. It never fetches,
+commits, dispatches or publishes. Use the staged mode for individual slices.
+Prefer normal fast-forward Git publication; when using the existing tree
+API fallback, verify exact tree and expected remote parent, retain the
+local commit IDs and record their aggregate remote mapping. Source PASS
+is not independent native or CI evidence. Deletions, binary files, merges,
+divergence and dirty work require the existing reviewed manual route.

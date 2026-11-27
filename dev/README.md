@@ -505,3 +505,11 @@ Risk, not diff size, determines profile. All profiles retain the existing safety
 ## First use and next improvement
 
 The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. The first CLI now covers environment observation, context discovery and basic checkpoint capture/check. Task continuity is now available via task init/next/status/transition. Verification planning and bounded local evidence are now available. The integrated start/resume/status/finish, profiles, CI navigation and behavior Eval are available. Future automation is driven by real product work and controlled evaluation; see the [bwdev roadmap](../docs/development/BWDEV_DESIGN.md). See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.
+
+## Local commit batches
+
+Reuse the authorized workspace across slices. Follow the [fast development
+policy](../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance)
+and [committed batch candidate](skills/verification/SKILL.md#committed-local-batch-candidate).
+The helper checks a clean exact local range without network access; it does
+not decide which checks, CI or native acceptance are mandatory.

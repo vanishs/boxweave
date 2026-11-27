@@ -154,3 +154,79 @@ class StagedBatchTests(unittest.TestCase):
         self.assertEqual(result["checks"][-1]["status"], "SOURCE_CHANGED")
         self.assertNotIn("export", result)
         self.assertEqual((self.root / "unexpected").read_text(), "x")
+
+    def commit(self, message):
+        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                 "commit", "-qm", message)
+        return self.git("rev-parse", "HEAD").decode().strip()
+
+    def committed_range(self):
+        first = self.commit("first")
+        self.write("docs/second.md", "second change\n")
+        self.git("add", "docs/second.md")
+        second = self.commit("second")
+        head, tree = batch.snapshot(self.root)
+        self.assertEqual(head, second)
+        return first, second, tree
+
+    def test_committed_batch_two_local_commits_exact_export(self):
+        first, head, tree = self.committed_range()
+        with patch.dict(batch.CHECKS, {"format": ("python", "-c", "print('fixture')")}):
+            result, code = batch.run(self.root, self.parent, tree, self.home / "committed",
+                                     [], [], 10, head)
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "LOCAL_COMMITTED_PASS")
+        self.assertEqual(result["local_commits"], [first, head])
+        self.assertEqual(result["binding"], "LOCAL_COMMIT_RANGE")
+        self.assertEqual(result["export"]["parent"], self.parent)
+        self.assertEqual(result["export"]["tree"], tree)
+        self.assertEqual(result["checks"][0]["argv"], ["git", "diff", "--check", self.parent, head])
+        self.assertEqual({r["path"] for r in result["export"]["rows"]}, {self.doc, "docs/second.md"})
+        self.assertEqual(result["native_ci"], "NOT_ESTABLISHED")
+        framed = batch.framed_export(result["export"], 1, 65536)
+        header, body = framed.split(b"\n", 1)
+        index = json.loads(header)
+        self.assertEqual(index["tree"], tree)
+        rows = []
+        for frame in index["frames"]:
+            raw = body[frame["offset"]:frame["offset"]+frame["bytes"]]
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), frame["sha256"])
+            rows.extend(json.loads(raw)["rows"])
+        self.assertEqual(rows, result["export"]["rows"])
+
+    def test_committed_batch_refuses_dirty_stale_and_divergent(self):
+        first, head, tree = self.committed_range()
+        for parent, candidate, expected_tree in ((self.parent, first, tree),
+                                                  (self.parent, head, "0"*40),
+                                                  (head, head, tree)):
+            with self.assertRaises(batch.BatchError):
+                batch.committed_snapshot(self.root, parent, candidate, expected_tree)
+        self.write("staged.txt", "do not lose")
+        self.git("add", "staged.txt")
+        with self.assertRaises(batch.BatchError):
+            batch.committed_snapshot(self.root, self.parent, head, tree)
+
+    def test_committed_batch_refuses_divergent_parent(self):
+        first, head, tree = self.committed_range()
+        self.git("checkout", "-q", "--detach", self.parent)
+        self.write("divergence", "other history")
+        self.git("add", "divergence")
+        divergent = self.commit("divergent")
+        self.git("checkout", "-q", "--detach", head)
+        with self.assertRaises(batch.BatchError):
+            batch.committed_snapshot(self.root, divergent, head, tree)
+
+    def test_committed_batch_source_drift_and_failure_no_export(self):
+        _, head, tree = self.committed_range()
+        with patch.dict(batch.CHECKS, {"format": ("python", "-c", "raise SystemExit(7)")}):
+            result, code = batch.run(self.root, self.parent, tree, self.home / "failed",
+                                     [], [], 10, head)
+        self.assertEqual(code, 1)
+        self.assertNotIn("export", result)
+        with patch.dict(batch.CHECKS, {"format": ("python", "-c", "open('drift','w').write('keep')")}):
+            result, code = batch.run(self.root, self.parent, tree, self.home / "drift",
+                                     [], [], 10, head)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["checks"][-1]["status"], "SOURCE_CHANGED")
+        self.assertNotIn("export", result)
+        self.assertEqual((self.root / "drift").read_text(), "keep")

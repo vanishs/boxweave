@@ -1,0 +1,65 @@
+{
+  "scope": "LOCATORS_AND_SANITIZED_RESULTS_ONLY",
+  "boxes": [
+    {
+      "box_id": "9124a75d-b3df-4b10-af2a-972aa6eab566",
+      "role": "P1 clean installed startup",
+      "original": "78ebc170daa5764d3908273f99bb5c11",
+      "finding": "47 surviving source files in current/history; 16 historical deletions; original lab retained"
+    },
+    {
+      "box_id": "91bd9fb7-ae4d-46c4-ab35-7ca6b7f069f9",
+      "role": "P2 R3 LXC",
+      "original": "e48e51e0088c7e9e93a9500d8a8e886a",
+      "finding": "bootstrap/offline native evidence, original archive retained; exact source 8786dc2"
+    },
+    {
+      "box_id": "ad5aeb01-4a88-454f-88b0-9686c67a1d8a",
+      "role": "P0 native",
+      "original": "56d43adbbe9d8486684a39a25f4c645d",
+      "finding": "clean 1cfcd3d; 15 top-level relevant evidence files (downloaded Go distribution excluded)"
+    },
+    {
+      "box_id": "9b71009f-a41d-411a-9739-85db5adc12de",
+      "role": "P1 WAN",
+      "original": "6691b7336c8ba9ae6719a0e7020f0cbe",
+      "finding": "clean 92ffeda; historical proof source copied exactly, not executed; public WAN still separate"
+    },
+    {
+      "box_id": "48638092-3779-4050-b383-c91fdd91435b",
+      "role": "PR188 scoped lab",
+      "original": "6ed1195a0fe4ccae50996b8a2bcd1423",
+      "finding": "no Git checkout; original H4B/H5 reports byte-identical to current repo; historical extracted source and native evidence retained"
+    },
+    {
+      "box_id": "c5a60ef1-9ab0-4e05-bfe1-60a74e08b631",
+      "role": "PR188 roundtrip",
+      "original": "359245428024e3151a5e1b70947aa8be",
+      "finding": "no Git checkout or named loose research files in scanned roots"
+    },
+    {
+      "box_id": "41d6de99-b757-42b9-8c87-ddfdeb6768a8",
+      "role": "PR193 R5 witness",
+      "original": "38f992bd6d7d53e33fb38686e32989b0",
+      "finding": "clean 55be132"
+    },
+    {
+      "box_id": "4d8a52a5-ab61-4654-9350-732e7d59a460",
+      "role": "PR193 R6 B witness",
+      "original": "f7453106b22dacfaf8fb27e5f08450d7",
+      "finding": "clean f4a63f6; recovery-fixture exit0, 1107 B log b73065662b77e4a7bc5dcb63e0b1d78184cb86fd4c8d27dd8218f8c6feaa9cdb"
+    },
+    {
+      "box_id": "d8038bb1-5e30-4ade-9290-69df9c0fe7ce",
+      "role": "PR193 R5a witness",
+      "original": "b1d63ca94ae35fdf385ea77ab1d49b78",
+      "finding": "clean f4a63f6; bwdev exit0 log 27f616a75d0e70b32bfe1a7fd9254d73d6b55c63a05b31193cd344d4c201d5a4; scope exit0 log 60e5110704fea0b1804a7f899631201d7109d53982d979de24cad4613aef78e6"
+    },
+    {
+      "box_id": "ef4c6f5e-f729-45ef-bfe6-b0964f62da04",
+      "role": "PR193 R6 A witness",
+      "original": "e30137c74bef21d13325825ece1a1a6e",
+      "finding": "clean f4a63f6; identical recovery-fixture log/record digest to R6 B"
+    }
+  ]
+}
