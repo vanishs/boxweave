@@ -177,3 +177,13 @@ crosswalk. Remove only legacy and legacy-offline active N2 entries;
 historical source/history stays available for P4. Keep all 29 Scoped
 lanes, original markers and negative controls; do not mark obsolete
 behavior PASS. Exact new-head revalidation required.
+
+### P2 R4 release S2 consumer candidate
+
+Replace only the active RC direct-serve call with installed Scoped N2
+plus real independent S25 and exact RC receipt/asset binding. Retain
+all 72 historical markers/23 producers, 29 N2 lane assertions and
+S25 checker. Historical accept_s2_native.sh and non-191 caller remain
+for P4 inventory; no source fixture deletion. Release-specific
+producer/consumer code BOX_VERIFIED; independent PR CI pending;
+actual release-only evidence OPEN. No release/quality/signature waiver.

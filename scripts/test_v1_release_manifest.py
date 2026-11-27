@@ -108,7 +108,22 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("needs: [source, linux, native-s2-gate, native-s25-gate, candidate]", workflow)
         s2 = workflow.split("\n  native-s2-gate:\n", 1)[1].split("\n  native-s25-gate:\n", 1)[0]
         s25 = workflow.split("\n  native-s25-gate:\n", 1)[1].split("\n  candidate:\n", 1)[0]
-        self.assertIn("sh scripts/accept_s2_native.sh", s2)
+        self.assertNotIn("sh scripts/accept_s2_native.sh", s2)
+        self.assertIn("needs: [native-s25-gate, candidate]", s2)
+        self.assertIn("actions: read", s2)
+        self.assertIn("name: v1-release-candidate-manifest", s2)
+        self.assertIn("sha256sum -c SHA256SUMS", s2)
+        self.assertIn("python3 scripts/pr191_s2_ci_gate.py --release release-assets", s2)
+        self.assertIn("P2_R4_SCOPED_RELEASE_S2_EXACT_CI_CROSSWALK=PASS", s2)
+        self.assertIn("native_manifest_sha256: ", s2)
+        publish = workflow.split("\n  publish:\n", 1)[1]
+        self.assertIn("needs.native-s2-gate.outputs.native_manifest_sha256", publish)
+        self.assertLess(publish.index('= "$EXPECTED_NATIVE_MANIFEST_SHA256"'),
+                        publish.index('gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$INPUT_TAG"'))
+        n2 = (ROOT / ".github/workflows/v1-n2-installed-lifecycle.yml").read_text()
+        self.assertIn('branches: ["release/v1.*-rc.*"]', n2)
+        self.assertIn("python3 scripts/pr191_s2_ci_gate.py --release-version", n2)
+        self.assertIn('gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1"', n2)
         self.assertNotIn("sh scripts/s25_bridgehead_lab.sh", s2)
         self.assertIn("sh scripts/s25_bridgehead_lab.sh", s25)
         self.assertNotIn("sh scripts/accept_s2_native.sh", s25)

@@ -168,38 +168,51 @@ jobs:
 
   native-s2-gate:
     name: v1-prerelease-native-S2-isolated-runner
-    # Each job receives a fresh GitHub-hosted VM. S2 installs Incus,
-    # so S2.5's foreign-native-state guard must never run on S2's runner.
+    # N2's independent fresh installed Scoped jobs run in the dedicated
+    # workflow on this exact RC push. S2.5 remains a separate real native VM.
+    # The consumer needs the actual candidate manifest and nested evidence.
+    needs: [native-s25-gate, candidate]
+    outputs:
+      native_manifest_sha256: ${{ steps.crosswalk.outputs.manifest_sha256 }}
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: read
+      actions: read
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/download-artifact@v4
         with:
-          go-version-file: go.mod
-          cache: true
-      - name: Require the exact protected v1 HEAD before touching a disposable VM
+          name: v1-release-candidate-manifest
+          path: release-assets
+      - name: Require the exact protected v1 HEAD and release candidate
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REF" =~ ^refs/heads/release/v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          python3 scripts/pr191_s2_ci_gate.py --release-version
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
-      - name: Real S2 native regression
+          (cd release-assets && sha256sum -c SHA256SUMS)
+      - name: Exact installed Scoped S2 original CI provenance and RC asset identity
+        id: crosswalk
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          sh scripts/accept_s2_native.sh | tee "$RUNNER_TEMP/native-s2-gate.log"
-          grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$RUNNER_TEMP/native-s2-gate.log"
+          python3 scripts/test_pr191_s2_witness_map.py
+          python3 scripts/test_pr191_s2_ci_gate.py
+          python3 scripts/pr191_s2_ci_gate.py --release release-assets | tee "$RUNNER_TEMP/native-s2-gate.log"
+          grep -Fxq P2_R4_SCOPED_RELEASE_S2_EXACT_CI_CROSSWALK=PASS "$RUNNER_TEMP/native-s2-gate.log"
+          echo "manifest_sha256=$(sha256sum release-assets/SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
   native-s25-gate:
     name: v1-prerelease-nested-S2.5-isolated-runner
@@ -227,7 +240,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REF" =~ ^refs/heads/release/v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          python3 scripts/pr191_s2_ci_gate.py --release-version
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
       - name: Real nested independent Agent/Incus verifier
         shell: bash
@@ -271,7 +284,6 @@ jobs:
         shell: bash
         env:
           EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-          EVENT_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
@@ -310,6 +322,7 @@ jobs:
       - name: Exact v1 HEAD, release branch, tag and immutable asset-set protection; publish prerelease only
         env:
           GH_TOKEN: ${{ github.token }}
+          EXPECTED_NATIVE_MANIFEST_SHA256: ${{ needs.native-s2-gate.outputs.native_manifest_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -323,6 +336,8 @@ jobs:
           assert m['tag'] == sys.argv[1] and m['source'] == sys.argv[2]
           PY
           (cd release-assets && sha256sum -c SHA256SUMS)
+          [[ "$EXPECTED_NATIVE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum release-assets/SHA256SUMS | cut -d' ' -f1)" = "$EXPECTED_NATIVE_MANIFEST_SHA256"
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$INPUT_TAG" >/dev/null 2>&1; then
             test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$INPUT_TAG" --jq .object.sha)" = "$GITHUB_SHA"
             if gh release view "$INPUT_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

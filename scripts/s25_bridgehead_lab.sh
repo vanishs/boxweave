@@ -34,7 +34,14 @@ for name in ("/","/usr","/usr/local","/usr/local/bin"):
         os.chmod(name,stat.S_IMODE(s.st_mode)&~0o022)
     assert not os.lstat(name).st_mode&0o022
 P1B_S25_PARENT
- CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+ case "${GITHUB_REF:-}" in
+   refs/heads/release/*)
+     release_version="$(python3 scripts/pr191_s2_ci_gate.py --release-version)"
+     CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=$release_version -X main.commit=$(git rev-parse HEAD) -buildid=" -o "$work/staging/boxweave" ./cmd/boxweave
+     ;;
+   *) CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+     ;;
+ esac
  sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
  cp scripts/pr191_s25_scoped_setup.sh "$work/staging/pr191_s25_scoped_setup.sh"
  cp install.sh "$work/staging/s25-install.sh"

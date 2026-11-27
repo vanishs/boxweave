@@ -1633,3 +1633,55 @@ Learning: distinguish retired product requirements from retained
 generic safety proof; verify exact retained gate set. No new BDH asset.
 Current quality/S1/two-arch logs still fail only inherited H tests;
 retain formal acceptance blockers. No R4 advancement until R3 exit.
+
+### P2 R3 signed / P2 R4 exact release consumer candidate
+
+R3 signed on exact ebf1d9c6e0d724ac1474c9e179789bf36255d5f6,
+N2 46063354636 29/29 PASS, S2 46063354608 (72 markers/23 original
+producers), S25 46063354620 and Forward 46063354635 PASS.
+See [signed review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7227714246).
+No full PR/P1 acceptance. The earlier local LXC functional evidence
+remains bounded; preserve archives.
+
+R4 replaces the obsolete direct-serve release S2 invocation with
+the existing installed Scoped producer and exact CI consumer model.
+A controlled RC push starts the same 29 independent N2 lanes only
+after exact protected-v1 HEAD and VERSION/ref checks. RC candidate-a
+and S25 use the distribution build flags and version stamp; retain
+candidate-b distinct negative and all existing native assertions.
+S25 is still a real independent release job on its own clean VM.
+Release S2 depends on S25 and the actual two-arch manifest job, then
+observes exact same-source, same-release-ref push N2 run/attempt and
+the current release run's completed S25/manifest jobs (not its own
+unfinished run). Require the 23 mapped receipts and seven additional
+identity-only receipts after all original N2 gates: 30 distinct job,
+artifact, transcript identities and exact amd64 asset SHA256 for each.
+PR receipts cannot authorize RC. No automatic rerun, dispatch, release
+branch or tag creation. Verify the full manifest checksum; pass its
+digest to the existing publish dependency and compare again before any
+tag/publication effect. Existing source, dual-arch, immutable assets,
+readback and stable-signature policy unchanged. Keep historical direct
+S2 scripts and non-191 PR route for P4 caller consolidation.
+
+Box 9d374e18-196a-493d-bf1f-2d582589f04d /root/pr191-p2-ready:
+0a4789a2c63ceaf5482e52298aaa6d95 exit0, 68 focused/adjacent tests,
+four workflow actionlint, shell/format/diff checks PASS. Two actual
+local RC-stamped amd64 builds at parent Go source ebf1d9c both SHA256
+32669bb5f8552d6fee9ce14df7cfeda1071b173545cae99a2de2e11b3b0e65da,
+build-info exact. This proves same-Box rebuild identity only.
+0ab4c1dda61df9975522943dcc0d819e exit0 adds complete 30-lane synthetic
+consumer success + wrong unmapped digest refusal (10 gate tests total,
+69 distinct focused/adjacent tests); original map, N2 assertions, S25
+checker, manifest and stable-gate code byte-identical to parent.
+Initial actionlint caught unused undefined inputs.release_tag in original
+release YAML; removed that stale reference and reran PASS. Oversized
+source-edit argv refused at admission; bounded source edits verified.
+No native operations replayed or new BDH assets. Learning: exact
+release event and artifact identity cannot be inferred from PR PASS;
+independent rebuild divergence must fail closed.
+
+Independent PR exact-head CI pending. Actual release-only runner/
+cross-run build identity and current-attempt release artifact provenance
+remain UNVERIFIED until separately authorized RC execution; do not
+manufacture release context or publish to test. Inherited H/C04/C01,
+final C11 and release-only proof explicitly open. R5 not started.

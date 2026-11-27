@@ -316,3 +316,35 @@ N2 checks. Reject old fixture selectors before execution; historical
 fixture bodies remain for the P4 caller/source inventory. No success
 marker for retired behavior. No product runtime change, no C01/H/C04
 or release gate waiver. Independent exact new-head CI required.
+
+### P2 R3 final signoff and R4 release S2 disposition
+
+Exact ebf1d9c N2 46063354636 SUCCESS 29/29, all five C07
+normal/offline/negative actual witnesses and generic recovery PASS.
+S2 46063354608, S25 46063354620, Forward 46063354635 PASS.
+[R3 signed evidence](https://github.com/vanishs/boxweave/pull/191#issuecomment-7227714246).
+Retired two obsolete Legacy gates with owner authorization; no old
+success marker fabricated. C07 scoped exit verified.
+
+R4 C11 replacement: historical release accept_s2_native.sh direct
+serve is replaced by all 29 installed N2 lanes plus independent real
+S25. The release-only consumer uses exact protected v1 source,
+same repository/RC ref/push and original run/attempt/job/artifact
+metadata; all 72 old mapped markers remain (23 producer receipts).
+Seven nonmapped mandatory lanes provide identity-only receipts after
+their original gates; all 30 candidate SHA256 values must equal the
+actual amd64 manifest asset. No reuse of PR/dispatch artifacts or
+missing, mixed, stale, skipped or unsuccessful native jobs. Exact
+manifest checksum binding carries into publish before any tag effect.
+Keep source/dual arch/publish dependencies and stable authorization/
+signature policy; S25 checker and S2 map unchanged.
+
+BOX_VERIFIED: 69 distinct focused and adjacent tests including
+synthetic 30-lane positive/negative consumer, workflow/shell/format,
+same-Box RC rebuild identity. The synthetic result is NOT native or
+release CI acceptance. PR consumer independent revalidation pending.
+Actual RC branch execution, cross-run build reproducibility and
+release asset provenance remain UNVERIFIED until separately approved.
+Do not use release branch creation to test without release authority.
+H two Install tests, C04 hosted public WAN, C01/final quality and
+C11 final release evidence remain open. R5 separate independent review.

@@ -1,11 +1,15 @@
 name: v1 N2 clean installed retirement lifecycle
 on:
+  push:
+    branches: ["release/v1.*-rc.*"]
   pull_request:
     branches: [v1]
     # Cover the complete installed-runtime and fixture dependency families,
     # rather than maintaining a growing list of individual cutover leaves.
     # Documentation-only paths remain excluded; every former path is covered.
     paths:
+      - '.github/workflows/v1-release.yml'
+      - '.github/workflows/v1-pr191-s25-scoped.yml'
       - 'internal/**'
       - 'cmd/**'
       - 'scripts/**'
@@ -21,7 +25,7 @@ permissions:
   contents: read
 jobs:
   installed-lifecycle:
-    if: github.repository == 'vanishs/boxweave' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.ref == 'refs/heads/feat/v1-network-reliability-20261122')
+    if: github.repository == 'vanishs/boxweave' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.ref == 'refs/heads/feat/v1-network-reliability-20261122' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -59,6 +63,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Require the exact protected v1 HEAD for a controlled RC producer
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/pr191_s2_ci_gate.py --release-version
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
       - name: Exact-head native bootstrap, Scoped install, recovery and retirement
         shell: bash
         run: |
@@ -82,11 +95,23 @@ jobs:
           case "$N2_EVIDENCE_LANE" in
             scoped-retirement|scoped-offline-empty|scoped-offline-settled|scoped-offline-original|scoped-update-ack|scoped-update-ack-receipt|scoped-noquota)
               echo "No historical S2 mapping; original full lane checks remain required"
+              if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/release/* ]]; then
+                python3 scripts/pr191_s2_ci_gate.py --release-n2-identity "$RUNNER_TEMP/n2-installed.log" "$RUNNER_TEMP/pr191-n2-identity.json"
+                echo "release_identity=true" >> "$GITHUB_OUTPUT"
+              fi
               exit 0
               ;;
           esac
           python3 scripts/pr191_s2_witness_map.py --log "$RUNNER_TEMP/n2-installed.log" --source "$N2_EXACT_HEAD" --lane "$N2_EVIDENCE_LANE" --ci-receipt "$RUNNER_TEMP/pr191-s2-lane.json"
           echo "ready=true" >> "$GITHUB_OUTPUT"
+      - name: Retain sanitized release-only N2 candidate identity
+        if: steps.crosswalk.outputs.release_identity == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr191-n2-identity-${{ matrix.mode }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pr191-n2-identity.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Retain sanitized lane locator
         if: steps.crosswalk.outputs.ready == 'true'
         uses: actions/upload-artifact@v4

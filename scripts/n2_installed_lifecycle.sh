@@ -40,8 +40,16 @@ echo "N2_EVIDENCE_LANE=${N2_EVIDENCE_LANE:?}"
 if test "${P1B_S2_NATIVE:-0}" = 1; then
   sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_wan_host_observe.py prebootstrap
 fi
+release_version=""
+case "${GITHUB_REF:-}" in
+  refs/heads/release/*) release_version="$(python3 scripts/pr191_s2_ci_gate.py --release-version)" ;;
+esac
 for version in a b; do
-  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-dev.n2-$version -X main.commit=$commit -buildid=" -o "$work/candidate-$version" ./cmd/boxweave
+  stamp="1.0.0-dev.n2-$version"
+  if test "$version" = a && test -n "$release_version"; then
+    stamp="$release_version"
+  fi
+  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=$stamp -X main.commit=$commit -buildid=" -o "$work/candidate-$version" ./cmd/boxweave
 done
 first="$(sha256sum "$work/candidate-a" | cut -d' ' -f1)"
 next="$(sha256sum "$work/candidate-b" | cut -d' ' -f1)"

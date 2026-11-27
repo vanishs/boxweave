@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [v1]
     paths:
+      - '.github/workflows/v1-release.yml'
+      - '.github/workflows/v1-n2-installed-lifecycle.yml'
       - 'scripts/pr191_s2_ci_gate.py'
       - 'scripts/test_pr191_s2_ci_gate.py'
       - '.github/workflows/v1-s2-native.yml'
