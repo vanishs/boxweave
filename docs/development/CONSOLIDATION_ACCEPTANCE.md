@@ -223,3 +223,30 @@ P1-06d34: [host forwarding diagnostic comparison](CONSOLIDATION_P1_06D34_CHECKPO
 - D35: [Scoped fixture conversion](CONSOLIDATION_P1_06D35_CHECKPOINT.md); native gates unchanged.
 
 - D36: [Pure Scoped Peer provenance and drift witnesses](CONSOLIDATION_P1_06D36_CHECKPOINT.md); native gates retained.
+
+### P2 R3 installed lifecycle replacement checkpoint (candidate)
+
+Exact R2 head 3ba1029, N2 run 46032710024: 26/28 success.
+Scoped normal retirement job 140620280975 actual LIVE_PLAN, RETIRED_HISTORY,
+INTERRUPTED_RESUMED, NATIVE_RESTORED, FOREIGN_UNCHANGED, COMPLETE, purge
+interruption/resume and fresh reinstall workload PASS. Scoped stop-ack
+140620281369 preserves the original without recorded native ACK; this
+is a negative for exceptional archival, not a positive. Scoped
+140620281284 confirms generic reviewed recovery, no replay, foreign and
+partial-original refusal. S2 46032710003 and S25 46032709975 PASS in their
+own scopes; neither substitutes for offline retirement.
+
+| Original lane / assertion | Current disposition and evidence |
+| --- | --- |
+| legacy: guided Legacy preview, schema6 upgrade/rollback and separate IPv4 retirement helper activation/outage | Obsolete Legacy-only contract proposed for explicit disposition; do not report PASS. Current fresh refusal and stale-plan no-effect in scoped-retirement; generic durable original/no-replay remains in Scoped producer lanes. |
+| legacy: I3 drift/no effect, D3/D4 recovery and D5 postcheck, H3B decline/apply, H4A navigation/replay, full archive, interrupted purge and reinstall | Reuse matching actual Scoped 140620281284 and 140620280975 evidence within scope; old installed mixed/legacy evidence refusal and any unmapped unique assertions remain open until reviewed. |
+| legacy-offline: exact original/archived UNKNOWN/native retired/foreign unchanged | New scoped-offline-original lane, actual Native Stop ACK and withheld business finalization, cold original claim/bytes, verified prefix and independent native poststate. CI_PENDING. |
+| legacy-offline: post-native interrupted cleanup and purge | New scoped-offline-original retains both distinct interruption boundaries, existing purge helper and second install. CI_PENDING. |
+| stopped empty/populated settled and active/declined refusal | New scoped-offline-empty and scoped-offline-settled lanes, real current wrapper and installed binary. CI_PENDING. |
+| missing Native ACK and unproven original | Extend existing scoped-stop-ack lane after all old assertions; no retirement effects. CI_PENDING. |
+| recognized inherited LXC policy | PR188 exact historical normal/empty native witness retained; R2 source gates unchanged where applicable. Current exceptional installed LXC behavior not proven by hosted Ubuntu VM. |
+
+Keep both old failing lanes until independent equivalent evidence and
+owner-approved obsolete-contract disposition. Preserve the original 72
+S2 marker/23 producer mapping, new lanes have separate C07 gates.
+No H/C04/C01 waiver or release authorization.

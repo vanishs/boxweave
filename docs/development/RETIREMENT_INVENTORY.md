@@ -152,3 +152,12 @@ witness disposition; historical receipts refuse new/resume execution in
 the current wrapper. Do not retire old N2 gates on this basis. Bounded
 power UNKNOWN archival needs a distinct exact proof without business
 Delete/claim settlement or replay. C07/C11 remain open.
+
+### P2 R3 offline installed witnesses
+
+Add three clean hosted Scoped offline lanes and the missing-ACK negative
+to the existing stop-ack lane. Existing Legacy lanes and assertions remain
+until the candidate passes real native acceptance and the obsolete-only
+requirements are explicitly disposed. See
+[acceptance crosswalk](CONSOLIDATION_ACCEPTANCE.md#p2-r3-installed-lifecycle-replacement-checkpoint-candidate).
+No Legacy runtime restoration, no deletion of existing safety evidence.

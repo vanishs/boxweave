@@ -390,11 +390,23 @@ if test "${P1B_S2_OVERLAP:-0}" = 1; then
   sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_overlap.py "$project" "$work/actor.receipt" "$first" "$lab" "$overlay_sha"
   exit 0
 fi
+if test -n "${P2_R3_OFFLINE:-}"; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  case "$P2_R3_OFFLINE" in
+    original) CGO_ENABLED=1 go test -c -o "$work/p2-offline-original.test" ./internal/install
+              chmod 0755 "$work/p2-offline-original.test" ;;
+    empty|settled) ;;
+    *) exit 1 ;;
+  esac
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_p2_offline.py "$project" "$work/actor.receipt" "$first" "$P2_R3_OFFLINE"
+  exit 0
+fi
 if test "${P1B_S2_STOP_ACK:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-stop-delete-probe" ./scripts/s2_p1_stop_delete_probe.go
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-stop-delete-proxy" ./scripts/s2_p1_stop_delete_proxy.go
   sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_stop_ack.py "$project" "$work/actor.receipt" "$first"
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_p2_offline.py --missing-ack "$project" "$work/actor.receipt" "$first"
   exit 0
 fi
 if test "${P1B_S2_EXEC_CRASH:-0}" = 1; then

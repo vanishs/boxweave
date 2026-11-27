@@ -1432,3 +1432,39 @@ historical legacy-only lanes remain until R3 disposition; S1/quality/
 dual arch still fail inherited H. No C07/C11 acceptance, P1 H/C04/C01
 waiver, merge or release. Next R3 installed witness and equivalence
 review, with real gaps repaired before advancement.
+
+## P2 R3 — installed offline witness candidate
+
+Baseline 3ba1029 exact CI: S2 46032710003, S25 46032709975,
+Forward 46032710011 PASS. N2 46032710024: 26/28, actual normal
+retirement 140620280975 and generic Scoped recovery 140620281284 PASS;
+legacy 140620280987 and legacy-offline 140620281007 reject unsupported
+fresh Legacy installation. All five failed source/dual-arch jobs contain
+the same two inherited H tests, not new R2 failures.
+
+Add three distinct hosted-only lanes (empty, settled populated, exact
+power UNKNOWN with recorded real Native ACK). Reuse the existing
+disposable installed D4 fixture with a Scoped power mode and exact
+restricted Native receipt, withhold business finalization only.
+Bind exact candidate/host/project and compare original cold bytes,
+claims and complete operation set before/after archive. Exercise active
+and declined refusal, foreign ACL refusal, unrelated empty project
+preservation, verified native prefix interruption, post-native cleanup
+interruption, explicit resume, purge interruption/reinstall. Extend
+the existing actual missing-ACK Stop lane with a read-only offline
+refusal; never change its retained original. No native uninstall in
+the development Box, no fabricated ACK, no production test hook.
+
+Focused local candidate checks 21e1f14dfa6a02d56e324356dab0b0a6
+exit0: 4 Go offline journal/prefix tests, vet, Python 64 uninstaller,
+4 identity, 14 S2 mapping and 3 CI gate tests. Dedicated installed test
+correctly skipped outside hosted lab; not native evidence. Earlier
+d01b9795d47c0eb52b30901449c2072c caught missing three-lane partition;
+explicit separate C07 lanes added without changing 72/23 S2 coverage.
+See acceptance/inventory crosswalk. New lane actual CI_PENDING.
+Old Legacy gates retained pending evidence and explicit disposition.
+Historical LXC normal/empty evidence remains bounded; exact new
+exceptional inherited-policy native proof needs authorized clean
+nested fixture. BDH plan b93b46ef1e81d3abcb4bc4f7e4001874 reused
+installed-lifecycle route; L012/L014 review-required remains open,
+no BDH promotion.

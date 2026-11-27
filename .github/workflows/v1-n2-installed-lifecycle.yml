@@ -20,6 +20,7 @@ on:
       - scripts/pr188_h1a_observe.py
       - scripts/pr188_h1b_plan.py
       - scripts/pr188_h2b_offline.py
+      - scripts/pr191_p2_offline.py
       - scripts/pr188_h2c_purge.py
       - scripts/test_offline_retirement.py
       - internal/state/maintenance_offline*.go
@@ -157,10 +158,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-update-ack-wal-before, scoped-update-ack-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec, scoped-stop-ack, scoped-overlap, scoped-altpool]
+        mode: [legacy, scoped, scoped-retirement, legacy-offline, scoped-offline-empty, scoped-offline-settled, scoped-offline-original, scoped-create-ack, scoped-delete-ack, scoped-update-ack, scoped-update-ack-receipt, scoped-create-wal-before, scoped-create-wal-after, scoped-delete-wal-before, scoped-delete-wal-after, scoped-exec-wal-before, scoped-exec-wal-after, scoped-update-ack-wal-before, scoped-update-ack-wal-after, scoped-exec-crash, scoped-sdk-compat, scoped-s2-native, scoped-exec-retention, scoped-update-transport, scoped-physical-quota, scoped-auth-races, scoped-noquota, scoped-malformed-exec, scoped-stop-ack, scoped-overlap, scoped-altpool]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PR178_SCOPED_N2: ${{ startsWith(matrix.mode, 'scoped') && '1' || '0' }}
+      P2_R3_OFFLINE: ${{ matrix.mode == 'scoped-offline-empty' && 'empty' || matrix.mode == 'scoped-offline-settled' && 'settled' || matrix.mode == 'scoped-offline-original' && 'original' || '' }}
       PR188_OFFLINE_RETIREMENT: ${{ matrix.mode == 'legacy-offline' && '1' || '0' }}
       PR182_SCOPED_RETIREMENT: ${{ matrix.mode == 'scoped-retirement' && '1' || '0' }}
       P1B_ACK_CUT: ${{ matrix.mode == 'scoped-create-ack' && 'create' || matrix.mode == 'scoped-delete-ack' && 'delete' || matrix.mode == 'scoped-update-ack' && 'update' || matrix.mode == 'scoped-update-ack-receipt' && 'update-receipt' || '' }}
@@ -325,10 +327,33 @@ jobs:
             grep -Eq '^P1B_SCOPED_PREATOMIC_OVERLAP_ORIGINALS [a-f0-9]{32} [a-f0-9-]{36} [a-f0-9]{32} [a-f0-9]{32} [a-f0-9-]{36} [a-f0-9]{32} [a-f0-9-]{36}$' "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
+          if test -n "$P2_R3_OFFLINE"; then
+            grep -Fxq PR178_N2_INSTALL=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq PR178_N2_FRESH_ONLY=PASS "$RUNNER_TEMP/n2-installed.log"
+            grep -Fxq P2_R3_SCOPED_OFFLINE_ACTIVE_REFUSED=PASS "$RUNNER_TEMP/n2-installed.log"
+            case "$P2_R3_OFFLINE" in
+              empty)
+                grep -Fxq P2_R3_SCOPED_OFFLINE_DECLINED_NO_EFFECT=PASS "$RUNNER_TEMP/n2-installed.log"
+                grep -Fxq P2_R3_SCOPED_OFFLINE_EMPTY_COMPLETE=PASS "$RUNNER_TEMP/n2-installed.log" ;;
+              settled)
+                grep -Fxq P2_R3_SCOPED_OFFLINE_SETTLED_COMPLETE=PASS "$RUNNER_TEMP/n2-installed.log" ;;
+              original)
+                for marker in EXACT_UNKNOWN_REVIEW FOREIGN_REFUSED_NO_EFFECT PREFIX_RESUMED ARCHIVED_UNKNOWN_UNCHANGED NATIVE_RETIRED PURGE FOREIGN_UNCHANGED POSTNATIVE_RESUMED; do
+                  grep -Fxq "P2_R3_SCOPED_OFFLINE_$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
+                done
+                grep -Eq '^P2_R3_SCOPED_OFFLINE_ORIGINAL [a-f0-9]{32} [a-f0-9-]{36} [a-f0-9]{32} [a-f0-9-]{36}$' "$RUNNER_TEMP/n2-installed.log"
+                grep -Fxq PR188_H2C_PURGE_INTERRUPTED_RESUMED=PASS "$RUNNER_TEMP/n2-installed.log"
+                grep -Fxq PR188_ROUNDTRIP_SCOPED_FRESH_LEDGER_OLD_TOKEN_DENIED=PASS "$RUNNER_TEMP/n2-installed.log"
+                grep -Fxq PR188_ROUNDTRIP_SCOPED_REINSTALL_WORKLOAD=PASS "$RUNNER_TEMP/n2-installed.log" ;;
+              *) exit 1 ;;
+            esac
+            exit 0
+          fi
           if test "$P1B_S2_STOP_ACK" = 1; then
             for marker in PR178_N2_INSTALL PR178_N2_FRESH_ONLY S2_P1_STOP_DELETE_NATIVE_OWNED_REAL_UUID_SEEDED S2_P1_STOP_DELETE_ORIGINAL_MUTATION_ADMITTED S2_P1_NATIVE_STOP_LOST_ACK_BEFORE_RESTART_UNKNOWN P1B_SCOPED_STOP_202_NATIVE_STOPPED_EXACT_UUID S2_P1_NATIVE_STOP_LOST_ACK_RESTART_UNKNOWN_NO_REPLAY P1B_SCOPED_STOP_ACK_FIXED_LEDGER_RESTART_RETAINED_UNKNOWN; do
               grep -Fxq "$marker=PASS" "$RUNNER_TEMP/n2-installed.log"
             done
+            grep -Fxq P2_R3_SCOPED_OFFLINE_MISSING_ACK_REFUSED=PASS "$RUNNER_TEMP/n2-installed.log"
             grep -Eq '^P1B_SCOPED_STOP_ACK_ORIGINAL [0-9a-f]{32} [0-9a-f-]{36} [0-9a-f]{32} [0-9a-f-]{36}$' "$RUNNER_TEMP/n2-installed.log"
             exit 0
           fi
@@ -466,7 +491,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$N2_EVIDENCE_LANE" in
-            legacy|legacy-offline|scoped-retirement|scoped-update-ack|scoped-update-ack-receipt|scoped-noquota)
+            legacy|legacy-offline|scoped-retirement|scoped-offline-empty|scoped-offline-settled|scoped-offline-original|scoped-update-ack|scoped-update-ack-receipt|scoped-noquota)
               echo "No historical S2 mapping; original full lane checks remain required"
               exit 0
               ;;

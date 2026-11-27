@@ -64,10 +64,12 @@ class WitnessMap(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/v1-n2-installed-lifecycle.yml").read_text()
         modes = set(re.search(r"^        mode: \[(.+)\]$", workflow, re.M)[1].split(", "))
         unmapped = {"legacy", "legacy-offline", "scoped-retirement",
+                    "scoped-offline-empty", "scoped-offline-settled", "scoped-offline-original",
                     "scoped-update-ack", "scoped-update-ack-receipt", "scoped-noquota"}
         self.assertEqual(modes, (set(LANES) - {"s25"}) | unmapped)
         self.assertFalse((set(LANES) - {"s25"}) & unmapped)
         self.assertIn("|".join(("legacy", "legacy-offline", "scoped-retirement",
+                               "scoped-offline-empty", "scoped-offline-settled", "scoped-offline-original",
                                "scoped-update-ack", "scoped-update-ack-receipt", "scoped-noquota")) + ")", workflow)
 
     def test_n2_cutover_runtime_changes_trigger_native_review(self):
