@@ -3151,7 +3151,7 @@ def scoped_drain_capture(project, active, observer=None, observer_sha=None, allo
             allowed = ("peer_grants_NOT_RELEASED:", "forward_claims_NOT_RELEASED:",
                        "network_address_fences_NOT_RELEASED:")
             blockers.extend("DRAIN_" + b for b in sql["blockers"] if not b.startswith(allowed))
-            if sql["version"] != 6 or sql["unresolved_operations"]:
+            if sql["version"] != 7 or sql["unresolved_operations"]:
                 blockers.append("DRAIN_UNSETTLED_ORIGINALS")
             exec_archive = inspect_exec_archive(uid)
             # Exact static installed contract and original scope are still

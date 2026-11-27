@@ -39,6 +39,51 @@ class ScopedDrainPlanTests(unittest.TestCase):
             with self.assertRaisesRegex(u.UninstallError, "INSTANCE_INVENTORY_NOT_EXCLUSIVE"):
                 u.scoped_drain_global_inventory("user-1001", self.scope)
 
+    def test_capture_requires_exact_schema7_and_settled_originals(self):
+        # Read-only capture with synthetic observer inputs; no host calls.
+        from contextlib import ExitStack
+        from types import SimpleNamespace
+
+        digest = "a" * 64
+        local = {key: {"state": "ABSENT"} for key in (
+            "backup", "scriptlet", "legacy_root_operations", "scoped_fence",
+            "purge_fence", "audit")}
+        local["state"] = {"state": "OBSERVED", "files": [
+            {"name": name, "identity": {}, "safe": True}
+            for name in ("ledger.sqlite", "install-manifest.json", u.SERVE_LOCK_NAME)]}
+        local["scoped_journal"] = {"tree": {"sha256": digest}}
+        report = {
+            "coverage": "BOUNDED_SOURCES_OBSERVED",
+            "ledger_observation_sha256": digest,
+            "installation": {"adapter": "EXACT_RUNNING_OBSERVER_BINARY",
+                "mode": "SCOPED_V2", "identity": {"static_contract": "VERIFIED",
+                    "service_unit": "ACTIVE", "runtime": "VERIFIED",
+                    "guard_unit": "ACTIVE", "lifecycle_unit": "ACTIVE"},
+                "installed_sha256": digest, "manifest_sha256": digest,
+                "unit_sha256": digest, "preimage": {"sha256": digest}},
+            "native": {"base_acl_config": "RECORDED_PREIMAGE_MATCH",
+                "bridge_config": "RECORDED_PREIMAGE_MATCH",
+                "evidence": {"sha256": digest}}}
+        patches = {
+            "machine_sha": digest, "maintenance_local_inventory": local,
+            "maintenance_observe": report, "maintenance_preview": {"blockers": []},
+            "scoped_drain_scope": self.scope, "scoped_drain_global_inventory": None,
+            "inspect_exec_archive": {}, "scoped_effective_reviews": {},
+            "scoped_units": {}, "scoped_incus_active": 123, "command": ("", 0)}
+        for version, unresolved, expected in ((7, 0, []), (6, 0, ["DRAIN_UNSETTLED_ORIGINALS"]),
+                (8, 0, ["DRAIN_UNSETTLED_ORIGINALS"]), (7, 1, ["DRAIN_UNSETTLED_ORIGINALS"])):
+            with self.subTest(version=version, unresolved=unresolved), ExitStack() as stack:
+                stack.enter_context(mock.patch.object(u.pwd, "getpwnam",
+                    return_value=SimpleNamespace(pw_uid=1001)))
+                for name, result in patches.items():
+                    stack.enter_context(mock.patch.object(u, name, return_value=result))
+                reader = stack.enter_context(mock.patch.object(u, "inspect_sqlite",
+                    return_value={"version": version, "unresolved_operations": unresolved,
+                                  "operations": 5, "blockers": []}))
+                capture = u.scoped_drain_capture("user-1001", True)
+                self.assertEqual(capture["blockers"], expected)
+                self.assertTrue(reader.call_args.kwargs["scoped"])
+
     def test_exact_dependency_order(self):
         steps = u.scoped_drain_steps(self.scope)
         self.assertEqual([s["action"] for s in steps],
