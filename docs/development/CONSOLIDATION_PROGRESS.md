@@ -536,3 +536,5 @@ P1-06d33: [recovery observation isolation](CONSOLIDATION_P1_06D33_CHECKPOINT.md)
 P1-06d34: [host forwarding diagnostic comparison](CONSOLIDATION_P1_06D34_CHECKPOINT.md). Read-only evidence candidate; public WAN remains UNVERIFIED.
 
 - D35: [Explicit Scoped admission and recovery fixtures](CONSOLIDATION_P1_06D35_CHECKPOINT.md).
+
+- D36: [Pure Scoped Peer lineage and Legacy decoder isolation](CONSOLIDATION_P1_06D36_CHECKPOINT.md).

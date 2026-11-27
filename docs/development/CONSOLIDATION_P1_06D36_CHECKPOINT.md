@@ -1,0 +1,6 @@
+# P1 06D36: pure Scoped Peer lineage
+Parent: 32198dfad9b9105fa2373d06e7eb35e504c7beab.
+Reuse actual Scoped creation/claim/binding/finalization fixtures; build complete pure Scoped Peer grant, revoke and regrant histories through admission, atomic stage, read-only proof and synthetic Root finalization. Verify unrelated sibling direction, old credential revocation after success, exact original identity, foreign scope and completed/UNKNOWN phase refusal; six historical event/claim/intent/state/link drift cases fail without partial pending state. Synthetic receipts certify SQLite boundaries only.
+Isolate Legacy historical intent/claim decoder and terminal event aliases in a separate file, preserving exact behavior and all historical compatibility witnesses until retirement gates authorize removal.
+Focused initial pure and N3 tests PASS (8.605s), fdaba080399b9f7a65b0d5642029ffa5. Extraction initially failed on unused strings import (ab07cccb02b4bb37a42438f18e0dd73a); corrected focused pure/Legacy/Scoped lineage tests PASS (26.844s), 8aa09dd597cbc4622160f627cee28dbe. Full staged verification and exact remote identity recorded on PR.
+No Legacy retirement, schema deletion, native certification or P1 closure.

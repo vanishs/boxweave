@@ -10,7 +10,8 @@ import (
 	"github.com/vanishs/boxweave/internal/peerscope"
 )
 
-func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
+func n3ScopedOwnedFixture(t *testing.T) (*Store, OwnedBox, string) {
+	t.Helper()
 	ctx := context.Background()
 	s := newStore(t)
 	_, tok, e := s.IssueToken(ctx, time.Hour)
@@ -55,10 +56,17 @@ func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
 			}
 		}
 	}
+	return s, box, tok.ID
+}
+func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
+	t.Helper()
+	ctx := context.Background()
+	s, box, tokenID := n3ScopedOwnedFixture(t)
+	const project = "user-1001"
 	raw, _ := json.Marshal(struct {
 		BoxID string `json:"box_id"`
 	}{box.UUID})
-	del, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-history-delete-one", RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
+	del, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tokenID, TokenID: tokenID, Key: "n3-history-delete-one", RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
 	if e != nil {
 		t.Fatal(e)
 	}

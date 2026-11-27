@@ -135,3 +135,5 @@ P1-06d33: [recovery observation isolation](CONSOLIDATION_P1_06D33_CHECKPOINT.md)
 P1-06d34: [host forwarding diagnostic comparison](CONSOLIDATION_P1_06D34_CHECKPOINT.md). No network policy changes or native gate waiver.
 
 - D35: [Scoped fixture conversion](CONSOLIDATION_P1_06D35_CHECKPOINT.md); native gates unchanged.
+
+- D36: [Pure Scoped Peer provenance and drift witnesses](CONSOLIDATION_P1_06D36_CHECKPOINT.md); native gates retained.
