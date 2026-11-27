@@ -161,3 +161,11 @@ until the candidate passes real native acceptance and the obsolete-only
 requirements are explicitly disposed. See
 [acceptance crosswalk](CONSOLIDATION_ACCEPTANCE.md#p2-r3-installed-lifecycle-replacement-checkpoint-candidate).
 No Legacy runtime restoration, no deletion of existing safety evidence.
+
+R3 follow-up 8786dc2: all three installed offline positives and actual
+missing-ACK refusal CI_VERIFIED. Exact empty LXC full retirement and
+archive/native postcheck BOX_VERIFIED. Normal handoff regression
+correction and I3 current Project drift oracle in new candidate.
+Assertion-by-assertion proposed Legacy disposition recorded in
+CONSOLIDATION_ACCEPTANCE.md; keep old gates until owner approval and
+actual retained normal/drift proof. No obsolete assertion marked PASS.

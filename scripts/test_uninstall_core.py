@@ -948,6 +948,25 @@ class FakeHost(unittest.TestCase):
         self.assertFalse(u.AUDIT.exists())
         self.assertFalse(u.SCOPED_FENCE.exists())
 
+    def test_settled_retirement_reader_mode_is_explicit_for_every_phase(self):
+        report = {"project": "user-1001", "review_sha256": "a" * 64,
+                  "table": "bw_pg_" + "b" * 16, "phase": "INSTALLED", "retired": 0}
+        for offline in (False, True):
+            for action in ("plan", "resume-plan", "restore", "guard"):
+                with self.subTest(offline=offline, action=action), \
+                        mock.patch.object(u, "file_fingerprint", return_value={"sha256": "c"}), \
+                        mock.patch.object(u, "require_root_owned"), \
+                        mock.patch.object(u, "command", return_value=(json.dumps(report), 0)) as call:
+                    plan = {"project": "user-1001", "binary": {"sha256": "c"},
+                            "scoped_native": report, "offline_entry": offline}
+                    self.assertEqual(u.scoped_native(plan, action), report)
+                    argv = call.call_args.args[0]
+                    self.assertEqual(argv[:4], [str(u.BINARY), "native-scoped-retirement-" + action,
+                                               "-project", "user-1001"])
+                    self.assertEqual("-retirement-cold" in argv, offline)
+                    self.assertEqual("-approve-local" in argv, action in ("restore", "guard"))
+                    self.assertEqual(call.call_count, 1)
+
     def test_offline_unknown_route_never_normal_drain_approve(self):
         self.native = [{"uuid": "12345678-1234-1234-1234-123456789012"}]
         blocked = {"ready": False, "blockers": ["DRAIN_UNSETTLED_ORIGINALS"]}

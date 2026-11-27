@@ -1573,3 +1573,47 @@ aa6a5ff4109f1a8d32437848b3838936 PASS; signed Incus 7.6 package
 catalog 71f6c43499ac7922fae4f27d21f19188 PASS.
 Do not reset previous labs or spoof hosted-only fixture identity.
 Current candidate installed LXC witness not yet executed.
+
+### P2 R3 — offline positives and normal handoff regression
+
+Exact 8786dc2 N2 46059894552 completed 28/31; candidate SHA256
+e1dd4cdf76315490eb321cd2a1ea3d3e467a997667c604f1f2bd8b21b2502db9.
+Empty 140711332479, settled 140711332302, exact UNKNOWN archival
+140711332393 and missing-ACK refusal 140711332606 all PASS.
+Original lane reached verified native prefix resume, unchanged original
+UNKNOWN/claims/all operations, independent native poststate, post-native
+interruption/resume, foreign preservation, interrupted purge and fresh
+ledger/new workload. S2 46059894513, S25 46059894537, Forward 46059894575
+PASS. Quality, S1 and dual arch remain red (inherited H).
+Normal retirement 140711332374 passed live plan, foreign ACL refusal,
+retired history, then blocked at SCOPED_DRAIN_EMPTY_RETIREMENT_BLOCKED
+after approved drain, before archive/restore. Exact lower-level blocker
+not printed. The 8786dc2 cold-reader change affected this normal stopped
+handoff as well; the preceding bf36c5f normal lane had passed.
+Restrict cold capture to explicit settled offline entry; keep normal
+read-only audit contract and original validation. Bind cold mode to
+native review digest and use it through every wrapper phase. No cold
+fallback, unverified scope, altered archive/UNKNOWN or safety bypass.
+Add bounded blocker detail at handoff. Focused Go tests (10), CLI, vet,
+65 uninstaller and 15 evidence-map tests, format/diff check PASS in
+7ed22391ae50c0a4abcb0fac13eb628a; exact corrected native rerun required.
+
+Actual fresh LXC witness on 8786dc2 (see PR comments 7227025109 and
+7227076542): owner-approved 91bd9fb7-ae4d-46c4-ab35-7ca6b7f069f9.
+Exact installed candidate b85ef75340a41140ba63cb8c1a57d844a16e777b781f9d72df5207f3f598d4a6.
+Native bootstrap 5242c2ed2c79cf8b681e4f1d56e5a33d and install
+38a5b86d435983f376dcbd0000b0cdb5 exit0. Cold plan/active refusal and
+effective LXC review b7ca2606a2965e0ffe9483df9da4840e PASS. Declined
+approval unchanged and actual offline empty COMPLETE
+3ada5ec4dfc358444a10535700440cd9. Independent archive/native postcheck
+9a3abbab77f7c42a7baa5c68a16b74f3 PASS: original five file digests,
+Incus PID 7257 and exact inherited LXC hash unchanged. Preserve
+retired-xp38o5al; no reset/purge of lab. Functional-only scope,
+not strong isolation or exceptional populated LXC certification.
+
+Legacy gate audit: I3 native Project description drift is a generic
+safety oracle, not retired. Add equivalent installed Scoped empty
+Project drift refusal/no-effect fixture and required marker to normal
+retirement lane; preserve every earlier gate and fixture. Owner decision
+for obsolete-only Legacy semantics remains required. See acceptance
+crosswalk; no lane removal or R4 advancement.

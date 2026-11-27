@@ -46,8 +46,52 @@ def interrupted(project):
     raise AssertionError("interruption not reached")
 
 
+def verify_project_drift(project, candidate, digest):
+    # Replace the generic I3 pre-retirement drift oracle on the supported
+    # Scoped contract. A harmless description change is confined to this
+    # exact fresh hosted fixture; it is not an operator repair procedure.
+    assert os.geteuid() == 0 and os.environ.get("GITHUB_ACTIONS") == "true"
+    assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+    import hashlib
+    assert candidate and hashlib.sha256(Path(candidate).read_bytes()).hexdigest() == digest
+    assert hashlib.sha256(u.BINARY.read_bytes()).hexdigest() == digest
+    assert run("git", "rev-parse", "HEAD") == os.environ["N2_EXACT_HEAD"]
+    assert not run("incus", "list", "--all-projects", "-c", "n", "-f", "csv")
+    p, ready = check_plan(project)
+    assert p.returncode == 0 and ready["ready"] and ready["mode"] == u.SCOPED_MODE
+    before = pid("boxweave.service")
+    incus_pid = pid("incus.service")
+    desc = run("incus", "project", "get", project, "description", "--property")
+    original = json.loads(run("incus", "query", "/1.0/projects/" + project))
+    profile = run("incus", "query", "/1.0/profiles/default?project=" + project)
+    ledger = u.inspect_sqlite(u.STATE / "ledger.sqlite", guided=True, scoped=True)
+    drift = "BoxWeave isolated Scoped CI drift fixture"
+    assert desc != drift
+    run("incus", "project", "set", project, "description=" + drift, "--property")
+    modified = {**original, "description": drift}
+    try:
+        assert json.loads(run("incus", "query", "/1.0/projects/" + project)) == modified
+        blocked, reviewed = check_plan(project)
+        assert blocked.returncode != 0 and not reviewed["ready"]
+        assert any("SCOPED_NATIVE_PROOF_UNVERIFIED" in b for b in reviewed["blockers"]), reviewed["blockers"]
+        assert json.loads(run("incus", "query", "/1.0/projects/" + project)) == modified
+        assert run("incus", "query", "/1.0/profiles/default?project=" + project) == profile
+        assert u.inspect_sqlite(u.STATE / "ledger.sqlite", guided=True, scoped=True) == ledger
+        assert pid("boxweave.service") == before and pid("incus.service") == incus_pid
+        assert not any(os.path.lexists(path) for path in (u.AUDIT, u.SCOPED_FENCE, u.SCOPED_DRAIN, u.RETIRED))
+    finally:
+        assert json.loads(run("incus", "query", "/1.0/projects/" + project)) == modified
+        run("incus", "project", "set", project, "description=" + desc, "--property")
+    assert json.loads(run("incus", "query", "/1.0/projects/" + project)) == original
+    p, restored = check_plan(project)
+    assert p.returncode == 0 and restored["ready"]
+    print("P2_R3_SCOPED_PROJECT_DRIFT_REFUSED_NO_EFFECT=PASS", flush=True)
+
+
 def main(project, receipt, candidate=None, digest=None):
     assert os.geteuid() == 0
+    if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted":
+        verify_project_drift(project, candidate, digest)
     # Normal full retirement previews the exact owned fixture without effects.
     with LoopbackMCP("http://127.0.0.1:18650/mcp", token=token(receipt),
                      allow_mutations=True, timeout=60) as c:

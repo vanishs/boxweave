@@ -121,3 +121,16 @@ func TestP2OfflineArchiveLedgerInventory(t *testing.T) {
 		})
 	}
 }
+
+func TestP2SettledRetirementReaderReviewBinding(t *testing.T) {
+	original := strings.Repeat("a", 64)
+	if got := scopedSettledRetirementDigest(original, false); got != original {
+		t.Fatal("normal reviewed digest changed", got)
+	}
+	cold := scopedSettledRetirementDigest(original, true)
+	if cold == original || !nativePeerGuardSHA256Valid(cold) ||
+		cold != scopedSettledRetirementDigest(original, true) ||
+		cold == scopedSettledRetirementDigest(strings.Repeat("b", 64), true) {
+		t.Fatal("cold review must be deterministic and mode-bound")
+	}
+}

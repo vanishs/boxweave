@@ -110,6 +110,7 @@ func run() error {
 	prepareACL := f.String("acl", "", "new exclusively owned bw-prefixed Incus network ACL")
 
 	prepareSHA := f.String("native-prepare-sha256", "", "operator-reviewed exact native prepare plan/journal digest")
+	retirementCold := f.Bool("retirement-cold", false, "require exclusive cold ledger proof for settled offline retirement")
 
 	oldIncusPackage := f.String("old-incus-package", "", "exact current signed Ubuntu Incus package version")
 	confirmNativeHost := f.String("confirm-native-host-sha256", "", "operator-reviewed current local machine-ID digest")
@@ -133,6 +134,10 @@ func run() error {
 	}
 	if f.NArg() != 0 {
 		return errors.New("unexpected arguments")
+	}
+	if *retirementCold && command != "native-scoped-retirement-plan" && command != "native-scoped-retirement-resume-plan" &&
+		command != "native-scoped-retirement-restore" && command != "native-scoped-retirement-guard" {
+		return errors.New("cold retirement proof is settled scoped retirement only")
 	}
 	if *summary && command != "doctor" {
 		return errors.New("summary is doctor-only")
@@ -246,14 +251,14 @@ func run() error {
 			if *approveLocal || *prepareSHA != "" {
 				return errors.New("read-only scoped retirement plan does not accept approval")
 			}
-			report, err = install.NativeScopedRetirementPlan(ctx, *project, command == "native-scoped-retirement-resume-plan")
+			report, err = install.NativeScopedRetirementPlan(ctx, *project, command == "native-scoped-retirement-resume-plan", *retirementCold)
 		default:
 			release, e := acquireMaintenanceLock()
 			if e != nil {
 				return e
 			}
 			defer release()
-			report, err = install.NativeScopedRetirementApply(ctx, *project, *prepareSHA, command == "native-scoped-retirement-guard", *approveLocal)
+			report, err = install.NativeScopedRetirementApply(ctx, *project, *prepareSHA, command == "native-scoped-retirement-guard", *approveLocal, *retirementCold)
 		}
 		if err != nil {
 			return err

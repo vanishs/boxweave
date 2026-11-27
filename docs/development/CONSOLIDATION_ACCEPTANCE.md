@@ -250,3 +250,37 @@ Keep both old failing lanes until independent equivalent evidence and
 owner-approved obsolete-contract disposition. Preserve the original 72
 S2 marker/23 producer mapping, new lanes have separate C07 gates.
 No H/C04/C01 waiver or release authorization.
+
+### R3 actual evidence and pending Legacy-only dispositions
+
+Exact 8786dc2, N2 46059894552, candidate
+e1dd4cdf76315490eb321cd2a1ea3d3e467a997667c604f1f2bd8b21b2502db9.
+The following is an assertion-level proposed disposition, NOT approval
+to remove either old lane. Record historic requirements as retired,
+never PASS them by printing old success markers.
+
+| Original assertion(s) | Current actual evidence / disposition |
+| --- | --- |
+| Common N2 bootstrap, H3A wrapper/OAuth/no effect, D1/D2/D3 absent, H3B/H4A/H4B, H1A/H1B common empty/unsafe/nonroot negatives | Shared pre-branch gate in all existing Scoped lanes; 140711332324 PASS. Retain common gate. |
+| I2_GUIDED_LEGACY_PREVIEW_NO_EFFECT | Positive Legacy preview obsolete by fresh-only owner scope. Current read-only/stale Scoped plan and explicit retired wrapper refusal retained; prior bf36c5f 140706362734 verifies no native changes on old fresh-plan refusal. |
+| I3_LEGACY_DRIFT_REFUSED_BEFORE_RETIREMENT | Generic exact Project description drift refusal REQUIRED. Add matching current installed Scoped oracle, candidate CI_PENDING; do not substitute foreign-ACL refusal for same configuration drift. |
+| D3 positive, D4 reviewed recovery/no replay, H3B decline, H4A busy/replay and UNKNOWN navigation, D5 authenticated postcheck | Current actual 140711332324 verifies every matching SCOPED_V2 marker. Also real guided apply and partial plan/apply refusal. |
+| PR177_D5_LEGACY_CLEANUP | Legacy-specific power and sibling cleanup/IPv4 retirement queue are obsolete; retain current real dependency drain/cleanup, terminal history and exact new-identity evidence. 140711332393 exact archived UNKNOWN and new workload; normal 140711332374 handoff blocked, correction pending. |
+| N2_INSTALLED_HELPER_ACTIVATION | Legacy IPv4 helper obsolete. Retain actual Scoped lifecycle/guard activation, boot order and real Create/Delete in 140711332324. |
+| N2_INSTALLED_HELPER_OUTAGE_RECOVERY_NO_DELETE_REPLAY | Old post-Delete asynchronous address reclaim, pending queue, helper identity and capacity reuse intentionally obsolete (Scoped holds retired identities). Retain original/no-replay invariant via actual scoped-delete-ack 140711332387, final commit recovery and N4 partial/no-replay/degraded guard in 140711332324. These do not prove the old helper-outage scenario; explicit obsolete-contract owner decision required. |
+| N2_SCHEMA6_UPGRADE_ROLLBACK | Obsolete Legacy upgrade/rollback/commit contract; current fresh-only refusal, exact artifact and supported readiness gates remain. No claim of future stable upgrade. |
+| N2_FULL_UNINSTALL_PRESERVES_ARCHIVE; N2_CLEAN_INSTALLED_LIFECYCLE_PASS | Actual current Scoped lifecycle 140711332324; actual empty/settled/exceptional archive/poststate 140711332479/302/393; legacy-specific archived helper obsolete. Normal full archive needs corrected rerun. |
+| PR188_H2C_PURGE_INTERRUPTED_RESUMED, RC14_LEGACY_PURGE, RC14_FRESH_LEDGER, RC14_LEGACY_TO_SCOPED_REINSTALL | Actual 140711332393 interrupted purge and fresh Scoped empty six tables, old valid token denied, same names/new UUID and real network workload. Legacy-to-Scoped positive transition contract obsolete; same-mode normal 140706362734 prior PASS, current correction pending. |
+| legacy-offline PR188_H2B EXACT_UNKNOWN_REVIEW, ARCHIVED_UNKNOWN_UNCHANGED, NATIVE_RETIRED, FOREIGN_UNCHANGED | Actual 140711332393 matching current Scoped markers, real native ACK and immutable original/all claims, verified prefix/resume, no business settlement or replay. |
+| legacy-offline PR188_H2C OFFLINE_POSTNATIVE_RESUMED, OFFLINE_PURGE, PURGE_INTERRUPTED_RESUMED | Actual 140711332393 current markers and completed fresh reinstall. |
+| Unproven native ACK | Current 140711332606 actual negative, retains exact UNKNOWN without new effects. |
+| LXC recognized inherited policy | 8786dc2 local independent postcheck 9a3abbab77f7c42a7baa5c68a16b74f3 PASS in 91bd9fb7-ae4d-46c4-ab35-7ca6b7f069f9; prior normal LXC proof historical. Not recursive isolation or populated exceptional LXC proof. |
+
+Old mixed/legacy evidence rejection remains mandatory; current source
+negative checks and explicit installed wrapper refusal retained.
+No current Legacy installation/upgrade positive gate can pass without
+reintroducing intentionally retired semantics. Keep both legacy lane
+names, source and exact earlier evidence until owner approval and all
+retained generic witnesses are verified. Final current normal regression,
+I3 equivalent CI and owner disposition outstanding. No P1 H, C04, C01
+or release gate waiver. Do not advance R4 or claim R3 signed.

@@ -1588,6 +1588,8 @@ def scoped_native(plan, action):
             argv += ["-native-prepare-sha256", plan["scoped_native"]["review_sha256"]]
     else:
         argv = [str(BINARY), "native-scoped-retirement-" + action, "-project", plan["project"]]
+        if plan.get("offline_entry") is True:
+            argv.append("-retirement-cold")
     if action in ("restore", "guard"):
         argv += ["-native-prepare-sha256", plan["scoped_native"]["review_sha256"], "-approve-local"]
     raw, code = command(argv, acceptable=(0, 1), timeout=140)
@@ -3621,7 +3623,7 @@ def scoped_drain_continue(record):
         scoped_drain_verify(r)
         plan = scoped_plan(project, offline=r["approved_plan"].get("offline_entry") is True)
         if not plan["ready"]:
-            raise UninstallError("SCOPED_DRAIN_EMPTY_RETIREMENT_BLOCKED")
+            raise UninstallError("SCOPED_DRAIN_EMPTY_RETIREMENT_BLOCKED:" + ",".join(plan["blockers"])[:1024])
         if plan.get("scoped_effective_reviews", {}) != r["approved_plan"]["capture"]["immutable"].get("scoped_effective_reviews", {}):
             raise UninstallError("SCOPED_DRAIN_HANDOFF_POLICY_DRIFT")
         plan["drain_receipt"] = scoped_private_file(SCOPED_DRAIN, 1024 * 1024)
