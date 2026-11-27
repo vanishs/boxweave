@@ -5,26 +5,19 @@ on:
     branches: [v1]
     paths:
       - '.github/workflows/v1-release.yml'
-      - '.github/workflows/v1-n2-installed-lifecycle.yml'
-      - 'scripts/pr191_s2_ci_gate.py'
-      - 'scripts/test_pr191_s2_ci_gate.py'
-      - '.github/workflows/v1-s2-native.yml'
-      - 'scripts/pr191_ci_apt_sources.py'
-      - 'scripts/test_pr191_ci_apt_sources.py'
-      - 'scripts/s25*'
-      - 'scripts/pr191_s25*'
-      - 'scripts/pr191_s2_witness_map.*'
-      - 'scripts/s2_p3_evidence_audit.py'
-      - 'scripts/s2_p3_scoped_acceptance.json'
-      - 'scripts/pr191_n2_evidence_identity.py'
-      - 'scripts/test_pr191_s2_witness_map.py'
-      - 'scripts/test_pr191_s25*'
+      - '.github/workflows/v1-pr191-s25-scoped.yml'
       - 'internal/**'
       - 'cmd/**'
+      - 'scripts/**'
+      - 'install.sh'
+      - 'uninstall.sh'
       - 'go.mod'
       - 'go.sum'
-      - 'install.sh'
-      - '.github/workflows/v1-pr191-s25-scoped.yml'
+      - 'Makefile'
+      - 'VERSION'
+      - '.github/workflows/v1-s2-native.yml'
+      - '.github/workflows/v1-n2-installed-lifecycle.yml'
+
 
 permissions:
   contents: read
@@ -32,7 +25,7 @@ permissions:
 jobs:
   s25-bridgehead-lab:
     name: s25-scoped-nested-startup-and-lifecycle
-    if: github.repository == 'vanishs/boxweave' && github.event.pull_request.number == 191 && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.repository == 'vanishs/boxweave' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:

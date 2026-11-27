@@ -1876,3 +1876,34 @@ format invocation lacked gofmt PATH (b9ac68d202a1b360b6dfcdc0f7462544);
 corrected staging and toolchain in d74873d52e28049f5912668f5fbedceb,
 exit0: shell, 24 S25/crosswalk tests, full tracked format PASS.
 No complete Install package or independent new-head claim.
+
+### P4 R2 — native CI routing and release evidence convergence
+
+Baseline 17afed0fe6b39365e1d2aad2392b2126f98a7db3. R1 quality
+job 140787860760 exposed one new Python error: the old S25 ordering
+oracle still searched the retired direct inner stage path. Move the
+assertion to the actual wrapper stage/activate/status/Doctor order,
+helper exact apply/active proof and both outer/inner helper/token/
+Doctor ordering; preserve readiness checks. No H changes.
+
+Unify N2/S25/S2 PR path filters to complete source/script/wrapper
+families and VERSION, not docs. Replace #191-only special routing with
+the same-repository v1 PR Scoped contract and actual positive PR ID,
+exact source/event SHA, PR merge ref, consumer and producer
+workflow/job identity and run/attempt. Historical S2 non-PR direct
+route remains only on its original branch. Reject zero-size locator,
+wrong repository ID, missing/wrong producer identity; retain all
+existing artifact and receipt checks. Future PR context is modeled,
+not an actual different PR run. Both old S25 manual workflows limited
+to original historical branches. Archive obsolete guided-upgrade
+workflow and its sole historical script at parent 17afed0f; current
+Forward fresh/refusal coverage remains. See [workflow ledger](P4_WORKFLOW_DISPOSITION.md).
+
+Operation a35daccafe16320f07af136132446dbe exit0: 50 targeted
+tests, YAML and format. 582e6eeefabb3114ea034324ec16a6f8 /
+native b52020d1-7ce0-4206-9c5f-4e548de28fa8 exit0: all 477
+Python tests, 47 YAMLs, 1437-file format and 13 CI classification tests.
+RC complete modeled consumer, stable and manifest checks remain;
+no actual release or native execution here. R1 S25/Forward PASS,
+N2 28/29 at observation, S2 pending; other Go failures remain
+frozen H. New-head CI required; do not certify P4 or release yet.

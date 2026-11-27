@@ -405,3 +405,12 @@ entry refusals, marker mappings, historical evidence and current
 generic requirements retained. No full source/installed new-head
 acceptance, no H/C04/C01/C11 waiver. R2 must reconcile remaining
 historical callers and explicit equivalence decisions.
+
+### P4 R2 exact CI routing candidate
+
+C10/C11: current PR trigger parity, actual PR identity and stricter
+producer/consumer provenance tested locally. Current 29 N2 lanes,
+72 markers/23 producers, RC and stable dependencies unchanged.
+R1 new obsolete ordering test error corrected using current call
+chain; all 477 Python tests PASS. Actual new-head CI and final RC
+proof pending; preserve C01/H, C04 and final C11. No signoff.

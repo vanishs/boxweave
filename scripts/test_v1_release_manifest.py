@@ -344,18 +344,32 @@ class ReleaseTests(unittest.TestCase):
 
 
     def test_s25_doctor_requires_initialized_and_activated_controller(self):
-        # Stage writes files, not SQLite. Doctor is observation-only.
+        # Current Scoped install helper uses the exact wrapper, not the
+        # removed Legacy direct stage/token/activate sequence.
+        wrapper = (ROOT / "install.sh").read_text().split("def main():", 1)[1]
+        stage = wrapper.index('install_phase("STAGE"')
+        activate = wrapper.index('install_phase("ACTIVATE"')
+        status = wrapper.index('install_phase("INSTALLED_STATUS"')
+        doctor = wrapper.index("doctor = doctor_postflight")
+        self.assertLess(stage, activate)
+        self.assertLess(activate, status)
+        self.assertLess(status, doctor)
+        self.assertIn('doctor.get("mcp_ready")', wrapper[doctor:])
+        self.assertIn('doctor.get("native", {}).get("ready")', wrapper[doctor:])
+        helper = (ROOT / "scripts/pr191_s25_scoped_setup.sh").read_text()
+        apply = helper.index('sh "$wrapper" --apply --scoped-peer-fresh', helper.index(':apply"'))
+        active = helper.index("systemctl is-active --quiet boxweave.service", apply)
+        self.assertLess(apply, active)
+        self.assertIn('s["service_active"] and s["restart_required"] is False', helper[active:])
         for name in ("s25_bridgehead_lab.sh", "s25_inner_setup.sh"):
             with self.subTest(layer=name):
                 source = (ROOT / "scripts" / name).read_text()
-                stage = source.index(" install-stage -project ")
-                token = source.index(" token-create >", stage)
-                activate = source.index(" install-activate -project ", stage)
-                doctor = source.index(" doctor -project ", stage)
-                self.assertLess(stage, token)
-                self.assertLess(token, activate)
-                self.assertLess(activate, doctor)
-                self.assertIn('assert s["ready"] and s["native"]["ready"]', source)
+                install = source.index("pr191_s25_scoped_setup.sh install")
+                token = source.index(" token-create >", install)
+                doctor = source.index(" doctor -project ", token)
+                self.assertLess(install, token)
+                self.assertLess(token, doctor)
+                self.assertIn('assert s["ready"] and s["native"]["ready"]', source[doctor:])
                 self.assertIn("nftables conntrack", source)
 
     def test_rc_flag_not_required_and_removed(self):

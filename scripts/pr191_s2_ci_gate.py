@@ -42,7 +42,8 @@ def select_run(payload, workflow, source, pr):
     for r in records(payload, "workflow_runs"):
         if (r["head_sha"] != source or r["event"] != "pull_request" or
                 r["path"] != ".github/workflows/" + workflow or
-                r["repository"]["full_name"] != REPO or r["head_repository"]["full_name"] != REPO):
+                r["repository"]["full_name"] != REPO or r["head_repository"]["full_name"] != REPO or
+                r["head_repository"]["id"] != r["repository"]["id"]):
             continue
         if any(p["number"] == pr and p["head"]["sha"] == source and
                p["base"]["ref"] == "v1" and p["head"]["repo"]["id"] == r["repository"]["id"] and
@@ -76,7 +77,7 @@ def checked_lane(run, jobs, artifacts, lane, source, identity_only=False):
             raise ValueError("missing successful evidence step: " + lane)
     name = ("pr191-n2-identity-" if identity_only else "pr191-s2-") + lane + "-attempt-" + str(run["run_attempt"])
     a = [x for x in records(artifacts, "artifacts") if x["name"] == name]
-    if len(a) != 1 or a[0]["expired"] or a[0]["size_in_bytes"] > 65536:
+    if len(a) != 1 or a[0]["expired"] or not 0 < a[0]["size_in_bytes"] <= 65536:
         raise ValueError("missing/expired/oversized lane artifact: " + lane)
     meta = a[0]["workflow_run"]
     if (meta["id"] != run["id"] or meta["head_sha"] != source or
@@ -87,7 +88,7 @@ def checked_lane(run, jobs, artifacts, lane, source, identity_only=False):
             "job_id": j[0]["id"], "artifact_id": a[0]["id"], "artifact_name": name}
 
 
-def bind_receipt(receipt, location, event_sha, release_ref=None):
+def bind_receipt(receipt, location, event_sha, release_ref=None, pr=None):
     ci = receipt["ci"]
     if (receipt["report"]["lane"] != location["lane"] or
             ci["repository"] != REPO or ci["event"] != ("push" if release_ref else "pull_request") or
@@ -100,6 +101,13 @@ def bind_receipt(receipt, location, event_sha, release_ref=None):
         if (ci["workflow_ref"] != REPO + "/.github/workflows/" + workflow + "@" + release_ref or
                 ci["job"] != job or receipt["report"]["source"] != event_sha):
             raise ValueError("release receipt workflow/ref/job mismatch")
+    else:
+        workflow = S25 if location["lane"] == "s25" else N2
+        job = "s25-bridgehead-lab" if location["lane"] == "s25" else "installed-lifecycle"
+        if (type(pr) is not int or pr <= 0 or
+                ci.get("workflow_ref") != REPO + "/.github/workflows/" + workflow + "@refs/pull/" + str(pr) + "/merge" or
+                ci.get("job") != job):
+            raise ValueError("PR receipt workflow/ref/job mismatch")
 
 
 def release_context(env, source, workflows):
@@ -298,7 +306,7 @@ def download_receipt(loc, directory, expected):
     return json.loads(files[0].read_text())
 
 
-def collect_receipts(metadata, lanes, source, event_sha, release_ref=None):
+def collect_receipts(metadata, lanes, source, event_sha, release_ref=None, pr=None):
     if set(metadata) != set(lanes):
         raise ValueError("incomplete required native lane inventory")
     if len({m["job_id"] for m in metadata.values()}) != len(lanes) or len({
@@ -310,10 +318,26 @@ def collect_receipts(metadata, lanes, source, event_sha, release_ref=None):
             loc = metadata[lane]
             expected = "pr191-s25-lane.json" if lane == "s25" else "pr191-s2-lane.json"
             receipt = download_receipt(loc, Path(root) / lane, expected)
-            bind_receipt(receipt, loc, event_sha, release_ref)
+            bind_receipt(receipt, loc, event_sha, release_ref, pr)
             receipts.append(receipt)
     report = evaluate_receipts(receipts, source)
     return report, receipts
+
+
+def pr_context(env, source, pr_text, event_sha):
+    if not re.fullmatch(r"[1-9][0-9]{0,18}", pr_text):
+        raise ValueError("invalid PR number")
+    ref = "refs/pull/" + pr_text + "/merge"
+    if (env.get("GITHUB_ACTIONS") != "true" or
+            env.get("RUNNER_ENVIRONMENT") != "github-hosted" or
+            env.get("GITHUB_REPOSITORY") != REPO or
+            env.get("GITHUB_EVENT_NAME") != "pull_request" or
+            env.get("GITHUB_SHA") != event_sha or env.get("GITHUB_REF") != ref or
+            env.get("GITHUB_JOB") != "s2-native-blackbox" or
+            env.get("GITHUB_WORKFLOW_REF") != REPO + "/.github/workflows/v1-s2-native.yml@" + ref or
+            not all(re.fullmatch(r"[a-f0-9]{40}", x) for x in (source, event_sha))):
+        raise ValueError("exact same-repository Scoped PR CI context required")
+    return int(pr_text)
 
 
 def main():
@@ -334,13 +358,7 @@ def main():
             out.write("\n")
         return
     source, pr_text, event_sha = sys.argv[1:]
-    if (os.environ.get("GITHUB_ACTIONS") != "true" or
-            os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted" or
-            os.environ.get("GITHUB_REPOSITORY") != REPO or
-            os.environ.get("GITHUB_EVENT_NAME") != "pull_request" or
-            os.environ.get("GITHUB_SHA") != event_sha or pr_text != "191" or
-            not all(re.fullmatch(r"[a-f0-9]{40}", x) for x in (source, event_sha))):
-        raise ValueError("exact same-repository PR #191 CI context required")
+    pr = pr_context(os.environ, source, pr_text, event_sha)
     if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != source:
         raise ValueError("checkout source mismatch")
     lanes = sorted({lane for row in load_map() for lane in row["requires"]})
@@ -349,7 +367,7 @@ def main():
     while True:
         runs = {workflow: select_run(
             api("actions/workflows/" + workflow + "/runs?event=pull_request&head_sha=" +
-                source + "&per_page=100"), workflow, source, int(pr_text))
+                source + "&per_page=100"), workflow, source, pr)
                 for workflow in (N2, S25)}
         if all(r and r["status"] == "completed" for r in runs.values()):
             break
@@ -364,7 +382,7 @@ def main():
         for lane in lanes:
             if (lane == "s25") == (workflow == S25):
                 metadata[lane] = checked_lane(run, jobs, artifacts, lane, source)
-    report, _ = collect_receipts(metadata, lanes, source, event_sha)
+    report, _ = collect_receipts(metadata, lanes, source, event_sha, pr=pr)
     # This is the original S2 coverage scope, not the whole N2 gate or public WAN.
     print(json.dumps({"source": source, "jobs": [metadata[lane] for lane in lanes],
                       "mapped_markers": report["original_marker_rows"],

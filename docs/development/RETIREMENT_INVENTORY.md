@@ -239,3 +239,12 @@ and markers retained. A04 shared lock and old workflow consumers,
 A05/A06 archive and residual SQL/dispatch, A08 outer/N2 old callers
 remain R2 mapping or further bounded cleanup after proof; not retired
 or waived. H-associated composition unchanged; no replacement.
+
+### P4 R2 workflow and remaining caller disposition
+
+[P4 workflow ledger](P4_WORKFLOW_DISPOSITION.md) accounts for
+48 prior workflow files, seven current, two stable, 38 retained
+historical/optional, one archived with its sole script. Keep historic
+assertions and original source; no mass deletion. A04/A05/A06/A08
+shared and old consumer dispositions remain pending per-slice proof.
+No H change or waiver.

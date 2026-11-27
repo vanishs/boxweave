@@ -18,6 +18,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
+      - 'VERSION'
       - '.github/workflows/v1-s2-native.yml'
       - '.github/workflows/v1-n2-installed-lifecycle.yml'
   workflow_dispatch:

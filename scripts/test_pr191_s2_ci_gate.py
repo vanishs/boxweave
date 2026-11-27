@@ -62,7 +62,7 @@ class S2CIGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             g.checked_lane(run, bad, artifacts, "scoped", SOURCE)
         for field, value in (("expired", True), ("name", "pr191-s2-scoped-attempt-1"),
-                             ("size_in_bytes", 65537)):
+                             ("size_in_bytes", 65537), ("size_in_bytes", 0)):
             bad = copy.deepcopy(artifacts)
             bad["artifacts"][0][field] = value
             with self.assertRaises(ValueError):
@@ -76,13 +76,73 @@ class S2CIGateTests(unittest.TestCase):
         loc = g.checked_lane(*fixture(), "scoped", SOURCE)
         receipt = {"report": {"lane": "scoped"}, "ci": {"repository": g.REPO,
             "event": "pull_request", "event_sha": EVENT, "run_id": 10, "run_attempt": 2}}
-        g.bind_receipt(receipt, loc, EVENT)
+        receipt["ci"].update(job="installed-lifecycle",
+                             workflow_ref=g.REPO+"/.github/workflows/"+g.N2+"@refs/pull/191/merge")
+        g.bind_receipt(receipt, loc, EVENT, pr=191)
         for field, value in (("run_id", 11), ("run_attempt", 1), ("event_sha", SOURCE),
-                             ("repository", "other/repo")):
+                             ("repository", "other/repo"), ("job", "other"),
+                             ("workflow_ref", g.REPO+"/.github/workflows/"+g.N2+"@refs/pull/192/merge")):
             bad = copy.deepcopy(receipt)
             bad["ci"][field] = value
             with self.assertRaises(ValueError):
-                g.bind_receipt(bad, loc, EVENT)
+                g.bind_receipt(bad, loc, EVENT, pr=191)
+
+
+    def test_current_same_repo_pr_context_and_future_pr(self):
+        for pr in ("191", "207"):
+            ref = "refs/pull/" + pr + "/merge"
+            env = {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted",
+                   "GITHUB_REPOSITORY": g.REPO, "GITHUB_EVENT_NAME": "pull_request",
+                   "GITHUB_SHA": EVENT, "GITHUB_REF": ref, "GITHUB_JOB": "s2-native-blackbox",
+                   "GITHUB_WORKFLOW_REF": g.REPO+"/.github/workflows/v1-s2-native.yml@"+ref}
+            self.assertEqual(g.pr_context(env, SOURCE, pr, EVENT), int(pr))
+            for field, value in (("GITHUB_EVENT_NAME", "push"), ("GITHUB_REF", "refs/heads/v1"),
+                                 ("GITHUB_JOB", "other"), ("GITHUB_WORKFLOW_REF", "other/ref"),
+                                 ("GITHUB_SHA", SOURCE), ("GITHUB_REPOSITORY", "other/repo")):
+                with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                    g.pr_context({**env, field: value}, SOURCE, pr, EVENT)
+            for wrong in ("0", "001", "other", "208"):
+                with self.assertRaises(ValueError):
+                    g.pr_context(env, SOURCE, wrong, EVENT)
+            run, _, _ = fixture()
+            run["pull_requests"][0]["number"] = int(pr)
+            self.assertEqual(g.select_run(page("workflow_runs", [run]), g.N2, SOURCE, int(pr)), run)
+            run["head_repository"] = {"id": 999, "full_name": g.REPO}
+            self.assertIsNone(g.select_run(page("workflow_runs", [run]), g.N2, SOURCE, int(pr)))
+        with self.assertRaises(ValueError):
+            g.bind_receipt({"report":{"lane":"scoped"}, "ci":{"repository":g.REPO,
+                "event":"pull_request", "event_sha":EVENT, "run_id":10, "run_attempt":2}},
+                g.checked_lane(*fixture(), "scoped", SOURCE), EVENT, pr=191)
+
+
+    def test_current_workflow_trigger_parity_and_legacy_route(self):
+        root = Path(".github/workflows")
+        names = (g.N2, g.S25, "v1-s2-native.yml")
+        sources = [(root / name).read_text() for name in names]
+        paths = []
+        for src in sources:
+            selected = set()
+            for line in src.split("    paths:\n", 1)[1].splitlines():
+                if not line.startswith("      - "):
+                    break
+                selected.add(line.strip().removeprefix("- ").strip("'"))
+            paths.append(selected)
+        self.assertTrue(paths[0])
+        self.assertEqual(paths[0], paths[1])
+        self.assertEqual(paths[0], paths[2])
+        self.assertTrue({"scripts/**", "internal/**", "cmd/**", "install.sh",
+                         "uninstall.sh", "VERSION", "Makefile", "go.mod", "go.sum"} <= paths[0])
+        self.assertFalse(any(p.startswith("docs/") or p == "**" for p in paths[0]))
+        self.assertIn("github.event.pull_request.head.repo.full_name == github.repository", sources[1])
+        self.assertNotIn("pull_request.number == 191", sources[1])
+        self.assertNotIn("pull_request.number == 191", sources[2])
+        self.assertIn("if: github.event_name == 'pull_request'", sources[2])
+        self.assertIn("if: github.event_name != 'pull_request' && github.ref == 'refs/heads/feat/v1-s2-operations-20261110'", sources[2])
+        self.assertIn("github.event.pull_request.head.sha || github.sha", sources[2])
+        self.assertIsNone(g.select_run(page("workflow_runs", []), g.N2, SOURCE, 191))
+        self.assertFalse((root / "v1-guided-upgrade.yml").exists())
+        self.assertFalse(Path("scripts/guided_upgrade_ci.sh").exists())
+
 
 
 RC_REF = "refs/heads/release/v" + Path("VERSION").read_text().strip() + "-rc.7"
