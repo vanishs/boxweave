@@ -10,8 +10,6 @@ stage="$1"; binary_sha="$2"; agent_sha="$3"; package_proxy="$4"; simwan_sha="$5"
 test "$(id -u)" = 0
 test ! -e /var/lib/incus
 test ! -e /var/lib/boxweave
-case "${P1B_S25_SCOPED:-0}" in 0|1) ;; *) exit 88 ;; esac
-if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  test "$#" = 10
  test "$(hostname)" = bw-s25-mcp-l1
  awk '$5 ~ /^\/(var\/lib|run)\/incus(\/|$)/ {bad=1} END {exit bad}' /proc/self/mountinfo
@@ -20,9 +18,6 @@ if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  curl -fsSL --max-time 60 "$stage/s25-install.sh" -o /root/s25-install.sh
  echo "$7  /root/s25-install.sh" | sha256sum -c -
  export BW_S25_INSTALL_SHA="$7" BW_S25_SETUP_LAYER=inner BW_S25_ALLOWED_NESTED=1 P1B_S25_SCOPED=1
-else
- test "$#" = 5
-fi
 . /etc/os-release
 test "$ID" = ubuntu && test "$VERSION_ID" = 24.04
 echo S25_INNER_GUEST_START=PASS
@@ -118,14 +113,7 @@ S25_SIGNED_APT
 s25_update_indices
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
-if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  sh /root/pr191_s25_scoped_setup.sh bootstrap /usr/local/bin/boxweave-s25-candidate "$binary_sha" "$pkg" /root
-else
-apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
-systemctl start incus.service
-systemctl is-active --quiet incus.service
-incus admin init --auto --storage-backend=dir
-fi
 test -z "$(incus list --all-projects --format csv -c n)"
 # Incus image copy default pull is performed by the TARGET daemon,
 # not necessarily by the incus CLI. Configure only the fresh, exclusively
@@ -135,9 +123,6 @@ test "$(incus config get core.proxy_https)" = "$package_proxy"
 echo S25_INNER_INCUS_DAEMON_SCOPED_HTTPS_PROXY=PASS
 echo S25_INNER_PINNED_INCUS_DAEMON=PASS
 
-if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
- useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
-fi
 uid="$(id -u boxweave)"
 project="user-$uid"
 runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
@@ -151,7 +136,6 @@ if runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HO
  exit 51
 fi
 echo S25_INNER_FOREIGN_PROJECT_DENIED=PASS
-if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  image_fingerprint="$8"; meta_sha="$9"; root_sha="${10}"
  for digest in "$image_fingerprint" "$meta_sha" "$root_sha"; do
    printf '%s\n' "$digest" | grep -Ex '[0-9a-f]{64}' >/dev/null
@@ -167,58 +151,18 @@ if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  test "$actual" = "$image_fingerprint"
  printf '%s\n' "$image_fingerprint" > /root/s25-image/fingerprint
  echo P1B_S25_INNER_EXACT_IMAGE_IMPORTED=PASS
-else
- incus image copy images:ubuntu/24.04 local: --target-project "$project" \
-  --alias boxweave-ubuntu-24.04 >/dev/null
-fi
 echo S25_INNER_IMAGE_READY=PASS
 net="incusbr-$uid"
 incus network show "$net" >/dev/null
 
-target_acl="bw-s25-inner-owned"
 candidate=/usr/local/bin/boxweave-s25-candidate
-if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  sh /root/pr191_s25_scoped_setup.sh install "$candidate" "$binary_sha" "$project" /root
-else
-"$candidate" native-prepare-plan -project "$project" -pool default \
-  -network "$net" -acl "$target_acl" > /root/s25-native-plan.json
-sha="$(python3 -c 'import json;print(json.load(open("/root/s25-native-plan.json"))["review_sha256"])')"
-test -n "$sha"
-if "$candidate" native-prepare-apply -project "$project" -pool default \
-  -network "$net" -acl "$target_acl" \
-  -native-prepare-sha256 "0000000000000000000000000000000000000000000000000000000000000000" \
-  -approve-local >/dev/null 2>&1; then
- echo S25_FAIL_WRONG_NATIVE_PREP_SHA_ACCEPTED >&2
- exit 53
-fi
-test ! -e /var/lib/boxweave-native-prereq-v1.json
-"$candidate" native-prepare-apply -project "$project" -pool default \
-  -network "$net" -acl "$target_acl" \
-  -native-prepare-sha256 "$sha" -approve-local > /root/s25-native-applied.json
-"$candidate" native-prereq-plan -project "$project" > /root/s25-prereq.json
-python3 - <<'S25_INNER_NATIVE_ASSERT'
-import json
-s=json.load(open("/root/s25-prereq.json"))
-assert s["config_ready"] and len(s["checks"])==8 and all(x["ok"] for x in s["checks"]),s
-assert any(x["id"] == "selected_storage_pool_ready" and x["ok"] for x in s["checks"]),s
-assert any("STORAGE_QUOTA_UNVERIFIED" in x for x in s.get("warnings",[])),s
-S25_INNER_NATIVE_ASSERT
-echo S25_INNER_APPROVED_NATIVE_PREP_8_OF_8=PASS
-
-hash="$(sha256sum "$candidate" | awk '{print $1}')"
-test "$hash" = "$binary_sha"
-"$candidate" install-stage -project "$project" \
-  -source-binary "$candidate" -expect-sha256 "$hash" -approve-stage > /root/s25-stage.json
-fi
 for name in admin1 admin2 peer; do
  runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
   /usr/local/bin/boxweave token-create > "/root/s25-$name.secret"
  chmod 0600 "/root/s25-$name.secret"
 done
-if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
- "$candidate" install-activate -project "$project" -approve-local > /root/s25-activate.json
-fi
 # Doctor is observation-only. Explicit token creation initializes the ledger;
 # activate the exact staged service before checking installed readiness.
 runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \

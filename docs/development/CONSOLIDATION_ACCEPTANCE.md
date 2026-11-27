@@ -395,3 +395,13 @@ new metadata-directory umask regression pass locally. S25 failed
 artifacts observation is traced to a reproducible source permission
 mismatch; exact installed rerun is needed. No change to private journals,
 Root checks, H, C04 or other mandatory evidence. No formal acceptance.
+
+### P4 R1 bounded source retirement
+
+P3 predecessor 13fee95 actual N2 29/29, S2/S25/Forward PASS,
+D4/H4B and SDK 23 discovery verified. C10/C11 bounded installer
+obsolete body and inner S25 source cleanup verified locally. Current
+entry refusals, marker mappings, historical evidence and current
+generic requirements retained. No full source/installed new-head
+acceptance, no H/C04/C01/C11 waiver. R2 must reconcile remaining
+historical callers and explicit equivalence decisions.

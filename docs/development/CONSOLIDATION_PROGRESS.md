@@ -1836,3 +1836,43 @@ root fixture PASS, CLI/Diagnostic full packages, selected Install
 D1-D4/P3/H1A/unit checks, vet, shell, 48 Python regressions and format.
 Actual S25 and dependent S2 exact-head independent proof remains
 mandatory. No formal R4/P3 signoff yet.
+
+### P4 R1 — bounded obsolete implementation retirement
+
+Baseline 13fee95b6c03c3e0d5b70c39806594c99d47cfe3. R0 ledger
+[7230209749](https://github.com/vanishs/boxweave/pull/191#issuecomment-7230209749).
+P3 exact N2 46082177305 29/29 PASS, S2 46082177119 PASS, S25
+46082177116 PASS, Forward 46082177167 PASS. N2 scoped 140783414980
+actual D1-D5, H3B/H4A/H4B capacity/recovery and partial refusal PASS;
+SDK 140783415189/191 exact 23 discovery, old/current SDK PASS.
+These close P3 installed regression within scope at predecessor,
+not final release. C01/H and C04/C11 final obligations remain.
+
+A01-A03: all Go references to BackupReceipt/Upgrade/Rollback/
+CommitUpgrade and subordinate helpers were contained in lifecycle.go
+and finalize.go; remove dead product upgrade bodies, retain exact
+Activate and shared helpers. Retire install.sh uncalled guided upgrade,
+old fresh review and their private helpers. Keep old-selector refusal,
+metadata/receipt checks, installed fresh/Doctor/OAuth, native dependency
+lifecycle and historical recognition. Eight old wrapper test methods
+were exclusively direct retired-upgrade tests; preserve source/history
+in Git, current generic decline, stale, identity, schema and refusal
+oracles remain. Retain test_guided_upgrade.py current metadata, Scoped,
+LXC and reader prerequisites tests; historical filename still used.
+
+A08: remove only unreachable Legacy branches in s25_inner_setup.sh
+after existing mandatory Scoped entry selector. Preserve exact live
+commands, checks, markers and setup helper (including stale negative
+and exact image). Outer/N2 transitive historical callers move with
+R2 mapping; no producer/checker/marker edit. A04 shared
+nativeScriptletAcquireLock still referenced outside family and old
+workflow calls; A05/A06 old archive/uninstall consumers need explicit
+reachability/disposition. A07/H remains frozen. Do not bulk delete.
+
+Local operation a732c74812efe0bb2647af91e6917277: CLI/Diagnostic
+whole packages, selected Install, vet and 98 Python tests PASS;
+aggregate exit1 only format saw unstaged deleted file. A second
+format invocation lacked gofmt PATH (b9ac68d202a1b360b6dfcdc0f7462544);
+corrected staging and toolchain in d74873d52e28049f5912668f5fbedceb,
+exit0: shell, 24 S25/crosswalk tests, full tracked format PASS.
+No complete Install package or independent new-head claim.

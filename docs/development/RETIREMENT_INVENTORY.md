@@ -227,3 +227,15 @@ CLI/unit/wrapper/recovery, historical branches and tests. S25 current
 entrypoints are Scoped-only before any setup; retain old bodies for
 P4 transitive audit. Historical audit/purge CLI no-dispatch negatives
 are not a replacement for actual reader evidence. Keep H frozen.
+
+### P4 R1 retired and retained ledger
+
+A01-A03 retired: no current product upgrade dispatch or bodies.
+Historical direct positive and failure-path tests remain at parent
+13fee95. Current explicit old-command/selector refusals and generic
+fresh review/digest/schema/metadata/OAuth checks retained. A08 inner
+S25 Legacy branches retired; current Scoped branch exact statements
+and markers retained. A04 shared lock and old workflow consumers,
+A05/A06 archive and residual SQL/dispatch, A08 outer/N2 old callers
+remain R2 mapping or further bounded cleanup after proof; not retired
+or waived. H-associated composition unchanged; no replacement.
