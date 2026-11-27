@@ -41,7 +41,10 @@ done
 first="$(sha256sum "$work/candidate-a" | cut -d' ' -f1)"
 next="$(sha256sum "$work/candidate-b" | cut -d' ' -f1)"
 test "$first" != "$next"
-sudo apt-get update -qq
+# CI package selection: unrelated optional repository is not needed.
+# Required repository signatures and exact package checks are unchanged.
+sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_ci_apt_sources.py
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base conntrack nftables iproute2 >/dev/null
 # N3 guard prerequisite, not final installed Peer acceptance.
 if test "${PR178_SCOPED_N2:-0}" = 1; then
@@ -55,7 +58,7 @@ curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/key.asc"
 test "$(gpg --show-keys --with-colons "$work/key.asc" | awk -F: '$1=="fpr"{print $10;exit}')" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
 sudo install -m 0644 "$work/key.asc" /etc/apt/keyrings/bw-n2-install.asc
 echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/bw-n2-install.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/bw-n2-install.list >/dev/null
-sudo apt-get update -qq
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
 sudo "$work/candidate-a" native-plan -incus-package-version "$pkg" > "$work/bootstrap-plan.json"

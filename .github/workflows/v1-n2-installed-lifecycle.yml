@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [v1]
     paths:
+      - 'scripts/pr191_ci_apt_sources.py'
+      - 'scripts/test_pr191_ci_apt_sources.py'
       - internal/install/**
       - internal/diagnostic/**
       - internal/state/diagnostic_snapshot*.go
@@ -177,6 +179,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$N2_EXACT_HEAD"
           echo "H5_INSTALLED_SOURCE=$N2_EXACT_HEAD mode=${{ matrix.mode }}"
           sh -n scripts/n2_installed_lifecycle.sh
+          python3 scripts/test_pr191_ci_apt_sources.py
           sh scripts/n2_installed_lifecycle.sh | tee "$RUNNER_TEMP/n2-installed.log"
           for marker in WRAPPER REAL_OAUTH_RESUME INSTALLED_NO_EFFECT; do
             grep -Fxq "PR188_H3A_${marker}=PASS" "$RUNNER_TEMP/n2-installed.log"

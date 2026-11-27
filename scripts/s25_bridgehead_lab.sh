@@ -44,7 +44,10 @@ P1B_S25_PARENT
  candidate_sha="$(sha256sum "$work/staging/boxweave" | cut -d' ' -f1)"
 fi
 
-sudo apt-get update -qq
+# CI package selection: unrelated optional repository is not needed.
+# Required repository signatures and exact package checks are unchanged.
+sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_ci_apt_sources.py
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 iproute2 nftables conntrack dnsmasq-base >/dev/null
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/staging/zabbly.asc"
@@ -60,7 +63,7 @@ Components: main
 Architectures: amd64
 Signed-By: /etc/apt/keyrings/s25-zabbly.asc
 S25_APT_SOURCE
-sudo apt-get update -qq
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
 if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then

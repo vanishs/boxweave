@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [v1]
     paths:
+      - 'scripts/pr191_ci_apt_sources.py'
+      - 'scripts/test_pr191_ci_apt_sources.py'
       - 'scripts/s25*'
       - 'scripts/pr191_s25*'
       - 'scripts/test_pr191_s25*'
@@ -45,6 +47,7 @@ jobs:
           python3 scripts/test_pr191_s25_scoped_setup.py
           python3 scripts/test_pr191_s25_dual_auth.py
           python3 scripts/test_pr191_s25_apt_refresh.py
+          python3 scripts/test_pr191_ci_apt_sources.py
           python3 -m py_compile scripts/s25_independent_verifier.py
           python3 -m py_compile scripts/s25_simwan6.py
           python3 -m py_compile scripts/s25_r12_foreign_l1.py scripts/s25_dual_auth.py
