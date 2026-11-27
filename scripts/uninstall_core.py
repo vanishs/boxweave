@@ -1533,11 +1533,61 @@ def scoped_units(allow_empty_lxc=False):
     return result
 
 
+def scoped_offline_review(plan):
+    if file_fingerprint(BINARY) != plan["binary"]:
+        raise UninstallError("exact installed offline executable changed")
+    require_root_owned(BINARY)
+    raw, code = command([str(BINARY), "native-scoped-offline-review", "-project", plan["project"]],
+                        acceptable=(0, 1), timeout=140)
+    if code:
+        raise UninstallError("SCOPED_OFFLINE_ARCHIVE_PROOF_UNVERIFIED")
+    proof = json.loads(raw)
+    if (not isinstance(proof, dict) or proof.get("project") != plan["project"] or
+            not VALID_SHA.fullmatch(proof.get("review_sha256", "")) or
+            not VALID_SHA.fullmatch(proof.get("ledger_sha256", "")) or
+            not re.fullmatch(r"bw_pg_[0-9a-f]{16}", proof.get("table", "")) or
+            not isinstance(proof.get("retired"), int) or proof["retired"] < 0):
+        raise UninstallError("SCOPED_OFFLINE_ARCHIVE_IDENTITY_UNVERIFIED")
+    targets, originals = proof.get("targets"), proof.get("originals")
+    if not isinstance(targets, list) or not targets or not isinstance(originals, list) or not originals:
+        raise UninstallError("SCOPED_OFFLINE_ARCHIVE_SCOPE_UNVERIFIED")
+    actual = [(b["uuid"], b["name"], b["state"]) for b in plan["incus_instances"]]
+    expected = [(b["uuid"], b["name"], "Stopped") for b in targets]
+    if sorted(actual) != sorted(expected) or len({b["uuid"] for b in targets}) != len(targets):
+        raise UninstallError("SCOPED_OFFLINE_NATIVE_SCOPE_DRIFT")
+    owners = {b["uuid"] for b in targets}
+    ids = {x["id"] for x in originals}
+    if (len(ids) != len(originals) or len(ids) != plan["sqlite"]["unresolved_operations"] or
+            any(x["state"] != "UNKNOWN" or x["action"] != "box_stop" or x["claim_protection"] != "RETAINED" or
+                x["recorded_claims"] != 1 or x["native_receipt"] is not True or
+                x["retirement_scope"] != "EXACT_OWNED_POWER_ORIGINAL" or x["box_uuid"] not in owners or
+                x["incarnation"] != x["box_uuid"] for x in originals)):
+        raise UninstallError("SCOPED_OFFLINE_ORIGINAL_SCOPE_DRIFT")
+    return proof
+
+
+def scoped_offline_native_view(proof):
+    return {"project": proof["project"], "review_sha256": proof["review_sha256"],
+            "phase": "OFFLINE_PENDING", "guard_present": True, "retired": proof["retired"],
+            "table": proof["table"]}
+
+
 def scoped_native(plan, action):
     if file_fingerprint(BINARY) != plan["binary"]:
         raise UninstallError("exact installed scoped executable changed")
     require_root_owned(BINARY)
-    argv = [str(BINARY), "native-scoped-retirement-" + action, "-project", plan["project"]]
+    if plan.get("offline_archive"):
+        if action == "plan":
+            proof = scoped_offline_review(plan)
+            if proof != plan["offline_archive"]:
+                raise UninstallError("SCOPED_OFFLINE_ORIGINAL_REVIEW_DRIFT")
+            return scoped_offline_native_view(proof)
+        name = "final-plan" if action == "resume-plan" else action
+        argv = [str(BINARY), "native-scoped-offline-" + name, "-project", plan["project"]]
+        if action == "resume-plan":
+            argv += ["-native-prepare-sha256", plan["scoped_native"]["review_sha256"]]
+    else:
+        argv = [str(BINARY), "native-scoped-retirement-" + action, "-project", plan["project"]]
     if action in ("restore", "guard"):
         argv += ["-native-prepare-sha256", plan["scoped_native"]["review_sha256"], "-approve-local"]
     raw, code = command(argv, acceptable=(0, 1), timeout=140)
@@ -1562,13 +1612,15 @@ def scoped_offline_entry_check():
     scoped_incus_active()
 
 
-def scoped_plan(project, offline=False):
+def scoped_plan(project, offline=False, exceptional=False):
+    if exceptional and not offline:
+        raise UninstallError("exceptional retirement requires explicit offline entry")
     if offline:
         scoped_offline_entry_check()
     if os.path.lexists(SCOPED_FENCE) or audit_status()["status"] == "STARTED":
         raise UninstallError("SCOPED_RETIREMENT_IN_PROGRESS: review --resume-plan --scoped, do not start another")
     # This alternative is only used for an empty Scoped installation.
-    if native_instances(project, guided=False):
+    if native_instances(project, guided=False) and not exceptional:
         raise UninstallError("SCOPED_LXC_EMPTY_RETIREMENT_REQUIRES_MCP_CLEANUP")
     plan = inspect("full", project, [], None, guided=True, scoped=True,
                    offline=offline, scoped_empty_lxc=True)
@@ -1583,7 +1635,7 @@ def scoped_plan(project, offline=False):
     plan["scoped_units"] = scoped_units(allow_empty_lxc=True)
     reviewed = scoped_effective_reviews(allow_lxc=True)
     if reviewed:
-        if plan["sqlite"]["boxes"] or plan["sqlite"]["unresolved_operations"] or plan["incus_instances"]:
+        if not exceptional and (plan["sqlite"]["boxes"] or plan["sqlite"]["unresolved_operations"] or plan["incus_instances"]):
             raise UninstallError("SCOPED_LXC_EMPTY_RETIREMENT_REQUIRES_MCP_CLEANUP")
         plan["scoped_effective_reviews"] = reviewed
     plan["scoped_journal"] = scoped_tree(SCOPED_JOURNAL)
@@ -1593,11 +1645,29 @@ def scoped_plan(project, offline=False):
         if plan["service_state"] != "inactive":
             raise UninstallError("SCOPED_OFFLINE_CONTROLLER_NOT_INACTIVE")
         plan["offline_entry"] = True
-    if plan["sqlite"]["boxes"] or plan["incus_instances"]:
+    if not exceptional and (plan["sqlite"]["boxes"] or plan["incus_instances"]):
         plan["blockers"].append("SCOPED_LIVE_BOXES: use the exact scoped normal drain coordinator")
     if not os.path.lexists(SCOPED_JOURNAL / "retirement-preimage.json"):
         plan["blockers"].append("SCOPED_RETIREMENT_PREIMAGE_MISSING: older installation has no verified original configuration")
-    if not plan["blockers"]:
+    if exceptional:
+        try:
+            local = maintenance_local_inventory(project, plan["service_user_uid"])
+            if (local.get("mounted_artifacts") or local.get("capture") or
+                    any(isinstance(v, dict) and v.get("state") in ("UNSAFE", "UNVERIFIED") for v in local.values()) or
+                    any(local.get(k, {}).get("state") != "ABSENT" for k in
+                        ("backup", "scriptlet", "legacy_root_operations", "drain_fence", "offline_fence", "purge_fence", "scoped_fence"))):
+                raise UninstallError("exceptional offline local inventory unverified")
+            proof = scoped_offline_review(plan)
+            ids = {x["id"] for x in proof["originals"]}
+            plan["blockers"] = [b for b in plan["blockers"] if not (
+                b.startswith("OPERATION_UNKNOWN:") and b.split(":")[1] in ids or
+                b == "network_address_fences_NOT_RELEASED:" + str(2 * len(proof["targets"])))]
+            plan["offline_archive"] = proof
+            plan["scoped_native"] = scoped_offline_native_view(proof)
+        except (UninstallError, OSError, ValueError, KeyError, TypeError) as exc:
+            plan["blockers"].append("SCOPED_OFFLINE_ARCHIVE_PROOF_UNVERIFIED:" + str(exc)[:240])
+            plan["scoped_native"] = None
+    elif not plan["blockers"]:
         try:
             plan["scoped_native"] = scoped_native(plan, "plan")
             if plan["scoped_native"]["phase"] != "INSTALLED" or plan["scoped_native"]["guard_present"] is not True:
@@ -1617,6 +1687,8 @@ def scoped_plan(project, offline=False):
                        "remove exact Incus guard drop-in and reload systemd without restarting Incus",
                        "stop owned guard; remove only verified scoped guard table",
                        "archive original Root journal and remove exact owned controller files"]
+    if exceptional:
+        plan["actions"].insert(2, "retire exact stopped owned native Boxes and detached ACLs after archiving unchanged UNKNOWN originals; never settle or replay")
     plan["retained"] = ["Incus, original Project/Profile/bridge, all other native resources and workloads",
                         "private controller and Root audit archive, dedicated OS identity, external tunnel"]
     if len(canonical(plan)) > 768 * 1024:
@@ -1715,15 +1787,18 @@ def scoped_verify_original(plan):
     if scoped_units(allow_empty_lxc=bool(plan.get("scoped_effective_reviews"))) != plan["scoped_units"] or scoped_tree(SCOPED_JOURNAL) != plan["scoped_journal"]:
         raise UninstallError("original scoped Root journal or unit drift")
     if inspect_sqlite(STATE / "ledger.sqlite", guided=True, scoped=True,
-                      cold=plan.get("offline_entry") is True) != plan["sqlite"] or plan["sqlite"]["blockers"]:
+                      cold=plan.get("offline_entry") is True) != plan["sqlite"] or (plan["sqlite"]["blockers"] and not plan.get("offline_archive")):
         raise UninstallError("original scoped ledger changed; preserve protected work")
-    if native_instances(plan["project"], guided=True):
-        raise UninstallError("scoped native consumers remain")
+    consumers = native_instances(plan["project"], guided=True)
+    if consumers != (plan["incus_instances"] if plan.get("offline_archive") else []):
+        raise UninstallError("scoped native consumers changed")
     require_quiescent_scoped_native(plan["project"])
     if inspect_exec_archive(plan["service_user_uid"]) != plan["exec_archive"]:
         raise UninstallError("original scoped Exec archive changed")
     original = {x["name"]: x["info"] for x in plan["state_files"]}
     current = {x["name"]: x["info"] for x in scoped_state_files(plan)}
+    if plan.get("offline_archive") and current != original:
+        raise UninstallError("exceptional offline original bytes changed")
     for name in ("install-manifest.json", SERVE_LOCK_NAME):
         if current.get(name) != original.get(name):
             raise UninstallError("original scoped state identity drift")
@@ -1777,6 +1852,71 @@ def scoped_archive(record):
     return record
 
 
+def scoped_offline_progress(plan, effect=False):
+    if file_fingerprint(BINARY) != plan["binary"]:
+        raise UninstallError("exact installed offline executable changed")
+    require_root_owned(BINARY)
+    approved = plan["offline_archive"]
+    argv = [str(BINARY), "native-scoped-offline-" + ("step" if effect else "progress"),
+            "-project", plan["project"], "-native-prepare-sha256", approved["review_sha256"]]
+    if effect:
+        argv.append("-approve-local")
+    raw, code = command(argv, acceptable=(0, 1), timeout=140)
+    if code:
+        raise UninstallError("SCOPED_OFFLINE_PREFIX_UNVERIFIED: preserve original intent")
+    report = json.loads(raw)
+    total = 2 * len(approved["targets"])
+    if (not isinstance(report, dict) or report.get("review_sha256") != approved["review_sha256"] or
+            type(report.get("total")) is not int or report["total"] != total or
+            type(report.get("completed")) is not int or not 0 <= report["completed"] <= total or
+            report.get("next") not in ("DISPATCH", "VERIFY_ONLY", "COMPLETE") or
+            (report["next"] == "COMPLETE") != (report["completed"] == total)):
+        raise UninstallError("invalid offline progress identity")
+    return report
+
+
+def scoped_offline_effect_proof(archive, plan):
+    approved = plan["offline_archive"]
+    actual = {x.name for x in archive.iterdir() if x.name.startswith("offline-effect-")}
+    expected = set()
+    proofs = {}
+    for index in range(2 * len(approved["targets"])):
+        kind = "ACL" if index % 2 else "INSTANCE"
+        for status in ("INTENT", "ACK", "VERIFIED"):
+            name = f"offline-effect-{index:04d}-{status.lower()}.json"
+            if status == "ACK" and (kind == "ACL" or name not in actual):
+                continue
+            path = archive / name
+            proof = scoped_private_file(path, 8192)
+            receipt = read_json(path)
+            native_id = receipt.get("NativeID", "")
+            if status == "ACK" and not VALID_UUID.fullmatch(native_id):
+                raise UninstallError("invalid archived native ACK")
+            if receipt != {"Schema": 1, "Review": approved["review_sha256"], "Index": index,
+                           "Kind": kind, "UUID": approved["targets"][index // 2]["uuid"],
+                           "Status": status, "NativeID": native_id if status == "ACK" else ""}:
+                raise UninstallError("offline effect receipt identity changed")
+            expected.add(name)
+            proofs[name] = proof["sha256"]
+    if actual != expected:
+        raise UninstallError("unexpected archived offline effect receipt")
+    return proofs
+
+
+def scoped_offline_complete_prefix(plan, archive):
+    progress = scoped_offline_progress(plan)
+    for _ in range(progress["total"]):
+        if progress["next"] == "COMPLETE":
+            break
+        previous = progress["completed"]
+        progress = scoped_offline_progress(plan, effect=True)
+        if progress["completed"] != previous + 1:
+            raise UninstallError("offline native prefix did not advance exactly once")
+    if progress["next"] != "COMPLETE":
+        raise UninstallError("offline native prefix incomplete")
+    return scoped_offline_effect_proof(archive, plan)
+
+
 def scoped_archive_proof(record):
     plan = record["scoped_plan"]
     archive = Path(record.get("archive", ""))
@@ -1800,6 +1940,21 @@ def scoped_archive_proof(record):
     if plan.get("drain_receipt"):
         if scoped_private_file(archive / "drain-receipt.json", 1024 * 1024)["sha256"] != plan["drain_receipt"]["sha256"]:
             raise UninstallError("archived drain receipt changed")
+    if plan.get("offline_archive"):
+        if cleanup["state_files"] != plan["state_files"]:
+            raise UninstallError("exceptional offline archived state differs from approved original")
+        if "offline_effects" in record:
+            if scoped_offline_effect_proof(archive, plan) != record["offline_effects"]:
+                raise UninstallError("offline effect receipt digest changed")
+        elif record["phase"] != "ARCHIVED":
+            raise UninstallError("offline effect prefix missing")
+        if record["status"] == "COMPLETE":
+            result = record["result"]
+            if (result.get("unresolved_originals") != plan["offline_archive"]["originals"] or
+                    result.get("business_operations_replayed") is not False or
+                    result.get("operation_outcome_changed") is not False or
+                    result.get("offline_effects_sha256") != sha(canonical(record["offline_effects"]))):
+                raise UninstallError("offline result identity mismatch")
     return archive, cleanup
 
 
@@ -1926,6 +2081,10 @@ def scoped_cleanup(record):
     result = {"outcome": "COMPLETE", "mode": SCOPED_MODE, "scope": "full",
               "approved_review_sha256": plan["review_sha256"], "retirement_archive": str(archive),
               "host_machine_id_sha256": plan["host_machine_id_sha256"], "retained": plan["retained"]}
+    if plan.get("offline_archive"):
+        result.update(unresolved_originals=plan["offline_archive"]["originals"],
+                      business_operations_replayed=False, operation_outcome_changed=False,
+                      offline_effects_sha256=sha(canonical(record["offline_effects"])))
     audited_complete(plan["review_sha256"], result)
     scoped_finish_fence(scoped_audit(plan["project"]))
     return result
@@ -1971,6 +2130,8 @@ def scoped_resume_plan(project, archive_hint=None, offline=False):
         scoped_verify_effective_reviews(plan, allow_removed=record["phase"]=="CLEANUP_STARTED")
         if record["phase"] == "CLEANUP_STARTED":
             scoped_postcheck(plan, archive)
+        elif plan.get("offline_archive") and record["phase"] == "ARCHIVED" and "offline_effects" not in record:
+            native = scoped_offline_progress(plan)
         else:
             native = scoped_native(plan, "resume-plan")
     return {"ready": True, "mode": SCOPED_MODE, "status": record["status"], "phase": record["phase"],
@@ -2012,6 +2173,10 @@ def scoped_continue(record):
         for unit in (UNIT.name, SCOPED_LIFECYCLE_UNIT.name):
             scoped_inactive(unit)
         if record["phase"] == "ARCHIVED":
+            if plan.get("offline_archive") and "offline_effects" not in record:
+                effects = scoped_offline_complete_prefix(plan, archive)
+                record = scoped_advance(record, "ARCHIVED", offline_effects=effects)
+                scoped_archive_proof(record)
             result = scoped_native(plan, "restore")
             if result["phase"] != "NATIVE_RESTORED" or result["guard_present"] is not True:
                 raise UninstallError("original native restore not verified")
@@ -2039,6 +2204,7 @@ def scoped_main(args, offline=False):
     if (args.apply or args.box_uuid or args.native_prepare_sha256 or args.confirm_host_sha256 or
             args.confirm_review_sha256 or args.scope not in (None, "full") or args.guided_full_plan):
         raise UninstallError("scoped retirement is full-only with terminal approval, not legacy apply/scope")
+    exceptional = False
     if os.path.lexists(SCOPED_DRAIN):
         if not (args.resume_plan or args.resume):
             raise UninstallError("SCOPED_DRAIN_IN_PROGRESS: review the original --resume-plan --scoped")
@@ -2064,12 +2230,16 @@ def scoped_main(args, offline=False):
         scoped_incus_active()
         if native_instances(project, guided=False):
             snapshot = scoped_drain_plan(project, offline=offline)
-            print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
-            if args.plan:
-                return 0 if snapshot["ready"] else 2
-            result = scoped_drain_approve(project, snapshot, offline=offline)
-            print(json.dumps(result, indent=2, sort_keys=True), flush=True)
-            return 0
+            exceptional = offline and not snapshot["ready"] and any(
+                b == "DRAIN_UNSETTLED_ORIGINALS" or b.startswith("ORIGINAL_UNKNOWN:")
+                for b in snapshot["blockers"])
+            if not exceptional:
+                print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
+                if args.plan:
+                    return 0 if snapshot["ready"] else 2
+                result = scoped_drain_approve(project, snapshot, offline=offline)
+                print(json.dumps(result, indent=2, sort_keys=True), flush=True)
+                return 0
     if args.resume_plan or args.resume:
         snapshot = scoped_resume_plan(project, args.retirement_archive, offline=offline)
         print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
@@ -2079,7 +2249,7 @@ def scoped_main(args, offline=False):
     else:
         if not (args.plan or args.full) or args.retirement_archive:
             raise UninstallError("use --scoped --plan or --scoped --full")
-        snapshot = scoped_plan(project, offline=offline)
+        snapshot = scoped_plan(project, offline=offline, **({"exceptional": True} if exceptional else {}))
         print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
         if args.plan:
             return 0 if snapshot["ready"] else 2
@@ -2098,7 +2268,7 @@ def scoped_main(args, offline=False):
             record = scoped_audit(project)
         else:
             with scoped_lock(MAINTENANCE_LOCK):
-                if scoped_plan(project, offline=offline) != snapshot:
+                if scoped_plan(project, offline=offline, **({"exceptional": True} if exceptional else {})) != snapshot:
                     raise UninstallError("scoped retirement evidence changed after approval")
                 audited_write({"status": "STARTED", "mode": SCOPED_MODE, "scope": "full",
                                "host_sha256": snapshot["host_machine_id_sha256"], "review_sha256": snapshot["review_sha256"],
@@ -2296,6 +2466,8 @@ def purge_inventory(project):
             exact_names.update("scoped-" + Path(x).name for x in plan["scoped_units"])
             if plan.get("drain_receipt"):
                 exact_names.add("drain-receipt.json")
+            if plan.get("offline_archive"):
+                exact_names.update(record["offline_effects"])
             if {x.name for x in archive.iterdir()} != exact_names:
                 raise UninstallError("scoped archive exact entry set differs from receipt")
         elif record.get("mode") == OFFLINE_MODE:
@@ -2328,6 +2500,8 @@ def purge_inventory(project):
             if plan.get("drain_receipt"):
                 permitted.add("drain-receipt.json")
             permitted.update("scoped-" + Path(x).name for x in plan["scoped_units"])
+            if plan.get("offline_archive"):
+                permitted.update(record["offline_effects"])
         for path in sorted(archive.iterdir()):
             if path.name not in permitted:
                 raise UninstallError("unrecognized retirement archive entry: " + str(path))

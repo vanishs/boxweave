@@ -27,10 +27,24 @@ const scopedRetiredForwardInvalid = `(
 // Check all retained claims within the same read-only retirement snapshot.
 // An orphan or foreign incarnation is never accepted as historical proof.
 func checkScopedRetiredForwardHistory(ctx context.Context, tx *sql.Tx, project string) error {
+	return checkScopedForwardHistory(ctx, tx, project, false)
+}
+
+// Exceptional archive observation also retains exact revoked Forward
+// history of still-owned Boxes. The ordinary retired-only gate is unchanged.
+func checkScopedOfflineForwardHistory(ctx context.Context, tx *sql.Tx, project string) error {
+	return checkScopedForwardHistory(ctx, tx, project, true)
+}
+
+func checkScopedForwardHistory(ctx context.Context, tx *sql.Tx, project string, allowOwned bool) error {
+	ownerState := "b.state!='DELETED'"
+	if allowOwned {
+		ownerState = "b.state NOT IN ('DELETED','OWNED')"
+	}
 	var n int
 	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM forward_claims f
  LEFT JOIN owned_boxes b ON b.project=f.project AND b.uuid=f.box_uuid AND b.incarnation=f.incarnation
- WHERE f.project=? AND (b.uuid IS NULL OR b.state!='DELETED' OR `+scopedRetiredForwardInvalid+`)`, project).Scan(&n)
+ WHERE f.project=? AND (b.uuid IS NULL OR `+ownerState+` OR `+scopedRetiredForwardInvalid+`)`, project).Scan(&n)
 	if err != nil {
 		return err
 	}

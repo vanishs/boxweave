@@ -948,6 +948,59 @@ class FakeHost(unittest.TestCase):
         self.assertFalse(u.AUDIT.exists())
         self.assertFalse(u.SCOPED_FENCE.exists())
 
+    def test_offline_unknown_route_never_normal_drain_approve(self):
+        self.native = [{"uuid": "12345678-1234-1234-1234-123456789012"}]
+        blocked = {"ready": False, "blockers": ["DRAIN_UNSETTLED_ORIGINALS"]}
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                mock.patch.object(u, "scoped_inactive"), mock.patch.object(u, "scoped_incus_active"), \
+                mock.patch.object(u, "scoped_drain_plan", return_value=blocked), \
+                mock.patch.object(u, "scoped_drain_approve") as drain, \
+                mock.patch.object(u, "scoped_plan", return_value={"ready": False}) as plan, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(u.main(["--offline-plan", "--project", "user-1001"]), 2)
+            plan.assert_called_once_with("user-1001", offline=True, exceptional=True)
+            drain.assert_not_called()
+        self.assertFalse(u.AUDIT.exists())
+
+    def test_offline_prefix_steps_require_exact_advance(self):
+        initial = {"completed": 0, "total": 2, "next": "VERIFY_ONLY"}
+        one = {"completed": 1, "total": 2, "next": "DISPATCH"}
+        done = {"completed": 2, "total": 2, "next": "COMPLETE"}
+        with mock.patch.object(u, "scoped_offline_progress", side_effect=[initial, one, done]) as step, \
+                mock.patch.object(u, "scoped_offline_effect_proof", return_value={"proof": "a"}) as proof:
+            self.assertEqual(u.scoped_offline_complete_prefix({}, u.RETIRED), {"proof": "a"})
+            self.assertEqual(step.call_args_list, [mock.call({}), mock.call({}, effect=True), mock.call({}, effect=True)])
+            proof.assert_called_once()
+        with mock.patch.object(u, "scoped_offline_progress", side_effect=[initial, done]) as step, \
+                mock.patch.object(u, "scoped_offline_effect_proof") as proof:
+            with self.assertRaisesRegex(u.UninstallError, "advance exactly once"):
+                u.scoped_offline_complete_prefix({}, u.RETIRED)
+            self.assertEqual(step.call_count, 2)
+            proof.assert_not_called()
+
+    def test_offline_effect_archive_requires_exact_receipts(self):
+        d = Path(self.t.name)
+        target = "12345678-1234-1234-1234-123456789012"
+        review = "a" * 64
+        plan = {"offline_archive": {"targets": [{"uuid": target}], "review_sha256": review}}
+        for i in range(2):
+            for status in ("INTENT", "VERIFIED"):
+                path = d / f"offline-effect-{i:04d}-{status.lower()}.json"
+                path.write_text(json.dumps({"Schema": 1, "Review": review, "Index": i,
+                                            "Kind": "ACL" if i else "INSTANCE", "UUID": target,
+                                            "Status": status, "NativeID": ""}))
+                path.chmod(0o600)
+        with mock.patch.object(u, "scoped_private_file", side_effect=lambda p, cap: u.file_fingerprint(p)):
+            self.assertEqual(len(u.scoped_offline_effect_proof(d, plan)), 4)
+            extra = d / "offline-effect-0002-intent.json"
+            extra.write_text("{}")
+            with self.assertRaisesRegex(u.UninstallError, "unexpected archived"):
+                u.scoped_offline_effect_proof(d, plan)
+            extra.unlink()
+            (d / "offline-effect-0000-verified.json").write_text("{}")
+            with self.assertRaisesRegex(u.UninstallError, "identity changed"):
+                u.scoped_offline_effect_proof(d, plan)
+
     def test_scoped_full_only_refuses_legacy_apply(self):
         with mock.patch.object(u.os, "geteuid", return_value=0):
             with self.assertRaisesRegex(u.UninstallError, "full-only"):

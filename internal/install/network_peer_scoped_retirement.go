@@ -145,8 +145,26 @@ func scopedRetirementFenceMatches(project, digest string) error {
 // Root receipts must match every retired lineage, and no extra incomplete
 // lifecycle original may be silently hidden by a terminal SQLite row.
 func scopedRetirementReceipts(r nativePeerFreshJournalRecord, ledger state.ScopedNetworkAuditLedger) ([]scopedLifecycleRecord, error) {
+	return scopedRetirementReceiptSet(r, ledger, nil)
+}
+
+// Only the explicit offline archive reader supplies current owned lineages.
+// Ordinary empty retirement still requires only completed retired lineages.
+func scopedRetirementReceiptSet(r nativePeerFreshJournalRecord, ledger state.ScopedNetworkAuditLedger, current []state.NativeNetworkBox) ([]scopedLifecycleRecord, error) {
 	want := map[string]bool{}
 	var receipts []scopedLifecycleRecord
+	if len(current) != len(ledger.Boxes) {
+		return nil, errors.New("scoped retirement owner receipt scope mismatch")
+	}
+	for i, b := range ledger.Boxes {
+		id := current[i].OriginalID
+		rec, err := nativeScopedCreateReceipt(id)
+		if err != nil || want["op-"+id] || !nativeScopedReceiptMatches(r, rec, id, "CREATE", b) {
+			return nil, errors.New("current Root Create evidence unverified")
+		}
+		want["op-"+id] = true
+		receipts = append(receipts, rec)
+	}
 	for _, b := range ledger.Retired {
 		a, err := nativeScopedCreateReceipt(b.CreateID)
 		if err != nil || !nativeScopedReceiptMatches(r, a, b.CreateID, "CREATE", b.ScopedNetworkAuditBinding) {
@@ -178,6 +196,9 @@ func scopedRetirementReceipts(r nativePeerFreshJournalRecord, ledger state.Scope
 }
 
 func scopedRetirementNativeRead(ctx context.Context, project string, resume bool) (scopedRetirementNative, error) {
+	return scopedRetirementNativeReadMode(ctx, project, resume, "")
+}
+func scopedRetirementNativeReadMode(ctx context.Context, project string, resume bool, offlineDigest string) (scopedRetirementNative, error) {
 	var zero scopedRetirementNative
 	if os.Geteuid() != 0 {
 		return zero, errors.New("scoped retirement requires Host-local root")
@@ -197,18 +218,45 @@ func scopedRetirementNativeRead(ctx context.Context, project string, resume bool
 	if err != nil || len(last.Active) != 0 {
 		return zero, errors.New("scoped retirement requires terminal empty Peer policy")
 	}
-	db, err := state.OpenNetworkAuditReadOnly(nativePeerRootInstalledDB)
-	if err != nil {
-		return zero, err
-	}
-	defer db.Close()
-	ledger, err := db.ReadScopedRetirementLedger(ctx, r.Project, r.Bridge)
-	if err != nil {
-		return zero, errors.New("SCOPED_RETIREMENT_LIVE_OR_UNSETTLED: clean up through MCP first; preserve original claims")
-	}
-	receipts, err := scopedRetirementReceipts(r, ledger)
-	if err != nil {
-		return zero, err
+	var ledger state.ScopedNetworkAuditLedger
+	var receipts []scopedLifecycleRecord
+	if offlineDigest != "" {
+		approved, archive, e := scopedOfflineArchiveBinding(project, offlineDigest)
+		if e != nil {
+			return zero, e
+		}
+		l, e := scopedOfflineLedger(ctx, project, r.Bridge)
+		if e != nil {
+			return zero, e
+		}
+		receipts, e = scopedRetirementReceiptSet(r, l.Inventory, l.Current)
+		if e != nil {
+			return zero, e
+		}
+		original := approved
+		original.ReviewSHA256 = ""
+		if nativePrepareStateDigest("scoped-offline-archive-review-v1", r, p, l, receipts, last, guard.DigestSHA256, original) != offlineDigest {
+			return zero, errors.New("offline archived original review changed")
+		}
+		n, pending, e := scopedOfflineJournal(archive, approved)
+		if e != nil || pending || n != 2*len(approved.Targets) {
+			return zero, errors.New("offline native retirement prefix incomplete")
+		}
+		ledger = l.Inventory
+	} else {
+		db, err := state.OpenNetworkAuditReadOnly(nativePeerRootInstalledDB)
+		if err != nil {
+			return zero, err
+		}
+		defer db.Close()
+		ledger, err = db.ReadScopedRetirementLedger(ctx, r.Project, r.Bridge)
+		if err != nil {
+			return zero, errors.New("SCOPED_RETIREMENT_LIVE_OR_UNSETTLED: clean up through MCP first; preserve original claims")
+		}
+		receipts, err = scopedRetirementReceipts(r, ledger)
+		if err != nil {
+			return zero, err
+		}
 	}
 	c, err := prepareClient(ctx)
 	if err != nil {
@@ -220,6 +268,13 @@ func scopedRetirementNativeRead(ctx context.Context, project string, resume bool
 	if err != nil || len(instances) != 0 {
 		return zero, errors.New("scoped native Project not proven empty")
 	}
+	if offlineDigest != "" {
+		all, e := c.GetInstancesAllProjects(api.InstanceTypeAny)
+		if e != nil || len(all) != 0 {
+			return zero, errors.New("offline final native instance scope changed")
+		}
+	}
+
 	ops, err := own.GetOperations()
 	if err != nil {
 		return zero, err
@@ -271,6 +326,9 @@ func scopedRetirementNativeRead(ctx context.Context, project string, resume bool
 		return zero, err
 	}
 	for _, name := range names {
+		if offlineDigest != "" && name != peerscope.QuarantineACL {
+			return zero, errors.New("offline final foreign ACL appeared")
+		}
 		if strings.HasPrefix(name, "bw-") && (name != peerscope.QuarantineACL || absent) {
 			return zero, errors.New("unexpected or retained BoxWeave ACL")
 		}
@@ -304,6 +362,9 @@ func scopedRetirementNativeRead(ctx context.Context, project string, resume bool
 	// This digest binds original preimage, retained identities/receipts,
 	// immutable boot history and terminal guard, not mutable service PIDs.
 	digest := nativePrepareStateDigest("scoped-retirement-v1", r, p, ledger, receipts, last, guard.DigestSHA256)
+	if offlineDigest != "" {
+		digest = offlineDigest
+	}
 	phase := "INSTALLED"
 	if profileBefore {
 		phase = "PROFILE_RESTORED"
@@ -325,11 +386,14 @@ func scopedRetirementNativeRead(ctx context.Context, project string, resume bool
 }
 
 func scopedRetirementStable(ctx context.Context, project string, resume bool) (scopedRetirementNative, error) {
-	a, err := scopedRetirementNativeRead(ctx, project, resume)
+	return scopedRetirementStableMode(ctx, project, resume, "")
+}
+func scopedRetirementStableMode(ctx context.Context, project string, resume bool, offlineDigest string) (scopedRetirementNative, error) {
+	a, err := scopedRetirementNativeReadMode(ctx, project, resume, offlineDigest)
 	if err != nil {
 		return a, err
 	}
-	b, err := scopedRetirementNativeRead(ctx, project, resume)
+	b, err := scopedRetirementNativeReadMode(ctx, project, resume, offlineDigest)
 	if err != nil || !reflect.DeepEqual(a, b) || ctx.Err() != nil {
 		return scopedRetirementNative{}, errors.New("scoped retirement observation changed or unavailable")
 	}
@@ -346,6 +410,19 @@ func NativeScopedRetirementPlan(ctx context.Context, project string, resume bool
 // a single effect. On an error, return immediately; only a fresh reviewed
 // resume may continue after independent post-state verification.
 func NativeScopedRetirementApply(ctx context.Context, project, digest string, guardOnly, approved bool) (ScopedRetirementReview, error) {
+	return nativeScopedRetirementApplyMode(ctx, project, digest, guardOnly, approved, false)
+}
+func NativeScopedOfflineFinalPlan(ctx context.Context, project, digest string) (ScopedRetirementReview, error) {
+	if !nativePeerGuardSHA256Valid(digest) {
+		return ScopedRetirementReview{}, errors.New("exact offline archive review required")
+	}
+	p, e := scopedRetirementStableMode(ctx, project, true, digest)
+	return p.Review, e
+}
+func NativeScopedOfflineFinalApply(ctx context.Context, project, digest string, guardOnly, approved bool) (ScopedRetirementReview, error) {
+	return nativeScopedRetirementApplyMode(ctx, project, digest, guardOnly, approved, true)
+}
+func nativeScopedRetirementApplyMode(ctx context.Context, project, digest string, guardOnly, approved, offline bool) (ScopedRetirementReview, error) {
 	var zero ScopedRetirementReview
 	if !approved || !nativePeerGuardSHA256Valid(digest) {
 		return zero, errors.New("exact local scoped retirement approval required")
@@ -357,7 +434,11 @@ func NativeScopedRetirementApply(ctx context.Context, project, digest string, gu
 		if err := scopedRetirementInactive(ctx, "boxweave.service", scopedLifecycleUnitName); err != nil {
 			return scopedRetirementNative{}, err
 		}
-		p, err := scopedRetirementStable(ctx, project, true)
+		offlineDigest := ""
+		if offline {
+			offlineDigest = digest
+		}
+		p, err := scopedRetirementStableMode(ctx, project, true, offlineDigest)
 		if err != nil {
 			return p, err
 		}

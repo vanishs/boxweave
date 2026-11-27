@@ -1401,3 +1401,34 @@ R1 exact candidate ceee966: Forward 45990043049 PASS (fresh job
 retirement preimage). S1/quality/dual-arch actual failures remain
 the two inherited H tests. N2/S2/S25 were still running at this check.
 No P1 H/C04/C01 waiver or release authorization.
+
+### P2 R2 — archive-bound bounded power UNKNOWN candidate
+
+Source candidate BOX_VERIFIED for the minimum exceptional stopped scope:
+all current instances independently proved stopped and exact-owned, terminal
+Peer/Forward policy, unchanged original Root Create/retired Delete receipts,
+cold schema-7 ledger and retained exact power-stop UNKNOWN claims. Separate
+root-local review and archive-bound intent/ACK/verified prefix; no new
+business Operation, claim release, outcome rewrite or blind replay. A pending
+intent without independently verified exact next absence refuses; an
+unrecorded or non-prefix native change refuses. Exact archive receipts join
+common retirement, resume, final native restore, cleanup and purge proof.
+Ordinary drain/empty retirement still require their original settled gates.
+Foreign, mixed, unproved or unsupported scope refuses. R3 must test actual
+installed positive and negative lifecycle, including interrupted effects,
+archive bytes and original UNKNOWN retention, purge/reinstall and LXC.
+No native effect executed during this source slice.
+
+Box focused checks 7153e2177a585efcfd328b3eae6bbd3d exit0: new state
+eligibility and drift negatives, native prefix/journal/no-replay tests,
+related existing Go witnesses, and 64 Python uninstaller tests PASS.
+Full affected Go regression 078d9442c84a37ca453f73d7cc790f28 exit1:
+State PASS (141.549s), CLI PASS (1.530s), Install only inherited
+TestS4B2ConntrackScopeMustComeFromFullSQLiteLedger and
+TestS4B2RootAuditRefusesSQLiteAndNativeInterleaving FAIL; vet and format PASS.
+No skipped H checks or altered old tests. Independent CI_PENDING.
+Previous exact 818c982: S2, S25 and Forward PASS; N2 26/28, two
+historical legacy-only lanes remain until R3 disposition; S1/quality/
+dual arch still fail inherited H. No C07/C11 acceptance, P1 H/C04/C01
+waiver, merge or release. Next R3 installed witness and equivalence
+review, with real gaps repaired before advancement.

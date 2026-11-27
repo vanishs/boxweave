@@ -161,6 +161,71 @@ func run() error {
 		}
 		return runMaintenanceDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser}, *summary)
 	}
+	// Exceptional offline retirement is root-local and uses only the exact
+	// installed Project and archived review. No caller-supplied target path.
+	if strings.HasPrefix(command, "native-scoped-offline-") {
+		valid := os.Geteuid() == 0 && state.SafeDiagnosticProject(*project)
+		f.Visit(func(v *flag.Flag) {
+			if v.Name != "project" && v.Name != "native-prepare-sha256" && v.Name != "approve-local" {
+				valid = false
+			}
+		})
+		if !valid {
+			return state.ErrInvalid
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		switch command {
+		case "native-scoped-offline-review":
+			if *approveLocal || *prepareSHA != "" {
+				return state.ErrInvalid
+			}
+			r, e := install.NativeScopedOfflineArchiveReview(ctx, *project)
+			if e != nil {
+				return e
+			}
+			return json.NewEncoder(os.Stdout).Encode(r)
+		case "native-scoped-offline-progress", "native-scoped-offline-final-plan":
+			if *approveLocal || *prepareSHA == "" {
+				return state.ErrInvalid
+			}
+			if command == "native-scoped-offline-progress" {
+				r, e := install.NativeScopedOfflineArchiveProgress(ctx, *project, *prepareSHA)
+				if e != nil {
+					return e
+				}
+				return json.NewEncoder(os.Stdout).Encode(r)
+			}
+			r, e := install.NativeScopedOfflineFinalPlan(ctx, *project, *prepareSHA)
+			if e != nil {
+				return e
+			}
+			return json.NewEncoder(os.Stdout).Encode(r)
+		case "native-scoped-offline-step", "native-scoped-offline-restore", "native-scoped-offline-guard":
+			if !*approveLocal || *prepareSHA == "" {
+				return state.ErrInvalid
+			}
+			release, e := acquireMaintenanceLock()
+			if e != nil {
+				return e
+			}
+			defer release()
+			if command == "native-scoped-offline-step" {
+				r, e := install.NativeScopedOfflineArchiveStep(ctx, *project, *prepareSHA, true)
+				if e != nil {
+					return e
+				}
+				return json.NewEncoder(os.Stdout).Encode(r)
+			}
+			r, e := install.NativeScopedOfflineFinalApply(ctx, *project, *prepareSHA, command == "native-scoped-offline-guard", true)
+			if e != nil {
+				return e
+			}
+			return json.NewEncoder(os.Stdout).Encode(r)
+		default:
+			return state.ErrInvalid
+		}
+	}
 	switch command {
 	case "native-scoped-retirement-plan", "native-scoped-retirement-resume-plan", "native-scoped-retirement-restore", "native-scoped-retirement-guard", "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
