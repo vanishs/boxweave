@@ -82,7 +82,13 @@ and the receipts already held; do not add repetitive list/poll calls.
 2. Inspect ready and WORKING tasks, including independent work while CI
    waits. Continue safe actionable work within scope. If none is actionable,
    distinguish requested completion, verified blockers and actual budget
-   boundaries; record the exact next safe action.
+   boundaries; record the exact next safe action. A checkpoint, local
+   commit, progress report, test failure or pending CI is not a stop
+   condition. A budget estimate triggers preservation, not termination.
+   Record observed limit/error or actual inability to proceed; do not
+   assert quota exhaustion without evidence. Honor explicit owner stop.
+   If required work remains ready and no such boundary is present,
+   continue the same authorized pass; never request a routine continue.
 3. For structured delivery, use existing bwdev finish with
    --operations-reviewed after this review (including no Operations);
    repeat --pending-output ORIGINAL_ID for each known unread required

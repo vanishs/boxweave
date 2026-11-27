@@ -12,12 +12,12 @@ R0 assessed published 363ee542c41a748fde5a59dd63b247ac534d4a52.
 | --- | --- |
 | R0 | COMPLETE (planning only): finite cutover sequence and gate placement below. |
 | R1 | COMPLETE (preparation): Scoped fixtures, retained negatives and full State regression. |
-| R2 | READY: actual runtime cutover, coupled with R3 and minimum C/E wiring. |
-| R3 | OPEN: direct fresh schema 7 candidate; remove three old tables, preserve retained state and no-write refusal. |
+| R2 | IN PROGRESS: core runtime/CLI/installer cutover locally verified; final R2/R3/C/E joint exit open. |
+| R3 | IN PROGRESS: direct schema 7, old SQL removed, four-open refusal and targeted tests PASS; regression/consumer gate open. |
 | R4 | OPEN: affected native/consumer proof; WAN separate C04 gate. |
 | R5 | OPEN: independent integrated candidate review and exact-head CI. |
 
-Evidence refresh: original read-only audits
+Historical R0 evidence refresh: original read-only audits
 b4d9a961885b13e47b44e6fb5cacdd93 and
 9d38d803cfba2c20b5e36414ded20a86 exit0. Work-ref UNKNOWN list empty
 at observation (not global absence proof). Remote 363ee54 seven runs:
@@ -39,7 +39,7 @@ no actual tracked deletion. Use normal Git if available, otherwise
 reviewed exact-tree entries including deletions, verify tree and lease
 the observed parent. No new BDH tool required.
 
-Workspace: same owned Box 9d374e18-196a-493d-bf1f-2d582589f04d,
+Historical R0 workspace: same owned Box 9d374e18-196a-493d-bf1f-2d582589f04d,
  /root/pr191-p1-replan, clean at 363ee54 after one fetch. Preserve
  /root/pr191-p1-d36 local 60448ba (BDH committed-range helper) and
 d2338b3 (D37 test), not published. Policy a3a01ea already represented
@@ -94,22 +94,141 @@ Full State 155.040s, vet, diff and clean HEAD exit0:
 c5a1e704d5f9ea87c5a417d9f507335e. Format PASS.
 No new Box/worktree or BDH tool; no production cutover yet.
 
-### Next command: P1 R2
+### R2 local runtime checkpoint (2026-11-26)
 
-1. Execute actual R2/R3 coupled cutover: remove Legacy mode and
-   execution, adopt direct schema 7, preserve v6 no-write refusal,
-   and convert minimum install/serve/recovery/drain and test/CI
-   consumers needed for a coherent candidate. Map obsolete-only
-   assertions before removal; retain real installed Scoped producer
-   evidence, exact source/job binding and 72-marker crosswalk.
-2. Verify build/startup, fresh schema, original v6 unresolved state
-   refusal, retained positives/negatives and aggregate source tests.
-   Publish only coherent verified tree. Update R2/R3 exits and actual
-   remaining witnesses. R4/R5 native/CI and independent WAN remain
-   mandatory; no new compatibility branch or preparation cycle.
+Remote parent 1ce5799aa874f61cf6ef95719bd097fd618f7f6c:
+seven CI runs successful; not evidence of changed R2 code.
+Same Box and worktree, local branch pr191-r2-r3.
+Source commits 52da855, cee10c8, 3f50b95; exact source tree
+764b021749dc8458c554253851370302f891d6bf.
+41 files +392/-1680. Controller Create/Delete/Peer/admission
+and recovery dispatch Scoped-only; legacy retirement loop removed.
+Root peer and scriptlet CLI routes removed; upgrade/rollback/install-commit
+explicitly refuse, fresh stage requires exact review, default wrapper
+uses scoped plan/re-review/approval. No existing installation altered.
+Existing scoped flag retained only as assertion; false refused.
 
-R0/R1 complete as planning/preparation, not product acceptance.
-P0 closed; P2-P5 open. No merge/release.
+Full Go and Python (414 tests) pass, changed package vet and format:
+060d4c3739338d787575661804a0c166 exit0 (Go State 158.733s).
+Go log SHA256 06425654767c11210520eca3fa79d91bdcd0c1731579790e3addb25b71d0d96a;
+Python log SHA256 8f0df1173f47be25582402913c54f96879dbbeeec0340dd0e97438e94e98e213.
+Binary build/ten refusal checks in d766549c7b87fb76b664ca42a388db60;
+binary SHA256 a9b23b9f937ee1c6ab0ac9b273cf9e907c28e2824a49bed2e1b718d1deb77d2a.
+That operation exit128 only at missing Git author; commit operation
+3b9df1fed9f8edb4228e0de7e3f4ead1 exit0. Prior wrapper fixture failures
+and old unit expectation failures corrected without dropping approval/drift
+and no-activation negatives. No native installation/packet proof for R2.
+
+### Resume P1 R2/R3 directly
+
+Current local HEAD `9c76b3394f85d8b4545b9db82b2dd2b7328fd504`,
+Box `9d374e18-196a-493d-bf1f-2d582589f04d`,
+`/root/pr191-p1-replan`, staged/dirty schema-7 and test changes.
+Prior published product head `1ce5799aa874f61cf6ef95719bd097fd618f7f6c`;
+reconcile the separate non-product remediation with local source without
+resetting or replacing dirty work. Tracked checkpoint (not remote backup):
+`/tmp/pr191-r23-audit-lineage-checkpoint-1841.patch`, SHA256
+`74fee48d37b0bbcfe8aa92b6d6bb982c744efc826b6f7dfd69f420b38572b134`.
+Last full State/Install regression `7397d63915e73c8c20d6931bc589168a`
+exit 1, 33 top-level failures, log `/tmp/pr191-r23-audit-lineage-regression.log`
+SHA256 `5f5c0ea9ed536364293991aac9ee3fe319df465c6df38a8df5350a3a4b8e21aa`.
+Inspection `cbece5ba11422cfefc4ee717541c54b8` exit 0, both streams consumed.
+See [self-audit](https://github.com/vanishs/boxweave/pull/191#issuecomment-7208593686).
+Prior 44 selected failures versus 33 full-suite failures are not equivalent
+workloads; no observed prior quota exhaustion.
+
+| Internal outcome group | Retained oracle / action |
+| --- | --- |
+| History, retirement and compaction (10 reports) | C02/C05/C10/C11: exact Scoped terminal history, corruption, held identity/address/claims; reuse Scoped history/capacity witnesses, retire Legacy-only queue/archive/reuse/compaction with rationale and explicit refusal. Preserve large-history/concurrency where applicable. |
+| Peer and Install (19 reports) | C03/C04/C05/C10/C11: exact Scoped original/grant/revoke, direction independence, claims, no replay/drift; convert controller/Root audit and conntrack fixtures, not native-proof claims. |
+| Dependent Delete/recovery (4 reports) | C05/C10/C11: exact linked children, retained history and atomic original/review recovery; use Scoped fixtures, preserve negative calibration. |
+
+Counts are navigation, not quotas or permission for blanket test deletion.
+Map each changed assertion to a retained witness or obsolete-only rationale.
+Finish minimum C/E wiring (schema-7 diagnostics/maintenance, S2/S2.5/N2
+producers and consumers), fresh schema/no-write refusal, binary startup,
+72-marker crosswalk and aggregate source checks. R4/R5 including WAN remain
+mandatory and open. Use the [batch helper](../../dev/skills/verification/SKILL.md#go-failure-navigation-candidate)
+and one active ledger; no extra stage or user command for routine fixes.
+Owner paused product development for remediation; next command is P1 R2/R3.
+
+### R2/R3 local schema-7 checkpoint (2026-11-26)
+
+Parent 9c76b3394f85d8b4545b9db82b2dd2b7328fd504; remote PR head
+1ce5799aa874f61cf6ef95719bd097fd618f7f6c unchanged. Same authorized
+Box/worktree pr191-r2-r3, uncommitted source, no native effects.
+
+Direct schema 7 removes three IPv4 retirement/queue/compaction tables
+and two indexes. No old-table SQL in Go production sources. Historical
+interfaces explicitly refuse before SQL/witness; remaining caller
+cleanup required. Scoped admission, recovery plan/writer, binding,
+maintenance and address holds use retained model. History digest v7.
+Scoped uninstall requires schema7 and refuses even empty old tables;
+non-Scoped historical offline reader retained for P2 review, refuses 7.
+N2/example schema assertions updated, not complete native wiring.
+
+Evidence: 4398d548eec21e92d43177a72dc23c02 (exact v6 original UNKNOWN,
+receipt, claims, queue, bytes retained across four opens);
+0e0fc55fd3b1ef6b547af06996d97ed1 (fresh schema/old-table and callback
+refusal, scoped lifecycle/peer); ff39790fbcb0e081898f9c2b07614e48
+(uninstall 58/58 and diagnostics); a5e750d6a9c1f70706074dbc2ba7f318
+(shared pin fixture); e7fc998b5c5459e2df9e1f00f9d04bd9 (Create faults);
+4c8eb934d87c2696bfa00ebcc64b98c0 and 814cc0b69b5ed60f76c34be3abf3cf84
+(Delete/Create recovery faults); abc757942719fca9708dff6f090474fe
+(replay/plan-writer); e00daff538a84d24ac1a44b09c997bfc (retained holds);
+28d1f149788ec1865046024eb5416f47 (maintenance digest), all exit0.
+c65312bcec14524019dd333127ef9ff4: all packages compile, vet changed
+packages, diff check PASS; selected regression exit1, 44 failures
+(42 State, 2 Install), not all suite. Outer audit exit0 is NOT test PASS.
+Logs /tmp/pr191-r23-schema7-first-regression.log and
+/tmp/pr191-r23-final-failed-recheck.log (SHA256
+d6a1521da1a4adad9e1e83e0f364b57e6bb0a44325ff9dc8c7f71d5b70229c5b).
+
+Mixed-table runtime negatives move to incompatible-open tests; retained
+same-schema replay, stale plan/writer, pin conflicts and history tested.
+Legacy lifecycle-pin subcase removed, Scoped retained. Old status
+characterization now explicit refusal. Historical DDL only test fixture.
+Next: classify 44 failures and potentially vacuous Legacy negatives,
+preserve genuine history/dependency/peer/interleaving/reviewed recovery
+witnesses, retire obsolete-only semantics explicitly; finish diagnostic
+classification and S2/S25/N2 wiring. Full regression and native gates
+OPEN. No R2/R3 exit, no merge/release/publication. Prior suffix preserved.
+
+### R2/R3 BDH cycle 02 reuse
+
+Failure navigation candidate used on actual pending tests. Initial
+top-level failure count corrected to 71; previous selected recheck 44.
+Converted TestCreatePinOriginalCollisionAndUnknown to Scoped original,
+same-project UNKNOWN refusal and synthetic cross-project collision.
+Focused PASS fa79d954af9b7de01ec5070d5cff6a67; selected recheck
+1273ed77a06e0154676cb2bad30f4da2 exit1 internally, 43 failures.
+No acceptance gate changed. See dev/LEARNING_INBOX.md cycle 02.
+Next use the failure index to migrate actual remaining Peer/Delete,
+history and reviewed-recovery witnesses, then consumer wiring and full
+source/native gates. No publication of incomplete candidate.
+
+### R2/R3 recovery/Peer regression conversion
+
+Remote 1ce5799 remains unchanged (seven successful workflow runs);
+local parent 9c76b33, prior uncommitted schema and BDH changes preserved.
+On the same worktree, converted reviewed concurrency to actual Scoped
+originals (same/different keys), retired identity bind to a no-write
+refusal with original UNKNOWN, events, claims and no recovery receipt,
+and Exec output recovery to Scoped original with foreign-path refusal.
+Dedicated Scoped Delete atomicity witness retained and run.
+Peer provenance uses actual Scoped admission/stage/finalize: grant,
+revoke, regrant exact links; UNKNOWN cannot use dispatch receipt;
+lost ACK recovered with the same proof and callback count one, both
+directions. Synthetic native evidence, not native effects.
+Original tests exit0: 5eb9995a71b7b4d04a0b8490df0b56f9,
+60c02f525bc0d6f8c9c7727337d292b0, 64782d1379043eeccbb356df05c25807,
+30b27968362058e8a90a8bd488baade9, eeb909ee114842d647068ca190676125.
+Six previously failing test names now individually pass, plus retained
+Scoped Delete and recovered revoke. No aggregate PASS/count claim.
+Long command rejected at admission; split into bounded commands.
+Existing failure index and fixtures reused; no new harness asset selected.
+Continue actual remaining Peer/audit/history/retirement/dependency and
+consumer conversion, then aggregate checks and joint publication.
 
 ## Historical phase status (superseded)
 
@@ -649,3 +768,10 @@ P1-06d34: [host forwarding diagnostic comparison](CONSOLIDATION_P1_06D34_CHECKPO
 - D35: [Explicit Scoped admission and recovery fixtures](CONSOLIDATION_P1_06D35_CHECKPOINT.md).
 
 - D36: [Pure Scoped Peer lineage and Legacy decoder isolation](CONSOLIDATION_P1_06D36_CHECKPOINT.md).
+
+#### R2/R3 continuation: exact audit and Create provenance
+
+- Converted shared audit positives to explicit retired-reader refusal; 11 drift negatives run against a valid Scoped baseline. Exact 1,024 identity boundary covered by existing Scoped witness (Operation c2b1b9f5804730415d9c5317293166a8, guest exit 0).
+- Missing native ACK remains UNKNOWN, no invented ownership, recovery audit or lost claims. Recovered Create/Delete retirement validates exact event, linked recovery receipt and audit; independently corrupted rows refuse (aa7f4613228a40104a1a83d99386176b, exit 0).
+- Found genuine fail-open in active Create lineage: native ACK plus arbitrary SUCCEEDED event accepted a recovered Create with damaged recovery audit/event before Delete admission (519d4027408121378852de30849abaa3, exit 1, two expected negative failures). Replaced legacy no-ACK predicate with exact native ACK + unique terminal event + exact linked scoped recovery receipt/audit for recovered Create. Valid recovered Create and both corruption negatives, related Create/Delete recovery tests pass (5e939d6e5b385d043f6b3f382cf558db, exit 0).
+- These are SQLite/guest source witnesses, not native CI. No final regression count yet; R2/R3 remain open. Preserve old uncommitted schema/BDH work and no remote publication before coherent gate.

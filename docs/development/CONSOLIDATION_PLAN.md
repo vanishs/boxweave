@@ -82,6 +82,23 @@ to fill a blocked stage; no PASS for unmet mandatory gates.
    fault/recovery assertions. Exit: one schema, no live old-table
    dependency; aggregate R2/R3 local candidate verified.
 
+### Joint R2/R3 execution (remaining work)
+
+Use the three outcome groups in the [live ledger](CONSOLIDATION_PROGRESS.md#current-p1-recovery-ledger),
+not one task per failed test. These are internal work packages, not new
+stages or owner commands.
+
+1. Close history/retirement, Peer/Install and dependent Delete/recovery
+   by shared Scoped fixtures and explicit behavioral dispositions. Batch
+   related inspection, edits and focused regression; repair genuine defects.
+2. Finish minimum schema-7 diagnostic, install/serve/recovery/drain and
+   S2/S2.5/N2 consumer wiring required by the cutover; preserve all retained
+   oracles and the 72-marker crosswalk. Defer unrelated cleanup to R4/P2-P4.
+3. Run aggregate applicable checks on one coherent candidate; update the
+   single ledger, publish only a verified tree, and compare actual R2/R3
+   exit conditions. Use the Finish Gate; do not stop at a work package,
+   failure, checkpoint or pending CI while safe necessary work remains.
+
 ### R4 - Converge affected acceptance
 
 1. Finish cutover-required consumers, equivalent native mapping, old-mode

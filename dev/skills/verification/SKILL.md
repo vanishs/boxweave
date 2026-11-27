@@ -112,3 +112,49 @@ or evidence fails, stop publication and preserve the original worktree.
 Logs are private; do not publish raw logs. A staged-tree result is local,
 not independent CI/native acceptance. Record measured nested calls, bytes
 and rework; do not infer general productivity from one trial.
+
+
+## Go failure navigation (candidate)
+
+For iterative Go regression on an authorized checkout with existing plain
+(non-JSON) go test logs, prefer one read-only projection over repeatedly
+constructing grep and source-mapping snippets:
+
+    python3 dev/go_failure_index.py CURRENT_LOG --previous PRIOR_LOG
+
+The prior log is optional. Keep actual original operation exit, complete
+logs, exact source, and applicable test command. The output groups reported
+top-level failure names by current tracked declaration files, preserves
+package failures (including build errors), flags missing/ambiguous names,
+and marks previously failed names not reported now. It is a textual
+navigation aid, not Go AST analysis or subtest coverage, and never a
+PASS verdict. A missing name, zero failures, or exit zero of
+the summary cannot establish successful or nonempty execution. Source
+mapping reflects the current worktree, not the historical log's tree.
+Use actual test output for each replacement, and do not retire behavior
+solely because an old name is absent. Keep raw logs private and expand
+only the relevant failure. No connector access or automatic selection.
+
+For a developer-selected package or coherent test group, run one bounded
+local Exec from the checkout root instead of separate test/log/index
+operations:
+
+    CGO_ENABLED=1 python3 dev/go_failure_index.py --run ./internal/state --pattern '^TestExample$' --evidence-dir /tmp/fresh-evidence
+
+Use an unused evidence directory outside the checkout and the actual
+approved packages/regex (omit pattern for all tests). Optionally pass
+`--previous` for a prior log. The helper retains argv, original test
+exit, full combined log/digest, source observations before/after and
+compact top-level failure/run/pass/skip navigation. It returns nonzero for
+test failure, observed source drift or zero reported passing tests.
+Absence of result.json means no completed batch verdict; recover original
+Operation rather than replay. Raw evidence remains private. Observe the
+original Operation, guest exit and required streams separately. The local
+source observation is not a Git tree, does not cover ignored inputs or
+transient drift, and is not independent native proof. Reported unique
+names are navigation, not complete per-package/subtest acceptance.
+Use actual named assertions and full applicable gates before delivery.
+Do not use the helper to run untrusted source or weaken a mandatory gate.
+Batch related edits in the same authorized worktree; avoid concurrent
+Exec on a busy Box. Reuse existing staged helper for verified publication,
+ordinary exact-tree Git for removals. No new product tool or scheduler.

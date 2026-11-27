@@ -12,7 +12,7 @@ Before an actual task: record branch/current HEAD, existing local/remote edits, 
 
 For phase-specific context, each phase card has two tiers: **required on entry** (few files) and **read only at named subtask**. Open the relevant path/section, not the whole repo. A referenced acceptance ID may be fetched just before its test; no need to preload all of [ACCEPTANCE](../verification/ACCEPTANCE.md).
 
-For PR #191 P1, the current
+For PR #191 P1, the historical S1–S5 entry above is superseded for execution order; read only the active consolidation plan and live ledger, plus relevant witness contracts. The current
 [recovery plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
 and live exit ledger govern execution order. Apply
 [outcome-first adaptive stages](AGENT_WORKFLOW.md#outcome-first-adaptive-stages):

@@ -39,6 +39,7 @@ Bootstrap registry, read directly by bwdev context. These paths are canonical re
 | skill.harness-improver | Evolve Loop, deferred candidate, feedback and bounded improvement | [improver](skills/harness-improver/SKILL.md) | Initial |
 | skill.continuous-learning | Failure, correction, stage end, reusable improvement | [continuous-learning](skills/continuous-learning/SKILL.md) | Initial |
 | module.install | Edit installer internals | [local guide](../internal/install/AGENTS.md) | Initial |
+| tool.go-failure-index | Run selected Go regressions with compact failure navigation, or index existing logs | [helper](go_failure_index.py), [verification](skills/verification/SKILL.md#go-failure-navigation-candidate) | Candidate; actual #191 reuse, review pending |
 | tool.staged-batch | Staged source verification, bounded export and exact-tree delivery | [helper](staged_batch.py), [verification](skills/verification/SKILL.md#staged-source-batch-candidate) | Candidate; measured reuse pending |
 | tool.transfer-plan | Bounded guest file transfer, MCP chunk upload/copy, payload assembly, SHA256, receipt journal, interruption recovery | [offline planner](transfer_plan.py), [Box skill](skills/box-development/SKILL.md) | Candidate; independent utility pending |
 | tool.bwdev | Universal work entry, start/resume/status/finish, context, task, verify, learn, CI | [CLI](bwdev), [contract](../docs/development/BWDEV_DESIGN.md) | Initial |

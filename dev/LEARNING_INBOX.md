@@ -121,3 +121,63 @@ The original historical report owns actual commands, IDs and results. These obse
   measured; reassess V4/V5 residuals from the development plan when
   new evidence supports reopening. Resume P1 from verified current
   head; retain all native and final exact-head gates. No promotion.
+
+- Cycle 2026-11-26-02 (candidate; owner invoked): #191 remote
+  1ce5799aa874f61cf6ef95719bd097fd618f7f6c, local 9c76b3394f85d8b4545b9db82b2dd2b7328fd504.
+  Window since cycle 01: D32-D36 staged reuse (D36 export -89.6%),
+  R0/R1 replan, R2/R3 schema cutover and [local checkpoint](https://github.com/vanishs/boxweave/pull/191#issuecomment-7208165980).
+  Staged helper not applicable to deletion/dirty candidate; prior private
+  patch exactly recovered in 16c998bcc473b07b8a1cffb0f9ca46cf. CI/polling
+  total counts and independent utility not established. Two long argv
+  refusals previously observed; transfer candidate V4/V5 remains deferred
+  without changed caller-side authorization/integration evidence.
+  Reviewed R0 research, BDH plan and dual-loop plan: reuse Git/Go/Python
+  and KCS/SRE bounded toil pattern; no external framework or new MCP.
+  Selected [failure navigation](go_failure_index.py): repeated manual
+  log counting/mapping and absent-test ambiguity; first failure count
+  correction 71 (not 67), intermediate 52, latest prior 44.
+  Independent local comparison 4cbdef3b48a792d53da78d71bfbd8b7d:
+  71/44/43 name counts agree with sed; 44/44 file paths with git grep,
+  26 files, 6 missing old names. Compact projection 6278 B from two
+  raw logs totaling 48050 B (navigation only, not equivalent full logs);
+  new product recheck projection 3935 B from 43422 B raw inputs.
+  No measured whole-task speed or nested call savings: prior manual
+  map already batched; setup, regex correction and validation add cost.
+  Full harness 133/133 and Eval 20/20, cd10d7db75463a1e9fd5a0002101a62e.
+  Actual use selected Create pin collision test, converted retained
+  assertions with synthetic cross-project bridge (not native authorization),
+  fa79d954af9b7de01ec5070d5cff6a67 exit0. Selected 44-test recheck
+  1273ed77a06e0154676cb2bad30f4da2: explicit test PASS, regression exit1,
+  43 remaining failures; raw log SHA256 507dccb1a4644bbc0ce44c7eb7404fad80273e9dbd46f3b14f596200ea548ffa.
+  Forward candidates ranked: (1) reuse index on next R2/R3 batch, verify
+  remaining assertions and all gates; (2) shared fixture caller inventory
+  only if repeated navigation persists; (3) publication composition and
+  V4/V5 only when actual integration prerequisites change. No promotion.
+  Bounded cycle complete; original P1 remains open, no merge/release or
+  publication of knowingly failing candidate.
+
+- Cycle 2026-11-26-03 (owner-authorized execution remediation, #191):
+  [audit](https://github.com/vanishs/boxweave/pull/191#issuecomment-7208593686)
+  and original full-regression operation 7397d63915e73c8c20d6931bc589168a
+  exposed premature stopping with ready work, repeated test/log orchestration
+  and old/new workflow overlap. Prior nested-call total was an estimate,
+  not a verified complete trace; no verified quota exhaustion.
+  Preserve the existing product worktree; isolate the non-product change
+  on the published head. Extend existing go_failure_index.py rather than
+  add a scheduler, MCP tool or new task registry. Explicit caller-selected
+  test group runs once with private log, original exit, source observations
+  and bounded projection. Fake failure, source drift, no-tests, path,
+  overwrite and named positive checks passed in
+  c65272c4401af72f40d33c2fb150273d. Real old-head selected Go test
+  TestS4B3ReadExactPeerCompilerSnapshot reported run/pass 1/1, exit 0,
+  source drift false, operation a11ef91c9c666902d03b3b9bcd618ef1,
+  log SHA256 6ad5b8b854ab1741362062532637fa308e8f31a5f35cf81cbe23c3cf40c5ca5d.
+  One Exec + original state and two streams; includes initial edits/staging,
+  not an equivalent-workload comparative benchmark. Record setup cost;
+  no measured whole-task utility or automatic finish enforcement claim.
+  Active plan/ledger and existing Finish Gate clarify continuation;
+  unchanged safety, required CI and native evidence. No product change.
+  Next real P1 work is paused by owner until explicitly resumed; measure
+  actual nested attempts per closed group, verified C-ID exits, and
+  handoff continuity, not document/commit counts. Do not reopen deferred
+  transfer integration absent new evidence; no promotion.

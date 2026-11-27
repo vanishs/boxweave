@@ -8,13 +8,27 @@ Start every BoxWeave task with the [canonical BDH bootstrap](../../dev/BOOTSTRAP
 
 ## One-pass development phases and durable Agent handoff
 
-For the new v1 implementation, **begin with** [the single phased implementation plan](../process/IMPLEMENTATION_PLAN.md), [one common execution protocol](PHASE_EXECUTION_PROTOCOL.md), **only** the [current S1–S5 card](../history/development/phases/README.md) and the [current append-only action/decision-log checkpoint](EXECUTION_LOG.md#current-checkpoint). This workflow supplies detailed testing/review procedures **when the current phase reaches them**; it is not a second competing roadmap. Each major phase performs its own scoped research, implementation, positive/negative tests, independent/native acceptance, correction loop, original test rerun, and log/commit/handoff **in one pass**.
+Start with the active task plan and its current ledger. For #191 use the
+[consolidation plan](CONSOLIDATION_PLAN.md) and
+[live ledger](CONSOLIDATION_PROGRESS.md); the original
+[S1–S5 cards](../history/development/phases/README.md) are historical evidence,
+not a parallel execution queue. For other tasks use their applicable plan
+and [common protocol](PHASE_EXECUTION_PROTOCOL.md). Complete the authorized
+stage in one pass, including verification and correction; internal
+checkpoints are not user handoffs.
 
-If a subtask remains unresolved, document the original error, native/Tracking/UUID identity, attempts, permission/decision needs and next safe probe. Continue independent work rather than abandon the whole phase; **mandatory safety/release conditions still block their own acceptance/publication**. Update docs whenever code, native facts or context constraints demand it; log cross-phase changes and use narrow links rather than loading the entire archive. The final S5 must reaccept **all 20** tools and every installed local CLI leaf on the exact tested candidate, even if a previous SDK-only or early-stage probe succeeded.
+If a subtask remains unresolved, document the original error, native/Tracking/UUID identity, attempts, permission/decision needs and next safe probe. Continue independent work rather than abandon the whole phase; **mandatory safety/release conditions still block their own acceptance/publication**. Update docs whenever code, native facts or context constraints demand it; log cross-phase changes and use narrow links rather than loading the entire archive. The final S5 must reaccept **all 23 approved** tools and every installed local CLI leaf on the exact tested candidate, even if a previous SDK-only or early-stage probe succeeded.
 
 ## Commit / PR gates (required at every stage)
 
-Before committing, run `make hooks` (once per clone) and `make verify`; inspect the exact **staged** blob with `.githooks/pre-commit`, ensure tracked YAML parses without duplicate keys and every Go file passes `gofmt`. PRs must run the stable `quality-gate` status on the exact head SHA, plus phase-specific native independent proof. A green check alone does not enforce merging: [quality policy](../process/QUALITY_GATES.md) and [active-ruleset blocker #117](https://github.com/vanishs/boxweave/issues/117). A red/unverified check or mandatory phase gap forbids promotion, irrespective of the user's tool permissions; no bypass/force-push.
+Install hooks once per clone. Before every local commit, review the
+exact staged blob, pass the applicable staged format/YAML gate and focused
+tests for changed behavior; never commit unverified Go. Before publishing a
+coherent mixed/source candidate, run full applicable local verification
+(normally `make verify`); docs-only uses the existing quality policy.
+Required exact-head `quality-gate`, independent native gates and final review
+remain mandatory. A local slice is not CI acceptance. No bypass/force-push.
+See [quality policy](../process/QUALITY_GATES.md).
 
 ## Start-of-task checklist
 
@@ -91,6 +105,14 @@ or as a reversible, independently verified cutover candidate. Retain
 historical evidence. Do not add compatibility merely for old tests.
 Use ordinary deletion-capable Git or reviewed exact-tree publication
 when a source export helper cannot represent a removal.
+
+Use the [Finish Gate](../../dev/skills/task-resume/SKILL.md#finish-gate-candidate)
+before ending the authorized task. A checkpoint, report, local commit,
+pending CI, test failure or estimated budget pressure is not a stop reason
+while safe required work remains executable. Reuse the existing record,
+not another status document. Only completion, a genuine blocker after
+independent ready work, an observed platform boundary, or explicit owner
+stop ends the pass. Do not claim a quota from an estimate.
 
 One current ledger owns stage status; update it in place, link historical
 proof and next 1-3 actions. No repeated full-history prompts or separate
