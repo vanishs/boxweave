@@ -129,3 +129,5 @@ P1-06d30: [generic Scoped admission fixture checkpoint](CONSOLIDATION_P1_06D30_C
 P1-06d31: [Scoped lifecycle pin recovery witness](CONSOLIDATION_P1_06D31_CHECKPOINT.md). Source candidate; no native or P1 closure claim.
 
 P1-06d32: [Scoped recovery receipt and worker fault witnesses](CONSOLIDATION_P1_06D32_CHECKPOINT.md). Independent CI and hosted WAN remain open.
+
+P1-06d33: [recovery observation isolation](CONSOLIDATION_P1_06D33_CHECKPOINT.md). No change to original proof predicates or acceptance gates.

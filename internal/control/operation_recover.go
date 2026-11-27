@@ -71,8 +71,7 @@ func (s *Service) recoveryObserver(layer string) recovery.Service {
 	if s.ScopedPeerFresh {
 		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
 		svc.ScopedLifecycleWitness = install.NativeScopedLifecycleRecoverCall
-	} else {
-		svc.PeerWitness = recovery.ObserveCompletedPeer
+		return svc
 	}
-	return svc
+	return s.legacyRecoveryObserver(layer)
 }

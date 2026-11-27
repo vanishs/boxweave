@@ -530,3 +530,5 @@ P1-06d30: [generic Scoped admission fixture checkpoint](CONSOLIDATION_P1_06D30_C
 P1-06d31: [Scoped lifecycle pin and generic recovery fixtures](CONSOLIDATION_P1_06D31_CHECKPOINT.md). Keep Legacy assertions; staged verification and independent CI evidence tracked in PR.
 
 P1-06d32: [Scoped recovery receipts and worker faults](CONSOLIDATION_P1_06D32_CHECKPOINT.md). Source candidate; retain all prior witnesses and native gates.
+
+P1-06d33: [recovery observation isolation](CONSOLIDATION_P1_06D33_CHECKPOINT.md). Legacy witnesses retained; independent CI required.
