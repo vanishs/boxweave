@@ -142,3 +142,13 @@ P1-06d15b: [exclusive recovery observers and installed pin witness](CONSOLIDATIO
 P1-06d25/d26: [controller status and Legacy lifecycle isolation](CONSOLIDATION_P1_06D25_D26_CHECKPOINT.md). Box verified; independent CI pending. Legacy bodies retained, not yet retired.
 
 P1-06d27/d28: [pin repair and exact schema DDL isolation](CONSOLIDATION_P1_06D27_D28_CHECKPOINT.md). Box verification PASS, independent CI pending. Schema 6 unchanged. No retirement waiver.
+
+### P2 R2 settled offline entry checkpoint
+
+Current offline CLI dispatch is Scoped-only and shares the existing
+drain/archive/restore path for exact settled stopped installations.
+Historical offline execution helpers and tests remain pending caller and
+witness disposition; historical receipts refuse new/resume execution in
+the current wrapper. Do not retire old N2 gates on this basis. Bounded
+power UNKNOWN archival needs a distinct exact proof without business
+Delete/claim settlement or replay. C07/C11 remain open.

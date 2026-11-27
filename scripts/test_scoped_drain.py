@@ -70,19 +70,96 @@ class ScopedDrainPlanTests(unittest.TestCase):
             "scoped_drain_scope": self.scope, "scoped_drain_global_inventory": None,
             "inspect_exec_archive": {}, "scoped_effective_reviews": {},
             "scoped_units": {}, "scoped_incus_active": 123, "command": ("", 0)}
-        for version, unresolved, expected in ((7, 0, []), (6, 0, ["DRAIN_UNSETTLED_ORIGINALS"]),
-                (8, 0, ["DRAIN_UNSETTLED_ORIGINALS"]), (7, 1, ["DRAIN_UNSETTLED_ORIGINALS"])):
-            with self.subTest(version=version, unresolved=unresolved), ExitStack() as stack:
-                stack.enter_context(mock.patch.object(u.pwd, "getpwnam",
-                    return_value=SimpleNamespace(pw_uid=1001)))
-                for name, result in patches.items():
-                    stack.enter_context(mock.patch.object(u, name, return_value=result))
-                reader = stack.enter_context(mock.patch.object(u, "inspect_sqlite",
-                    return_value={"version": version, "unresolved_operations": unresolved,
-                                  "operations": 5, "blockers": []}))
-                capture = u.scoped_drain_capture("user-1001", True)
-                self.assertEqual(capture["blockers"], expected)
-                self.assertTrue(reader.call_args.kwargs["scoped"])
+        for active in (True, False):
+            report["installation"]["identity"]["service_unit"] = "ACTIVE" if active else "INACTIVE"
+            report["installation"]["identity"]["runtime"] = "VERIFIED" if active else "UNVERIFIED"
+            for version, unresolved, expected in ((7, 0, []), (6, 0, ["DRAIN_UNSETTLED_ORIGINALS"]),
+                    (8, 0, ["DRAIN_UNSETTLED_ORIGINALS"]), (7, 1, ["DRAIN_UNSETTLED_ORIGINALS"])):
+                with self.subTest(active=active, version=version, unresolved=unresolved), ExitStack() as stack:
+                    stack.enter_context(mock.patch.object(u.pwd, "getpwnam",
+                        return_value=SimpleNamespace(pw_uid=1001)))
+                    for name, result in patches.items():
+                        stack.enter_context(mock.patch.object(u, name, return_value=result))
+                    reader = stack.enter_context(mock.patch.object(u, "inspect_sqlite",
+                        return_value={"version": version, "unresolved_operations": unresolved,
+                                      "operations": 5, "blockers": []}))
+                    capture = u.scoped_drain_capture("user-1001", active, offline_entry=not active)
+                    self.assertEqual(capture["blockers"], expected)
+                    self.assertTrue(reader.call_args.kwargs["scoped"])
+                    self.assertEqual(reader.call_args.kwargs["cold"], not active)
+
+    def test_offline_plan_binds_stopped_entry_and_original_scope(self):
+        capture = {"scope": self.scope, "immutable": {"host": "h"},
+                   "witness": {"ledger": "a"}, "blockers": []}
+        with mock.patch.object(u.os.path, "lexists", return_value=False), \
+                mock.patch.object(u, "machine_sha", return_value="a" * 64), \
+                mock.patch.object(u, "scoped_inactive") as inactive, \
+                mock.patch.object(u, "scoped_incus_active"), \
+                mock.patch.object(u, "scoped_drain_capture", side_effect=lambda *args, **kwargs: copy.deepcopy(capture)) as read:
+            offline = u.scoped_drain_plan("user-1001", offline=True)
+            self.assertTrue(offline["ready"])
+            self.assertIs(offline["offline_entry"], True)
+            self.assertEqual(read.call_args.args[1], False)
+            self.assertEqual(inactive.call_count, 2)
+            normal = u.scoped_drain_plan("user-1001")
+            self.assertTrue(normal["ready"])
+            self.assertNotIn("offline_entry", normal)
+            self.assertNotEqual(offline["review_sha256"], normal["review_sha256"])
+            self.assertEqual(offline["steps"], normal["steps"])
+
+    def test_offline_entry_refuses_active_or_unverified_controller(self):
+        with mock.patch.object(u.os.path, "lexists", return_value=False), \
+                mock.patch.object(u, "scoped_inactive", side_effect=u.UninstallError("not inactive")), \
+                mock.patch.object(u, "scoped_drain_capture") as read:
+            with self.assertRaisesRegex(u.UninstallError, "not inactive"):
+                u.scoped_drain_plan("user-1001", offline=True)
+            read.assert_not_called()
+
+    def test_offline_resume_does_not_adopt_normal_receipt_or_stop_restarted_controller(self):
+        record = {"project": "user-1001", "phase": "APPROVED", "approved_plan": {}}
+        with mock.patch.object(u, "scoped_drain_read", return_value=record), \
+                mock.patch.object(u, "scoped_drain_verify") as verify:
+            with self.assertRaisesRegex(u.UninstallError, "OFFLINE_ORIGINAL_REQUIRED"):
+                u.scoped_drain_resume_preview("user-1001", offline=True)
+            verify.assert_not_called()
+        record["approved_plan"]["offline_entry"] = True
+        with mock.patch.object(u, "scoped_drain_read", return_value=record), \
+                mock.patch.object(u, "scoped_inactive", side_effect=u.UninstallError("not inactive")), \
+                mock.patch.object(u, "command") as command:
+            with self.assertRaisesRegex(u.UninstallError, "not inactive"):
+                u.scoped_drain_continue(record)
+            command.assert_not_called()
+
+    def test_offline_blockers_remain_no_approval(self):
+        capture = {"scope": self.scope, "immutable": {"host": "h"}, "witness": {"ledger": "a"},
+                   "blockers": ["DRAIN_UNSETTLED_ORIGINALS", "FOREIGN_LEDGER_SCOPE:ledger"]}
+        with mock.patch.object(u.os.path, "lexists", return_value=False), \
+                mock.patch.object(u, "machine_sha", return_value="a"*64), \
+                mock.patch.object(u, "scoped_inactive"), mock.patch.object(u, "scoped_incus_active"), \
+                mock.patch.object(u, "scoped_drain_capture", return_value=capture), \
+                mock.patch("builtins.open") as terminal, mock.patch.object(u, "scoped_drain_begin") as begin:
+            plan = u.scoped_drain_plan("user-1001", offline=True)
+            self.assertFalse(plan["ready"])
+            self.assertEqual(plan["blockers"], capture["blockers"])
+            with self.assertRaisesRegex(u.UninstallError, "retirement blocked"):
+                u.scoped_drain_approve("user-1001", plan, offline=True)
+            terminal.assert_not_called()
+            begin.assert_not_called()
+
+    def test_offline_approval_rejects_normal_confirmation_and_stale_plan(self):
+        import contextlib
+        import io
+        plan = {"ready": True, "offline_entry": True}
+        for answer, error in (("REMOVE SCOPED user-1001", "OPERATOR_APPROVAL_REQUIRED"),
+                              ("REMOVE SCOPED OFFLINE user-1001", "changed after approval")):
+            with self.subTest(answer=answer), \
+                    mock.patch("builtins.open", side_effect=[io.StringIO(answer+"\n"), io.StringIO()]), \
+                    mock.patch.object(u, "scoped_lock", side_effect=lambda _: contextlib.nullcontext()), \
+                    mock.patch.object(u, "scoped_drain_plan", return_value={**plan, "ready": False}), \
+                    mock.patch.object(u, "scoped_drain_begin") as begin:
+                with self.assertRaisesRegex(u.UninstallError, error):
+                    u.scoped_drain_approve("user-1001", plan, offline=True)
+                begin.assert_not_called()
 
     def test_exact_dependency_order(self):
         steps = u.scoped_drain_steps(self.scope)

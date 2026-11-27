@@ -913,6 +913,41 @@ class FakeHost(unittest.TestCase):
         with mock.patch.object(u, "command", return_value=(json.dumps([terminal]), 0)):
             REAL_REQUIRE_QUIET("user-1001")
 
+    def test_offline_cli_uses_current_scoped_coordinator_only(self):
+        for flag, attribute in (("--offline-plan", "plan"), ("--offline-full", "full"),
+                                ("--offline-resume-plan", "resume_plan"), ("--offline-resume", "resume")):
+            with self.subTest(flag=flag), mock.patch.object(u, "scoped_main", return_value=0) as scoped, \
+                    mock.patch.object(u, "offline_main") as legacy, mock.patch.object(u, "offline_resume_main") as old_resume:
+                self.assertEqual(u.main([flag, "--project", "user-1001"]), 0)
+                self.assertTrue(getattr(scoped.call_args.args[0], attribute))
+                self.assertEqual(scoped.call_args.kwargs, {"offline": True})
+                legacy.assert_not_called()
+                old_resume.assert_not_called()
+
+    def test_offline_historical_fence_blocks_new_and_resume_without_effect(self):
+        u.OFFLINE_FENCE.write_text("preserve exact original")
+        before = u.OFFLINE_FENCE.read_bytes()
+        with mock.patch.object(u, "scoped_main") as scoped:
+            for flag in ("--offline-plan", "--offline-full", "--offline-resume-plan", "--offline-resume"):
+                with self.subTest(flag=flag), self.assertRaisesRegex(u.UninstallError, "historical offline receipt"):
+                    u.main([flag, "--project", "user-1001"])
+            scoped.assert_not_called()
+        self.assertEqual(u.OFFLINE_FENCE.read_bytes(), before)
+        self.assertEqual(self.cmds, [])
+
+    def test_offline_empty_preview_uses_cold_scoped_review(self):
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                mock.patch.object(u, "scoped_inactive") as inactive, \
+                mock.patch.object(u, "scoped_incus_active"), \
+                mock.patch.object(u, "scoped_plan", return_value={"ready": True, "offline_entry": True}) as plan, \
+                mock.patch.object(u, "scoped_drain_plan") as drain, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(u.main(["--offline-plan", "--project", "user-1001"]), 0)
+            plan.assert_called_once_with("user-1001", offline=True)
+            inactive.assert_called_once_with(u.UNIT.name)
+            drain.assert_not_called()
+        self.assertFalse(u.AUDIT.exists())
+        self.assertFalse(u.SCOPED_FENCE.exists())
+
     def test_scoped_full_only_refuses_legacy_apply(self):
         with mock.patch.object(u.os, "geteuid", return_value=0):
             with self.assertRaisesRegex(u.UninstallError, "full-only"):

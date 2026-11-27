@@ -1360,3 +1360,44 @@ P1-06d34: [host forwarding diagnostic comparison](CONSOLIDATION_P1_06D34_CHECKPO
 - Missing native ACK remains UNKNOWN, no invented ownership, recovery audit or lost claims. Recovered Create/Delete retirement validates exact event, linked recovery receipt and audit; independently corrupted rows refuse (aa7f4613228a40104a1a83d99386176b, exit 0).
 - Found genuine fail-open in active Create lineage: native ACK plus arbitrary SUCCEEDED event accepted a recovered Create with damaged recovery audit/event before Delete admission (519d4027408121378852de30849abaa3, exit 1, two expected negative failures). Replaced legacy no-ACK predicate with exact native ACK + unique terminal event + exact linked scoped recovery receipt/audit for recovered Create. Valid recovered Create and both corruption negatives, related Create/Delete recovery tests pass (5e939d6e5b385d043f6b3f382cf558db, exit 0).
 - These are SQLite/guest source witnesses, not native CI. No final regression count yet; R2/R3 remain open. Preserve old uncommitted schema/BDH work and no remote publication before coherent gate.
+
+## P2 R2 checkpoint — stopped Scoped entry (2026-11-27)
+
+R2 remains IN PROGRESS, not C07 PASS. The settled stopped-controller
+slice reuses the existing exact Scoped drain and final retirement,
+instead of reactivating the Controller or restoring Legacy execution.
+The offline review binds its own entry intent and requires inactive
+Controller, already-active Incus, current Scoped identity and unchanged
+native/ledger/guard evidence. Populated scope uses durable business
+originals and approved-prefix resume; empty scope uses the existing
+Scoped archive/restore/purge chain. Offline ledger reads use the
+bounded cold-copy proof. Distinct terminal approval and original-mode
+resume remain mandatory; historical offline receipts refuse and require
+their matching historical artifacts.
+
+Box focused regression: 104 tests PASS (original
+65337d87a4e766ac86322607bfbcd321). Includes stopped/active capture,
+schema7/cold read, mixed and foreign scope, unknown refusal, changed
+review, distinct approval, resume and historical archive tests.
+These are synthetic source tests, not installed native acceptance.
+
+The inherited bounded power UNKNOWN archival obligation is still open.
+maintenanceRetirementScope already classifies exact owned power intent
+without settling it. ReadScopedDrainWitness and scopedDrainRoot require
+no nonterminal originals; ReadScopedRetirementLedger requires an empty,
+terminal ledger, released bindings and exact Create/Delete lineage.
+Therefore ordinary drain or changing only schema/mode cannot implement
+the exceptional archive-only authorization. Do not weaken these guards,
+release/replay an UNKNOWN, invent Delete receipts or restore Legacy.
+Next R2 slice requires a distinct archive-bound proof of exact original
+claims, native ownership/preimage and quiescence, with monotonic durable
+retirement-prefix evidence and independent poststate. Reuse common
+Scoped archive/restore/purge only after that proof. Keep existing
+negative tests, old N2 gates and C07/C11 open until legitimate equivalent
+proof. R3 native acceptance of the stopped entry remains required.
+
+R1 exact candidate ceee966: Forward 45990043049 PASS (fresh job
+140475255122 verified Controller Doctor, stale refusal and normal
+retirement preimage). S1/quality/dual-arch actual failures remain
+the two inherited H tests. N2/S2/S25 were still running at this check.
+No P1 H/C04/C01 waiver or release authorization.
