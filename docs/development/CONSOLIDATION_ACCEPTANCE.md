@@ -414,3 +414,13 @@ producer/consumer provenance tested locally. Current 29 N2 lanes,
 R1 new obsolete ordering test error corrected using current call
 chain; all 477 Python tests PASS. Actual new-head CI and final RC
 proof pending; preserve C01/H, C04 and final C11. No signoff.
+
+### P4 R3 documentation reconciliation
+
+Current candidate documents and BDH discovery references distinguish
+merged/released/installed/source identities. R1 actual installed
+evidence and inherited acceptance obligations are retained, historical
+upgrade and schema6 contracts scoped to matching builds. C12 existing
+deterministic Eval 24/24, eight bwdev and 13 scope checks passed;
+no new harness capability, candidate promotion or comparative utility
+inference. R4 observed use and R5 independent disposition remain.

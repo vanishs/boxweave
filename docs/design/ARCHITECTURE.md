@@ -18,7 +18,7 @@ Authenticated localhost Streamable HTTP MCP (operator tunnel optional)
      +--> agentless guest Exec and guest file APIs
 ```
 
-A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. Root/`incus-admin` Unix socket clients are privileged, but a non-root user **only in `incus`** has native per-user Project confinement. Prefer a dedicated `incus`-only BoxWeave runtime, with local-admin-provisioned `restricted.*` capabilities and actual denial tests. `UseProject` alone is not authorization; Legacy and Scoped Peer use distinct bounded Root-local authorization paths. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
+A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. Root/`incus-admin` Unix socket clients are privileged, but a non-root user **only in `incus`** has native per-user Project confinement. Prefer a dedicated `incus`-only BoxWeave runtime, with local-admin-provisioned `restricted.*` capabilities and actual denial tests. `UseProject` alone is not authorization; The current #191 candidate uses only Scoped Peer v2 and bounded Root-local helpers. Historical Legacy artifacts require their matching version; no current Legacy fallback. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
 
 ## Human, Agent and source-code perspectives
 

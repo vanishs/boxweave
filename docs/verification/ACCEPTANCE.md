@@ -8,9 +8,11 @@ An admission, terminal operation, actual guest exit, native readback, packet pro
 | Lifecycle/files | Authenticated UUID/Project confinement, native create/start/stop/delete/update, readiness, exclusive file create/list/read and unsafe-write refusals. |
 | Durable operations | Idempotency conflict/replay, separate original/native IDs, disconnect, exit/output retention, UNKNOWN recovery, claim protection and no duplicate dispatch. |
 | Identity | Token/OAuth revocation/refresh, Actor/Layer boundaries, foreign denial, restricted socket, exact Root original checks. |
-| Network | Distinct Legacy/Scoped, default deny, directional IPv4/IPv6, unrelated/reverse flows, Forward ownership/exposure, actual application packets, reboot and partial-policy fences. |
-| Maintenance | Read-only preview, approval, drift refusal, compatible legacy upgrade/rollback, full scoped retirement/resume, completed-data purge and clean fresh install with foreign native preservation. |
+| Network | Current Scoped v2 and Legacy/mixed refusal, default deny, directional IPv4/IPv6, unrelated/reverse flows, Forward ownership/exposure, actual application packets, reboot and partial-policy fences. |
+| Maintenance | Read-only preview, approval, drift refusal, full Scoped retirement/resume (normal and separately reviewed offline), completed-data purge, fresh install and old/mixed refusal with foreign native preservation. |
 | Nested/physical | Conditional native compatibility and independent controller; distinct target-specific physical/external/storage tests as required. |
+
+For #191, the [consolidation acceptance ledger](../development/CONSOLIDATION_ACCEPTANCE.md) and [workflow dispositions](../development/P4_WORKFLOW_DISPOSITION.md) govern the current candidate. All 29 N2 lanes, independent S25, 72 S2 marker rows/23 producer receipts and source/quality/dual-architecture gates remain required. Historical Legacy positive upgrade/rollback evidence is version-bound, not an active product path; stable upgrade/rollback and #170 obligations require explicit final disposition, not waiver by documentation. H and C04 remain open.
 
 Exact merged feature evidence is in [status](../STATUS.md). #184 passed full legacy retirement, purge, fresh Scoped ledger, and scoped retirement/purge preserving unrelated resources. #177/#178 proved original recovery, live directional flows and partial-native fault acceptance. No physical signoff follows from this.
 

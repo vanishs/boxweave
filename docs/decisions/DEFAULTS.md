@@ -12,7 +12,7 @@
 | MCP/auth | Loopback HTTP; operator-owned HTTPS/Tunnel; independently revocable management Actors, no admin/viewer roles or permission scopes. |
 | Files | List/read/exclusive create; conditional replace/delete unsupported. |
 | State | Missing/inconsistent ownership fails closed; no replay UNKNOWN or silent adoption. |
-| Maintenance | Compatible Legacy upgrade; Scoped fresh-only, separate full retirement/resume and reviewed completed-data purge. |
+| Maintenance | Current #191 Scoped fresh-only, separate normal and reviewed offline retirement/resume, and reviewed completed-data purge. Legacy upgrades are historical; no current product upgrade/rollback. |
 | Publication | Protected v1 and exact release branch; stable and deployment are separate gates. |
 
 See [product boundary](PRODUCT_BOUNDARY.md), [operational policy](P0_OPERATIONAL_POLICIES.md), [network](../design/NETWORK.md), [versioning](../process/VERSIONING.md) and [historical decisions](../history/README.md).

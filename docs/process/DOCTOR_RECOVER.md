@@ -2,7 +2,7 @@
 
 This guide describes the implementation introduced by PR #177; RC13 does not contain it. D0–D5 passed exact-head CI and were merged on
 2026-11-24. Use the exact installed build's help and manifest. One binary,
-two local CLI entries, unchanged 23-tool MCP catalog. See [current status](../INDEX.md).
+two local CLI entries, unchanged 23-tool MCP catalog. See [current status](../STATUS.md).
 
 ## PR #191 current Scoped candidate
 
@@ -98,8 +98,8 @@ scope, or the required local authority is unavailable, preserve the
 original claims and evidence. Do not use SQL edits, native replay,
 blanket unlock, policy resets, reinstall or unrelated Box restarts to
 force progress. A reviewed settlement is not a generic repair tool.
-Scoped fresh v2 does not support upgrade or rollback. PR #182 introduced full-only scoped retirement/resume after MCP cleanup, requiring the original fresh native preimage. The #188 candidate additionally reviews and drains exact normal owned dependencies through existing originals before restoration; see the manual installation guide. Older installations without the preimage must retain their original evidence.
-Legacy guided retirement/resume has its own exact review and audit flow. The current installer now emits phase labels and separates optional OAuth configuration from installed service health. Current full retirement consults a fixed read-only native preparation observation before approval and effects, without treating it as permission to delete. Use the matching installed binary/uninstaller and original archive; a STARTED audit is navigation to --resume-plan, not a new uninstall. See [install/uninstall incident closure](../history/development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md).
+Scoped fresh v2 does not support upgrade or rollback. PR #182 introduced full-only scoped retirement/resume after MCP cleanup, requiring the original fresh native preimage. The #191 candidate retains the #188 exact normal owned drain through existing originals before restoration, and separately reviewed offline retirement; see the manual installation guide. Older installations without the preimage must retain their original evidence.
+Historical Legacy guided retirement/resume applies only to its matching artifacts; it is not a current #191 recovery path. The current installer now emits phase labels and separates optional OAuth configuration from installed service health. Current full retirement consults a fixed read-only native preparation observation before approval and effects, without treating it as permission to delete. Use the matching installed binary/uninstaller and original archive; a STARTED audit is navigation to --resume-plan, not a new uninstall. See [install/uninstall incident closure](../history/development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md).
 
 See [the D4 execution contract](../history/development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md)
 and [the D5 acceptance record](../history/development/V1_PR177_D5_DELIVERY_2026-11-24.md).

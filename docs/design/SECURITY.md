@@ -16,7 +16,7 @@
 
 ## Native SDK and Root authority
 
-The confined nonroot incus-only service uses the per-user socket. Verify exact restricted Project, owned UUID, native capabilities, allowed proxy/nesting settings and actual packet isolation. UseProject alone is not authorization. Scoped Peer v2 uses independent ACLs, a durable original-bound Root guard/lifecycle path and exact native/kernel validation; Legacy uses a separately reviewed shared-ACL path. Neither exposes arbitrary Root operations. Historical TLS and daemon-global Scriptlet experiments are retained as [historical evidence](../history/README.md), not authorization to change current daemon-global settings. See [network](NETWORK.md), [Incus integration](INCUS_INTEGRATION.md) and [maintenance](../getting-started/MANUAL_INSTALL.md).
+The confined nonroot incus-only service uses the per-user socket. Verify exact restricted Project, owned UUID, native capabilities, allowed proxy/nesting settings and actual packet isolation. UseProject alone is not authorization. Scoped Peer v2 uses independent ACLs, a durable original-bound Root guard/lifecycle path and exact native/kernel validation; earlier Legacy shared-ACL paths are historical, not a supported #191 runtime. No arbitrary Root operations are exposed. Historical TLS and daemon-global Scriptlet experiments are retained as [historical evidence](../history/README.md), not authorization to change current daemon-global settings. See [network](NETWORK.md), [Incus integration](INCUS_INTEGRATION.md) and [maintenance](../getting-started/MANUAL_INSTALL.md).
 
 ## Minimal access control
 

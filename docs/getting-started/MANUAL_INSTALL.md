@@ -1,6 +1,6 @@
 # Install BoxWeave
 
-Select an exact published release and verify its assets. See [current source and release status](../STATUS.md); source features are not automatically present in a release. RC13 uses Legacy; the newer scoped, Doctor/Recover and purge features require a build containing their merged PRs.
+Select an exact published release and verify its assets. See [current source and release status](../STATUS.md); source features are not automatically present in a release. RC13 is historical Legacy; RC14 is a published prerelease, not the schema-7 draft #191 candidate. Use the documentation and wrapper from the exact matching release or authorized candidate.
 
 ## 1. Prepare the Host
 
@@ -85,8 +85,7 @@ blindly. Configuration readiness is not packet, quota, remote authorization
 or release acceptance.
 
 Normal full retirement uses the matching verified uninstaller and original
-native preimage. Offline Scoped retirement remains a separate acceptance
-obligation during consolidation; never substitute Legacy execution.
+native preimage. Reviewed exceptional offline Scoped retirement has bounded candidate CI evidence; final exact-head and target-specific acceptance remain separate. Never substitute Legacy execution.
 
 ## 4. Verify installation
 
@@ -153,7 +152,7 @@ The erasure plan lists only recognized, reviewed completed retirement archives, 
 
 For RC13, obtain the matching verified RC13 uninstaller for the original legacy retirement. Do not use the RC14 purge wrapper for that initial retirement. Clean up owned Boxes, Peer and Forward via MCP and let native retirement operations settle. A separately staged legacy Peer Root unit or its journals, if present, needs exact local original review; the current generic purge intentionally refuses these residuals rather than deleting an unverified root capability. Retain evidence if the original retirement refuses. Do not substitute the new reader on an old installed binary. Run the new purge only after verified full retirement. No automatic migration, arbitrary native cleanup, removal of Incus itself, dedicated OS account, images or external tunnel is performed. The next Scoped install requires its own fresh native preview and explicit approval; the existing bridge address range is preserved and foreign native projects or customized topology may block admission. The original RC13 Host may still use a /24 bridge rather than the /21 provisioned by a new Incus bootstrap.
 
-### #188 candidate: maintenance preview and exceptional offline retirement
+### Current #191 candidate: maintenance preview and exceptional offline retirement
 
 The unified observation-side preview is separate from executable approval.
 For the matching verified candidate wrapper and local installed scope:
@@ -168,11 +167,17 @@ authorizes erasure. Use the exact maintenance-recheck digest interface
 shown by the matching wrapper to check freshness. It is not a full-retirement
 approval. Normal Scoped retirement uses its own full plan and confirmation.
 
-The historical stopped Legacy offline route is not the consolidated
-Scoped contract. The current offline Scoped lifecycle remains an open
-acceptance obligation; do not substitute a historical procedure, newer
-binary or evidence deletion for a refused original. See
-[H5 delivery](../development/PR188_H5_DELIVERY.md) for historical context.
+The historical stopped Legacy route is not the current Scoped contract.
+The #191 candidate has separate offline plan/full and original resume
+plan/resume actions for a stopped Scoped installation. Exact reviewed
+scope, original evidence, retained claims and native preimage are required;
+active, foreign, incomplete or unverified installations refuse. Normal
+full retirement and completed-data purge remain separate contracts.
+P2 verified empty, settled and exact-original offline lanes, including
+interrupted continuation; R1's exact N2 retained all 29 lanes. Do not
+substitute a historical procedure or treat these fixture results as
+authority for a particular Host. See [consolidation acceptance](../development/CONSOLIDATION_ACCEPTANCE.md)
+and [historical H5](../development/PR188_H5_DELIVERY.md).
 
 ### Nested lifecycle compatibility (candidate)
 

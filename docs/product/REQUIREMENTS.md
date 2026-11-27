@@ -2,6 +2,23 @@
 
 **Status:** approved design goals, NOT implemented facts. Supersedes broader numbered requirements previously proposed on the design-only branch.
 
+## Current candidate interpretation
+
+Retain the original requirement IDs and approved design goals below.
+For the draft schema-7 #191 source, R-003/R-014 distinguish fresh
+controller installation and reviewed retirement/recovery from native
+dependency lifecycle. Product upgrade/rollback is not implemented or
+promised by this candidate; final stable compatibility disposition
+belongs to #170 and explicit owner review. R-007's conditional replace
+and delete remain unsupported absent safe native atomicity. R-017's
+historical OAuth browser-login exclusion does not override the approved
+embedded OAuth Actor contract in [scope](SCOPE.md). R-019/R-025 require
+the current controlled RC and separately signed stable workflow;
+automatic publication is not permission to bypass either gate.
+See [current acceptance](../verification/ACCEPTANCE.md) and
+[versioning](../process/VERSIONING.md). This interpretation does not
+waive any retained acceptance requirement.
+
 | ID | Required outcome |
 |---|---|
 | R-001 | One controller and restricted Incus ownership domain per host/layer; implementation Go + official MCP/Incus SDK; no second management protocol or Containarium. |

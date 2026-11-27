@@ -1,17 +1,34 @@
 # Current source and release status
 
-Reviewed baseline: v1 [06d2743](https://github.com/vanishs/boxweave/commit/06d27434b11997e9254822c122483c9dacba12a3), 2026-11-24. This is not a claim about any installed Host.
+Observed 2026-11-27. This page separates published artifacts, merged
+source, the active draft candidate, and installed Host observations.
 
-| Item | Observed baseline |
+| Identity | Observed status |
 | --- | --- |
-| Stable | Unpublished; see [stable selector](../V1_PUBLISHED_RELEASE). |
-| Prerelease | [RC13](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.13), source 6c995687, latest published tag verified at audit. |
-| RC14 | [Release branch](https://github.com/vanishs/boxweave/tree/release/v1.0.0-rc.14) at 06d2743; publication not yet verified. Check [release CI](https://github.com/vanishs/boxweave/actions?query=branch%3Arelease%2Fv1.0.0-rc.14) and [actual Releases](https://github.com/vanishs/boxweave/releases) before installing. |
-| Runtime | 23 public MCP Tools, SQLite schema 6, independently revocable management Actors. |
-| Modes | Legacy; explicit fresh-only Scoped Peer v2 (no migration, upgrade or rollback). |
-| Maintenance | Local Doctor/Recover, full-only scoped retirement with original preimage, separate completed-data purge. These newer features are not in RC13. |
+| Stable v1 | UNPUBLISHED; [selector](../V1_PUBLISHED_RELEASE). |
+| Published prerelease | [RC14](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.14), tag commit [3fb71a6](https://github.com/vanishs/boxweave/commit/3fb71a6ddf47d13d165e5c039144aa66fad0eb05), schema 6, published 2026-11-24 22:34 UTC. GitHub metadata lists both Linux architectures, installer, uninstaller, manifest and checksums. Asset bytes/signatures were not independently verified in this documentation audit. |
+| Merged v1 | [9d07665](https://github.com/vanishs/boxweave/commit/9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d), schema 6; do not assume it is the published tag. |
+| Draft [PR #191](https://github.com/vanishs/boxweave/pull/191) | Reviewed R2 source [7ec2dc3](https://github.com/vanishs/boxweave/commit/7ec2dc31b13efff094c864ecf4fce302a4e52ba8), schema 7, 23 MCP Tools, Scoped v2 only, no Legacy product upgrade/rollback or automatic migration. Not merged or published. |
+| Installed Host | Query its exact version, commit, schema and actual discovery; never infer from this page or a release tag. |
 
-## Merged changes beyond RC13
+## Candidate progress
+
+The R1 predecessor 17afed0f passed N2 (29/29), independent S25,
+S2 crosswalk and Forward. R2 corrects the obsolete installer order
+test and aligns current native PR producer/consumer routes; exact
+R2 CI is not fully accepted. H remains frozen pending Support and
+owner direction. C04 public WAN and C01/C11 final evidence remain
+open. See [progress](development/CONSOLIDATION_PROGRESS.md),
+[acceptance](development/CONSOLIDATION_ACCEPTANCE.md) and
+[workflow dispositions](development/P4_WORKFLOW_DISPOSITION.md).
+The candidate supports normal and reviewed exceptional offline
+Scoped retirement with original evidence and separate completed-data
+purge; the tested predecessor scope is not universal Host approval.
+
+## Historical merged changes beyond RC13
+
+The following entries preserve the 2026-11-24 audit at 06d2743;
+they do not establish the present installed contract.
 
 | PR | Scope |
 | --- | --- |

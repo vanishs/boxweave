@@ -1907,3 +1907,37 @@ RC complete modeled consumer, stable and manifest checks remain;
 no actual release or native execution here. R1 S25/Forward PASS,
 N2 28/29 at observation, S2 pending; other Go failures remain
 frozen H. New-head CI required; do not certify P4 or release yet.
+
+### P4 R3 — live documentation and BDH reference synchronization
+
+Baseline 7ec2dc31b13efff094c864ecf4fce302a4e52ba8. Actual GitHub
+release list/tag metadata: RC14 published 2026-11-24 22:34:59 UTC,
+tag commit 3fb71a6ddf47d13d165e5c039144aa66fad0eb05, schema 6
+from tagged source, six expected assets listed (bytes/signatures not
+independently checked). Merged v1 9d07665 schema6, draft #191 schema7;
+stable selector UNPUBLISHED. No installation/publication claim.
+R2 quality job 140791193295 fails only frozen H cases in reviewed
+logs; other independent CI pending at observation. R1 native
+29/29 N2, S2/S25/Forward PASS remains predecessor evidence.
+
+Align README/status/index, architecture/Incus/security, product
+scope/defaults/boundary and current install/Doctor/Recover, acceptance
+and risk navigation. Preserve original numbered requirements and
+historical evidence; clarify current interpretation, no new stable
+waiver. Current normal and exceptional offline Scoped retirement
+has P2/R1 bounded evidence; final and particular Host proof remain.
+Retain all C01-C12, 29 N2 lanes, 72 S2 markers/23 producers and
+release-specific obligations. H frozen and C04 remains P5.
+
+BDH current index points at existing acceptance and workflow
+dispositions; actual plan re-discovery observed four consolidation
+paths. Reviewed profiles, context domains, verification/resume skill,
+existing Eval and #193 handoff: no stale applicable runtime selector
+or new code change needed. Preserve L012/L014 REVIEW_REQUIRED, L015
+candidate, #193 fresh-use R3/R4, R6 NOT MET and V5. No new asset or
+optimization; existing assets reused. Eval 24/24 deterministic
+fixtures and changed-document link targets verified (operations
+0ceb8d454996cd86ae7b55ff191685ad and a732bcfc0d0271da9db9e8dabb850d74).
+Local format, eight bwdev tests and 13 scope tests passed
+d4a583e33ead2183420dbf12d8d26e31, guest exit0. No comparative
+Agent run, efficiency claim or independent final signoff.
