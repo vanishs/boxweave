@@ -1,0 +1,80 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+type wire struct {
+	lastSize atomic.Int64
+	lastStatus atomic.Int64
+}
+
+func (w *wire) RoundTrip(r *http.Request) (*http.Response, error) {
+	res, err := http.DefaultTransport.RoundTrip(r)
+	if r.ContentLength > 100000 {
+		w.lastSize.Store(r.ContentLength)
+		if res != nil {
+			w.lastStatus.Store(int64(res.StatusCode))
+		}
+	}
+	return res, err
+}
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	const uri = "boxweave://boxes/fixture/fs/binary"
+	blob := bytes.Repeat([]byte{0, 1, 2, 255}, 1<<18)
+	var calls atomic.Int64
+	s := mcp.NewServer(&mcp.Implementation{Name: "r0-budget", Version: "0"}, nil)
+	s.AddResource(&mcp.Resource{URI: uri, Name: "binary"}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: uri, Blob: blob}}}, nil
+	})
+	type input struct { Data string `json:"data"` }
+	mcp.AddTool(s, &mcp.Tool{Name: "count", Description: "Synthetic budget probe"}, func(_ context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, any, error) {
+		calls.Add(1)
+		raw, err := base64.StdEncoding.DecodeString(in.Data)
+		if err != nil { return nil, nil, err }
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprint(len(raw))}}}, nil, nil
+	})
+	ts := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {return s}, &mcp.StreamableHTTPOptions{Stateless:true, JSONResponse:true}))
+	defer ts.Close()
+	for _, version := range []string{"", "2025-11-25"} {
+		w := &wire{}
+		c := mcp.NewClient(&mcp.Implementation{Name:"r0-budget-client",Version:"0"},nil)
+		cs, err := c.Connect(ctx,&mcp.StreamableClientTransport{Endpoint:ts.URL,HTTPClient:&http.Client{Transport:w},DisableStandaloneSSE:true,MaxRetries:-1},&mcp.ClientSessionOptions{ProtocolVersion:version})
+		must(err)
+		fmt.Println("negotiated",cs.InitializeResult().ProtocolVersion)
+		r, err := cs.ReadResource(ctx,&mcp.ReadResourceParams{URI:uri})
+		must(err)
+		if len(r.Contents)!=1 || !bytes.Equal(r.Contents[0].Blob,blob) {panic("binary resource mismatch")}
+		fmt.Printf("PASS JSON binary resource raw bytes=%d\n",len(blob))
+		before:=calls.Load()
+		for _, n:=range []int{2<<20,3<<20} {
+			r,err:=cs.CallTool(ctx,&mcp.CallToolParams{Name:"count",Arguments:map[string]any{"data":base64.StdEncoding.EncodeToString(make([]byte,n))}})
+			fmt.Printf("raw=%d wire_request=%d http_status=%d tool_calls=%d error=%t\n",n,w.lastSize.Load(),w.lastStatus.Load(),calls.Load()-before,err!=nil)
+			if n==2<<20 {
+				must(err)
+				if r.IsError || calls.Load()!=before+1 {panic("2MiB refused")}
+			} else if (err==nil && !r.IsError) || calls.Load()!=before+1 || w.lastStatus.Load()!=413 {
+				panic("3MiB raw should exceed default 4MiB JSON request limit before dispatch")
+			}
+		}
+		cs.Close()
+	}
+	fmt.Println("PASS core protocol legacy/current, binary resource, SDK default request ceiling; not a product or external connector size guarantee")
+}
