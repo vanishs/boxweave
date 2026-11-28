@@ -1,0 +1,184 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+)
+
+// A synthetic single-transfer fixture on private local storage, not product code.
+const chunk = 256 << 10
+const size = (5 << 20) + 17
+
+type journal struct {
+	Confirmed int64
+	Published bool
+}
+
+func must(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+func expect(ok bool, reason string) {
+	if !ok {
+		panic(reason)
+	}
+}
+func data(off int64) []byte {
+	n := int64(chunk)
+	if size-off < n {
+		n = size - off
+	}
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(((off+int64(i))*131 + (off+int64(i))/chunk) % 251)
+	}
+	return b
+}
+func load(dir string) journal {
+	var j journal
+	b, e := os.ReadFile(filepath.Join(dir, "journal"))
+	must(e)
+	must(json.Unmarshal(b, &j))
+	return j
+}
+func syncDir(dir string) { f, e := os.Open(dir); must(e); must(f.Sync()); must(f.Close()) }
+func save(dir string, j journal) {
+	f, e := os.CreateTemp(dir, "journal-")
+	must(e)
+	must(json.NewEncoder(f).Encode(j))
+	must(f.Sync())
+	must(f.Close())
+	must(os.Rename(f.Name(), filepath.Join(dir, "journal")))
+	syncDir(dir)
+}
+func digest(p string) [32]byte {
+	f, e := os.Open(p)
+	must(e)
+	defer f.Close()
+	h := sha256.New()
+	_, e = io.Copy(h, f)
+	must(e)
+	var d [32]byte
+	copy(d[:], h.Sum(nil))
+	return d
+}
+func writeUnacked(dir string) {
+	f, e := os.OpenFile(filepath.Join(dir, "stage"), os.O_WRONLY, 0600)
+	must(e)
+	_, e = f.WriteAt(data(0), 0)
+	must(e)
+	must(f.Sync())
+	must(f.Close())
+	os.Exit(77)
+}
+func child(dir, mode string, code int) {
+	exe, e := os.Executable()
+	must(e)
+	c := exec.Command(exe, mode, dir)
+	e = c.Run()
+	x, ok := e.(*exec.ExitError)
+	expect(ok && x.ExitCode() == code, "unexpected child exit")
+}
+func main() {
+	if len(os.Args) == 3 {
+		dir := os.Args[2]
+		switch os.Args[1] {
+		case "write":
+			writeUnacked(dir)
+		case "publish":
+			must(os.Link(filepath.Join(dir, "stage"), filepath.Join(dir, "final")))
+			syncDir(dir)
+			os.Exit(78)
+		}
+		panic("unknown fixture mode")
+	}
+	dir, e := os.MkdirTemp("", "bw-r0-transfer-")
+	must(e)
+	defer os.RemoveAll(dir)
+	stage := filepath.Join(dir, "stage")
+	dest := filepath.Join(dir, "final")
+	f, e := os.OpenFile(stage, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	must(e)
+	must(f.Close())
+	save(dir, journal{})
+	child(dir, "write", 77)
+	j := load(dir)
+	st, e := os.Stat(stage)
+	must(e)
+	expect(j.Confirmed == 0 && st.Size() == chunk, "crash window not observed")
+	fmt.Println("PASS abrupt process exit after data fsync, before durable ack")
+	// Exact fixture provenance and expected chunk bytes are known. Never apply this to an unknown final target.
+	f, e = os.OpenFile(stage, os.O_RDWR, 0600)
+	must(e)
+	b := make([]byte, chunk)
+	_, e = f.ReadAt(b, 0)
+	must(e)
+	expect(bytes.Equal(b, data(0)), "unacknowledged chunk differs")
+	must(f.Sync())
+	j.Confirmed = chunk
+	save(dir, j)
+	// Identical retry verifies the existing range, not an additional write.
+	_, e = f.ReadAt(b, 0)
+	must(e)
+	expect(bytes.Equal(b, data(0)) && load(dir).Confirmed == chunk, "duplicate mismatch")
+	b[0] ^= 1
+	expect(!bytes.Equal(b, data(0)), "conflict oracle invalid")
+	fmt.Println("PASS exact staged range reconciled; duplicate range verified; changed-range oracle detects mismatch")
+	for j.Confirmed < size {
+		b = data(j.Confirmed)
+		n, e := f.WriteAt(b, j.Confirmed)
+		must(e)
+		expect(n == len(b), "short write")
+		must(f.Sync())
+		j.Confirmed += int64(n)
+		save(dir, j)
+	}
+	must(f.Close())
+	h := sha256.New()
+	for off := int64(0); off < size; {
+		b = data(off)
+		h.Write(b)
+		off += int64(len(b))
+	}
+	var expected [32]byte
+	copy(expected[:], h.Sum(nil))
+	expect(digest(stage) == expected, "whole digest mismatch")
+	fmt.Printf("PASS %d-byte staged file verified, SHA256=%x\n", size, expected)
+	// Same-content unrelated destination must not prove original publication.
+	in, e := os.Open(stage)
+	must(e)
+	out, e := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	must(e)
+	_, e = io.Copy(out, in)
+	must(e)
+	must(out.Close())
+	must(in.Close())
+	expect(os.Link(stage, dest) != nil, "collision overwritten")
+	a, e := os.Stat(stage)
+	must(e)
+	z, e := os.Stat(dest)
+	must(e)
+	expect(!os.SameFile(a, z) && digest(dest) == expected, "same-byte unrelated collision oracle invalid")
+	must(os.Remove(dest)) // fixture-owned collision only
+	fmt.Println("PASS no-clobber local link; equal bytes alone do not establish publication identity")
+	child(dir, "publish", 78)
+	j = load(dir)
+	expect(!j.Published, "publication ack unexpectedly present")
+	a, e = os.Stat(stage)
+	must(e)
+	z, e = os.Stat(dest)
+	must(e)
+	expect(os.SameFile(a, z) && digest(dest) == expected, "publication reconciliation mismatch")
+	j.Published = true
+	save(dir, j)
+	expect(load(dir).Published, "ack missing")
+	fmt.Println("PASS abrupt process exit after local link and directory fsync; exact inode plus digest reconciled")
+	fmt.Println("SCOPE local private filesystem, single writer, synthetic exits; not SFTP, power-loss, SQLite, product implementation, or hostile concurrency proof")
+}
