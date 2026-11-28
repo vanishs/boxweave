@@ -388,7 +388,8 @@ if test "${P1B_S2_OLD_SDK:-0}" = 1; then
   echo P1B_SCOPED_OLD_SDK_PINNED_1_6_1=PASS
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-sdk-probe" ./scripts/s2_native_probe.go
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
-  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_sdk_compat.py "$project" "$work/actor.receipt" "$first" "$work/s2-legacy-sdk-probe" "$work/s2-native-sdk-probe" "$work/s2-bh018-atomic-probe"
+  CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-probe" ./scripts/s4_oauth_installed_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_sdk_compat.py "$project" "$work/actor.receipt" "$first" "$work/s2-legacy-sdk-probe" "$work/s2-native-sdk-probe" "$work/s2-bh018-atomic-probe" "$work/s4-oauth-probe"
   exit 0
 fi
 if test "${P1B_S2_MALFORMED_EXEC:-0}" = 1; then

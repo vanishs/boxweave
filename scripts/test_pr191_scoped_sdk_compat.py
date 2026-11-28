@@ -5,7 +5,8 @@ import unittest
 
 from pr191_scoped_sdk_compat import (ACTIONS, NAME, OUTPUT_KEYS, originals,
                                     verify_current_outputs, verify_originals,
-                                    SPECIAL_KEYS, SPECIAL_NAME, verify_specials)
+                                    SPECIAL_KEYS, SPECIAL_NAME, verify_specials,
+                                    OAUTH_KEY, verify_oauth)
 
 
 class OldSDKOriginalsTests(unittest.TestCase):
@@ -127,6 +128,42 @@ class OldSDKOriginalsTests(unittest.TestCase):
                 finally:
                     self.db.execute("ROLLBACK TO bad")
                     self.db.execute("RELEASE bad")
+
+
+    def test_oauth_three_distinct_actor_originals_and_negatives(self):
+        self.db.execute("DELETE FROM operations")
+        self.db.execute("DELETE FROM exec_outputs")
+        for i in range(1, 4):
+            oid = f"{i:032x}"
+            actor = f"actor-{i}"
+            credential = actor if i == 3 else f"oauth-token-{i}"
+            self.db.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (oid, f"{i+20:032x}", actor, credential, "project",
+                             "box_exec", "SUCCEEDED", "uuid", "uuid", f"native-{i}",
+                             hashlib.sha256(OAUTH_KEY.encode()).hexdigest()))
+            self.db.execute("INSERT INTO exec_outputs VALUES (0,?)", (oid,))
+        primary = (f"{1:032x}", "native-1")
+        self.assertEqual(len(verify_oauth(self.read, "project", "uuid", primary)), 3)
+        for update in (
+                "UPDATE operations SET native_operation_id='same'",
+                "UPDATE operations SET actor_id='same'",
+                "UPDATE operations SET token_id=actor_id",
+                "UPDATE operations SET state='UNKNOWN'",
+                "UPDATE operations SET incarnation='other'",
+                "UPDATE operations SET layer='other'",
+                "UPDATE exec_outputs SET exit_code=1",
+                "INSERT INTO operations SELECT * FROM operations"):
+            with self.subTest(update=update):
+                self.db.execute("SAVEPOINT bad")
+                try:
+                    self.db.execute(update)
+                    with self.assertRaises(AssertionError):
+                        verify_oauth(self.read, "project", "uuid", primary)
+                finally:
+                    self.db.execute("ROLLBACK TO bad")
+                    self.db.execute("RELEASE bad")
+        with self.assertRaises(AssertionError):
+            verify_oauth(self.read, "project", "uuid", (f"{3:032x}", "native-3"))
 
 
 if __name__ == "__main__":
