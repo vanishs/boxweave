@@ -39,18 +39,29 @@ def api(path):
 
 def select_run(payload, workflow, source, pr):
     matches = []
+    mismatched_heads = set()
     for r in records(payload, "workflow_runs"):
         if (r["head_sha"] != source or r["event"] != "pull_request" or
                 r["path"] != ".github/workflows/" + workflow or
                 r["repository"]["full_name"] != REPO or r["head_repository"]["full_name"] != REPO or
                 r["head_repository"]["id"] != r["repository"]["id"]):
             continue
-        if any(p["number"] == pr and p["head"]["sha"] == source and
-               p["base"]["ref"] == "v1" and p["head"]["repo"]["id"] == r["repository"]["id"] and
-               p["base"]["repo"]["id"] == r["repository"]["id"] for p in r["pull_requests"]):
+        associations = [p for p in r["pull_requests"]
+                        if p["number"] == pr and p["base"]["ref"] == "v1" and
+                        p["head"]["repo"]["id"] == r["repository"]["id"] and
+                        p["base"]["repo"]["id"] == r["repository"]["id"]]
+        if any(p["head"]["sha"] == source for p in associations):
             matches.append(r)
+        else:
+            mismatched_heads.update(p["head"]["sha"] for p in associations
+                                    if re.fullmatch(r"[a-f0-9]{40}", p["head"]["sha"]))
     if len(matches) > 1:
         raise ValueError("ambiguous exact-source CI runs: " + workflow)
+    if not matches and mismatched_heads:
+        # GitHub can report the live PR head in old run associations. Do not
+        # substitute that head or spend the full budget on a known mismatch.
+        raise ValueError("exact producer PR association head mismatch: " + workflow +
+                         " expected=" + source + " observed=" + ",".join(sorted(mismatched_heads)))
     return matches[0] if matches else None
 
 

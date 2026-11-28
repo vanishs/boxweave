@@ -31,11 +31,11 @@ sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMEN
 sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base conntrack nftables iproute2 >/dev/null
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/key.asc"
-test "$(gpg --show-keys --with-colons "$work/key.asc" | awk -F: '$1=="fpr"{print $10;exit}')" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+python3 scripts/pr191_ci_apt_sources.py verify-incus-key "$work/key.asc"
 sudo install -m 0644 "$work/key.asc" /etc/apt/keyrings/bw-forward-install.asc
 echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/bw-forward-install.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/bw-forward-install.list >/dev/null
 sudo apt-get update -qq
-pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
+pkg="$(python3 scripts/pr191_ci_apt_sources.py incus-package)"
 test -n "$pkg"
 if [ "$FORWARD_INSTALL_MODE" = fresh ]; then
   sudo python3 - <<'PYCI'

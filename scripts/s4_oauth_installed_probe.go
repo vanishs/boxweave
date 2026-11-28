@@ -117,6 +117,11 @@ func main() {
 		strings.HasPrefix(*endpoint, "http://127.0.0.1:"), "UNSAFE_RUNNER_TARGET")
 	must(os.Getenv("GITHUB_ACTIONS") == "true" &&
 		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted", "NOT_DISPOSABLE_RUNNER")
+	if os.Getenv("BW_S4_SCOPED_OAUTH") == "1" {
+		must(os.Geteuid() != 0 && *project == fmt.Sprintf("user-%d", os.Geteuid()) &&
+			*db == "/var/lib/boxweave/ledger.sqlite" && *endpoint == "http://127.0.0.1:18650/mcp" &&
+			os.Getenv("INCUS_SOCKET") == "/var/lib/incus/unix.socket.user", "SCOPED_EXACT_TARGET_REQUIRED")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	store, err := state.Open(*db)
@@ -269,6 +274,11 @@ func main() {
 	guestOutput, err := nativeRead.Output()
 	must(err == nil && string(guestOutput) == "S4_OAUTH_ONCE\n",
 		"INDEPENDENT_GUEST_SIDE_EFFECT_NOT_EXACTLY_ONE")
+	if os.Getenv("BW_S4_SCOPED_OAUTH") == "1" {
+		must(store.RevokeOAuthGrant(ctx, other.GrantID) == nil, "OTHER_GRANT_REVOKE_FAILED")
+		unauthorized(ctx, *endpoint, other.Access, "OTHER_REVOKED_GRANT_HTTP_ACCEPTED")
+		must(admissions() == beforeNegatives+2, "OTHER_REVOKE_CREATED_ADMISSION")
+	}
 	must(store.SetOAuthOrigin(ctx, "") == nil, "DISABLE_EPHEMERAL_OAUTH_FAILED")
 	fmt.Printf("S4_A_OAUTH_NATIVE_ORIGINAL_BW_ID=%s NATIVE_ID=%s BOX_UUID=%s\n",
 		originalID, nativeID, *boxID)

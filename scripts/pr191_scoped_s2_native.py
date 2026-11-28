@@ -39,6 +39,49 @@ def by_key(read, key):
                 (hashlib.sha256(key.encode()).hexdigest(),))
 
 
+FILE_NAME = "s3-file-phase2-ci"
+FILE_KEYS = (
+    ("s3-file-installed-box-create-1115", "box_create", "SUCCEEDED", True),
+    ("s3-installed-fixture-one-native-exec-1115", "box_exec", "SUCCEEDED", True),
+    ("s3-installed-huge-native-dir-fixture-1115", "box_exec", "SUCCEEDED", True),
+    ("s3-file-installed-one-exclusive-create-1115", "box_file_apply", "SUCCEEDED", False),
+    ("s3-peer-file-create-verified-01", "box_file_apply", "SUCCEEDED", False),
+    *((f"s3-file-denied-existing-{i}", "box_file_apply", "FAILED", False) for i in range(5)),
+    ("s3-post-denial-resource-lock-check", "box_file_apply", "SUCCEEDED", False),
+    ("s3-scoped-independent-file-readback", "box_exec", "SUCCEEDED", True),
+    ("s3-stopped-after-verified-files", "box_stop", "SUCCEEDED", True),
+    ("s3-deleted-after-verified-files", "box_delete", "SUCCEEDED", True),
+)
+
+
+def verify_file_originals(read, project, actor, peer):
+    assert actor and peer and actor != peer
+    result = []
+    for key, action, state, native in FILE_KEYS:
+        found = by_key(read, key)
+        assert len(found) == 1, key
+        r = found[0]
+        principal = peer if key == "s3-peer-file-create-verified-01" else actor
+        assert r[2:7] == (principal, principal, project, action, state), key
+        assert r[7] and r[7] == r[8] and bool(r[9]) == native, key
+        assert all(re.fullmatch(r"[0-9a-f]{32}", r[i]) for i in (0, 1)), key
+        if action == "box_exec":
+            assert read("SELECT exit_code FROM exec_outputs WHERE operation_id=?", (r[0],)) == [(0,)], key
+        result.append(r)
+    assert all(r[7] == result[0][7] for r in result)
+    assert all(len({r[i] for r in result}) == len(result) for i in (0, 1))
+    native_ids = [r[9] for r in result if r[9]]
+    assert len(set(native_ids)) == len(native_ids)
+    uuid = result[0][7]
+    assert read("SELECT uuid,incarnation,state,deleted_by_operation_id FROM owned_boxes WHERE project=? AND name=?",
+                (project, FILE_NAME)) == [(uuid, uuid, "DELETED", result[-1][0])]
+    assert read("SELECT state FROM network_bindings WHERE project=? AND box_uuid=? AND nic='eth0'",
+                (project, uuid)) == [("RELEASED",)]
+    for mode in ("replace", "delete"):
+        assert not by_key(read, "s3-native-cas-unsupported-" + mode)
+    return result
+
+
 def verify_history(read, project, actor, queued, foreign):
     assert re.fullmatch(r"[0-9a-f]{32}", queued) and re.fullmatch(r"[0-9a-f]{32}", foreign)
     assert queued != foreign
@@ -161,6 +204,18 @@ def main(project, candidate_sha, phase, *args):
     ids = [pid(u) for u in UNITS]
     assert os.path.samefile(f"/proc/{ids[0]}/exe", binary)
     guard = guard_identity()
+    if phase in ("file-before", "file-after"):
+        assert not native_names() and acls() == {"bw-peer-quarantine"}
+        assert rows("SELECT COUNT(*) FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')") == [(0,)]
+        runtime = "|".join(map(str, ids)) + "|" + hashlib.sha256(guard.encode()).hexdigest()
+        if phase == "file-before":
+            assert not args and all(not by_key(rows, key) for key, *_ in FILE_KEYS)
+            print(runtime)
+        else:
+            assert len(args) == 3 and args[2] == runtime
+            verify_file_originals(rows, project, args[0], args[1])
+            print("P1B_SCOPED_FILE_FIXED_LEDGER_AND_NATIVE_ABSENCE=PASS")
+        return
     if phase == "before":
         assert not args and not native_names()
         assert acls() == {"bw-peer-quarantine"}

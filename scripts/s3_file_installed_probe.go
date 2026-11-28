@@ -108,6 +108,10 @@ func call(ctx context.Context, s *mcp.ClientSession, name string, args map[strin
 
 func rejects(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any) bool {
 	result, err := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	if os.Getenv("BW_S3_SCOPED_FILE_ONLY") == "1" {
+		need(err == nil && result != nil, "transport failure is not a file refusal")
+		return result.IsError
+	}
 	return err != nil || (result != nil && result.IsError)
 }
 
@@ -681,6 +685,11 @@ func main() {
 		os.Geteuid() == 0 {
 		panic("refuse non-CI or privileged installed MCP test")
 	}
+	if os.Getenv("BW_S3_SCOPED_FILE_ONLY") == "1" {
+		need(requiredEnv("BW_S3_MCP_URL") == "http://127.0.0.1:18650/mcp", "Scoped installed loopback required")
+		need(os.Getenv("BW_S3_PHASE3_MODE") == "" && os.Getenv("BW_S5B1_EXACT_TOOLS") == "" &&
+			os.Getenv("BW_S5B_TC015") == "", "Scoped file-only fixture required")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 16*time.Minute)
 	defer cancel()
 	if os.Getenv("BW_S3_PHASE3_MODE") == "handoff" {
@@ -885,6 +894,23 @@ func main() {
 	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/post-denial"), []byte("POST_DENIAL_OK")),
 		"denied Create retained false resource lock")
 	fmt.Println("S3_INSTALLED_MCP_POST_DENIAL_LOCK_RELEASE=PASS")
+	if os.Getenv("BW_S3_SCOPED_FILE_ONLY") == "1" {
+		_, code, stdout, stderr := s3GuestExec(ctx, admin, uuid, "s3-scoped-independent-file-readback", `
+set -eu
+cd /root/s3-file-phase2
+test "$(cat victim)" = S3_PHASE2_VICTIM_LOCKED
+test "$(cat created)" = S3_EXCLUSIVE_CREATED_OK
+test "$(cat peer-created)" = S3_INDEPENDENT_ACTOR_CREATE_OK
+test "$(cat post-denial)" = POST_DENIAL_OK
+test -L sym && test -p fifo
+test victim -ef hard
+test ! -e /root/s3-file-phase2-link/new
+printf S3_SCOPED_FILE_READBACK
+`)
+		need(code == 0 && stdout == "S3_SCOPED_FILE_READBACK" && stderr == "", "independent Guest file readback failed")
+		fmt.Println("P1B_SCOPED_FILE_INDEPENDENT_GUEST_READBACK=PASS")
+	}
+
 	if os.Getenv("BW_S3_PHASE3_MODE") == "stage" {
 		runS3GuestGitPhase3(ctx, admin, peer, uuid)
 		// The same negative and idempotency matrix already passed before

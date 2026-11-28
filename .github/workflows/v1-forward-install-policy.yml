@@ -9,6 +9,8 @@ on:
       - cmd/boxweave/main.go
       - install.sh
       - scripts/forward_install_policy_ci.sh
+      - scripts/pr191_ci_apt_sources.py
+      - scripts/test_pr191_ci_apt_sources.py
       - .github/workflows/v1-forward-install-policy.yml
   pull_request:
     branches: [v1]
@@ -18,6 +20,8 @@ on:
       - internal/native/forward*.go
       - internal/control/forward_tools.go
       - scripts/forward_install_policy_ci.sh
+      - scripts/pr191_ci_apt_sources.py
+      - scripts/test_pr191_ci_apt_sources.py
       - scripts/forward_project_capabilities_native.py
       - .github/workflows/v1-forward-install-policy.yml
   workflow_dispatch:
@@ -49,6 +53,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           sh -n scripts/forward_install_policy_ci.sh
+          python3 scripts/test_pr191_ci_apt_sources.py
           sh scripts/forward_install_policy_ci.sh | tee "$RUNNER_TEMP/forward-install.log"
           grep -Fxq FORWARD_INSTALL_DISPOSABLE_SCOPE_PASS "$RUNNER_TEMP/forward-install.log"
           if test "$FORWARD_INSTALL_MODE" = fresh; then

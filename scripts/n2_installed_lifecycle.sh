@@ -69,11 +69,11 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   echo PR178_N3_GUARD_PREREQUISITE=PASS
 fi
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/key.asc"
-test "$(gpg --show-keys --with-colons "$work/key.asc" | awk -F: '$1=="fpr"{print $10;exit}')" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+python3 scripts/pr191_ci_apt_sources.py verify-incus-key "$work/key.asc"
 sudo install -m 0644 "$work/key.asc" /etc/apt/keyrings/bw-n2-install.asc
 echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/bw-n2-install.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/bw-n2-install.list >/dev/null
 sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
-pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
+pkg="$(python3 scripts/pr191_ci_apt_sources.py incus-package)"
 test -n "$pkg"
 sudo "$work/candidate-a" native-plan -incus-package-version "$pkg" > "$work/bootstrap-plan.json"
 digest="$(python3 -c 'import json,sys;x=json.load(open(sys.argv[1]));assert x["mode"]=="fresh-install-proposed";print(x["plan_sha256"])' "$work/bootstrap-plan.json")"
@@ -356,6 +356,17 @@ if test "${P1B_S2_NATIVE:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-sdk-probe" ./scripts/s2_native_probe.go
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s3-file-probe" ./scripts/s3_file_installed_probe.go
+  file_runtime="$(sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_s2_native.py "$project" "$first" file-before)"
+  for actor in file-admin file-peer; do
+    (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/$actor.receipt")
+  done
+  file_admin="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/file-admin.receipt")"
+  file_peer="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/file-peer.receipt")"
+  BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm BW_S3_SCOPED_FILE_ONLY=1 \
+    BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/file-admin.receipt" \
+    BW_S3_PEER_TOKEN_FILE="$work/file-peer.receipt" "$work/s3-file-probe"
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_s2_native.py "$project" "$first" file-after "$file_admin" "$file_peer" "$file_runtime"
   sh scripts/pr191_scoped_s2_native.sh "$project" "$work/actor.receipt" "$first" "$work/s2-native-sdk-probe" "$work/s2-queued-cancel-seed"
   exit 0
 fi
@@ -376,7 +387,9 @@ if test "${P1B_S2_OLD_SDK:-0}" = 1; then
   go version -m "$work/s2-legacy-sdk-probe" | grep -F 'github.com/modelcontextprotocol/go-sdk'
   echo P1B_SCOPED_OLD_SDK_PINNED_1_6_1=PASS
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-sdk-probe" ./scripts/s2_native_probe.go
-  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_sdk_compat.py "$project" "$work/actor.receipt" "$first" "$work/s2-legacy-sdk-probe" "$work/s2-native-sdk-probe"
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-probe" ./scripts/s4_oauth_installed_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_sdk_compat.py "$project" "$work/actor.receipt" "$first" "$work/s2-legacy-sdk-probe" "$work/s2-native-sdk-probe" "$work/s2-bh018-atomic-probe" "$work/s4-oauth-probe"
   exit 0
 fi
 if test "${P1B_S2_MALFORMED_EXEC:-0}" = 1; then

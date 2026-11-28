@@ -44,6 +44,7 @@ jobs:
           sh -n install.sh
           sh -n uninstall.sh
           python3 -m unittest -v scripts/test_v1_release_manifest.py
+          python3 scripts/test_ci_candidate_build.py
 
   build:
     needs: source
@@ -77,30 +78,7 @@ jobs:
           version="$(cat VERSION)"
           mkdir release-assets
           binary="release-assets/boxweave-v$version-linux-$ARCH"
-          CGO_ENABLED=1 go build -trimpath -buildvcs=false \
-            -ldflags "-X main.version=$version -X main.commit=$GITHUB_SHA -buildid=" \
-            -o "$binary" ./cmd/boxweave
-          python3 - "$version" "$GITHUB_SHA" "$binary" <<'PY'
-          import json, subprocess, sys
-          assert json.loads(subprocess.check_output([sys.argv[3], "build-info"])) == {
-              "version": sys.argv[1], "commit": sys.argv[2]}
-          PY
-          d="$(mktemp -d "$RUNNER_TEMP/stable-sqlite.XXXXXXXX")"
-          chmod 0700 "$d"
-          trap 'rm -rf -- "$d"' EXIT
-          "$binary" status -db "$d/ledger.sqlite" -project no-project \
-            -incus-socket /unavailable-incus > "$d/status.json"
-          python3 - "$d/status.json" "$d/ledger.sqlite" <<'PY'
-          import json, pathlib, sqlite3, sys
-          from contextlib import closing
-          assert json.load(open(sys.argv[1], encoding="utf-8"))["ready"] is False
-          with closing(sqlite3.connect(pathlib.Path(sys.argv[2]).as_uri() + "?mode=ro", uri=True)) as db:
-              assert db.execute("SELECT version FROM schema_version").fetchall() == [(7,)]
-              tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-              assert {"owned_boxes", "operations", "operation_resource_claims", "network_bindings", "network_address_fences"}.issubset(tables)
-              assert not any(t.startswith(("network_ipv4_retirement", "network_ipv4_compaction")) for t in tables)
-              assert db.execute("SELECT count(*) FROM operations").fetchone() == (0,)
-          PY
+          python3 scripts/ci_candidate_build.py "$version" "$GITHUB_SHA" "$ARCH" "$binary"
           go test -count=1 ./...
           sha256sum "$binary"
       - uses: actions/upload-artifact@v4
