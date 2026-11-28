@@ -4,7 +4,8 @@ import sqlite3
 import unittest
 
 from pr191_scoped_sdk_compat import (ACTIONS, NAME, OUTPUT_KEYS, originals,
-                                    verify_current_outputs, verify_originals)
+                                    verify_current_outputs, verify_originals,
+                                    SPECIAL_KEYS, SPECIAL_NAME, verify_specials)
 
 
 class OldSDKOriginalsTests(unittest.TestCase):
@@ -87,6 +88,45 @@ class OldSDKOriginalsTests(unittest.TestCase):
         self.db.execute("UPDATE exec_outputs SET exit_code=0 WHERE exit_code=7")
         with self.assertRaises(AssertionError):
             verify_current_outputs(self.read, "project")
+
+
+    def test_special_exit_originals_and_restart_negative_controls(self):
+        self.db.execute("DELETE FROM operations")
+        self.db.execute("DELETE FROM owned_boxes")
+        self.db.execute("DELETE FROM exec_outputs")
+        cp = {"box_id": "uuid", "create_id": f"{1:032x}", "specials": [
+            {"exit": code, "original_id": f"{i:032x}", "native_id": f"native-{i}"}
+            for i, code in ((2, 126), (3, 127))]}
+        for i, (key, action, code) in enumerate(SPECIAL_KEYS, 1):
+            oid = f"{i:032x}"
+            self.db.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (oid, f"{i+20:032x}", "actor", "token", "project",
+                             action, "SUCCEEDED", "uuid", "uuid", f"native-{i}",
+                             hashlib.sha256(key.encode()).hexdigest()))
+            if code is not None:
+                self.db.execute("INSERT INTO exec_outputs VALUES (?,?)", (code, oid))
+        self.db.execute("INSERT INTO owned_boxes VALUES (?,?,?,?,?,?)",
+                        ("uuid", "uuid", "DELETED", f"{7:032x}", "project", SPECIAL_NAME))
+        before = verify_specials(self.read, "project", cp, False)
+        self.assertEqual(verify_specials(self.read, "project", cp, True)[:3], before)
+        for update in (
+                "UPDATE exec_outputs SET exit_code=0 WHERE exit_code=126",
+                "UPDATE operations SET native_operation_id='different' WHERE id='" + f"{2:032x}" + "'",
+                "UPDATE operations SET state='UNKNOWN' WHERE id='" + f"{3:032x}" + "'",
+                "UPDATE operations SET layer='foreign'",
+                "UPDATE operations SET incarnation='foreign' WHERE action='box_stop'",
+                "UPDATE owned_boxes SET deleted_by_operation_id='other'",
+                "UPDATE network_bindings SET state='PINNED'",
+                "INSERT INTO operations SELECT * FROM operations WHERE id='" + f"{2:032x}" + "'"):
+            with self.subTest(update=update):
+                self.db.execute("SAVEPOINT bad")
+                try:
+                    self.db.execute(update)
+                    with self.assertRaises(AssertionError):
+                        verify_specials(self.read, "project", cp, True)
+                finally:
+                    self.db.execute("ROLLBACK TO bad")
+                    self.db.execute("RELEASE bad")
 
 
 if __name__ == "__main__":

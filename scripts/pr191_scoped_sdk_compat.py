@@ -7,16 +7,19 @@ reads the fixed ledger and native inventory; it never replays or cleans up a
 failed original.
 """
 import hashlib
+import json
 import os
 from pathlib import Path
 import pwd
 import re
 import subprocess
 import sys
+import tempfile
 
 from mcp_testkit import LoopbackMCP
 from n2_installed_lifecycle import pid, token
-from pr178_n2_scoped_lifecycle import acls
+from pr178_n2_scoped_lifecycle import acls, instance
+from pr177_d4_installed_recovery import wait_mcp_listener
 from pr191_scoped_ack_loss import guard_identity, native_names
 from pr191_scoped_lifecycle_recovery import rows
 
@@ -107,7 +110,45 @@ def verify_current_outputs(read, project):
     return result
 
 
-def main(project, receipt, candidate_sha, probe, current_probe):
+SPECIAL_NAME = "bw-s2-bh018-atomic-native"
+SPECIAL_KEYS = (
+    ("s2-bh018-atomic-native-create-001", "box_create", None),
+    ("s2-bh018-original-exit-126-001", "box_exec", 126),
+    ("s2-bh018-original-exit-127-001", "box_exec", 127),
+    ("s2-bh018-independent-readback-126-001", "box_exec", 0),
+    ("s2-bh018-independent-readback-127-001", "box_exec", 0),
+    ("s2-bh018-atomic-native-stop-001", "box_stop", None),
+    ("s2-bh018-atomic-native-delete-001", "box_delete", None),
+)
+
+
+def verify_specials(read, project, checkpoint, complete):
+    result = []
+    for key, action, code in SPECIAL_KEYS[:7 if complete else 3]:
+        found = original_for_key(read, key)
+        assert len(found) == 1, key
+        r = found[0]
+        assert r[5:9] == (action, "SUCCEEDED", checkpoint["box_id"], checkpoint["box_id"]), key
+        assert r[4] == project and r[2] and r[3] and r[9], key
+        assert all(re.fullmatch(r"[0-9a-f]{32}", r[i]) for i in (0, 1)), key
+        if code is not None:
+            assert read("SELECT exit_code FROM exec_outputs WHERE operation_id=?", (r[0],)) == [(code,)], key
+        result.append(r)
+    assert all(r[2:5] == result[0][2:5] for r in result)
+    assert all(len({r[i] for r in result}) == len(result) for i in (0, 1, 9))
+    assert result[0][0] == checkpoint["create_id"]
+    assert [(r[0], r[9], code) for r, code in zip(result[1:3], (126, 127))] == [
+        (c["original_id"], c["native_id"], c["exit"]) for c in checkpoint["specials"]]
+    if complete:
+        assert read("SELECT uuid,incarnation,state,deleted_by_operation_id FROM owned_boxes "
+                    "WHERE project=? AND name=?", (project, SPECIAL_NAME)) == [
+                        (checkpoint["box_id"], checkpoint["box_id"], "DELETED", result[-1][0])]
+        assert read("SELECT state FROM network_bindings WHERE project=? AND box_uuid=? AND nic='eth0'",
+                    (project, checkpoint["box_id"])) == [("RELEASED",)]
+    return result
+
+
+def main(project, receipt, candidate_sha, probe, current_probe, special_probe):
     assert os.geteuid() == 0 and os.environ.get("GITHUB_ACTIONS") == "true"
     assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
     assert project == "user-" + str(pwd.getpwnam("boxweave").pw_uid)
@@ -151,6 +192,36 @@ def main(project, receipt, candidate_sha, probe, current_probe):
     for r in result:
         print("P1B_SCOPED_CURRENT_SDK_ORIGINAL", r[5], r[0], r[9], r[1], r[7], flush=True)
     print("P1B_SCOPED_CURRENT_SDK_OUTPUT_FIXED_LEDGER=PASS", flush=True)
+
+    # Reuse the official SDK special-exit probe after both SDK checks.
+    # Keep the private checkpoint even on failure; never replay UNKNOWN.
+    assert Path(special_probe).is_file()
+    assert all(not original_for_key(rows, key) for key, _, _ in SPECIAL_KEYS)
+    state = Path(tempfile.mkdtemp(prefix="bw-bh018-scoped.")) / "original.json"
+    env = dict(os.environ, BW_S2_MCP_URL="http://127.0.0.1:18650/mcp",
+               BW_S2_ADMIN_TOKEN=secret, BW_S2_BH018_CHECKPOINT=str(state))
+    subprocess.run([special_probe, "start"], env=env, check=True, timeout=730)
+    checkpoint = json.loads(state.read_text())
+    before = verify_specials(rows, project, checkpoint, False)
+    assert native_names() == [SPECIAL_NAME]
+    assert instance(project, SPECIAL_NAME)["config"]["volatile.uuid"] == checkpoint["box_id"]
+    assert [pid(u) for u in units] == pids and guard_identity() == guard
+    assert rows("SELECT count(*) FROM operations WHERE state IN "
+                "('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')") == [(0,)]
+    subprocess.run(["systemctl", "restart", units[0]], check=True, timeout=60)
+    wait_mcp_listener()
+    controller = pid(units[0])
+    assert controller != pids[0] and os.path.samefile(f"/proc/{controller}/exe", BIN)
+    assert [pid(u) for u in units[1:]] == pids[1:] and guard_identity() == guard
+    assert verify_specials(rows, project, checkpoint, False) == before
+    subprocess.run([special_probe, "resume"], env=env, check=True, timeout=730)
+    after = verify_specials(rows, project, checkpoint, True)
+    assert after[:3] == before
+    assert not native_names() and acls() == {"bw-peer-quarantine"}
+    assert [pid(u) for u in units] == [controller, *pids[1:]] and guard_identity() == guard
+    assert rows("SELECT count(*) FROM operations WHERE state IN "
+                "('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')") == [(0,)]
+    print("P1B_SCOPED_SPECIAL_EXEC_RESTART_FIXED_LEDGER=PASS", flush=True)
 
 
 if __name__ == "__main__":
