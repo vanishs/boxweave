@@ -74,13 +74,6 @@ func TestS25NativePrepareRefusesUnapprovedNonRootAccess(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root-only negative is exercised by dedicated CLI suite")
 	}
-	target := NativePrepareTarget{Project: "user-1001", Pool: "default", Network: "incusbr0", ACL: "bw-s25"}
-	if _, err := NativePreparePlanReview(t.Context(), target); err == nil || !strings.Contains(err.Error(), "root") {
-		t.Fatalf("nonroot review accepted %v", err)
-	}
-	if _, err := NativePrepareApply(t.Context(), target, strings.Repeat("0", 64), false); err == nil {
-		t.Fatal("unapproved native mutation accepted")
-	}
 	if _, err := NativePrepareStatus(); err == nil {
 		t.Fatal("nonroot journal read accepted")
 	}

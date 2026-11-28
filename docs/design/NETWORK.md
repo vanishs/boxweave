@@ -2,7 +2,9 @@
 
 BoxWeave manages exact owned Boxes in a restricted Incus Project. Private peer access is denied by default; internet access is independently controlled. No arbitrary IP/CIDR/port ACL or host firewall editor. See [security](SECURITY.md), [MCP contracts](MCP_TOOL_CONTRACTS.md) and [installation modes](../getting-started/MANUAL_INSTALL.md).
 
-## Scoped Peer v2 (current fresh-only candidate)
+## Scoped Peer v2 (sole current v1 architecture)
+
+Schema 7 uses a dedicated UUID-derived ACL per Box incarnation. There is no supported shared-ACL mode or fallback. The initial quarantine policy is a temporary fail-closed preparation boundary, not shared-ACL Peer execution. Legacy or mixed installations are refused; retained security requirements are verified against Scoped behavior.
 
 - Create uses stopped quarantine, exact UUID/incarnation and an independent UUID-derived ACL and static dual-stack binding before start. New Boxes default to boot.autostart=true; explicit false is preserved.
 - A grant/revoke names two owned UUIDs and one direction. Controller stages the original and claims; bounded Root helpers independently verify ledger, ACL/ETag, addresses and kernel inventory. No arbitrary Root command.

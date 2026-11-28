@@ -1,5 +1,7 @@
 # BDH v0.7 — proactive improvement execution
 
+> **Reference only:** Historical candidate evaluation. #193 is merged; continuation commands and candidate stages are not active.
+
 **Historical V0-V5 plan and evidence.** The [active BDH development plan](BDH_DEVELOPMENT_PLAN.md) governs the remaining work in #193. Preserve original V4 utility gates, both REOPEN decisions and V5; historical next actions are not a parallel active plan.
 
 Status: V0/V1a CI PASS; V1b and V2a/V2b implemented and Box-tested.

@@ -1,13 +1,5 @@
-name: S5B Peer production Create and combined restart (development candidate)
+name: Historical S5B Peer production Create and combined restart (development candidate)
 on:
-  push:
-    branches: [feat/v1-s5b-acceptance-20261120]
-    paths:
-      - '.github/workflows/v1-s5b-peer-production.yml'
-      - 'scripts/s5b_peer_production_native.sh'
-      - 'scripts/s5b_peer_production_native.py'
-      - 'internal/native/peer_static_binding*.go'
-      - 'internal/state/network_create_binding*.go'
   workflow_dispatch:
 permissions:
   contents: read

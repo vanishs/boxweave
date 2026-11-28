@@ -1,10 +1,6 @@
-name: S5B2-B6 pinned integrated native acceptance (non-release)
+name: Historical S5B2-B6 pinned integrated native acceptance (non-release)
 
 on:
-  push:
-    branches: [feat/v1-s5b-acceptance-20261120]
-    paths:
-      - '.github/workflows/v1-s5b-integrated-native.yml'
   workflow_dispatch:
 
 permissions:
@@ -18,8 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: >-
-          ${{ fromJSON(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'test: bound quota readback') && '["original-fault"]' || github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') || startsWith(github.event.head_commit.message, 'test: fix private SQLite fixture parent traversal') || startsWith(github.event.head_commit.message, 'test: bind pinned overlap harness diff')) && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
+        case: [original-fault, original-fault-repeat, nested-restart-verifier]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'

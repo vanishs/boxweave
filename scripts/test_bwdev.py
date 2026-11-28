@@ -27,8 +27,9 @@ class HarnessTests(unittest.TestCase):
         self.assertIn("internal/install/AGENTS.md", result["local_guides"])
         ids = [row["id"] for row in result["assets"]]
         self.assertIn("knowledge.maintenance", ids)
-        self.assertIn("skill.verification", ids)
-        self.assertIn("skill.box-development", ids)
+        self.assertIn("module.install", ids)
+        self.assertNotIn("skill.verification", ids)
+        self.assertNotIn("skill.box-development", ids)
 
     def test_escape(self):
         with self.assertRaises(HarnessError):

@@ -1,13 +1,13 @@
 # BDH development plan — simplify, reuse, verify
 
+> **Reference only:** PR #193 and parent #191 are both merged and closed. All historical continuation commands, branch names, phase gates and remaining candidate proposals below are archival, not current work authorization. Do not resume them without a new explicit task.
+
 Status: owner authorized R7 on 2026-11-25. Implementation slices delivered;
 R5 partial, R6 pilot complete with utility NOT MET. Final independent
 review, current documentation-head CI and owner disposition remain open.
 The checkpoint paragraphs below preserve dated evidence; the consolidated
 status and R7 decision section govern current work.
-Continue in [PR #193](https://github.com/vanishs/boxweave/pull/193), on
-feat/v1-bdh-proactive-improvement-20261125. Do not open another PR.
-Parent #191 stays paused at 3494ae8a35c50c386686c9d9d675c1ae37e1b1b7.
+Historical delivery: PR #193 merged at its final PR head 6e84153; parent #191 also merged. Original utility and independent acceptance evidence remains bounded to its tested revision.
 Retain the BDH (BoxWeave Development Harness) name and bwdev CLI.
 
 **Forward scope after limited #193 integration (2026-11-26):** #191 is the active parent PR. Earlier #193 execution instructions below are historical; retain their evidence and open gates. Future owner-invoked improvement cycles follow the [agent-agnostic evolution direction](BDH_AGENT_AGNOSTIC_EVOLUTION.md) and existing improver Skill. Do not build per-Agent adapters or a second runtime harness. Cross-Agent tests may be used when actually available and authorized; no dedicated integration project is required.

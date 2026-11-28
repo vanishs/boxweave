@@ -186,8 +186,8 @@ func TestN3NativeMCPModernDeleteTombstoneCut(t *testing.T) {
 			t.Fatal("tombstone not atomic", q, n, e)
 		}
 	}
-	history, e := reopened.ReadIPv4RetirementCandidate(ctx, project, did)
-	if e != nil || history.CreateOperationID != cid {
+	var history string
+	if e = db.QueryRowContext(ctx, "SELECT id FROM operations WHERE layer=? AND box_uuid=? AND action='box_create' AND state='SUCCEEDED'", project, dRec.BoxUUID).Scan(&history); e != nil || history != cid {
 		t.Fatal("retained original address lineage", history, e)
 	}
 	ledger, e := reopened.ReadCompleteNetworkAuditLedger(ctx, project, pin.Bridge, pin.ACL)

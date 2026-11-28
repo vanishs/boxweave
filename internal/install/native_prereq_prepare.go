@@ -1,8 +1,7 @@
 package install
 
-// S2.5 operator-only preparation of owned native Incus resources. The public
-// MCP actor cannot invoke this code or acquire the admin socket. Every write
-// is preceded by an exact reviewed host/native snapshot and a durable journal.
+// Historical preparation journal recognition and reviewed rollback only.
+// Fresh installations must use the Scoped installer; no Legacy creation.
 import (
 	"context"
 	"crypto/sha256"
@@ -19,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/lxc/incus/v7/shared/api"
-	"github.com/vanishs/boxweave/internal/native"
 )
 
 const nativePrepareJournalPath = "/var/lib/boxweave-native-prereq-v1.json"
@@ -63,111 +61,6 @@ func nativePrepareReadable(t NativePrepareTarget) error {
 		return fmt.Errorf("dedicated confined identity not ready: %w", err)
 	}
 	return nil
-}
-func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePreparePlan, NativePrepareRecord, error) {
-	plan := NativePreparePlan{Target: t}
-	rec := NativePrepareRecord{Schema: 1, Status: "PLANNED"}
-	if err := nativePrepareReadable(t); err != nil {
-		return plan, rec, err
-	}
-	host, err := migrationHostDigest()
-	if err != nil {
-		return plan, rec, err
-	}
-	plan.HostSHA256 = host
-	c, err := prepareClient(ctx)
-	if err != nil {
-		return plan, rec, err
-	}
-	own := c.UseProject(t.Project)
-	instances, err := own.GetInstanceNames(api.InstanceTypeAny)
-	if err != nil {
-		return plan, rec, err
-	}
-	if len(instances) != 0 {
-		return plan, rec, errors.New("owned project has instances: refuse to change live profile")
-	}
-	project, pETag, err := own.GetProject(t.Project)
-	if err != nil {
-		return plan, rec, err
-	}
-	if project.Config["restricted"] != "true" {
-		return plan, rec, errors.New("native owned project is not restricted")
-	}
-	nesting := project.Config["restricted.containers.nesting"]
-	if nesting != "" && nesting != "block" && nesting != "allow" {
-		return plan, rec, errors.New("unrecognized owned Project nesting setting")
-	}
-	profile, prETag, err := own.GetProfile("default")
-	if err != nil {
-		return plan, rec, err
-	}
-	actor, err := user.Lookup("boxweave")
-	if err != nil {
-		return plan, rec, err
-	}
-	incusGroup, err := user.LookupGroup("incus")
-	if err != nil {
-		return plan, rec, err
-	}
-	if !native.SafePerUserProfileConfig(profile.Config, actor.Uid, incusGroup.Gid) {
-		return plan, rec, errors.New("unreviewed native default Profile config: refuse takeover")
-	}
-	if err := nativePrepareProfileEligible(profile.Devices, t); err != nil {
-		return plan, rec, err
-	}
-	if len(profile.UsedBy) != 0 {
-		return plan, rec, errors.New("owned default profile already used")
-	}
-	pool, poolETag, err := c.GetStoragePool(t.Pool)
-	if err != nil {
-		return plan, rec, err
-	}
-	if !native.StoragePoolReady(pool) {
-		return plan, rec, errors.New("selected Incus storage pool is not created")
-	}
-	plan.Warnings = append(plan.Warnings,
-		"STORAGE_QUOTA_UNVERIFIED: Incus owns storage pool backing, capacity and quota enforcement; inspect these independently before physical deployment",
-		"NATIVE_PROXY_PERMISSION: approval permits instance proxy devices for the confined native Project actor; BoxWeave still restricts exact owned targets and external binds by service policy and caller acknowledgment.")
-	network, nETag, err := c.GetNetwork(t.Network)
-	if err != nil {
-		return plan, rec, err
-	}
-	if !network.Managed || network.Type != "bridge" || network.Status != "Created" {
-		return plan, rec, errors.New("selected native network must be a managed live bridge")
-	}
-	aclNames, err := c.GetNetworkACLNames()
-	if err != nil {
-		return plan, rec, err
-	}
-	if slices.Contains(aclNames, t.ACL) {
-		return plan, rec, errors.New("ACL name already exists: refuse adoption")
-	}
-	rec.BeforeProject = project.Writable()
-	rec.BeforeProfile = profile.Writable()
-	rec.AfterProject = nativePrepareProject(rec.BeforeProject)
-	rec.AfterProfile = nativePrepareProfile(t, rec.BeforeProfile)
-	rec.ACL, err = nativePrepareACL(t, network)
-	if err != nil {
-		return plan, rec, err
-	}
-	plan.NativeStateSHA256 = nativePrepareStateDigest(
-		project, pETag, profile, prETag, pool, poolETag, network, nETag, "ACL_ABSENT",
-	)
-	plan.Actions = []string{
-		"Create exact new dedicated ACL " + t.ACL + " (never edit shared network)",
-		"Set nesting permission only on empty restricted Project " + t.Project,
-		fmt.Sprintf("Set restricted.devices.proxy from %q to allow only on empty restricted Project %s", project.Config["restricted.devices.proxy"], t.Project),
-		"Set selected Incus root pool and private reject/anti-spoof NIC only in owned empty default profile",
-		"Independently read back same owned Project, profile, pool, ACL; image is resolved on Box Create",
-	}
-	plan.ReviewSHA256 = nativePrepareDigest(plan)
-	rec.Plan = plan
-	return plan, rec, nil
-}
-func NativePreparePlanReview(ctx context.Context, t NativePrepareTarget) (NativePreparePlan, error) {
-	p, _, e := nativePrepareInspect(ctx, t)
-	return p, e
 }
 func nativePrepareSave(rec NativePrepareRecord) error {
 	if err := os.MkdirAll(filepath.Dir(nativePrepareJournalPath), 0700); err != nil {
@@ -216,88 +109,6 @@ func NativePrepareStatus() (NativePrepareRecord, error) {
 	}
 	if rec.Schema != 1 || rec.Plan.ReviewSHA256 == "" {
 		return rec, errors.New("unknown native preparation journal schema")
-	}
-	return rec, nil
-}
-func NativePrepareApply(ctx context.Context, t NativePrepareTarget, approvedSHA string, approved bool) (NativePrepareRecord, error) {
-	var empty NativePrepareRecord
-	if !approved || len(approvedSHA) != 64 {
-		return empty, errors.New("explicit root-local reviewed native plan approval required")
-	}
-	if _, err := os.Lstat(nativePrepareJournalPath); err == nil {
-		return empty, errors.New("existing preparation journal: inspect/reconcile or rollback before any new effect")
-	} else if !os.IsNotExist(err) {
-		return empty, err
-	}
-	plan, rec, err := nativePrepareInspect(ctx, t)
-	if err != nil {
-		return empty, err
-	}
-	if plan.ReviewSHA256 != approvedSHA {
-		return empty, errors.New("host/native state or approved plan digest changed")
-	}
-	c, err := prepareClient(ctx)
-	if err != nil {
-		return empty, err
-	}
-	rec.Status = "APPLY_IN_FLIGHT"
-	if err = nativePrepareSave(rec); err != nil {
-		return empty, err
-	}
-	// A crash after this point leaves a durable in-flight marker; retrying
-	// apply is NEVER allowed. Root-local rollback compares exact after/before.
-	if err = c.CreateNetworkACL(rec.ACL); err != nil {
-		return rec, fmt.Errorf("ACL creation uncertain; inspect journal, never auto-retry: %w", err)
-	}
-	rec.Status = "ACL_CREATED"
-	if err = nativePrepareSave(rec); err != nil {
-		return rec, err
-	}
-	own := c.UseProject(t.Project)
-	proj, etag, err := own.GetProject(t.Project)
-	if err != nil {
-		return rec, err
-	}
-	if !reflect.DeepEqual(proj.Writable(), rec.BeforeProject) {
-		return rec, errors.New("Project changed after plan: rollback/review")
-	}
-	rec.Status = "PROJECT_IN_FLIGHT"
-	if err = nativePrepareSave(rec); err != nil {
-		return rec, err
-	}
-	if err = own.UpdateProject(t.Project, rec.AfterProject, etag); err != nil {
-		return rec, fmt.Errorf("Project mutation uncertain; inspect original: %w", err)
-	}
-	rec.Status = "PROJECT_UPDATED"
-	if err = nativePrepareSave(rec); err != nil {
-		return rec, err
-	}
-	profile, etag, err := own.GetProfile("default")
-	if err != nil {
-		return rec, err
-	}
-	if !reflect.DeepEqual(profile.Writable(), rec.BeforeProfile) {
-		return rec, errors.New("Profile changed after plan: rollback/review")
-	}
-	rec.Status = "PROFILE_IN_FLIGHT"
-	if err = nativePrepareSave(rec); err != nil {
-		return rec, err
-	}
-	if err = own.UpdateProfile("default", rec.AfterProfile, etag); err != nil {
-		return rec, fmt.Errorf("Profile mutation uncertain; inspect original: %w", err)
-	}
-	// Snapshot readback is not optional. If any check fails retain journal
-	// so the operator cannot unknowingly re-dispatch writes.
-	report, err := NativePrerequisites(ctx, t.Project)
-	if err != nil || !report.ConfigReady || report.ACL != t.ACL || report.Pool != t.Pool || report.Network != t.Network ||
-		report.ProjectPermissions["restricted.devices.proxy"] != "allow" {
-		rec.Status = "VERIFY_BLOCKED"
-		_ = nativePrepareSave(rec)
-		return rec, errors.New("native preparation applied but readback blocked; exact journal requires review")
-	}
-	rec.Status = "APPLIED"
-	if err = nativePrepareSave(rec); err != nil {
-		return rec, err
 	}
 	return rec, nil
 }
@@ -412,8 +223,8 @@ func NativePrepareRollback(ctx context.Context, approvedSHA string, approved boo
 }
 
 // NativePrepareArchive retains a reviewed, COMPLETED rollback journal before
-// starting a new fresh preparation. It does not remove or adopt any native
-// object. A failed/UNKNOWN in-flight journal can never be archived/rearmed.
+// a subsequent Scoped fresh installation. It does not remove or adopt any
+// native object. A failed/UNKNOWN in-flight journal cannot be archived.
 // The caller holds the same host-local maintenance mutex as apply/rollback.
 func NativePrepareArchive(ctx context.Context, expectedSHA string, approved bool) (string, error) {
 	rec, err := NativePrepareStatus()

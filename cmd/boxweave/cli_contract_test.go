@@ -13,7 +13,7 @@ func TestP3R1CommandContract(t *testing.T) {
 	original := os.Args
 	t.Cleanup(func() { os.Args = original })
 	// Help must not dispatch any retained command or private worker.
-	if len(cliCommands) != 45 {
+	if len(cliCommands) != 43 {
 		t.Fatalf("active generic command inventory: %d", len(cliCommands))
 	}
 	for command := range cliCommands {
@@ -37,6 +37,8 @@ func TestP3R1CommandContract(t *testing.T) {
 		{[]string{"upgrade", "--help"}, "legacy installation mutation unsupported"},
 		{[]string{"rollback", "-db", db}, "legacy installation mutation unsupported"},
 		{[]string{"install-commit", "-approve-local"}, "legacy installation mutation unsupported"},
+		{[]string{"native-prepare-plan", "--help"}, "legacy installation mutation unsupported"},
+		{[]string{"native-prepare-apply", "-approve-local", "-native-prepare-sha256", strings.Repeat("a", 64)}, "legacy installation mutation unsupported"},
 		{[]string{"native-peer-audit", "--db", db}, "unsupported command"},
 		{[]string{"native-peer-purge-plan", "--db", db}, "unsupported command"},
 		{[]string{"native-peer-root-unit-stage", "--help"}, "unsupported command"},

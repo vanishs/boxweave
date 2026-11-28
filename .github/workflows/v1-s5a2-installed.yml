@@ -1,18 +1,5 @@
-name: S5A2 installed original recovery
+name: Historical S5A2 installed original recovery
 on:
-  push:
-    branches: [feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
-    paths:
-      - 'internal/recovery/**'
-      - 'internal/state/recovery_navigation*.go'
-      - 'internal/state/activity_query.go'
-      - 'internal/control/recovery_attention*.go'
-      - 'internal/control/operation_tools.go'
-      - 'internal/state/operation_recover*.go'
-      - 'internal/control/operation_recover*.go'
-      - 'scripts/s5a2_recovery_probe.go'
-      - 'scripts/s5a2_installed_cli_review.sh'
-      - '.github/workflows/v1-s5a2-installed.yml'
   workflow_dispatch:
 permissions:
   contents: read

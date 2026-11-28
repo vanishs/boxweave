@@ -5,7 +5,7 @@
 ## What docs-only PRs should (and should not) trigger
 
 **Required GitHub status remains `quality-gate` on every PR into `v1`.**
-The active ruleset still enforces that exact job, strict freshness, normal PR
+The intended ruleset configuration requires that exact job, strict freshness, normal PR
 review and no bypass. **Do not add `paths-ignore` to the required PR workflow:**
 an absent required check can leave the PR waiting forever.
 
@@ -50,17 +50,25 @@ S4/S5 native signoff is inferred.
 | Before push | `.githooks/pre-push` | Pure-doc branch against tracked remote `v1`: skips redundant Go checks; mixed/code/config/release/uncertain changes run full `make verify` |
 | GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`**, lightweight for docs-only PRs | Any GitHub status other than SUCCESS for the candidate SHA; docs-only PRs check only changed document byte-format and scope; all other changes run full gates |
 
-**Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or direct pushes to unprotected branches. The server-side required-check rule on `v1` **now blocks merge/update of the protected branch**, not the creation of an invalid commit on another branch.
+**Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or direct pushes to unprotected branches. A server-side required-check rule blocks protected-branch merge/update only when enabled; it does not prevent invalid commits on other branches.
 
-## Server-side v1 merge rule — ACTIVE and independently verified (2026-11-09)
+## Server-side v1 merge rule — historical active witness (2026-11-09)
 
-**[Ruleset #26842628 — v1 required quality](https://github.com/vanishs/boxweave/rules/26842628)** was saved by the repository owner and independently read back through GitHub's ruleset API. The observed effective configuration is:
+**Current readback (2026-11-27 PT): disabled.** The owner-directed #191
+source integration removed the required check; live GitHub API reports
+v1 protected=false, ruleset 26842628 disabled, and no required status
+checks. The configuration below is historical, not current enforcement.
+The full quality gate remains a release requirement; restore and verify
+intended protection under owner authority before stable candidate build.
+See [current status](../STATUS.md) and the [owner decision](https://github.com/vanishs/boxweave/pull/191#issuecomment-7232633581).
+
+**Historical configuration (not current enforcement):** [Ruleset #26842628 — v1 required quality](https://github.com/vanishs/boxweave/rules/26842628) was saved by the repository owner and independently read back through GitHub's ruleset API. The observed effective configuration is:
 
 - **`enforcement=active`**, `target=branch`, exact included ref **`refs/heads/v1`**; no excluded branches.
 - Required **pull request**: `required_approving_review_count=0` (single maintainer), `required_review_thread_resolution=true`. Allowed merge methods: merge, squash and rebase.
 - Required check **`quality-gate`** from GitHub Actions (integration ID `15368`); **strict/up-to-date=true**, `do_not_enforce_on_create=false`. The check must pass on the candidate SHA.
 - **No bypass actors** (`bypass_actors=[]`, `current_user_can_bypass=never`), no force-push (`non_fast_forward`) and no branch deletion (`deletion`).
-- The unrelated historical ruleset [#26251692 — Basic protection](https://github.com/vanishs/boxweave/rules/26251692) remains `disabled`, targets `~ALL` when enabled, and **was not modified**. The new active rule protects only `v1`, not every repository branch.
+- The unrelated historical ruleset [#26251692 — Basic protection](https://github.com/vanishs/boxweave/rules/26251692) remains `disabled`, targets `~ALL` when enabled, and **was not modified**. The historical configuration targeted only `v1`, not every branch.
 
 ### Actual negative merge-gate witness
 
@@ -71,7 +79,7 @@ A configuration reference is stored at [`v1-required-quality.example.json`](../.
 
 ## Documentation-only CI fast path (2026-11-18)
 
-**The protected `v1` branch still requires the same `quality-gate` status.** To avoid repeated Go/Race, two-architecture candidate builds and real Incus installation from a pure documentation commit, the development workflows use a conservative changed-file classifier (`scripts/ci_change_scope.py`, with temporary-Git regression tests).
+**The intended `v1` release policy requires the same `quality-gate` status, regardless of whether branch protection is enabled.** To avoid repeated Go/Race, two-architecture candidate builds and real Incus installation from a pure documentation commit, the development workflows use a conservative changed-file classifier (`scripts/ci_change_scope.py`, with temporary-Git regression tests).
 
 - On `feat/v1-*` **pushes**, compare exactly the previous push SHA to the new HEAD; on **pull requests**, compare the entire PR against the `v1` merge base rather than only its last commit. Documentation means textual Markdown/MDX/RST files outside `.github/**`; executable/configuration files under `docs/**` still require full checks. Source-to-document renames are full.
 - For **docs-only** changes, the required **`quality-gate` job still runs and must succeed**, checking repository text formatting, changed-line whitespace and CI scope unit tests. Go setup, YAML Go parser, vet, module checks, Race and builds are skipped. The candidate workflow keeps a tiny scope job but skips expensive source validation, both Linux builds, candidate manifest and artifact upload. No release is produced.

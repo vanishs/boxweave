@@ -38,8 +38,6 @@ var cliCommands = map[string]cliCommand{
 	"native-bootstrap":                     {"dependency", "incus-package-version native-plan-sha256 approve-native-bootstrap"},
 	"native-prereq-plan":                   {"dependency", "project"},
 	"native-prereq-verify":                 {"dependency", "project native-prereq-sha256 approve-local"},
-	"native-prepare-plan":                  {"dependency", "project pool network acl"},
-	"native-prepare-apply":                 {"dependency", "project pool network acl native-prepare-sha256 approve-local"},
 	"native-prepare-status":                {"dependency", ""},
 	"native-prepare-retirement-check":      {"dependency", "project native-prepare-sha256"},
 	"native-prepare-rollback":              {"dependency", "native-prepare-sha256 approve-local"},
@@ -67,7 +65,7 @@ var cliCommands = map[string]cliCommand{
 
 func retiredCLICommand(command string) bool {
 	switch command {
-	case "upgrade", "rollback", "install-commit":
+	case "upgrade", "rollback", "install-commit", "native-prepare-plan", "native-prepare-apply":
 		return true
 	default:
 		return false

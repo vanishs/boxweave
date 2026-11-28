@@ -152,9 +152,13 @@ if [ "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1 ]; then
 import json,sys
 v=json.load(open(sys.argv[1]))
 u=v.get("metadata",v)["usage"]
-assert int(u["total"])==int(sys.argv[2])
-assert int(u["used"])<=int(sys.argv[2])
-assert int(u["used"])<=int(sys.argv[3])+1048576
+total,used,limit,reclaimed=int(u["total"]),int(u["used"]),int(sys.argv[2]),int(sys.argv[3])
+print("P1B_SCOPED_EDQUOT_ACCOUNTING"
+      f" total={total} used={used} expected_limit={limit}"
+      f" reclaimed={reclaimed} delta={used-reclaimed} allowed_delta=1048576",flush=True)
+assert total==limit, "EDQUOT changed the reported quota limit"
+assert used<=limit, "EDQUOT postimage exceeded the quota limit"
+assert used<=reclaimed+1048576, "EDQUOT postimage exceeded reclaimed usage tolerance"
 print("P1B_SCOPED_INDEPENDENT_EDQUOT_REAL_KERNEL_REFUSAL=PASS")
 EDQUOT
 fi

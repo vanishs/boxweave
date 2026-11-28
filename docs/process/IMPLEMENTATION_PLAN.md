@@ -2,15 +2,16 @@
 
 Use [current status](../STATUS.md) for exact source, published version and installed identity. S1–S5 and S2.5 milestone cards are historical; do not restart completed phases from old handoffs. Scoped Peer N1–N5, Doctor/Recover D0–D5, installation incident closure, scoped retirement and clean reinstall have merged. Prior results retain exact evidence scope.
 
-## Active draft consolidation
+## Merged consolidation, acceptance still open
 
-[PR #191](https://github.com/vanishs/boxweave/pull/191) is the current
-fresh-only schema-7 candidate. Follow the [P0-P5 plan](../development/CONSOLIDATION_PLAN.md),
-[progress](../development/CONSOLIDATION_PROGRESS.md) and
-[acceptance](../development/CONSOLIDATION_ACCEPTANCE.md). H remains frozen
-pending Support and owner direction, C04 is deferred to P5, and final
-release-specific evidence is separate. The published RC14 and merged v1
-are not this candidate.
+[PR #191](https://github.com/vanishs/boxweave/pull/191) integrated the
+fresh-only schema-7 architecture into v1. See the actual current
+[status and CI evidence](../STATUS.md). The former draft plan and
+[progress](../development/CONSOLIDATION_PROGRESS.md) preserve historical
+development decisions, not current merge state. The
+[acceptance ledger](../development/CONSOLIDATION_ACCEPTANCE.md) retains
+all mandatory obligations. Previous H/C01/C04/C11 and independent acceptance results are revision-bound. The two old Install tests were replaced on PR #198; exact-head verification remains outstanding. Do not treat source integration as a waiver. Formal publication [#170](https://github.com/vanishs/boxweave/pull/170)
+must be reconciled with the current fresh-only architecture.
 
 ## Next authorized work after candidate acceptance
 

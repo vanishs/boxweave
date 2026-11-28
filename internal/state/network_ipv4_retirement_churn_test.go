@@ -2,7 +2,6 @@ package state
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/vanishs/boxweave/internal/peerscope"
 	"net/netip"
@@ -10,29 +9,13 @@ import (
 	"testing"
 )
 
-// Legacy queue scheduling is absent; retained histories survive restart and
-// no queue/status/defer entry can create or advance retirement state.
+// Retained identity histories must survive restart.
 func TestIPv4RetirementQueuePersistentRoundRobin(t *testing.T) {
 	ctx := context.Background()
 	s, b, d := n3RetiredFixture(t)
 	path := strings.TrimSuffix(s.ExecArchiveDir(), ".exec-archive")
 	check := func(s *Store) {
 		t.Helper()
-		if ids, e := s.ClaimPendingIPv4Retirements(ctx, b.Project, 2); len(ids) != 0 || !errors.Is(e, ErrResourceLocked) {
-			t.Fatal(ids, e)
-		}
-		if e := s.RecordIPv4RetirementDeferred(ctx, b.Project, d.ID, "RETIREMENT_BRIDGE_NOT_QUIESCENT"); !errors.Is(e, ErrResourceLocked) {
-			t.Fatal(e)
-		}
-		if _, e := s.ReadIPv4RetirementStatus(ctx, b.Project); !errors.Is(e, ErrResourceLocked) {
-			t.Fatal(e)
-		}
-		if _, e := s.ReadIPv4RetirementStatus(ctx, "user-1002"); !errors.Is(e, ErrResourceLocked) {
-			t.Fatal(e)
-		}
-		if _, e := s.ReadIPv4RetirementRollbackWitness(ctx, b.Project); !errors.Is(e, ErrResourceLocked) {
-			t.Fatal(e)
-		}
 		ledger, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, purePeerBridge)
 		if e != nil || len(ledger.Retired) != 1 || ledger.Retired[0].DeleteID != d.ID {
 			t.Fatal(ledger, e)
@@ -97,13 +80,12 @@ func TestIPv4RetirementChurnBeyond256Originals(t *testing.T) {
 
 func TestIPv4RetirementStatusScopedDiagnostics(t *testing.T) {
 	ctx := context.Background()
-	s, b, d := n3RetiredFixture(t)
+	s, b, _ := n3RetiredFixture(t)
 	snap := DiagnosticSnapshot{store: s}
 	first, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
 	if e != nil || len(first.LegacyPending) != 0 || len(first.LegacyCompactions) != 0 || first.Retired != 1 || len(first.HistorySHA256) != 64 {
 		t.Fatal(first, e)
 	}
-	assertRemovedRetirementRefused(t, s, b.Project, d.ID)
 	after, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
 	if e != nil || after.ObservationDigest() != first.ObservationDigest() {
 		t.Fatal(after, e)

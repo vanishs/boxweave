@@ -1,5 +1,7 @@
 # Learning inbox
 
+> **Reference only:** Historical candidate and observation registry. It is not an active task queue. Reconsideration and improvement require an explicitly requested scope.
+
 ## Deferred opportunity review (current #193 plan)
 
 See the [active BDH plan](../docs/development/BDH_DEVELOPMENT_PLAN.md#find-deferred-opportunities-again)

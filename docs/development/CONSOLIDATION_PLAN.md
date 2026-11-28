@@ -1,5 +1,7 @@
 # v1 pre-release consolidation — active PR plan
 
+> **Reference only:** Merged #191 historical planning record. The implementation roadmap and branch instructions below are not active. Use current source and exact-head acceptance instead.
+
 Baseline: `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`, 2026-11-24. This is an authorized development target, not a statement that the baseline already implements it. One topic branch and one Draft PR into protected v1. Do not merge or publish without separate owner approval.
 
 Start with [BDH](../../dev/BOOTSTRAP.md), then [progress](CONSOLIDATION_PROGRESS.md), [retirement inventory](RETIREMENT_INVENTORY.md) and [acceptance](CONSOLIDATION_ACCEPTANCE.md) as relevant. Use existing task/checkpoint and learning mechanisms. The [phase protocol](PHASE_EXECUTION_PROTOCOL.md) applies with the parallel-CI refinement below.

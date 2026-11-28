@@ -69,11 +69,13 @@ func TestPR177D0ExtensionScopedRetirementStatusMismatch(t *testing.T) {
 	if !holds.IPs[netip.MustParseAddr(retired.IPv4)] || !holds.IPs[netip.MustParseAddr(retired.IPv6)] || !holds.MACs[retired.MAC] {
 		t.Fatal("valid retired address or MAC no longer held")
 	}
-	// The retained identity is never queued for obsolete Legacy reclamation.
-	if _, err = s.ReadIPv4RetirementStatus(ctx, b.Project); !errors.Is(err, ErrResourceLocked) {
-		t.Fatal("legacy status allowed", err)
+	// The current maintenance observation contains retained identity history,
+	// never an obsolete reclamation queue.
+	snap := DiagnosticSnapshot{store: s}
+	observed, err := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if err != nil || observed.Retired != 1 || len(observed.LegacyPending) != 0 || len(observed.LegacyCompactions) != 0 {
+		t.Fatal(observed, err)
 	}
-
 }
 
 func TestPR177D0ExtensionOriginalCredentialRevocation(t *testing.T) {

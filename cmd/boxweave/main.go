@@ -114,9 +114,6 @@ func run() error {
 	nativePlanSHA := f.String("native-plan-sha256", "", "operator-reviewed native APT simulation digest")
 	approveNative := f.Bool("approve-native-bootstrap", false, "approve exact signed APT plan on an empty local host")
 	prereqSHA := f.String("native-prereq-sha256", "", "operator-reviewed exact host and native prerequisite snapshot")
-	preparePool := f.String("pool", "", "existing reviewed native dir pool for pre-first-Box preparation")
-	prepareNetwork := f.String("network", "", "existing reviewed managed native bridge")
-	prepareACL := f.String("acl", "", "new exclusively owned bw-prefixed Incus network ACL")
 
 	prepareSHA := f.String("native-prepare-sha256", "", "operator-reviewed exact native prepare plan/journal digest")
 	retirementCold := f.Bool("retirement-cold", false, "require exclusive cold ledger proof for settled offline retirement")
@@ -303,7 +300,7 @@ func run() error {
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
 	case "install-stage", "install-activate",
-		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback", "native-prepare-archive",
+		"native-bootstrap", "native-prepare-rollback", "native-prepare-archive",
 		"native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
 		if err != nil {
@@ -314,26 +311,12 @@ func run() error {
 			return err
 		}
 	}
-	if command == "native-prepare-plan" || command == "native-prepare-apply" ||
-		command == "native-prepare-status" || command == "native-prepare-retirement-check" || command == "native-prepare-rollback" ||
+	if command == "native-prepare-status" || command == "native-prepare-retirement-check" || command == "native-prepare-rollback" ||
 		command == "native-prepare-archive" {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		target := install.NativePrepareTarget{Project: *project, Pool: *preparePool, Network: *prepareNetwork, ACL: *prepareACL}
 		enc := json.NewEncoder(os.Stdout)
 		switch command {
-		case "native-prepare-plan":
-			report, err := install.NativePreparePlanReview(ctx, target)
-			if err != nil {
-				return err
-			}
-			return enc.Encode(report)
-		case "native-prepare-apply":
-			record, err := install.NativePrepareApply(ctx, target, *prepareSHA, *approveLocal)
-			if e := enc.Encode(record); e != nil {
-				return e
-			}
-			return err
 		case "native-prepare-status":
 			record, err := install.NativePrepareStatus()
 			if err != nil {

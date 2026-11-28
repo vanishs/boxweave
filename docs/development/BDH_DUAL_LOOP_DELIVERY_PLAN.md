@@ -1,5 +1,7 @@
 # BDH universal activation and dual-loop delivery plan
 
+> **Reference only:** Historical design/rollout candidate; no universal activation, automatic follow-up, mandatory learning or new task is authorized.
+
 **Historical rollout plan for merged PR #189.** Keep original U1-U4 gates and evidence; the [active BDH development plan](BDH_DEVELOPMENT_PLAN.md) governs the current increment. Do not repeat closed rollout work.
 
 Status: implementation plan; v0.5.1 Box implementation and local evidence are recorded in [U1-U4 acceptance](BDH_DUAL_LOOP_ACCEPTANCE.md). Independent CI and fresh Agent surface activation are separate gates.

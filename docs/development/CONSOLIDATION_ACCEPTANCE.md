@@ -74,7 +74,12 @@ to P2, with UNKNOWN archival, interruption/resume, purge and foreign
 preservation obligations intact. Minimum P1 dependencies and the two
 blocked core Install regressions remain P1. No acceptance waiver.
 
-### Install legacy-oracle applicability (owner-approved review)
+### Scoped Install acceptance and legacy-oracle disposition
+
+The current v1 product contract is Schema 7 with a dedicated ACL for each
+Box. Shared-ACL execution is retired and is not a supported positive
+acceptance requirement. Legacy input must be refused without effects;
+do not restore shared-ACL execution to satisfy an obsolete oracle.
 
 PR #191 comment 7211274131 and aggregate-13 establish:
 
@@ -94,13 +99,24 @@ execution, but tests partial ACK/recovery, not the full interleaving
 obligation; it was SKIP in aggregate-13. Combined real ledger/native
 interleaving remains UNVERIFIED. Review operations
 f5cfcf0a06f9c3df275afd9851e36161 and a694069fab4a33de85012ac36d64b363.
-Preserve original test failures and all retained obligations. No skip,
-deletion, gate waiver or legacy revival. 
-P1 R2/R3 remains OPEN.
+Preserve the original failed results as evidence and retain every
+architecture-independent security obligation. The acceptance target is
+the current Scoped architecture, not a successful legacy operation.
+Record the obsolete positive expectation separately from the retained
+behavior and its equivalent or stronger Scoped witnesses.
+
+For the first oracle, the owner has explicitly confirmed the product
+scope in PR #198. See the proposed coverage disposition in comment
+7234888665 and the recorded owner direction in comment 7234910101.
+The original test remains unchanged pending separately authorized
+independent applicability review and disposition. This clarification
+does not authorize replay or delegation of a refused mutation, removal
+or skipping of existing tests, relaxation of safety checks, or a gate
+waiver. P1 R2/R3 remains OPEN.
 
 ### Deferred Install evidence — development only
 
-Owner decision (2026-11-27): P1 implementation is considered development-complete for scheduling; proceed with independent P2 development. This explicitly defers the unresolved Install composed witness in #194, not a PASS, waiver, or permission to repeat a refused operation. The existing 577 PASS / 66 SKIP / 2 FAIL aggregate and Race exit 1 remain recorded. Retain the original failed tests and all safety assertions. Exact-candidate regression, native and CI evidence, C04 hosted equivalence if needed, and old-gate applicability/replacement remain open before formal P1 acceptance, merge or release. This Schema 7 development checkpoint is not an accepted or release candidate. See [#194](https://github.com/vanishs/boxweave/issues/194) and [R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7212654941).
+Owner decision (2026-11-27): P1 implementation is considered development-complete for scheduling; proceed with independent P2 development. This explicitly defers the unresolved Install composed witness in #194, not a PASS, waiver, or permission to repeat a refused operation. The existing 577 PASS / 66 SKIP / 2 FAIL aggregate and Race exit 1 remain recorded. At this development checkpoint, the original failed tests and all safety assertions were retained. Current architecture applicability is described above; the checkpoint is preserved as evidence, not a requirement to support retired shared-ACL execution. Exact-candidate regression, native and CI evidence, C04 hosted equivalence if needed, and old-gate applicability/replacement remain open before formal P1 acceptance, merge or release. This Schema 7 development checkpoint is not an accepted or release candidate. See [#194](https://github.com/vanishs/boxweave/issues/194) and [R5 review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7212654941).
 
 ## Coverage ledger
 

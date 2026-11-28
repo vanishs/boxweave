@@ -10,8 +10,7 @@
       "query": "",
       "expected_ids": [
         "knowledge.maintenance",
-        "skill.verification",
-        "skill.box-development"
+        "module.install"
       ]
     },
     {
