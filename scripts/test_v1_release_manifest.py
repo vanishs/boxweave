@@ -72,6 +72,25 @@ class ReleaseTests(unittest.TestCase):
                     self.assertIn("matching original artifact", result.stderr)
                     self.assertEqual(result.stdout, "")
 
+    def test_packaged_core_digest_matches_executed_bytes(self):
+        # Use the same launcher and real identity function, but stop before
+        # main so this unit fixture does not observe or mutate a Host.
+        original = (ROOT / "scripts/uninstall_core.py").read_bytes()
+        anchor = b'if __name__ == "__main__":\n'
+        self.assertEqual(original.count(anchor), 1)
+        probe = original.replace(
+            anchor, anchor + b"    print(uninstaller_source_sha256())\n    sys.exit(0)\n")
+        source = self.dir / "probe.py"
+        wrapper = self.dir / "probe.sh"
+        for core in (probe, probe + b"\n# identity must follow actual bytes\n"):
+            source.write_bytes(core)
+            wrapper.write_bytes(module.package_uninstaller(core))
+            for argv in ([sys.executable, str(source)], ["sh", str(wrapper)]):
+                with self.subTest(argv=argv, digest=hashlib.sha256(core).hexdigest()):
+                    result = subprocess.run(argv, capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.strip(), hashlib.sha256(core).hexdigest())
+
     def test_checkout_uninstall_wrapper_missing_core_is_clear(self):
         wrapper = self.dir / "uninstall-source.sh"
         wrapper.write_bytes((ROOT / "uninstall.sh").read_bytes())

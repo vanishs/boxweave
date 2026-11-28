@@ -73,6 +73,16 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def uninstaller_source_sha256():
+    """Bind the reviewed preview to the exact source core in both entrypoints."""
+    if __file__ == "<boxweave-uninstall>":
+        digest = globals().get("_BOXWEAVE_EMBEDDED_CORE_SHA256")
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise UninstallError("embedded uninstaller source identity unavailable")
+        return digest
+    return sha(Path(__file__).read_bytes())
+
+
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
@@ -3207,7 +3217,7 @@ def maintenance_main(args):
     if failure:
         after["observer_failure"] = failure
     plan = maintenance_preview(project, args.retention, host, report, after,
-                               sha(Path(__file__).read_bytes()))
+                               uninstaller_source_sha256())
     if args.maintenance_recheck:
         match = (host == args.confirm_host_sha256 and
                  plan["preview_sha256"] == args.confirm_preview_sha256)
@@ -3813,7 +3823,7 @@ def offline_plan(project, observer=None):
         report = {}
         failure = "LOCAL_EVIDENCE_CHANGED"
     preview = maintenance_preview(project, "retain", host, report, local,
-                                  sha(Path(__file__).read_bytes()))
+                                  uninstaller_source_sha256())
     blockers, originals = offline_scope_blockers(report, preview)
     if failure:
         blockers.append("OFFLINE_OBSERVER_UNAVAILABLE:" + failure)

@@ -28,6 +28,25 @@ def validate_elf(data, architecture):
         raise ValueError("ELF machine mismatch for " + architecture)
 
 
+def package_uninstaller(core):
+    # Hash the exact executed core in the launcher, not a path named <stdin>.
+    # Strip only the one framing newline that the packager adds.
+    return (
+        b'#!/bin/sh\n'
+        b'set -eu\n'
+        b"exec python3 -c 'import hashlib, sys\n"
+        b'source = sys.stdin.buffer.read()\n'
+        b'if not source.endswith(b"\\n"):\n'
+        b'    raise SystemExit("BoxWeave uninstaller: incomplete embedded core")\n'
+        b'source = source[:-1]\n'
+        b'__file__ = "<boxweave-uninstall>"\n'
+        b'_BOXWEAVE_EMBEDDED_CORE_SHA256 = hashlib.sha256(source).hexdigest()\n'
+        b'sys.argv[0] = "-"\n'
+        b'exec(compile(source, __file__, "exec"))\' "$@" <<\'PY_BOXWEAVE_UNINSTALL\'\n'
+        + core + b'\nPY_BOXWEAVE_UNINSTALL\n'
+    )
+
+
 def assemble(directory, tag, source, installer):
     if not TAG.fullmatch(tag) or not SHA.fullmatch(source):
         raise ValueError("invalid v1 release tag or source SHA")
@@ -48,8 +67,7 @@ def assemble(directory, tag, source, installer):
         files[name] = data
     files["install.sh"] = installer.read_bytes()
     core = Path(__file__).resolve().parent / "uninstall_core.py"
-    files["uninstall.sh"] = (b"#!/bin/sh\nset -eu\nexec python3 - \"$@\" <<'PY_BOXWEAVE_UNINSTALL'\n" +
-                             core.read_bytes() + b"\nPY_BOXWEAVE_UNINSTALL\n")
+    files["uninstall.sh"] = package_uninstaller(core.read_bytes())
     go_mod = Path("go.mod").read_text(encoding="utf-8")
     def pinned(expression):
         match = re.search(expression, go_mod, re.MULTILINE)
