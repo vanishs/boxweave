@@ -87,4 +87,3 @@ func TestScopedConntrackUsesProtectedSQLiteLedger(t *testing.T) {
 		t.Fatal("incorrect scoped pair")
 	}
 }
-
