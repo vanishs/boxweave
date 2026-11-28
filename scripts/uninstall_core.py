@@ -4206,18 +4206,18 @@ def main(argv=None):
     action.add_argument("--offline-full", action="store_true", help="terminal-approved stopped Scoped full retirement; retain originals")
     action.add_argument("--maintenance-plan", action="store_true", help="H1B read-only full retirement preview; no apply authority")
     action.add_argument("--maintenance-recheck", action="store_true", help="read-only preview freshness comparison, not approval")
-    action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
-    action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
-    action.add_argument("--full", action="store_true", help="guided full retirement with terminal review and backup")
+    action.add_argument("--plan", action="store_true", help="with --scoped: read-only host inventory and review hashes")
+    action.add_argument("--apply", action="store_true", help="retired Legacy apply selector (unsupported)")
+    action.add_argument("--full", action="store_true", help="with --scoped: guided full retirement with terminal review and backup")
     action.add_argument("--purge-plan", action="store_true", help="read-only review of completed retirement data erasure")
     action.add_argument("--purge", action="store_true", help="permanently erase reviewed completed retirement data; resume same original if interrupted")
-    action.add_argument("--resume-plan", action="store_true", help="read-only review of a stopped, archived STARTED retirement")
-    action.add_argument("--resume", action="store_true", help="explicit terminal-approved continuation of the exact archived STARTED retirement")
+    action.add_argument("--resume-plan", action="store_true", help="with --scoped: read-only review of original retirement")
+    action.add_argument("--resume", action="store_true", help="with --scoped: terminal-approved continuation of the exact original")
     parser.add_argument("--scoped", action="store_true", help="explicit full-only Scoped Peer v2 retirement with exact owned Box cleanup")
     parser.add_argument("--retirement-archive", help="exact root-private original retirement archive for resume")
     parser.add_argument("--guided-full-plan", action="store_true",
-                        help="with --plan --scope full: use the same guided read-only archive/inventory checks as --full")
-    parser.add_argument("--scope", choices=SCOPES, help="service | controller | full (never shared Incus)")
+                        help="retired Legacy guided-plan selector (unsupported)")
+    parser.add_argument("--scope", choices=SCOPES, help="current retirement is full-only; old service/controller selectors unsupported")
     parser.add_argument("--project", help="exact restricted service Project (user-UID)")
     parser.add_argument("--box-uuid", action="append", default=[], help="full only: complete exact immutable UUID allowlist")
     parser.add_argument("--native-prepare-sha256", help="full only: exact original native journal review digest")
@@ -4267,6 +4267,10 @@ def main(argv=None):
         return maintenance_main(args)
     if any((args.retention, args.observer_binary, args.observer_sha256, args.confirm_preview_sha256)):
         parser.error("maintenance options cannot be used by existing apply/retirement/purge commands")
+    if not args.scoped and (args.plan or args.apply or args.full or args.resume_plan or args.resume):
+        raise UninstallError("LEGACY_RETIREMENT_UNSUPPORTED: scoped v2 retirement requires --scoped; "
+                             "for historical installations or interrupted retirement use the exact "
+                             "matching original artifact; preserve original evidence")
     if os.path.lexists(OFFLINE_FENCE):
         raise UninstallError("OFFLINE_RETIREMENT_IN_PROGRESS: review --offline-resume-plan; preserve exact original")
     if args.purge or args.purge_plan:
@@ -4275,98 +4279,8 @@ def main(argv=None):
         raise UninstallError("PURGE_IN_PROGRESS: review --purge-plan; preserve original receipt")
     if args.scoped:
         return scoped_main(args)
-    if not args.plan and not args.apply and not args.full and not args.resume_plan and not args.resume:
-        parser.print_help()
-        return 0 if not any((args.scope, args.project, args.box_uuid)) else 2
-    if args.resume_plan or args.resume:
-        if (args.scope or args.guided_full_plan or args.full or args.plan or args.apply or
-                args.box_uuid or args.native_prepare_sha256 or
-                args.confirm_host_sha256 or args.confirm_review_sha256 or
-                not args.retirement_archive):
-            parser.error("resume requires only --project and --retirement-archive")
-        args.project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
-        if os.geteuid() != 0 or sys.platform != "linux":
-            raise UninstallError("root on the original Host required for retirement recovery")
-        snapshot, original = inspect_interrupted_retirement(args.project, args.retirement_archive)
-        if args.resume_plan:
-            print(json.dumps(snapshot, indent=2, sort_keys=True))
-            return 0
-        print(json.dumps(snapshot, indent=2, sort_keys=True), flush=True)
-        with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
-            out.write("Type RESUME " + args.project + " to continue the original audited retirement: ")
-            out.flush()
-            if inp.readline().strip() != "RESUME " + args.project:
-                raise UninstallError("OPERATOR_APPROVAL_REQUIRED: interrupted retirement continuation not approved; original audit unchanged")
-        fresh, original = inspect_interrupted_retirement(args.project, args.retirement_archive)
-        if fresh != snapshot:
-            raise UninstallError("interrupted retirement evidence changed since approval")
-        print(json.dumps(resume_interrupted_retirement(original, args.retirement_archive),
-                         indent=2, sort_keys=True))
-        return 0
-    if args.retirement_archive:
-        parser.error("--retirement-archive requires --resume or --resume-plan")
-    if args.guided_full_plan and (not args.plan or args.scope != "full"):
-        parser.error("--guided-full-plan requires --plan --scope full")
-    if args.full:
-        if args.scope or args.confirm_host_sha256 or args.confirm_review_sha256:
-            parser.error("--full uses terminal approval, not explicit scope/digests")
-        args.scope = "full"
-        args.project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
-    if not args.scope or not args.project:
-        parser.error("--scope and --project required for plan/apply")
-    if os.geteuid() != 0 or sys.platform != "linux":
-        raise UninstallError("root on the reviewed Linux host required for safe ledger/Incus inspection")
-    # A prior STARTED audit must direct operators to the original archive,
-    # even when current controller artifacts are already partially removed.
-    refuse_scoped_retirement()
-    prior_audit = audit_status()
-    if prior_audit["status"] == "STARTED":
-        hint = "Do not repeat retirement; use --resume-plan --project PROJECT --retirement-archive EXACT_ORIGINAL_ARCHIVE if eligible; otherwise preserve the original audit for local review"
-        if args.plan:
-            print(json.dumps({"ready": False, "scope": args.scope, "project": args.project,
-                              "uninstall_audit": prior_audit, "blockers": ["PRIOR_UNINSTALL_INTERRUPTED_REVIEW_ORIGINAL_AUDIT"],
-                              "next_action": hint, "coverage": "ORIGINAL_AUDIT_ONLY"}, indent=2, sort_keys=True))
-            return 2
-        raise UninstallError("UNINSTALL_AUDIT_STARTED: " + hint)
-    plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256,
-                   guided=args.full or args.guided_full_plan)
-    if args.plan:
-        print(json.dumps(plan, indent=2, sort_keys=True))
-        return 0 if plan["ready"] else 2
-    if args.full:
-        print(json.dumps(plan, indent=2, sort_keys=True), flush=True)
-        if not plan["ready"]:
-            raise UninstallError("guided retirement blocked by current evidence; preserve original receipts and inspect plan blockers")
-        with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
-            out.write("Type REMOVE " + args.project + " to approve deleting all listed Boxes and retiring this controller: ")
-            out.flush()
-            if inp.readline().strip() != "REMOVE " + args.project:
-                raise UninstallError("OPERATOR_APPROVAL_REQUIRED: retirement not approved; no retirement changes")
-        fresh = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256, guided=True)
-        if fresh["review_sha256"] != plan["review_sha256"] or not fresh["ready"]:
-            raise UninstallError("host/scope/inventory drift; review again")
-        args.confirm_host_sha256 = plan["host_machine_id_sha256"]
-        args.confirm_review_sha256 = plan["review_sha256"]
-    if not VALID_SHA.fullmatch(args.confirm_host_sha256 or "") or \
-            not VALID_SHA.fullmatch(args.confirm_review_sha256 or ""):
-        raise UninstallError("apply requires exact host AND review SHA256 from fresh plan")
-    if plan["host_machine_id_sha256"] != args.confirm_host_sha256 or \
-            plan["review_sha256"] != args.confirm_review_sha256 or not plan["ready"]:
-        raise UninstallError("host/scope/inventory drift or blockers: apply refused")
-    refuse_scoped_retirement()
-    check_original_native_precondition(plan)
-    audited_write({"status": "STARTED", "scope": plan["scope"],
-                   "host_sha256": plan["host_machine_id_sha256"],
-                   "review_sha256": plan["review_sha256"],
-                   "actions": plan["actions"],
-                   "historical_released_exec": plan["sqlite"]["historical_released_exec"],
-                    "historical_released_other": plan["sqlite"]["historical_released_other"]})
-    result = apply(plan)
-    # Completion is a separate fsynced audit transition; interruptions keep
-    # the original STARTED receipt and require deliberate manual reconciliation.
-    audited_complete(plan["review_sha256"], result)
-    print(json.dumps(result, indent=2, sort_keys=True))
-    return 0
+    parser.print_help()
+    return 0 if not any((args.scope, args.project, args.box_uuid)) else 2
 
 
 if __name__ == "__main__":

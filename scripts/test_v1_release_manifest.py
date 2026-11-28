@@ -52,6 +52,26 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(m["dependencies"]["go_toolchain"], "1.26.9")
         self.assertTrue(m["dependencies"]["incus_go_sdk"].startswith("v7."))
 
+    def test_current_release_wrapper_retires_legacy_dispatch(self):
+        module.assemble(self.dir, "v1.0.0-rc.1", "a" * 40, self.installer)
+        package = self.dir / "uninstall.sh"
+        embedded = package.read_bytes().split(b"<<'PY_BOXWEAVE_UNINSTALL'\n", 1)[1].rsplit(
+            b"\nPY_BOXWEAVE_UNINSTALL\n", 1)[0]
+        self.assertEqual(embedded, (ROOT / "scripts/uninstall_core.py").read_bytes())
+        # Incomplete old actions are deliberately chosen: even the historical
+        # parser rejects them before inspecting a real Host. The current
+        # artifact must instead explicitly retire the entire old route.
+        for wrapper in (ROOT / "uninstall.sh", package):
+            for args in (["--plan"], ["--apply"], ["--full", "--scope", "service"],
+                         ["--resume-plan"], ["--resume"]):
+                with self.subTest(wrapper=wrapper.name, args=args):
+                    result = subprocess.run(["sh", str(wrapper), *args],
+                                            text=True, capture_output=True, timeout=5)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("LEGACY_RETIREMENT_UNSUPPORTED", result.stderr)
+                    self.assertIn("matching original artifact", result.stderr)
+                    self.assertEqual(result.stdout, "")
+
     def test_checkout_uninstall_wrapper_missing_core_is_clear(self):
         wrapper = self.dir / "uninstall-source.sh"
         wrapper.write_bytes((ROOT / "uninstall.sh").read_bytes())

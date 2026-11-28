@@ -121,6 +121,11 @@ Legacy installations require the exact matching historical artifact and
 [upgrade contract](../history/development/V1_GUIDED_UPGRADE_2026-11-21.md)
 or [retirement contract](../history/development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md);
 neither is a current Scoped upgrade or repair path.
+The current wrapper refuses non-Scoped plan/apply/full/resume actions
+before Host observation. An older interrupted retirement must keep its
+original evidence and use its exact matching historical artifact. Completed
+historical archive validation and separately reviewed purge remain supported;
+this is not permission to execute an older installation's retirement.
 
 If installation or maintenance fails, retain the original manifest, journal and evidence. Do not blindly reinstall, erase the ledger, weaken confinement or reset unrelated native resources.
 

@@ -1941,3 +1941,19 @@ fixtures and changed-document link targets verified (operations
 Local format, eight bwdev tests and 13 scope tests passed
 d4a583e33ead2183420dbf12d8d26e31, guest exit0. No comparative
 Agent run, efficiency claim or independent final signoff.
+
+### C10 A06 correction after P5
+
+Baseline 29201239, authorized review worktree /root/pr191-p5-review.
+Remove obsolete non-Scoped uninstall CLI dispatch; explicit refusal
+directs matching historical artifact. Keep current Scope, maintenance,
+offline, purge and historical archive behavior. See retirement inventory.
+Initial 116-case local run 95f71c0336cc2a8df4151046385d6ce7 exit1:
+maintenance parameter-separation precedence regression. Moved refusal
+after existing maintenance argument validation and before Host reads.
+Full offline Python 479/479, format 1438, scope 13/13, direct-name
+static reachability and diff PASS in 94139bfbdab678fb5bb84b893b5bbc12
+(native 53e6c881-7fab-4331-b01b-36c4676f41d5) guest exit0.
+Source and assembled self-contained release CLI negative tests pass.
+No Go/runtime H changes or actual Host retirement. New exact-head
+native CI and final independent C10 disposition remain required.

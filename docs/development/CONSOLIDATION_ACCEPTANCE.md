@@ -424,3 +424,15 @@ upgrade and schema6 contracts scoped to matching builds. C12 existing
 deterministic Eval 24/24, eight bwdev and 13 scope checks passed;
 no new harness capability, candidate promotion or comparative utility
 inference. R4 observed use and R5 independent disposition remain.
+
+### C10 A06 bounded wrapper retirement correction
+
+Current non-Scoped retirement plan/apply/full/resume unsupported
+before Host observation; historical original artifacts retain their
+matching behavior. Current maintenance parser separation, Scoped
+decline/drift refusal, offline/normal and historical completed archive
+purge regression retained. Local full Python 479/479 PASS; explicit
+source/package negative and static direct-name caller scan PASS.
+Old positive CLI oracles retained in parent; helper tests still run.
+C10 A06 local implementation verified; current exact native CI and
+independent review pending. No C01/H, C04, C11 or C12 waiver.

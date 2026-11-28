@@ -248,3 +248,26 @@ historical/optional, one archived with its sole script. Keep historic
 assertions and original source; no mass deletion. A04/A05/A06/A08
 shared and old consumer dispositions remain pending per-slice proof.
 No H change or waiver.
+
+### C10 A06 — historical uninstall entry retirement candidate
+
+Owner-directed C10 correction after P5 review, baseline 29201239.
+Retire only the current wrapper's non-Scoped plan/apply/full/resume
+dispatch; refuse before Host observation, after existing incompatible
+maintenance option validation. Keep typed old selectors for explicit
+refusal and existing N2 refusal substring. Source and embedded release
+wrapper use the same core. Normal Scoped, exceptional offline Scoped,
+maintenance preview and separately reviewed completed-data purge
+dispatch remain unchanged. Historical archive readers and original
+helper regression bodies remain; no old execution is reachable in the
+bounded direct-name AST graph from main. This is not whole-language
+reachability proof or physical native acceptance.
+
+Original CLI-positive tests and old approval/audit navigation oracles
+remain at exact parent 29201239. Old matching/stale digest and STARTED
+resume CLI tests now verify explicit refusal, no mutation and evidence
+preservation; historical helper-level archive/retirement/lock/resume
+tests remain. Guided Exec archive read-only test now invokes retained
+historical helper and also checks CLI refusal. Guided decline/drift
+test uses supported Scoped full path with no-effect checks.
+No H or current native lane modification.
