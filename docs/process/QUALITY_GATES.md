@@ -52,7 +52,15 @@ S4/S5 native signoff is inferred.
 
 **Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or direct pushes to unprotected branches. The server-side required-check rule on `v1` **now blocks merge/update of the protected branch**, not the creation of an invalid commit on another branch.
 
-## Server-side v1 merge rule — ACTIVE and independently verified (2026-11-09)
+## Server-side v1 merge rule — historical active witness (2026-11-09)
+
+**Current readback (2026-11-27 PT): disabled.** The owner-directed #191
+source integration removed the required check; live GitHub API reports
+v1 protected=false, ruleset 26842628 disabled, and no required status
+checks. The configuration below is historical, not current enforcement.
+The full quality gate remains a release requirement; restore and verify
+intended protection under owner authority before stable candidate build.
+See [current status](../STATUS.md) and the [owner decision](https://github.com/vanishs/boxweave/pull/191#issuecomment-7232633581).
 
 **[Ruleset #26842628 — v1 required quality](https://github.com/vanishs/boxweave/rules/26842628)** was saved by the repository owner and independently read back through GitHub's ruleset API. The observed effective configuration is:
 
