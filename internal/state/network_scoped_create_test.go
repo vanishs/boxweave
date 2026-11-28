@@ -128,9 +128,6 @@ func TestP1ScopedAddressHoldsRetainRetiredIdentity(t *testing.T) {
 	if e != nil || !h.IPs[netip.MustParseAddr(pin.IPv4)] || !h.IPs[netip.MustParseAddr(pin.IPv6)] || !h.MACs[pin.MAC] {
 		t.Fatal(h, e)
 	}
-	if e = s.RetireVerifiedIPv4(ctx, b.Project, pin.DeleteID, nil); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal("old release admitted", e)
-	}
 	_, actor, e := s.IssueToken(ctx, time.Hour)
 	if e != nil {
 		t.Fatal(e)

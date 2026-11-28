@@ -198,19 +198,23 @@ func NativeScopedLifecycleRecoverCall(ctx context.Context, original string) (sta
 		return zero, e
 	}
 	p := out.ScopedLifecycleRecovery
-	if out.ScopedPeer != nil || out.ScopedLifecycle != nil || out.Receipt != nil || out.Retirement != nil || out.PlanSHA256 != "" || out.Error != "" || out.Status != "COMPLETE_VERIFIED" || p == nil || !p.RecoveryOnly || p.Record.OriginalID != original || p.Record.Status != "VERIFIED" || !scopedLifecycleValid(p.Record) {
+	if out.ScopedPeer != nil || out.ScopedLifecycle != nil || out.Error != "" || out.Status != "COMPLETE_VERIFIED" || p == nil || !p.RecoveryOnly || p.Record.OriginalID != original || p.Record.Status != "VERIFIED" || !scopedLifecycleValid(p.Record) {
 		return zero, errors.New("scoped lifecycle recovery proof unverified")
 	}
 	return *p, nil
 }
 
 func nativeScopedRootCall(ctx context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {
+	return nativeScopedRootCallAt(ctx, scopedLifecycleSocket, req)
+}
+
+func nativeScopedRootCallAt(ctx context.Context, socket string, req NativePeerRootRequest) (NativePeerRootResponse, error) {
 	var zero NativePeerRootResponse
 	if !scopedLifecycleID.MatchString(req.OperationID) {
 		return zero, errors.New("invalid scoped lifecycle original")
 	}
 	var dial net.Dialer
-	conn, err := dial.DialContext(ctx, "unix", scopedLifecycleSocket)
+	conn, err := dial.DialContext(ctx, "unix", socket)
 	if err != nil {
 		return zero, err
 	}

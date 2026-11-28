@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -19,19 +18,10 @@ func TestIPv4PeerCompactionDurableFenceAndHistory(t *testing.T) {
 	purePeerComplete(t, s, purePeerAdmit(t, s, token, "keep-grant", 2, 3, true))
 	keep := purePeerAdmit(t, s, token, "keep-revoke", 2, 3, false)
 	purePeerComplete(t, s, keep)
-	del := n3DeleteOwned(t, s, one, token)
+	n3DeleteOwned(t, s, one, token)
 	before, e := s.ReadScopedTerminalPeerPolicy(ctx, purePeerProject, purePeerBridge)
 	if e != nil || len(before.Revoked) != 2 || len(before.Active) != 0 {
 		t.Fatal(before, e)
-	}
-	if ok, e := s.PrepareIPv4Compaction(ctx, purePeerProject, del.ID, func(context.Context, IPv4RetirementCandidate) (string, error) {
-		t.Fatal("retired compaction preview executed")
-		return strings.Repeat("a", 64), nil
-	}); ok || !errors.Is(e, ErrResourceLocked) {
-		t.Fatal(ok, e)
-	}
-	if _, e = s.ReadIPv4CompactionPlan(ctx, purePeerProject, del.ID); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal(e)
 	}
 	r := purePeerReadOnly(t, s)
 	after, e := r.ReadScopedTerminalPeerPolicy(ctx, purePeerProject, purePeerBridge)

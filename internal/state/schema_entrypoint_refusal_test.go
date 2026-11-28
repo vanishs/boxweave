@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -148,10 +149,9 @@ func TestIncompatibleSchemaPreservesOriginalAcrossEntryPoints(t *testing.T) {
 	}
 }
 
-// A fresh ledger contains only the retained model; retired entrypoints
-// must not even invoke their native witness on the new schema.
+// A fresh ledger contains only the retained model, with no obsolete
+// address reclamation or DROP compaction methods on Store.
 func TestSchema7FreshLegacyEntryRefusal(t *testing.T) {
-	ctx := context.Background()
 	s := newStore(t)
 	var version, n int
 	if e := s.db.QueryRow("SELECT version FROM schema_version").Scan(&version); e != nil || version != 7 {
@@ -160,15 +160,14 @@ func TestSchema7FreshLegacyEntryRefusal(t *testing.T) {
 	if e := s.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name LIKE 'network_ipv4_%'").Scan(&n); e != nil || n != 0 {
 		t.Fatal(n, e)
 	}
-	called := false
-	if e := s.RetireVerifiedIPv4(ctx, "user-1001", "original", func(context.Context, IPv4RetirementCandidate) (IPv4RetirementCandidate, string, error) {
-		called = true
-		return IPv4RetirementCandidate{}, "", nil
-	}); e == nil || called {
-		t.Fatal("retired callback invoked", e, called)
-	}
-	if ok, e := s.PrepareIPv4Compaction(ctx, "user-1001", "original", func(context.Context, IPv4RetirementCandidate) (string, error) { called = true; return "", nil }); e == nil || ok || called {
-		t.Fatal("compaction callback invoked", ok, e, called)
+	for _, method := range []string{
+		"ReadIPv4RetirementCandidate", "RetireVerifiedIPv4", "ReadIPv4RetirementPolicy",
+		"ClaimPendingIPv4Retirements", "RecordIPv4RetirementDeferred", "ReadIPv4RetirementStatus",
+		"ReadIPv4RetirementRollbackWitness", "PrepareIPv4Compaction", "ReadIPv4CompactionPlan",
+	} {
+		if _, ok := reflect.TypeOf(s).MethodByName(method); ok {
+			t.Fatalf("retired Store API still exists: %s", method)
+		}
 	}
 	if e := s.db.QueryRow("SELECT count(*) FROM operations").Scan(&n); e != nil || n != 0 {
 		t.Fatal(n, e)

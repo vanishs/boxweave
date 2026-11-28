@@ -36,45 +36,59 @@ func s4b2RootSocketFixture(t *testing.T, allowedUID uint32, handler nativePeerRo
 	return path, cancel
 }
 
+// Exercise the actual bounded listener without granting an unprivileged
+// test fixture the root identity that the production client requires.
+func scopedSocketTestCall(t *testing.T, path, raw string) NativePeerRootResponse {
+	t.Helper()
+	conn, err := net.DialTimeout("unix", path, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+	if _, err = conn.Write([]byte(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if err = conn.(*net.UnixConn).CloseWrite(); err != nil {
+		t.Fatal(err)
+	}
+	var out NativePeerRootResponse
+	if err = json.NewDecoder(conn).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 func TestS4B2RootSocketPeerCredentialsAndOnlyOriginalTuple(t *testing.T) {
 	var invoked atomic.Int32
+	id := strings.Repeat("a", 32)
 	path, _ := s4b2RootSocketFixture(t, uint32(os.Getuid()),
 		func(_ context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {
 			invoked.Add(1)
-			if req.OperationID != strings.Repeat("a", 32) {
-				t.Fatal("root request original ID changed")
+			if req.OperationID != id {
+				t.Error("root request original ID changed")
 			}
-			if req.PlanSHA256 == "" {
-				return NativePeerRootResponse{Status: "REVIEW_ONLY", PlanSHA256: strings.Repeat("b", 64)}, nil
+			status := "DISPATCH"
+			if req.ReconcileApproved {
+				status = "RECOVERY"
 			}
-			if req.PlanSHA256 != strings.Repeat("b", 64) {
-				t.Fatal("unapproved digest reached root")
-			}
-			return NativePeerRootResponse{Status: "COMPLETE_VERIFIED",
-				Receipt: &NativePeerConntrackJournalReceipt{Status: "COMPLETE_VERIFIED", PlanSHA256: req.PlanSHA256,
-					ProbedScopes: 4, ReadyForPeer: false, MutationComplete: true}}, nil
+			return NativePeerRootResponse{Status: status}, nil
 		})
-	ctx := t.Context()
-	r, err := nativePeerRootCall(ctx, path, NativePeerRootRequest{OperationID: strings.Repeat("a", 32)})
-	if err != nil || r.Status != "REVIEW_ONLY" || r.PlanSHA256 != strings.Repeat("b", 64) {
-		t.Fatalf("root readonly request rejected: %+v %v", r, err)
-	}
-	r, err = nativePeerRootCall(ctx, path, NativePeerRootRequest{
-		OperationID: strings.Repeat("a", 32), PlanSHA256: strings.Repeat("b", 64)})
-	if err != nil || r.Receipt == nil || r.Receipt.ReadyForPeer || !r.Receipt.MutationComplete {
-		t.Fatalf("root original request response not bounded: %+v %v", r, err)
+	for _, recovery := range []bool{false, true} {
+		raw, err := json.Marshal(NativePeerRootRequest{OperationID: id, ReconcileApproved: recovery})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "DISPATCH"
+		if recovery {
+			want = "RECOVERY"
+		}
+		if got := scopedSocketTestCall(t, path, string(raw)); got.Status != want {
+			t.Fatal(got)
+		}
 	}
 	if invoked.Load() != 2 {
 		t.Fatal("unexpected number of root worker executions")
-	}
-	_, err = nativePeerRootCall(ctx, path, NativePeerRootRequest{OperationID: "../escape"})
-	if err == nil || invoked.Load() != 2 {
-		t.Fatal("unsafe original path traversed root socket")
-	}
-	_, err = nativePeerRootCall(ctx, path, NativePeerRootRequest{
-		OperationID: strings.Repeat("a", 32), PlanSHA256: "wrong"})
-	if err == nil || invoked.Load() != 2 {
-		t.Fatal("invalid digest reached root")
 	}
 	t.Log("S4_B2_ROOT_SOCKET_UID_AND_EXACT_ORIGINAL_ONLY=PASS")
 }
@@ -83,69 +97,32 @@ func TestS4B2RootSocketRejectsWrongUIDAndExtraFields(t *testing.T) {
 	var invoked atomic.Int32
 	h := func(_ context.Context, req NativePeerRootRequest) (NativePeerRootResponse, error) {
 		invoked.Add(1)
-		return NativePeerRootResponse{Status: "REVIEW_ONLY"}, nil
+		return NativePeerRootResponse{Status: "VERIFIED"}, nil
 	}
+	id := strings.Repeat("a", 32)
+	base := `{"operation_id":"` + id + `"}`
 	wrongPath, _ := s4b2RootSocketFixture(t, uint32(os.Getuid())+1, h)
-	_, err := nativePeerRootCall(t.Context(), wrongPath, NativePeerRootRequest{
-		OperationID: strings.Repeat("a", 32)})
-	if err == nil || invoked.Load() != 0 {
-		t.Fatalf("foreign peer UID admitted: err=%v calls=%d", err, invoked.Load())
+	if got := scopedSocketTestCall(t, wrongPath, base); got.Status != "DENIED" {
+		t.Fatal("foreign peer UID admitted", got)
 	}
 	path, _ := s4b2RootSocketFixture(t, uint32(os.Getuid()), h)
 	for _, raw := range []string{
-		`{"operation_id":"` + strings.Repeat("a", 32) + `","project":"foreign"}`,
-		`{"operation_id":"` + strings.Repeat("a", 32) + `"}{"operation_id":"` + strings.Repeat("a", 32) + `"}`,
-		`{"operation_id":"` + strings.Repeat("a", 32) + `","plan_sha256":"` + strings.Repeat("B", 64) + `"}`,
+		`{"operation_id":"../escape"}`,
+		base + base,
+		`{"operation_id":"` + id + `","project":"foreign"}`,
+		`{"operation_id":"` + id + `","plan_sha256":"` + strings.Repeat("b", 64) + `"}`,
+		`{"operation_id":"` + id + `","reconcile":true}`,
+		`{"operation_id":"` + id + `","retirement_review":true}`,
+		`{"operation_id":"` + id + `","retirement_preview":true}`,
 	} {
-		conn, err := net.Dial("unix", path)
-		if err != nil {
-			t.Fatal(err)
+		if got := scopedSocketTestCall(t, path, raw); got.Status != "DENIED" {
+			t.Fatalf("unsafe wire payload accepted: %s %+v", raw, got)
 		}
-		if _, err := conn.Write([]byte(raw + "\n")); err != nil {
-			conn.Close()
-			t.Fatal(err)
-		}
-		if err := conn.(*net.UnixConn).CloseWrite(); err != nil {
-			conn.Close()
-			t.Fatal(err)
-		}
-		var got NativePeerRootResponse
-		if err := json.NewDecoder(conn).Decode(&got); err != nil || got.Status != "DENIED" {
-			conn.Close()
-			t.Fatalf("unsafe wire payload accepted: %+v %v", got, err)
-		}
-		conn.Close()
 	}
 	if invoked.Load() != 0 {
-		t.Fatalf("unexpected root action on invalid wire protocol: %d", invoked.Load())
+		t.Fatal("unexpected root action on invalid wire protocol", invoked.Load())
 	}
 	t.Log("S4_B2_ROOT_SOCKET_FOREIGN_UID_AND_UNBOUNDED_WIRE_REFUSED=PASS")
-}
-
-func TestS4B2RootSocketOperatorPinsOneOriginalAndPlan(t *testing.T) {
-	original := strings.Repeat("a", 32)
-	digest := strings.Repeat("b", 64)
-	cfg := NativePeerRootScope{
-		Approved: true, OriginalID: original, ApprovedPlanSHA: digest,
-	}
-	if !nativePeerRootApprovedRequest(cfg, NativePeerRootRequest{OperationID: original}) ||
-		!nativePeerRootApprovedRequest(cfg, NativePeerRootRequest{OperationID: original, PlanSHA256: digest}) {
-		t.Fatal("root refused exact approved read and original effect")
-	}
-	for _, req := range []NativePeerRootRequest{
-		{OperationID: strings.Repeat("c", 32)},
-		{OperationID: strings.Repeat("c", 32), PlanSHA256: digest},
-		{OperationID: original, PlanSHA256: strings.Repeat("d", 64)},
-	} {
-		if nativePeerRootApprovedRequest(cfg, req) {
-			t.Fatalf("one root approval reused for unrelated original: %+v", req)
-		}
-	}
-	cfg.Approved = false
-	if nativePeerRootApprovedRequest(cfg, NativePeerRootRequest{OperationID: original}) {
-		t.Fatal("root operation admitted without local host approval")
-	}
-	t.Log("S4_B2_ROOT_SOCKET_OPERATOR_EXACT_OPERATION_AND_DIGEST_ONLY=PASS")
 }
 
 // A killed root helper can strand its Unix socket. Restart is safe only
@@ -225,74 +202,22 @@ func TestS4B2RootSocketCrashRestartOnlyExactStaleInode(t *testing.T) {
 	t.Log("S4_B2_ROOT_SOCKET_CRASH_RESTART_STALE_ONLY_LIVE_FOREIGN_DENIED=PASS")
 }
 
-func TestS5A4RootReadOnlyApprovalScope(t *testing.T) {
-	original, digest := strings.Repeat("a", 32), strings.Repeat("b", 64)
-	cfg := NativePeerRootScope{Approved: true, OriginalID: original, ApprovedPlanSHA: digest}
-	req := NativePeerRootRequest{OperationID: original, ReconcileApproved: true}
-	if !nativePeerRootApprovedRequest(cfg, req) {
-		t.Fatal("exact approved readonly original refused")
-	}
-	for _, bad := range []NativePeerRootRequest{
-		{OperationID: original, ReconcileApproved: true, PlanSHA256: digest},
-		{OperationID: original, ReconcileApproved: true, Reconcile: true},
-		{OperationID: strings.Repeat("c", 32), ReconcileApproved: true},
-	} {
-		if nativePeerRootApprovedRequest(cfg, bad) {
-			t.Fatalf("ambiguous or foreign approval accepted: %+v", bad)
-		}
-	}
-	cfg.Approved = false
-	if nativePeerRootApprovedRequest(cfg, req) {
-		t.Fatal("unapproved recovery accepted")
-	}
+func TestScopedRootClientRequiresKernelRootPeer(t *testing.T) {
 	var invoked atomic.Int32
-	path, _ := s4b2RootSocketFixture(t, uint32(os.Getuid()), func(_ context.Context, r NativePeerRootRequest) (NativePeerRootResponse, error) {
+	req := NativePeerRootRequest{OperationID: strings.Repeat("a", 32), ReconcileApproved: true}
+	path, _ := s4b2RootSocketFixture(t, uint32(os.Getuid()), func(_ context.Context, got NativePeerRootRequest) (NativePeerRootResponse, error) {
 		invoked.Add(1)
-		if r != req {
-			t.Fatalf("request changed: %+v", r)
+		if got != req {
+			t.Error("request changed", got)
 		}
-		return NativePeerRootResponse{Status: "RECONCILE_VERIFIED"}, nil
+		return NativePeerRootResponse{Status: "COMPLETE_VERIFIED"}, nil
 	})
-	res, err := nativePeerRootCall(t.Context(), path, req)
+	res, err := nativeScopedRootCallAt(t.Context(), path, req)
 	if os.Getuid() == 0 {
-		if err != nil || res.Status != "RECONCILE_VERIFIED" || invoked.Load() != 1 {
+		if err != nil || res.Status != "COMPLETE_VERIFIED" || invoked.Load() != 1 {
 			t.Fatalf("root readonly socket failed: %+v %v", res, err)
 		}
 	} else if err == nil || invoked.Load() != 0 {
 		t.Fatal("nonroot socket was trusted as root witness")
-	}
-}
-
-func TestRetirementRootReviewIsExplicitAndReadOnly(t *testing.T) {
-	original := strings.Repeat("a", 32)
-	read := NativePeerRootRequest{OperationID: original, RetirementReview: true}
-	cfg := NativePeerRootScope{Approved: true, RetirementReview: true, DBPath: nativePeerRootInstalledDB, Project: "user-1001", Bridge: "bwbr0", ACL: "bw-peer"}
-	if !nativePeerRootScopeApproved(cfg) || nativePeerRootValidateRequest(read) != nil || nativePeerRootApprovedRequest(cfg, read) {
-		t.Fatal("read-only mode invalid")
-	}
-	if nativePeerRootApprovedRequest(cfg, NativePeerRootRequest{OperationID: original, PlanSHA256: strings.Repeat("b", 64)}) {
-		t.Fatal("read-only configuration authorizes a write")
-	}
-	unit, e := NativePeerRootUnitText(cfg)
-	if e != nil || !strings.Contains(unit, " -retirement-review -approve-local") || strings.Contains(unit, " -peer-plan-sha256 ") {
-		t.Fatal(unit, e)
-	}
-	for _, ambiguous := range []NativePeerRootRequest{
-		{OperationID: original, RetirementReview: true, PlanSHA256: strings.Repeat("b", 64)},
-		{OperationID: original, RetirementReview: true, Reconcile: true},
-		{OperationID: original, RetirementReview: true, ReconcileApproved: true},
-	} {
-		if nativePeerRootValidateRequest(ambiguous) == nil {
-			t.Fatal("ambiguous read accepted", ambiguous)
-		}
-	}
-	cfg.RetirementReview = false
-	if nativePeerRootScopeApproved(cfg) {
-		t.Fatal("missing approval")
-	}
-	cfg.RetirementReview = true
-	cfg.OriginalID = original
-	if nativePeerRootScopeApproved(cfg) {
-		t.Fatal("partial mutating approval")
 	}
 }

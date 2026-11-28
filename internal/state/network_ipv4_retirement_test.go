@@ -13,23 +13,6 @@ import (
 	"testing"
 )
 
-func assertRemovedRetirementRefused(t *testing.T, s *Store, project, id string) {
-	t.Helper()
-	ctx := context.Background()
-	if e := s.RetireVerifiedIPv4(ctx, project, id, func(context.Context, IPv4RetirementCandidate) (IPv4RetirementCandidate, string, error) {
-		t.Fatal("retired witness executed")
-		return IPv4RetirementCandidate{}, "", ErrInvalid
-	}); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal(e)
-	}
-	if _, e := s.ReadIPv4RetirementCandidate(ctx, project, id); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal(e)
-	}
-	if _, e := s.ReadIPv4RetirementPolicy(ctx, IPv4RetirementCandidate{Project: project, DeleteOperationID: id}); !errors.Is(e, ErrResourceLocked) {
-		t.Fatal(e)
-	}
-}
-
 func scopedReplacementOriginal(t *testing.T, s *Store, token, name string) Receipt {
 	t.Helper()
 	ctx := context.Background()
@@ -44,21 +27,18 @@ func scopedReplacementOriginal(t *testing.T, s *Store, token, name string) Recei
 	return r
 }
 
-// Old archive/reuse is intentionally absent. Original records and all
-// three held identities survive repeated refused legacy release attempts.
+// Original records and all three held identities remain in the current ledger.
 func TestIPv4RetirementAtomicArchiveReuse(t *testing.T) {
 	ctx := context.Background()
 	s, b, d := n3RetiredFixture(t)
 	before, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, purePeerBridge)
-	if e != nil || len(before.Retired) != 1 {
+	if e != nil || len(before.Retired) != 1 || before.Retired[0].DeleteID != d.ID {
 		t.Fatal(before, e)
 	}
 	first, e := s.ReadScopedDrainWitness(ctx, b.Project)
 	if e != nil {
 		t.Fatal(e)
 	}
-	assertRemovedRetirementRefused(t, s, b.Project, d.ID)
-	assertRemovedRetirementRefused(t, s, b.Project, d.ID)
 	after, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, purePeerBridge)
 	if e != nil || !reflect.DeepEqual(before, after) {
 		t.Fatal(after, e)
@@ -83,13 +63,12 @@ func TestIPv4RetirementAtomicArchiveReuse(t *testing.T) {
 func TestIPv4RetirementRefusesStaleOrUnsettledEvidence(t *testing.T) {
 	ctx := context.Background()
 	s, b, d := n3RetiredFixture(t)
-	for _, id := range []string{d.ID, strings.Repeat("f", 32)} {
-		assertRemovedRetirementRefused(t, s, b.Project, id)
-	}
 	if _, e := s.db.Exec("UPDATE operations SET state='UNKNOWN' WHERE id=?", d.ID); e != nil {
 		t.Fatal(e)
 	}
-	assertRemovedRetirementRefused(t, s, b.Project, d.ID)
+	if _, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, purePeerBridge); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("unsettled retired lineage accepted", e)
+	}
 	got, e := s.Get(ctx, d.ID)
 	if e != nil || got.State != "UNKNOWN" {
 		t.Fatal(got, e)
@@ -158,7 +137,6 @@ func TestIPv4RetirementHeldWriterReservation(t *testing.T) {
 	ctx := context.Background()
 	s, b, d := n3RetiredFixture(t)
 	path := strings.TrimSuffix(s.ExecArchiveDir(), ".exec-archive")
-	assertRemovedRetirementRefused(t, s, b.Project, d.ID)
 	if e := s.Close(); e != nil {
 		t.Fatal(e)
 	}
@@ -167,12 +145,11 @@ func TestIPv4RetirementHeldWriterReservation(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer again.Close()
-	assertRemovedRetirementRefused(t, again, b.Project, d.ID)
 	ledger, e := again.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, purePeerBridge)
 	if e != nil || len(ledger.Retired) != 1 || ledger.Retired[0].DeleteID != d.ID {
 		t.Fatal(ledger, e)
 	}
-	// A refused obsolete writer must not strand a new valid admission.
+	// Restart must not strand a new valid admission.
 	scopedReplacementOriginal(t, again, purePeerNewToken(t, again), "restart-next")
 }
 
@@ -205,7 +182,6 @@ func TestIPv4RetirementVerifiedForwardHistory(t *testing.T) {
 	ck(s.NativeAck(ctx, d.ID, "native-forward-delete"))
 	ck(s.FinalizeVerifiedForward(ctx, d.ID, false))
 	boxDel := n3DeleteOwned(t, s, b, token)
-	assertRemovedRetirementRefused(t, s, b.Project, boxDel.ID)
 	claim, e := s.GetForward(ctx, b.Project, f.ID)
 	if e != nil || claim.State != "REVOKED" || claim.OperationID != d.ID {
 		t.Fatal(claim, e)

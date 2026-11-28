@@ -34,8 +34,8 @@ func TestPR177D3ScopedExplicitReadOnlySelector(t *testing.T) {
 			t.Fatal(tc, got)
 		}
 	}
-	if got := scopedLifecycleRequestKind(NativePeerRootRequest{OperationID: id, ReconcileApproved: true, PlanSHA256: strings.Repeat("b", 64)}, "box_peer_set", "UNKNOWN"); got != "" {
-		t.Fatal("ambiguous request", got)
+	if err := nativePeerRootValidateRequest(NativePeerRootRequest{OperationID: "invalid"}); err == nil {
+		t.Fatal("invalid original accepted")
 	}
 	t.Log("D3_EXPLICIT_ROOT_SELECTOR_NEVER_DISPATCHES_PASS")
 }
