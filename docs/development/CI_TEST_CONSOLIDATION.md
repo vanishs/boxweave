@@ -37,4 +37,8 @@ The current core candidates for preservation are quality-gate, S1, Forward polic
 - No blanket deletion based on prefix, age or count. No coverage waiver, test oracle weakening, skipped-test substitution, reimplementation of the harness, or artificial percentage target. Consolidate only where measured maintenance or execution benefits justify the change. Maintain a small active test surface and clear scenario ownership.
 - Preserve RC15 and v1 branch state; work in this PR. No host mutation, release, merge or ruleset change as part of the initial inventory. The unrelated RC14 purge receipt size defect is outside this task.
 
-Initial status: inventory baseline recorded, detailed classifications and implementation pending. No workflow or test has been changed; no CI efficiency gain or coverage equivalence is claimed yet.
+## Current progress
+
+- [R0 audit](CI_TEST_CONSOLIDATION_R0.md): workflow and runner-cost baseline; transitive script/coverage work carried forward.
+- [R1 closeout](CI_TEST_CONSOLIDATION_R1_CLOSEOUT.md): classification complete; 16 historical workflow copies retired, 20 held in five coverage groups. Bounded implementation complete, CI acceptance pending. No runtime/script/test change or claimed runner-time savings.
+- Next R2: consolidate active shared preparation/verification helpers. R3 resolves remaining assertions and historical wrappers. R4/R5 unchanged; no coverage waiver.
