@@ -1,0 +1,45 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"log"
+	"os"
+
+	incus "github.com/lxc/incus/v7/client"
+)
+
+func must(e error) { if e != nil { log.Fatal(e) } }
+func check(ok bool, msg string) { if !ok { log.Fatal(msg) } }
+func main() {
+	log.SetFlags(0)
+	check(os.Geteuid()!=0&&len(os.Args)==2,"requires nonroot fixture user and UUID")
+	project:=fmt.Sprintf("user-%d",os.Geteuid())
+	const name="fs-r0-restricted-fixture"
+	d,e:=incus.ConnectIncusUnix("/var/lib/incus/unix.socket.user",nil);must(e)
+	p:=d.UseProject(project)
+	srv,_,e:=p.GetServer();must(e)
+	check(srv.Environment.ServerVersion=="7.7"||srv.Environment.ServerVersion=="7.7.0","wrong daemon")
+	verify:=func() {
+		i,_,e:=p.GetInstance(name);must(e)
+		check(os.Args[1]!=""&&i.Config["volatile.uuid"]==os.Args[1]&&i.Status=="Stopped","wrong fixture identity/state")
+	}
+	verify()
+	c,e:=p.GetInstanceFileSFTP(name);must(e);defer c.Close()
+	const path="/tmp/bw-r0-restricted-fixture.bin"
+	data:=bytes.Repeat([]byte("native-restricted-fixture\n"),4096)
+	f,e:=c.OpenFile(path,os.O_CREATE|os.O_EXCL|os.O_WRONLY);must(e)
+	n,e:=f.Write(data);must(e);check(n==len(data),"short write");must(f.Close())
+	f,e=c.Open(path);must(e);read,e:=io.ReadAll(f);must(e);must(f.Close())
+	check(bytes.Equal(read,data),"readback mismatch")
+	fmt.Printf("PASS nonroot uid=%d project=%s native=%s stopped SFTP bytes=%d SHA256=%x\n",os.Geteuid(),project,srv.Environment.ServerVersion,len(read),sha256.Sum256(read))
+	verify()
+	// Negative uses only the other synthetic default-project fixture in this owned lab.
+	// Never read contents from it. Successful connection is a test failure.
+	foreign,e:=d.UseProject("default").GetInstanceFileSFTP("fs-r0-fixture")
+	if e==nil {foreign.Close();log.Fatal("unexpected cross-project connection")}
+	fmt.Printf("PASS cross-project connection denied: %v\n",e)
+	fmt.Println("SCOPE normal Incus per-user Project socket; not actual BoxWeave auth, hostile isolation or full installation")
+}
