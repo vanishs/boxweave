@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the verified stable release (unchecked: build only)
+        description: "Publish the verified stable release (unchecked: build only)"
         type: boolean
         default: false
 
