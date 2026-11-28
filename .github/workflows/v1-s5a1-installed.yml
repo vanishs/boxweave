@@ -1,13 +1,6 @@
-name: S5A1 independent installed native diagnostics
+name: Historical S5A1 independent installed native diagnostics
 
 on:
-  push:
-    branches: [feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
-    paths:
-      - 'internal/control/operation_diagnostic*.go'
-      - 'scripts/s2_bh018_atomic_mcp_probe.go'
-      - 'scripts/accept_s2_native.sh'
-      - '.github/workflows/v1-s5a1-installed.yml'
   workflow_dispatch:
 
 permissions:

@@ -257,6 +257,25 @@ class StableGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "HEAD advanced"):
                 ci.protected_source(ROOT)
 
+    def test_completed_s5_workflows_are_historical_only(self):
+        workflows = ROOT / ".github/workflows"
+        historical = sorted(workflows.glob("v1-s5*.yml"))
+        self.assertTrue(historical)
+        for path in historical:
+            with self.subTest(workflow=path.name):
+                text = path.read_text()
+                self.assertTrue(text.startswith("name: Historical "))
+                self.assertIn("on:\n  workflow_dispatch:", text)
+                self.assertNotIn("\n  push:", text)
+                self.assertNotIn("\n  pull_request:", text)
+                for active in ("v1-stable-candidate.yml", "v1-stable-release.yml"):
+                    self.assertNotIn(path.name, (workflows / active).read_text())
+
+    def test_signed_historical_s5_evidence_does_not_require_workflow_replay(self):
+        for name, entry in self.s["gates"].items():
+            entry["evidence"] = [{"ref": f"historical:{name}:completed", "sha256": "d" * 64}]
+        self.assertEqual(self.verify()["verdict"], "STABLE_RELEASE_GATE_PASS")
+
     def test_workflow_separates_candidate_readonly_and_publish(self):
         build = (ROOT / ".github/workflows/v1-stable-candidate.yml").read_text()
         release = (ROOT / ".github/workflows/v1-stable-release.yml").read_text()

@@ -1,11 +1,5 @@
-name: S5B RC10 specialized recovery CLI six leaves (disposable)
+name: Historical S5B RC10 specialized recovery CLI six leaves (disposable)
 on:
-  push:
-    branches: [docs/s5b-rc10-closeout-20261121]
-    paths:
-      - '.github/workflows/v1-s5b-rc10-specialized-recovery.yml'
-      - 'scripts/s5b_rc10_specialized_recovery.sh'
-      - 'scripts/s5b_rc10_specialized_recovery.py'
   workflow_dispatch:
 permissions:
   contents: read

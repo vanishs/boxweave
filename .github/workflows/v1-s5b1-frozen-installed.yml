@@ -1,14 +1,6 @@
-name: S5B1 exact frozen installed SDK and retirement (non-release)
+name: Historical S5B1 exact frozen installed SDK and retirement (non-release)
 
 on:
-  push:
-    branches:
-      - feat/v1-s5b-acceptance-20261120
-    paths:
-      - '.github/workflows/v1-s5b1-frozen-installed.yml'
-      - 'scripts/s5b1_installed_closeout.sh'
-      - 'scripts/s25_bridgehead_lab.sh'
-      - 'scripts/s3_file_installed_probe.go'
   workflow_dispatch:
 
 permissions:
@@ -22,8 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: >-
-          ${{ fromJSON(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') && '["metadata"]' || '["sdk","retirement","metadata"]') }}
+        mode: [sdk, retirement, metadata]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
