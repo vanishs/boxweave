@@ -27,6 +27,10 @@ permissions:
 jobs:
   installed-lifecycle:
     if: github.repository == 'vanishs/boxweave' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.ref == 'refs/heads/feat/v1-network-reliability-20261122' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')))
+    # Coalesce pending first-attempt PR jobs per lane, never interrupt running jobs.
+    concurrency:
+      group: v1-n2-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.run_attempt == '1' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}-${{ matrix.mode }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:

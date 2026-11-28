@@ -49,6 +49,18 @@ class S2CIGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             g.select_run({"workflow_runs": [run], "total_count": 2}, g.N2, SOURCE, 191)
 
+    def test_exact_run_with_changed_pr_association_fails_closed(self):
+        run, _, _ = fixture()
+        run["pull_requests"][0]["head"]["sha"] = "c" * 40
+        with self.assertRaisesRegex(ValueError, "exact producer PR association head mismatch"):
+            g.select_run(page("workflow_runs", [run]), g.N2, SOURCE, 191)
+        self.assertIsNone(g.select_run(page("workflow_runs", [run]), g.N2, SOURCE, 190))
+        run["pull_requests"] = []
+        self.assertIsNone(g.select_run(page("workflow_runs", [run]), g.N2, SOURCE, 191))
+        exact, _, _ = fixture()
+        run["pull_requests"] = copy.deepcopy(exact["pull_requests"])
+        self.assertEqual(g.select_run(page("workflow_runs", [run]), g.N2, SOURCE, 191), run)
+
     def test_job_and_artifact_provenance(self):
         run, jobs, artifacts = fixture()
         self.assertEqual(g.checked_lane(run, jobs, artifacts, "scoped", SOURCE)["artifact_id"], 12)
@@ -114,6 +126,20 @@ class S2CIGateTests(unittest.TestCase):
                 "event":"pull_request", "event_sha":EVENT, "run_id":10, "run_attempt":2}},
                 g.checked_lane(*fixture(), "scoped", SOURCE), EVENT, pr=191)
 
+
+    def test_n2_pending_pr_coalescing_is_per_lane(self):
+        source = Path(".github/workflows/" + g.N2).read_text()
+        self.assertNotIn("\nconcurrency:\n", source)
+        block = source.split("\n    concurrency:\n", 1)[1].split("\n    runs-on:", 1)[0]
+        self.assertEqual(block.strip().splitlines(), [
+            "group: v1-n2-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.run_attempt == '1' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}-${{ matrix.mode }}",
+            "      cancel-in-progress: false",
+        ])
+        modes = source.split("mode: [", 1)[1].split("]", 1)[0].split(", ")
+        self.assertEqual(len(modes), 29)
+        self.assertEqual(len(set(modes)), 29)
+        self.assertIn("Require the exact protected v1 HEAD for a controlled RC producer", source)
+        self.assertIn("Require original installed lane assertions", source)
 
     def test_current_workflow_trigger_parity_and_legacy_route(self):
         root = Path(".github/workflows")

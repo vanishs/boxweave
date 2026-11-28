@@ -41,4 +41,8 @@ The current core candidates for preservation are quality-gate, S1, Forward polic
 
 - [R0 audit](CI_TEST_CONSOLIDATION_R0.md): workflow and runner-cost baseline; transitive script/coverage work carried forward.
 - [R1 closeout](CI_TEST_CONSOLIDATION_R1_CLOSEOUT.md): classification complete; 16 historical workflow copies retired, 20 held in five coverage groups. Bounded implementation complete, CI acceptance pending. No runtime/script/test change or claimed runner-time savings.
-- Next R2: consolidate active shared preparation/verification helpers. R3 resolves remaining assertions and historical wrappers. R4/R5 unchanged; no coverage waiver.
+- R2: [shared candidate](CI_TEST_CONSOLIDATION_R2.md) and [package helpers](CI_TEST_CONSOLIDATION_R2B.md); exact R2 N2 29/29 successful.
+- R3: [Exec](CI_TEST_CONSOLIDATION_R3A.md), [File](CI_TEST_CONSOLIDATION_R3B.md), [OAuth](CI_TEST_CONSOLIDATION_R3C.md), [network disposition](CI_TEST_CONSOLIDATION_R3D.md). Migrated native lanes have exact-revision success; remaining coverage and latest-head CI open.
+- [R3/R4 parallel checkpoint](CI_TEST_CONSOLIDATION_R34.md): candidate BH018 retirement, per-lane pending queue coalescing and S1 cache, locally validated; actual scheduling and latest-head acceptance pending. R5 remains open. No coverage waiver.
+
+- [R3 bounded closeout](CI_TEST_CONSOLIDATION_R3_CLOSEOUT.md): exact 6cf3393 native and S2 acceptance PASS; retire the replaced BH018 wrapper, retain 18 unresolved historical routes. Candidate CI and R4 effectiveness pending.
