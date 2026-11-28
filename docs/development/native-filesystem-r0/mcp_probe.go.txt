@@ -1,0 +1,110 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// Synthetic loopback transport fixture only. Not a production auth policy.
+type tokenTransport struct {
+	token *atomic.Value
+}
+
+func (t tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.Clone(req.Context())
+	r.Header.Set("Authorization", "Bearer "+t.token.Load().(string))
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	const good = "boxweave://boxes/fixture-a/fs/readme.txt"
+	var reads atomic.Int64
+	var revoked atomic.Bool
+	var token atomic.Value
+	token.Store("fixture-a")
+	s := mcp.NewServer(&mcp.Implementation{Name: "filesystem-r0", Version: "0"}, &mcp.ServerOptions{
+		SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) {
+			c.CacheScope = "private"
+			c.TTLMs = 0
+		},
+	})
+	s.AddResourceTemplate(&mcp.ResourceTemplate{Name: "fixture files", URITemplate: "boxweave://boxes/{box}/fs/{+path}"}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		reads.Add(1)
+		if req.Extra == nil || req.Extra.TokenInfo == nil || req.Extra.TokenInfo.UserID != "fixture-a" || req.Params.URI != good {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: good, MIMEType: "text/plain", Text: "fixture text"}}}, nil
+	})
+	mcp.AddTool(s, &mcp.Tool{Name: "fixture_link", Description: "Return synthetic resource link"}, func(_ context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		if req.Extra == nil || req.Extra.TokenInfo == nil || req.Extra.TokenInfo.UserID != "fixture-a" {
+			return nil, nil, fmt.Errorf("not authorized")
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.ResourceLink{URI: good, Name: "readme.txt", MIMEType: "text/plain"}}}, nil, nil
+	})
+	verifier := func(_ context.Context, v string, _ *http.Request) (*auth.TokenInfo, error) {
+		if revoked.Load() || (v != "fixture-a" && v != "fixture-b") {
+			return nil, auth.ErrInvalidToken
+		}
+		return &auth.TokenInfo{UserID: v, Expiration: time.Now().Add(time.Minute)}, nil
+	}
+	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: false})
+	ts := httptest.NewServer(auth.RequireBearerToken(verifier, nil)(h))
+	defer ts.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "filesystem-r0-client", Version: "0"}, nil)
+	cs, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: ts.URL, HTTPClient: &http.Client{Transport: tokenTransport{&token}}, DisableStandaloneSSE: true, MaxRetries: -1}, nil)
+	must(err)
+	defer cs.Close()
+	list, err := cs.ListResourceTemplates(ctx, nil)
+	must(err)
+	if len(list.ResourceTemplates) != 1 {
+		panic("template discovery mismatch")
+	}
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "fixture_link", Arguments: map[string]any{}})
+	must(err)
+	if result.IsError || len(result.Content) != 1 {
+		panic("link result mismatch")
+	}
+	link, ok := result.Content[0].(*mcp.ResourceLink)
+	if !ok || link.URI != good {
+		panic("link wire mismatch")
+	}
+	for range 2 {
+		r, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: link.URI})
+		must(err)
+		if len(r.Contents) != 1 || r.Contents[0].Text != "fixture text" || r.CacheScope != "private" || r.TTLMs != 0 {
+			panic("resource contents/cache mismatch")
+		}
+	}
+	if reads.Load() != 2 {
+		panic("stale cache reused")
+	}
+	token.Store("fixture-b")
+	if _, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: good}); err == nil {
+		panic("foreign actor read succeeded")
+	}
+	token.Store("fixture-a")
+	if _, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "boxweave://boxes/fixture-a/fs/%2e%2e/secret"}); err == nil {
+		panic("noncanonical URI accepted")
+	}
+	revoked.Store(true)
+	if _, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: good}); err == nil {
+		panic("revoked actor read succeeded")
+	}
+	fmt.Println("PASS template discovery, tool link, resource text, private zero TTL, per-request auth, foreign actor, malformed URI, revocation")
+	fmt.Println("Scope: synthetic SDK HTTP loopback only; no real Box auth, connector support, subscriptions, file uploads or path-race proof")
+}
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}

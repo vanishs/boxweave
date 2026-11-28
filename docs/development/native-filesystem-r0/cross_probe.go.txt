@@ -1,0 +1,176 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"log"
+	"os"
+
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/pkg/sftp"
+)
+
+const chunk = 256 << 10
+const size = (8 << 20) + 19
+const dir = "/tmp/bw-native-fs-r0-cross"
+
+func must(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+func check(ok bool, message string) {
+	if !ok {
+		log.Fatal(message)
+	}
+}
+func newFile(c *sftp.Client, p string, data []byte) {
+	f, err := c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	must(err)
+	n, err := f.Write(data)
+	must(err)
+	check(n == len(data), "short write")
+	must(f.Close())
+}
+func digest(c *sftp.Client, p string) [32]byte {
+	f, err := c.Open(p)
+	must(err)
+	h := sha256.New()
+	_, err = io.Copy(h, f)
+	must(err)
+	must(f.Close())
+	var out [32]byte
+	copy(out[:], h.Sum(nil))
+	return out
+}
+func main() {
+	log.SetFlags(0)
+	check(len(os.Args) == 3, "usage: cross-probe SOURCE_UUID DEST_UUID")
+	d, err := incus.ConnectIncusUnix("", nil)
+	must(err)
+	d = d.UseProject("default")
+	srv, _, err := d.GetServer()
+	must(err)
+	check(srv.Environment.ServerVersion == "7.7" || srv.Environment.ServerVersion == "7.7.0", "wrong daemon")
+	const src = "fs-r0-fixture"
+	const dst = "fs-r0-dest"
+	verify := func(name, uuid string) {
+		inst, _, err := d.GetInstance(name)
+		must(err)
+		check(uuid != "" && inst.Config["volatile.uuid"] == uuid && inst.Status == "Stopped", "fixture identity/state mismatch")
+	}
+	check(os.Args[1] != os.Args[2], "not distinct containers")
+	verify(src, os.Args[1])
+	verify(dst, os.Args[2])
+	a, err := d.GetInstanceFileSFTP(src)
+	must(err)
+	defer a.Close()
+	b, err := d.GetInstanceFileSFTP(dst)
+	must(err)
+	must(a.Mkdir(dir))
+	must(b.Mkdir(dir))
+	sp := dir + "/source.bin"
+	tp := dir + "/staged.bin"
+	f, err := a.OpenFile(sp, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	must(err)
+	h := sha256.New()
+	buf := make([]byte, chunk)
+	for off := int64(0); off < size; {
+		n := int64(len(buf))
+		if size-off < n {
+			n = size - off
+		}
+		for i := range buf[:n] {
+			buf[i] = byte(((off+int64(i))*137 + (off+int64(i))/chunk) % 251)
+		}
+		w, err := f.WriteAt(buf[:n], off)
+		must(err)
+		check(w == int(n), "source short write")
+		h.Write(buf[:n])
+		off += n
+	}
+	must(f.Close())
+	var expected [32]byte
+	copy(expected[:], h.Sum(nil))
+	check(digest(a, sp) == expected, "source digest mismatch")
+	in, err := a.Open(sp)
+	must(err)
+	defer in.Close()
+	out, err := b.OpenFile(tp, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	must(err)
+	n, err := in.ReadAt(buf, 0)
+	must(err)
+	check(n == len(buf), "first chunk short read")
+	n, err = out.WriteAt(buf, 0)
+	must(err)
+	check(n == len(buf), "first chunk short write")
+	must(out.Close())
+	must(b.Close())
+	fmt.Println("first chunk written; destination SFTP session closed")
+	// Controlled reconnect after a known write, not a controller or power crash.
+	b, err = d.GetInstanceFileSFTP(dst)
+	must(err)
+	defer b.Close()
+	st, err := b.Lstat(tp)
+	must(err)
+	check(st.Size() == chunk, "unexpected stage size")
+	prefix := make([]byte, chunk)
+	n, err = in.ReadAt(buf, 0)
+	must(err)
+	check(n == chunk, "short source prefix")
+	p, err := b.Open(tp)
+	must(err)
+	n, err = p.ReadAt(prefix, 0)
+	must(err)
+	must(p.Close())
+	check(n == chunk && bytes.Equal(prefix, buf), "stage prefix mismatch")
+	out, err = b.OpenFile(tp, os.O_WRONLY)
+	must(err)
+	for off := int64(chunk); off < size; {
+		want := int64(len(buf))
+		if size-off < want {
+			want = size - off
+		}
+		n, err := in.ReadAt(buf[:want], off)
+		must(err)
+		check(n == int(want), "short read")
+		n, err = out.WriteAt(buf[:want], off)
+		must(err)
+		check(n == int(want), "short write")
+		off += want
+	}
+	must(out.Close())
+	check(digest(b, tp) == expected, "destination digest mismatch")
+	fmt.Printf("PASS stopped-to-stopped distinct Box copy; bytes=%d SHA256=%x; reconnect prefix verified\n", size, expected)
+	// Test link and rename semantics only in synthetic fixture paths.
+	if _, ok := b.HasExtension("hardlink@openssh.com"); ok {
+		final := dir + "/final.bin"
+		err := b.Link(tp, final)
+		fmt.Printf("hardlink_create=%v\n", err)
+		if err == nil {
+			check(digest(b, final) == expected, "link digest mismatch")
+			err = b.Link(tp, final)
+			check(err != nil, "link unexpectedly replaced existing destination")
+			fmt.Printf("hardlink_collision=%v\n", err)
+			check(digest(b, final) == expected, "link collision changed destination")
+			fmt.Println("PASS native hardlink no-clobber observed; alias remains; not identity/CAS/durability proof")
+		}
+	}
+	x := dir + "/rename-source"
+	y := dir + "/rename-target"
+	newFile(b, x, []byte("new"))
+	newFile(b, y, []byte("old"))
+	err = b.Rename(x, y)
+	fmt.Printf("ordinary_rename_distinct_existing=%v\n", err)
+	if err == nil {
+		check(digest(b, y) == sha256.Sum256([]byte("new")), "rename did not replace expected bytes")
+		_, err = b.Lstat(x)
+		check(os.IsNotExist(err), "rename source still exists or unexpected error")
+		fmt.Println("PASS ordinary rename replaces distinct target; not safe no-clobber")
+	}
+	verify(src, os.Args[1])
+	verify(dst, os.Args[2])
+	fmt.Println("R0_CROSS_PASS (not product integration, crash durability, quota, CAS, or hostile race proof)")
+}

@@ -1,0 +1,172 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"runtime"
+	"runtime/debug"
+	"strings"
+	"time"
+
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/pkg/sftp"
+)
+
+// R0 fixture only: exact fresh inner container, no production target.
+func main() {
+	log.SetFlags(0)
+	if len(os.Args) != 5 {
+		log.Fatal("usage: probe INNER_NAME UUID EXPECTED_STATE RUN_LABEL")
+	}
+	name, uuid, state, label := os.Args[1], os.Args[2], os.Args[3], os.Args[4]
+	if name != "fs-r0-fixture" || uuid == "" || (state != "Stopped" && state != "Running") || (label != "never-started" && label != "running" && label != "stopped-again") {
+		log.Fatal("unexpected fixture identity or phase")
+	}
+	fmt.Println("go", runtime.Version())
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, dep := range info.Deps {
+			if dep.Path == "github.com/lxc/incus/v7" || dep.Path == "github.com/pkg/sftp" {
+				fmt.Println("dependency", dep.Path, dep.Version)
+			}
+		}
+	}
+	d, err := incus.ConnectIncusUnix("", nil)
+	must(err)
+	d = d.UseProject("default")
+	server, _, err := d.GetServer()
+	must(err)
+	fmt.Println("daemon", server.Environment.ServerVersion)
+	if server.Environment.ServerVersion != "7.7" && server.Environment.ServerVersion != "7.7.0" {
+		log.Fatal("unexpected daemon version")
+	}
+	check := func() {
+		inst, _, err := d.GetInstance(name)
+		must(err)
+		if inst.Config["volatile.uuid"] != uuid || inst.Status != state {
+			log.Fatalf("identity/state mismatch: %s %s", inst.Config["volatile.uuid"], inst.Status)
+		}
+	}
+	check()
+	c, err := d.GetInstanceFileSFTP(name)
+	must(err)
+	defer c.Close()
+	fmt.Printf("phase=%s uuid=%s state=%s\n", label, uuid, state)
+	for _, ext := range []string{"posix-rename@openssh.com", "fsync@openssh.com", "hardlink@openssh.com", "statvfs@openssh.com"} {
+		version, ok := c.HasExtension(ext)
+		fmt.Printf("extension %s advertised=%t version=%q\n", ext, ok, version)
+	}
+	dir := "/tmp/bw-native-fs-r0-" + label
+	must(c.Mkdir(dir))
+	p := dir + "/source.bin"
+	data := bytes.Repeat([]byte("boxweave-r0-0123456789abcdef\n"), 40000)
+	sum := sha256.Sum256(data)
+	start := time.Now()
+	f, err := c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	must(err)
+	n, err := io.Copy(f, bytes.NewReader(data))
+	must(err)
+	if n != int64(len(data)) {
+		log.Fatal("short copy")
+	}
+	if _, ok := c.HasExtension("fsync@openssh.com"); ok {
+		fmt.Printf("sync_result=%v\n", f.Sync())
+	}
+	must(f.Close())
+	if duplicate, err := c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL); err == nil {
+		duplicate.Close()
+		log.Fatal("exclusive create accepted existing destination")
+	} else {
+		fmt.Printf("exclusive_collision_refused=%v\n", err)
+	}
+	read := func(client *sftp.Client, path string) [32]byte {
+		h := sha256.New()
+		f, err := client.Open(path)
+		must(err)
+		_, err = io.Copy(h, f)
+		must(err)
+		must(f.Close())
+		var out [32]byte
+		copy(out[:], h.Sum(nil))
+		return out
+	}
+	observed := read(c, p)
+	if observed != sum {
+		log.Fatal("source digest mismatch")
+	}
+	f, err = c.Open(p)
+	must(err)
+	page := make([]byte, 32)
+	nn, err := f.ReadAt(page, 65536)
+	must(err)
+	must(f.Close())
+	if nn != len(page) || !bytes.Equal(page, data[65536:65568]) {
+		log.Fatal("random read mismatch")
+	}
+	info, err := c.Lstat(p)
+	must(err)
+	fmt.Printf("stream_bytes=%d sha256=%x size=%d mode=%s mtime=%s elapsed=%s random_read=PASS\n", n, observed, info.Size(), info.Mode(), info.ModTime().UTC().Format(time.RFC3339), time.Since(start))
+	// Fresh second native connection, bounded streaming between handles.
+	c2, err := d.GetInstanceFileSFTP(name)
+	must(err)
+	defer c2.Close()
+	in, err := c.Open(p)
+	must(err)
+	dst := dir + "/copy.bin"
+	out, err := c2.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	must(err)
+	n, err = io.CopyBuffer(out, in, make([]byte, 64<<10))
+	must(err)
+	must(out.Close())
+	must(in.Close())
+	if n != int64(len(data)) || read(c2, dst) != sum {
+		log.Fatal("copy digest mismatch")
+	}
+	fmt.Printf("two_handle_copy_bytes=%d digest=PASS\n", n)
+	entries, err := c.ReadDir(dir)
+	must(err)
+	for _, entry := range entries {
+		fmt.Printf("entry=%s size=%d mode=%s\n", entry.Name(), entry.Size(), entry.Mode())
+	}
+	// Observe rename collision on two synthetic same-content files; not CAS.
+	err = c.Rename(dst, p)
+	fmt.Printf("ordinary_rename_existing_result=%v\n", err)
+	if err != nil && read(c, p) != sum {
+		log.Fatal("rename refusal changed source")
+	}
+	if _, ok := c.HasExtension("posix-rename@openssh.com"); ok {
+		staged := dir + "/staged.txt"
+		target := dir + "/target.txt"
+		must(writeNew(c, staged, "new"))
+		must(writeNew(c, target, "old"))
+		err = c.PosixRename(staged, target)
+		fmt.Printf("posix_rename_existing_result=%v\n", err)
+		if err == nil && read(c, target) != sha256.Sum256([]byte("new")) {
+			log.Fatal("posix rename readback mismatch")
+		}
+	}
+	check()
+	fmt.Println("R0_BASIC_PASS", label, "(observed bytes, not CAS, snapshot or crash durability)")
+}
+
+func writeNew(c *sftp.Client, path, text string) error {
+	f, err := c.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(f, strings.NewReader(text))
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
+}
+
+func must(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
