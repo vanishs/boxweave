@@ -2,6 +2,8 @@
 
 Status: owner-directed design and R0 feasibility research. No feature acceptance, stable release, migration, or change to existing host configuration is implied. Target is the Resource-native design (C), absorbing useful Agent-facing operations from design B. This is a new product workstream, not BDH maintenance. Current implementation and policy remain authoritative until explicitly changed in this PR.
 
+For the progressive explanation, worked API/workflow examples, architecture, sequence and data relationship diagrams, see the [Native Filesystem architecture walkthrough](NATIVE_FILESYSTEM_ARCHITECTURE.md). It is explanatory; the R0 contract candidate and measured evidence remain the scope and evidence references.
+
 ## 1. Motivation and evidence
 
 BoxWeave v1 already has three file Tools, implemented in [control/file_tools.go](../../internal/control/file_tools.go) and [native/file.go](../../internal/native/file.go). Native SFTP is already the foundation; do not introduce a second transport to Incus. Current tools are Running-only, directory output bounded at 50 entries, underlying directory read bounded at 512 KiB / 4096 entries, file pages and exclusive creates bounded at 64 KiB. Read responses are base64, and there is no native conditional replace/delete. Historical RC14 argv cap was 4096 bytes per argument. These constraints lead external agents to use guest Exec for source upload, file assembly, and edits.
