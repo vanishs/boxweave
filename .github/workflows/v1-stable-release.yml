@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the verified stable release (unchecked builds only)
+        description: Publish the verified stable release (unchecked: build only)
         type: boolean
         default: false
 
@@ -105,9 +105,10 @@ jobs:
           sha256sum "$binary"
       - uses: actions/upload-artifact@v4
         with:
-          name: v1-stable-bin-${{ matrix.arch }}-${{ github.run_attempt }}
+          name: v1-stable-bin-${{ matrix.arch }}
           path: release-assets/
           if-no-files-found: error
+          overwrite: true
           retention-days: 30
 
   package:
@@ -120,7 +121,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          pattern: v1-stable-bin-*-${{ github.run_attempt }}
+          pattern: v1-stable-bin-*
           merge-multiple: true
           path: release-assets
       - name: Package immutable candidate; no stable release or pointer change
@@ -143,9 +144,10 @@ jobs:
           echo STABLE_CANDIDATE_PACKAGED_NOT_PUBLISHED
       - uses: actions/upload-artifact@v4
         with:
-          name: v1-stable-assets-${{ github.run_attempt }}
+          name: v1-stable-assets
           path: release-assets/
           if-no-files-found: error
+          overwrite: true
           retention-days: 30
 
   publish:
@@ -162,9 +164,9 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: v1-stable-assets-${{ github.run_attempt }}
+          name: v1-stable-assets
           path: release-assets
-      - name: Publish exact verified assets and check release readback
+      - name: Resume or publish exact verified assets through a draft
         env:
           GH_TOKEN: ${{ github.token }}
           STABLE_PUBLISH_AUTHORIZED: 'true'
