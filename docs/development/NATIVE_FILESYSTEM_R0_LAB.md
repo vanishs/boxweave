@@ -81,3 +81,7 @@ Product compatibility experiment original 1136f2601bd1554859599ec307ae3046, nati
 - Design freeze: proposed 25-tool boundary, strict mode schemas, resource URI encoding, persistent transfer schema/retirement and supported data limits require explicit owner decision and implementation design. No production feature or R0 independent signoff claimed here.
 
 Keep two outer lab Boxes and inner stopped fixtures for continuation. No merge/release or host changes. Use original receipts, do not rerun same names/paths without explicit fresh fixture intent.
+
+### Restricted Project feasibility: blocked execution
+
+[Restricted Project probe source](native-filesystem-r0/restricted_probe.go.txt) retained at commit 89d09803b8b27beb1146da76facb5fd2e77c2dba. Intended to test normal nonroot Incus per-user socket with an owned inner fixture. The subsequent tool call to upload it was refused by platform safety checks; no admitted Operation ID or native result was received. No attempt was made to change route, replay or bypass the refusal. No restricted user/project was created by this experiment. Restricted nonroot file feasibility remains unverified; preserve the existing product security requirements. Independent product compatibility build is unaffected and its original receipt remains the only current pending experiment.
