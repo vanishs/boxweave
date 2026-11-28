@@ -84,4 +84,27 @@ Acceptance scenarios: actual source >64 KiB upload; batch source transfer; searc
 
 ## 10. Status
 
-Design and R0 investigation only. No product mutation, new feature acceptance, CI weakening, merge or publication. See companion R0 lab evidence for actual results.
+Design and R0 investigation only. No product mutation, new feature acceptance, CI weakening, merge or publication. See [companion R0 lab evidence](NATIVE_FILESYSTEM_R0_LAB.md) for original operation receipts, exact builds and bounded experimental results.
+
+## 11. R0 measured refinements (2026-11-28, not product acceptance)
+
+The initial standalone native and protocol experiments are now complete in their recorded scopes. These findings refine the proposed design; they are not implementation claims.
+
+| Measured observation | Design consequence |
+| --- | --- |
+| Incus 7.7 dir backend and exact SDK 7.7.0 / SFTP 1.13.13 worked with never-started, Running and stopped-again LXC guests | Use one native file service across proven states, never implicitly start an offline Box. Keep exact UUID/incarnation and Project checks. Nonroot restricted Project and other storage backends still need proof. |
+| Native start remained pending with stopped-rootfs read handle held, completed after close | Bound connection and handle lifetime; coordinate read/mutation/lifecycle claims and release before transitions. Do not create a persistent per-Box SFTP cache. Never reuse a handle across state change. |
+| Standard Rename and PosixRename replaced existing target; hardlink refused existing target | Neither rename is no-clobber or CAS. Native hardlink is a research candidate for no-clobber publication only; alias, stage provenance, path race, backend and recovery constraints remain. Preserve current exclusive-create/UNKNOWN contract and unsupported conditional changes. |
+| fsync@openssh.com not advertised on tested Incus 7.7 daemon | Separate durable controller staging/ack, verified Guest readback and Guest power-loss durability; only the first two may be independently demonstrated. Do not report fsync guarantee from successful SFTP close or digest. |
+| Distinct stopped-to-stopped copy of 8,388,627 bytes succeeded after a controlled destination connection close and prefix readback | Native direct copy and verified-offset continuation are feasible without Guest networking or boot. Not proof of lost ACK recovery or mutable-source snapshots. Bind source identity and expected content; refuse changed/ambiguous source on resume. |
+| Local 5 MiB staging fixture recovered from subprocess exit before journal ack and after local publication | Controller-private bounded staging with data sync and durable original progress is plausible. Local inode identity cannot be transplanted to SFTP; same digest alone cannot reconcile a final target. No second public task or operation journal. |
+| 32 KiB native wire cap caused enumeration error plus 100 partial entries | Preserve independent underlying scan/wire budget; discard partial native results on failure or mark explicit incomplete coverage in a separately designed read/search mode. Do not report successful complete pages from an interrupted enumeration. |
+| SDK 1.8.0 and 1.9.0-pre.1 both passed synthetic stateless HTTP Resource/Link/auth/current/legacy/binary tests | Core Resources do not require a prerelease. Keep stable 1.8 baseline as an evidence-backed fallback; adopt stable 1.9 or prerelease only if a required capability and combined product acceptance justify it. No dependency bump in this research PR. |
+| Raw 2 MiB encoded upload passed loopback; raw 3 MiB exceeded default 4 MiB JSON request limit and was rejected before dispatch | Configure and measure budgets separately for raw chunks, encoded JSON and actual external client/model surface. Do not advertise 2 MiB product chunks based solely on SDK loopback; 256 KiB used only in internal experiments, not a frozen Tool limit. |
+| 1 MiB binary Resource round trip still uses JSON; SDK SSE keepalive is not JSON keepalive; notifications depend on active subscriptions | Keep Tools-only baseline and optional Resources; Files adapter and notifications remain separately negotiated, nonblocking and unimplemented. No silent new transport, public data route or notification guarantee. |
+
+### Decision boundaries before implementation freeze
+
+- R0 primary feasibility is positive for native offline file I/O, direct cross-Box copying, bounded enumeration and core Resources. Remaining blockers for stronger claims are not reasons to postpone independently proven features: strict CAS remains unsupported, Files/notifications defer if no actual client, and power-loss durability remains unclaimed.
+- Before R1 freeze, settle the 25-tool catalog, exact read/mutate modes and compatibility aliases, typed errors, URI canonicalization, controller staging directory/quota/expiry/retirement and SQLite schema change policy. Obtain owner approval for changed public catalog/schema rather than treating the plan as an enabled feature.
+- Full R0 completion remains conditional on the combined exact-source SDK compatibility result, restricted nonroot Project feasibility, and review of unresolved native/connector and schema risks. Actual product integration, restart/fault recovery, lifecycle lock concurrency, disk-full, cancellation, quota, alternate storage and external Agent efficiency are later explicit acceptance gates; record exclusions if unavailable.
