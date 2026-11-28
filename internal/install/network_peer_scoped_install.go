@@ -100,17 +100,22 @@ func scopedWriteExclusive(path, body string) error {
 		return errors.New("unsafe scoped unit parent")
 	}
 	if created {
-		// Only the new root-owned, non-symlink systemd directory; its
-		// files still respect the caller's umask.
+		// Only the new root-owned, non-symlink systemd directory.
 		if err := os.Chmod(parent, 0755); err != nil {
 			return err
 		}
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
 	_, err = f.WriteString(body)
+	if err == nil {
+		// These fixed public systemd fragments contain no secrets.
+		// Match the exact maintenance contract even under umask 0077.
+		// Change only the newly and exclusively created descriptor.
+		err = f.Chmod(0644)
+	}
 	if err == nil {
 		err = f.Sync()
 	}
