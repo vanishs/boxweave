@@ -1,0 +1,107 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"runtime"
+	"time"
+
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/pkg/sftp"
+)
+
+const fixture = "fs-r0-dest"
+const root = "/tmp/bw-native-fs-r0-metadata"
+const size = (32 << 20) + 37
+
+func must(e error) {
+	if e != nil { log.Fatal(e) }
+}
+func check(ok bool, msg string) {
+	if !ok { log.Fatal(msg) }
+}
+func writeNew(c *sftp.Client, path string, b []byte) {
+	f,e:=c.OpenFile(path,os.O_WRONLY|os.O_CREATE|os.O_EXCL);must(e)
+	n,e:=f.Write(b);must(e);check(n==len(b),"short write");must(f.Close())
+}
+func read(c *sftp.Client, path string) []byte {
+	f,e:=c.Open(path);must(e)
+	b,e:=io.ReadAll(io.LimitReader(f,4096));must(e);must(f.Close())
+	return b
+}
+func main() {
+	log.SetFlags(0)
+	check(len(os.Args)==3,"usage: metadata-probe UUID prepare|observe")
+	check(os.Args[1]=="370d86b8-178b-468c-9ffd-17bcc1f105be","unexpected fixture UUID")
+	d,e:=incus.ConnectIncusUnix("",nil);must(e)
+	d=d.UseProject("default")
+	srv,_,e:=d.GetServer();must(e)
+	check(srv.Environment.ServerVersion=="7.7"||srv.Environment.ServerVersion=="7.7.0","wrong daemon")
+	verify:=func(state string) {
+		i,_,e:=d.GetInstance(fixture);must(e)
+		check(i.Config["volatile.uuid"]==os.Args[1]&&i.Status==state,"wrong fixture state or identity")
+	}
+	stamp:=time.Unix(1700000000,0)
+	text:=[]byte("first\r\nUTF-8: \xe4\xb8\xad\xe6\x96\x87\nlast")
+	tp:=root+"/text.txt"
+	bp:=root+"/binary.dat"
+	empty:=root+"/empty"
+	if os.Args[2]=="prepare" {
+		verify("Stopped")
+		c,e:=d.GetInstanceFileSFTP(fixture);must(e)
+		defer c.Close()
+		must(c.Mkdir(root))
+		writeNew(c,empty,[]byte{})
+		st,e:=c.Stat(empty);must(e);check(st.Size()==0,"empty size mismatch")
+		check(len(read(c,empty))==0,"empty read mismatch")
+		writeNew(c,tp,text)
+		// Sequential append to a known synthetic file; not retry-safe or CAS.
+		f,e:=c.OpenFile(tp,os.O_WRONLY|os.O_APPEND);must(e)
+		n,e:=f.Write([]byte("\nappend\n"));must(e);check(n==8,"short append");must(f.Close())
+		text=append(text,[]byte("\nappend\n")...)
+		check(bytes.Equal(read(c,tp),text),"append mismatch")
+		must(c.Chmod(tp,0750));must(c.Chtimes(tp,stamp,stamp))
+		st,e=c.Stat(tp);must(e)
+		check(st.Mode().Perm()==0750&&st.ModTime().Equal(stamp),"metadata mismatch")
+		fmt.Println("PASS stopped empty file, sequential append, UTF-8/CRLF byte preservation, executable permission and mtime")
+		f,e=c.OpenFile(bp,os.O_WRONLY|os.O_CREATE|os.O_EXCL);must(e)
+		buf:=make([]byte,128<<10)
+		h:=sha256.New()
+		start:=time.Now()
+		for off:=int64(0);off<size; {
+			n:=int64(len(buf));if size-off<n { n=size-off }
+			for i:=range buf[:n] {buf[i]=byte((off+int64(i))%251)}
+			w,e:=f.Write(buf[:n]);must(e);check(w==int(n),"short binary write")
+			h.Write(buf[:n]);off+=n
+		}
+		must(f.Close())
+		fmt.Printf("PASS stopped stream write bytes=%d sha256=%x elapsed=%s go=%s\n",size,h.Sum(nil),time.Since(start),runtime.Version())
+		verify("Stopped")
+		return
+	}
+	check(os.Args[2]=="observe","unknown phase")
+	verify("Running")
+	c,e:=d.GetInstanceFileSFTP(fixture);must(e);defer c.Close()
+	check(bytes.Equal(read(c,tp),append(text,[]byte("\nappend\n")...)),"post-start text mismatch")
+	st,e:=c.Stat(tp);must(e);check(st.Mode().Perm()==0750&&st.ModTime().Equal(stamp),"post-start metadata mismatch")
+	f,e:=c.Open(bp);must(e)
+	start:=time.Now();h:=sha256.New()
+	n,e:=io.CopyBuffer(h,f,make([]byte,128<<10));must(e);check(n==size,"short stream read")
+	// Independently compute expected bytes in bounded memory.
+	expected:=sha256.New();buf:=make([]byte,128<<10)
+	for off:=int64(0);off<size; {
+		k:=int64(len(buf));if size-off<k {k=size-off}
+		for i:=range buf[:k] {buf[i]=byte((off+int64(i))%251)}
+		expected.Write(buf[:k]);off+=k
+	}
+	check(bytes.Equal(h.Sum(nil),expected.Sum(nil)),"post-start whole digest mismatch")
+	page:=make([]byte,64);n2,e:=f.ReadAt(page,size-17)
+	check(e==io.EOF&&n2==17,"EOF range mismatch")
+	must(f.Close())
+	fmt.Printf("PASS running readback bytes=%d sha256=%x elapsed=%s EOF=17/64 metadata=preserved\n",n,h.Sum(nil),time.Since(start))
+	verify("Running")
+}
