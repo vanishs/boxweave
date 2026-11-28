@@ -3,7 +3,7 @@ import hashlib
 import sqlite3
 import unittest
 
-from pr191_scoped_s2_native import KEYS, MAIN, verify_history, verify_originals, verify_public_wan, by_key
+from pr191_scoped_s2_native import KEYS, MAIN, verify_history, verify_originals, verify_public_wan, by_key, FILE_KEYS, FILE_NAME, verify_file_originals
 
 
 class HostForwardObservationTests(unittest.TestCase):
@@ -74,6 +74,34 @@ class ScopedS2OracleTests(unittest.TestCase):
                             (uuid, uuid, deletion, self.project, MAIN))
             self.db.execute("INSERT INTO network_bindings VALUES (?,?,'eth0','RELEASED')",
                             (self.project, uuid))
+
+    def test_file_originals_and_negative_controls(self):
+        for key, action, state, native in FILE_KEYS:
+            deletion = self.add(key, action, state=state, native=native,
+                                actor=self.actor2 if key == "s3-peer-file-create-verified-01" else self.actor)
+        self.db.execute("INSERT INTO owned_boxes VALUES (?,?,'DELETED',?,?,?)",
+                        (self.uuid, self.uuid, deletion, self.project, FILE_NAME))
+        self.db.execute("INSERT INTO network_bindings VALUES (?,?,'eth0','RELEASED')",
+                        (self.project, self.uuid))
+        self.assertEqual(len(verify_file_originals(self.read, self.project, self.actor, self.actor2)), len(FILE_KEYS))
+        for update in (
+                "UPDATE operations SET native_operation_id='fake' WHERE action='box_file_apply'",
+                "UPDATE operations SET state='UNKNOWN' WHERE state='FAILED'",
+                "UPDATE operations SET actor_id='other' WHERE action='box_file_apply'",
+                "UPDATE operations SET incarnation='other' WHERE action='box_delete'",
+                "UPDATE exec_outputs SET exit_code=1",
+                "UPDATE owned_boxes SET deleted_by_operation_id='other'",
+                "UPDATE network_bindings SET state='PINNED'",
+                "INSERT INTO operations SELECT * FROM operations WHERE action='box_create'"):
+            with self.subTest(update=update):
+                self.db.execute("SAVEPOINT bad")
+                try:
+                    self.db.execute(update)
+                    with self.assertRaises(AssertionError):
+                        verify_file_originals(self.read, self.project, self.actor, self.actor2)
+                finally:
+                    self.db.execute("ROLLBACK TO bad")
+                    self.db.execute("RELEASE bad")
 
     def test_exact_lineage_and_independent_actors(self):
         self.seed_originals()

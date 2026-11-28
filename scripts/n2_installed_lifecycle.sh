@@ -356,6 +356,17 @@ if test "${P1B_S2_NATIVE:-0}" = 1; then
   test "${PR178_SCOPED_N2:-0}" = 1
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-sdk-probe" ./scripts/s2_native_probe.go
   CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s3-file-probe" ./scripts/s3_file_installed_probe.go
+  file_runtime="$(sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_s2_native.py "$project" "$first" file-before)"
+  for actor in file-admin file-peer; do
+    (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/$actor.receipt")
+  done
+  file_admin="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/file-admin.receipt")"
+  file_peer="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/file-peer.receipt")"
+  BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm BW_S3_SCOPED_FILE_ONLY=1 \
+    BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/file-admin.receipt" \
+    BW_S3_PEER_TOKEN_FILE="$work/file-peer.receipt" "$work/s3-file-probe"
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_s2_native.py "$project" "$first" file-after "$file_admin" "$file_peer" "$file_runtime"
   sh scripts/pr191_scoped_s2_native.sh "$project" "$work/actor.receipt" "$first" "$work/s2-native-sdk-probe" "$work/s2-queued-cancel-seed"
   exit 0
 fi
