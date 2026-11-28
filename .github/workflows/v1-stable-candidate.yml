@@ -85,9 +85,16 @@ jobs:
           trap 'rm -rf -- "$d"' EXIT
           "$binary" status -db "$d/ledger.sqlite" -project no-project \
             -incus-socket /unavailable-incus > "$d/status.json"
-          python3 - "$d/status.json" <<'PY'
-          import json, sys
-          assert json.load(open(sys.argv[1]))["ready"] is False
+          python3 - "$d/status.json" "$d/ledger.sqlite" <<'PY'
+          import json, pathlib, sqlite3, sys
+          from contextlib import closing
+          assert json.load(open(sys.argv[1], encoding="utf-8"))["ready"] is False
+          with closing(sqlite3.connect(pathlib.Path(sys.argv[2]).as_uri() + "?mode=ro", uri=True)) as db:
+              assert db.execute("SELECT version FROM schema_version").fetchall() == [(7,)]
+              tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+              assert {"owned_boxes", "operations", "operation_resource_claims", "network_bindings", "network_address_fences"}.issubset(tables)
+              assert not any(t.startswith(("network_ipv4_retirement", "network_ipv4_compaction")) for t in tables)
+              assert db.execute("SELECT count(*) FROM operations").fetchone() == (0,)
           PY
           go test -count=1 ./...
           sha256sum "$binary"
