@@ -95,9 +95,8 @@ obligation; it was SKIP in aggregate-13. Combined real ledger/native
 interleaving remains UNVERIFIED. Review operations
 f5cfcf0a06f9c3df275afd9851e36161 and a694069fab4a33de85012ac36d64b363.
 Preserve original test failures and all retained obligations. No skip,
-deletion, gate waiver or legacy revival. Legitimate platform review of
-the earlier refused write is recommended, not submitted or resolved.
-No retry or delegation of refused action. P1 R2/R3 remains OPEN.
+deletion, gate waiver or legacy revival. 
+P1 R2/R3 remains OPEN.
 
 ### Deferred Install evidence — development only
 
