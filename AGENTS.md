@@ -21,7 +21,7 @@ Operator-managed HTTPS/Tunnel access is an existing product integration option o
 
 Record functional acceptance, environment capabilities, public reachability, authenticated client acceptance and isolation evidence separately. A limitation in one lane is not automatically a product failure in another. A local health check is not proof of packet reachability or remote authorization.
 
-Host confinement characteristics and client-platform limitations are not standalone BoxWeave product-function acceptance criteria. Report the particular observed effect, the affected check, and the evidence required to resolve it; do not classify an unrelated functional check as failed merely because an environmental limitation exists. Distinguish a potential limitation from an actual refusal, failure or unavailable capability. Respect actual runtime admission, host policy and platform safety boundaries; never bypass them or reinterpret a refused or untested effect as PASS. Continue independent authorized work while the affected check remains unresolved.
+Host confinement characteristics and client-platform limitations are not standalone BoxWeave product-function acceptance criteria. Report the particular observed effect, the affected check, and the evidence required to resolve it; do not classify an unrelated functional check as failed merely because an environmental limitation exists. Distinguish a potential limitation from an actual refusal, failure or unavailable capability.  Continue independent authorized work while the affected check remains unresolved.
 
 ## Development Harness
 
