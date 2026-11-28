@@ -56,6 +56,7 @@ func s4b2AuditRaceStore(t *testing.T) (*state.Store, *sql.DB) {
 	}
 	return s, db
 }
+
 // The embedded SDK interface exposes only the read methods used by the
 // production scoped audit. Unexpected SDK calls fail instead of reaching Incus.
 type s4b2ScopedAuditClient struct {
