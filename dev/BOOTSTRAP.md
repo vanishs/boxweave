@@ -17,8 +17,14 @@ when available; retain the canonical safety and acceptance requirements.
    task source and installed target version; do not switch branches or
    overwrite work merely to load instructions. Reuse reads within the
    task; refresh when resuming after relevant source or policy changes.
-2. Recover original task, workspace, target and Operations before changing
-   anything. Read the [toolbox and workflow](README.md) as relevant. With
+2. For a genuinely independent new task, start from the current request,
+   source, workspace, target and applicable contracts. Before changing
+   anything, recover the original task and Operations when continuing,
+   recovering or overlapping existing work. A new session or project does
+   not make an existing unresolved task independent. Preserve all known
+   safety refusals, unresolved Operations and mandatory acceptance evidence;
+   this routing rule does not authorize retrying or bypassing a refusal.
+   Read the [toolbox and workflow](README.md) as relevant. With
    a Python checkout, prefer bwdev work plan --kind KIND --query QUERY,
    then start/resume, task next, verify, learn and finish as applicable.
    Preserve checkpoints. Without a checkout, use authorized GitHub reads
@@ -30,9 +36,9 @@ when available; retain the canonical safety and acceptance requirements.
 
 For remote clients, group relevant capability discovery in one lookup where
 supported. Reuse exact discovered schemas within the task; discover further
-only when needed. Resolve the current checkpoint pointer first, then read
-that checkpoint and relevant acceptance rules rather than reloading long
-historical progress logs. Expand historical evidence only for a concrete
+only when needed. For work with an applicable checkpoint, resolve the
+current pointer first, then read that checkpoint and relevant acceptance
+rules rather than reloading long historical progress logs. Expand historical evidence only for a concrete
 gap, conflict, or required witness.
 
 For development follow [fast local reuse and strict acceptance](../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance):
