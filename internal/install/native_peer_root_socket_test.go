@@ -102,8 +102,18 @@ func TestS4B2RootSocketRejectsWrongUIDAndExtraFields(t *testing.T) {
 	id := strings.Repeat("a", 32)
 	base := `{"operation_id":"` + id + `"}`
 	wrongPath, _ := s4b2RootSocketFixture(t, uint32(os.Getuid())+1, h)
-	if got := scopedSocketTestCall(t, wrongPath, base); got.Status != "DENIED" {
-		t.Fatal("foreign peer UID admitted", got)
+	// Credentials are checked before reading. Do not race a request write
+	// against the listener closing a refused connection.
+	wrong, err := net.DialTimeout("unix", wrongPath, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = wrong.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var denied NativePeerRootResponse
+	err = json.NewDecoder(wrong).Decode(&denied)
+	_ = wrong.Close()
+	if err != nil || denied.Status != "DENIED" {
+		t.Fatal("foreign peer UID admitted", denied, err)
 	}
 	path, _ := s4b2RootSocketFixture(t, uint32(os.Getuid()), h)
 	for _, raw := range []string{

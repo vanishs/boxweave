@@ -62,10 +62,6 @@ func nativePrepareReadable(t NativePrepareTarget) error {
 	}
 	return nil
 }
-// NativePreparePlanReview refuses the retired shared ACL preparation path.
-func NativePreparePlanReview(_ context.Context, _ NativePrepareTarget) (NativePreparePlan, error) {
-	return NativePreparePlan{}, errors.New("legacy shared ACL preparation unsupported; scoped fresh only")
-}
 func nativePrepareSave(rec NativePrepareRecord) error {
 	if err := os.MkdirAll(filepath.Dir(nativePrepareJournalPath), 0700); err != nil {
 		return err
@@ -115,10 +111,6 @@ func NativePrepareStatus() (NativePrepareRecord, error) {
 		return rec, errors.New("unknown native preparation journal schema")
 	}
 	return rec, nil
-}
-// NativePrepareApply refuses before inspecting or modifying any host state.
-func NativePrepareApply(_ context.Context, _ NativePrepareTarget, _ string, _ bool) (NativePrepareRecord, error) {
-	return NativePrepareRecord{}, errors.New("legacy shared ACL preparation unsupported; scoped fresh only")
 }
 func nativePrepareACLIsOwned(acl *api.NetworkACL, rec NativePrepareRecord) bool {
 	if acl == nil || !reflect.DeepEqual(acl.Writable(), rec.ACL.NetworkACLPut) {

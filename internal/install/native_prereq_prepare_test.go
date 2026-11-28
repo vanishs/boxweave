@@ -70,20 +70,6 @@ func TestS25NativePrepareProjectOnlyWidensReviewedNestingAndProxy(t *testing.T) 
 	}
 }
 
-func TestLegacySharedACLPreparationAlwaysRefused(t *testing.T) {
-	target := NativePrepareTarget{Project: "user-1001", Pool: "default", Network: "incusbr0", ACL: "bw-s25"}
-	plan, err := NativePreparePlanReview(t.Context(), target)
-	if err == nil || !strings.Contains(err.Error(), "legacy shared ACL preparation unsupported") || !reflect.DeepEqual(plan, NativePreparePlan{}) {
-		t.Fatalf("retired plan returned evidence: %+v, %v", plan, err)
-	}
-	for _, approved := range []bool{false, true} {
-		rec, err := NativePrepareApply(t.Context(), target, strings.Repeat("a", 64), approved)
-		if err == nil || !strings.Contains(err.Error(), "legacy shared ACL preparation unsupported") || !reflect.DeepEqual(rec, NativePrepareRecord{}) {
-			t.Fatalf("retired apply accepted approval=%t: %+v, %v", approved, rec, err)
-		}
-	}
-}
-
 func TestS25NativePrepareRefusesUnapprovedNonRootAccess(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root-only negative is exercised by dedicated CLI suite")
