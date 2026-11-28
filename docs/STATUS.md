@@ -1,29 +1,60 @@
 # Current source and release status
 
-Observed 2026-11-27. This page separates published artifacts, merged
-source, the active draft candidate, and installed Host observations.
+Observed 2026-11-27 PT (2026-11-28 UTC), at v1
+[b6f7ae0](https://github.com/vanishs/boxweave/commit/b6f7ae09edb927d204fbcaaf9b2ecd6f98e7f211).
+Source integration is not release acceptance.
 
 | Identity | Observed status |
 | --- | --- |
 | Stable v1 | UNPUBLISHED; [selector](../V1_PUBLISHED_RELEASE). |
-| Published prerelease | [RC14](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.14), tag commit [3fb71a6](https://github.com/vanishs/boxweave/commit/3fb71a6ddf47d13d165e5c039144aa66fad0eb05), schema 6, published 2026-11-24 22:34 UTC. GitHub metadata lists both Linux architectures, installer, uninstaller, manifest and checksums. Asset bytes/signatures were not independently verified in this documentation audit. |
-| Merged v1 | [9d07665](https://github.com/vanishs/boxweave/commit/9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d), schema 6; do not assume it is the published tag. |
-| Draft [PR #191](https://github.com/vanishs/boxweave/pull/191) | Reviewed R2 source [7ec2dc3](https://github.com/vanishs/boxweave/commit/7ec2dc31b13efff094c864ecf4fce302a4e52ba8), schema 7, 23 MCP Tools, Scoped v2 only, no Legacy product upgrade/rollback or automatic migration. Not merged or published. |
-| Installed Host | Query its exact version, commit, schema and actual discovery; never infer from this page or a release tag. |
+| Published prerelease (last documented) | [RC14](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.14), tag commit [3fb71a6](https://github.com/vanishs/boxweave/commit/3fb71a6ddf47d13d165e5c039144aa66fad0eb05), schema 6. Historical release metadata, not a fresh asset verification. |
+| Merged v1 | Schema 7, Scoped v2 only; [#191](https://github.com/vanishs/boxweave/pull/191) merged at [b842dc0](https://github.com/vanishs/boxweave/commit/b842dc0830ee8bc40a76aca9d4cfa8d440455f95). Only BOOTSTRAP.md changed between that merge and the observed HEAD. |
+| Final #191 PR source | [cb67f99](https://github.com/vanishs/boxweave/commit/cb67f99c5bf320afba3b1e1211110dbff2c15dfe); same product tree as merge, with evidence bounded to the original source/build. |
+| Installed Host | Independently query exact version, commit, schema and discovery. No current Host acceptance inferred. |
 
-## Candidate progress
+## Release readiness: NO-GO
 
-The R1 predecessor 17afed0f passed N2 (29/29), independent S25,
-S2 crosswalk and Forward. R2 corrects the obsolete installer order
-test and aligns current native PR producer/consumer routes; exact
-R2 CI is not fully accepted. H remains frozen pending Support and
-owner direction. C04 public WAN and C01/C11 final evidence remain
-open. See [progress](development/CONSOLIDATION_PROGRESS.md),
-[acceptance](development/CONSOLIDATION_ACCEPTANCE.md) and
-[workflow dispositions](development/P4_WORKFLOW_DISPOSITION.md).
-The candidate supports normal and reviewed exceptional offline
-Scoped retirement with original evidence and separate completed-data
-purge; the tested predecessor scope is not universal Host approval.
+Actual final #191 Actions evidence (PR head cb67f99, not a stable build):
+
+| Gate | Result |
+| --- | --- |
+| [Quality](https://github.com/vanishs/boxweave/actions/runs/46098278881) | FAIL, full Go race regression. |
+| [S1](https://github.com/vanishs/boxweave/actions/runs/46098278814) | FAIL, unit/race regression. |
+| [Candidate](https://github.com/vanishs/boxweave/actions/runs/46098278827) | FAIL, source tooling and both architecture jobs; manifest skipped. |
+| [N2](https://github.com/vanishs/boxweave/actions/runs/46098278841) | PASS, 29/29 installed lanes, bounded native evidence. |
+| [S2](https://github.com/vanishs/boxweave/actions/runs/46098278865) | PASS, PR exact-CI crosswalk marker observed. |
+| [S2.5](https://github.com/vanishs/boxweave/actions/runs/46098278831) | PASS, scoped independent nested lifecycle; not hostile recursive isolation. |
+| [Forward](https://github.com/vanishs/boxweave/actions/runs/46098278810) | PASS, three policy lanes; not public WAN reachability. |
+
+The same two Install tests fail across five jobs: the retired shared-ACL
+reader returns ErrResourceLocked before the old positive and interleaving
+oracles run. See [#194](https://github.com/vanishs/boxweave/issues/194),
+[current source](https://github.com/vanishs/boxweave/blob/b6f7ae09edb927d204fbcaaf9b2ecd6f98e7f211/internal/state/network_audit_ledger.go)
+and the [post-merge review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7232991141).
+This does not establish a new live Scoped defect or pass the retained
+composed real protected SQLite/native interleaving obligation. The original
+refused test-write must not be replayed or delegated; preserve all coverage
+and seek legitimate review of the original denial where necessary.
+
+The [owner's source-integration decision](https://github.com/vanishs/boxweave/pull/191#issuecomment-7232633581)
+reports removing required quality-gate protection for the merge. It did not
+waive acceptance. Effective live protection needs independent readback;
+stable candidate and signed publication require protected v1. The
+[#197 quality run](https://github.com/vanishs/boxweave/actions/runs/46103061090)
+passed only the documentation fast path, skipping Go race/build.
+The previous draft status is historical, not an instruction to repeat P1.
+
+Before stable: resolve H/C01 and remaining C04/C11/C12/P5 evidence,
+reconcile all supported acceptance IDs and [#170](https://github.com/vanishs/boxweave/pull/170),
+verify protection, build an exact stable candidate without publication,
+reconcile artifact/native evidence, obtain independent trusted signatures
+and protected dry-run. No stable candidate or signed release evidence was
+verified in this audit. Do not alter the selector or publish.
+
+See the [acceptance ledger](development/CONSOLIDATION_ACCEPTANCE.md),
+[workflow dispositions](development/P4_WORKFLOW_DISPOSITION.md), and
+[versioning](process/VERSIONING.md). The older phase records are retained
+with their original scope.
 
 ## Historical merged changes beyond RC13
 
