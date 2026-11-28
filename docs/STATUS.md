@@ -7,7 +7,7 @@ Source integration is not release acceptance.
 | Identity | Observed status |
 | --- | --- |
 | Stable v1 | UNPUBLISHED; [selector](../V1_PUBLISHED_RELEASE). |
-| Published prerelease (last documented) | [RC14](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.14), tag commit [3fb71a6](https://github.com/vanishs/boxweave/commit/3fb71a6ddf47d13d165e5c039144aa66fad0eb05), schema 6. Historical release metadata, not a fresh asset verification. |
+| Published prerelease (metadata verified) | [RC14](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.14), tag commit [3fb71a6](https://github.com/vanishs/boxweave/commit/3fb71a6ddf47d13d165e5c039144aa66fad0eb05), schema 6. GitHub release metadata confirms six assets and reported digests; bytes were not independently verified. |
 | Merged v1 | Schema 7, Scoped v2 only; [#191](https://github.com/vanishs/boxweave/pull/191) merged at [b842dc0](https://github.com/vanishs/boxweave/commit/b842dc0830ee8bc40a76aca9d4cfa8d440455f95). Only BOOTSTRAP.md changed between that merge and the observed HEAD. |
 | Final #191 PR source | [cb67f99](https://github.com/vanishs/boxweave/commit/cb67f99c5bf320afba3b1e1211110dbff2c15dfe); same product tree as merge, with evidence bounded to the original source/build. |
 | Installed Host | Independently query exact version, commit, schema and discovery. No current Host acceptance inferred. |
@@ -38,18 +38,25 @@ and seek legitimate review of the original denial where necessary.
 
 The [owner's source-integration decision](https://github.com/vanishs/boxweave/pull/191#issuecomment-7232633581)
 reports removing required quality-gate protection for the merge. It did not
-waive acceptance. Effective live protection needs independent readback;
-stable candidate and signed publication require protected v1. The
+waive acceptance. Live API readback confirms v1 protected=false, ruleset
+[26842628](https://github.com/vanishs/boxweave/rules/26842628) disabled
+and required status checks empty. Restore and independently verify the
+intended protection under owner authority; stable candidate and signed
+publication require protected v1. The
 [#197 quality run](https://github.com/vanishs/boxweave/actions/runs/46103061090)
 passed only the documentation fast path, skipping Go race/build.
-The previous draft status is historical, not an instruction to repeat P1.
+Actual current v1 push [quality](https://github.com/vanishs/boxweave/actions/runs/46103179949)
+and [candidate](https://github.com/vanishs/boxweave/actions/runs/46103179985)
+runs both FAIL at b6f7ae0; all four failed jobs reproduce the same two
+Install tests, and the manifest job is skipped. The previous draft status
+is historical, not an instruction to repeat P1.
 
 Before stable: resolve H/C01 and remaining C04/C11/C12/P5 evidence,
 reconcile all supported acceptance IDs and [#170](https://github.com/vanishs/boxweave/pull/170),
 verify protection, build an exact stable candidate without publication,
 reconcile artifact/native evidence, obtain independent trusted signatures
-and protected dry-run. No stable candidate or signed release evidence was
-verified in this audit. Do not alter the selector or publish.
+and protected dry-run. GitHub returns zero v1 workflow_dispatch runs and no v1.0.0 tag or
+Release; no stable candidate or signed release evidence was verified. Do not alter the selector or publish.
 
 See the [acceptance ledger](development/CONSOLIDATION_ACCEPTANCE.md),
 [workflow dispositions](development/P4_WORKFLOW_DISPOSITION.md), and
