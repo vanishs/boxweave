@@ -61,8 +61,7 @@ sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 iproute2 nftables conntrack dnsmasq-base >/dev/null
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/staging/zabbly.asc"
-fp="$(gpg --show-keys --with-colons "$work/staging/zabbly.asc" | awk -F: '$1=="fpr"{print $10;exit}')"
-test "$fp" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+python3 scripts/pr191_ci_apt_sources.py verify-incus-key "$work/staging/zabbly.asc"
 sudo install -m 0644 "$work/staging/zabbly.asc" /etc/apt/keyrings/s25-zabbly.asc
 sudo tee /etc/apt/sources.list.d/s25-zabbly.sources >/dev/null <<'S25_APT_SOURCE'
 Enabled: yes
@@ -74,7 +73,7 @@ Architectures: amd64
 Signed-By: /etc/apt/keyrings/s25-zabbly.asc
 S25_APT_SOURCE
 sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
-pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
+pkg="$(python3 scripts/pr191_ci_apt_sources.py incus-package)"
 test -n "$pkg"
 if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
  sudo env P1B_S25_SCOPED=1 BW_S25_SETUP_LAYER=outer GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \

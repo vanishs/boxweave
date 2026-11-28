@@ -69,11 +69,11 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   echo PR178_N3_GUARD_PREREQUISITE=PASS
 fi
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/key.asc"
-test "$(gpg --show-keys --with-colons "$work/key.asc" | awk -F: '$1=="fpr"{print $10;exit}')" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+python3 scripts/pr191_ci_apt_sources.py verify-incus-key "$work/key.asc"
 sudo install -m 0644 "$work/key.asc" /etc/apt/keyrings/bw-n2-install.asc
 echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/bw-n2-install.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/bw-n2-install.list >/dev/null
 sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
-pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
+pkg="$(python3 scripts/pr191_ci_apt_sources.py incus-package)"
 test -n "$pkg"
 sudo "$work/candidate-a" native-plan -incus-package-version "$pkg" > "$work/bootstrap-plan.json"
 digest="$(python3 -c 'import json,sys;x=json.load(open(sys.argv[1]));assert x["mode"]=="fresh-install-proposed";print(x["plan_sha256"])' "$work/bootstrap-plan.json")"
