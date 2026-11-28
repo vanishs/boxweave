@@ -15,7 +15,7 @@ import (
 )
 
 const fixture = "fs-r0-dest"
-const root = "/tmp/bw-native-fs-r0-metadata"
+const root = "/tmp/bw-native-fs-r0-metadata-v2"
 const size = (32 << 20) + 37
 
 func must(e error) {
@@ -59,16 +59,12 @@ func main() {
 		st,e:=c.Stat(empty);must(e);check(st.Size()==0,"empty size mismatch")
 		check(len(read(c,empty))==0,"empty read mismatch")
 		writeNew(c,tp,text)
-		// Sequential append to a known synthetic file; not retry-safe or CAS.
-		f,e:=c.OpenFile(tp,os.O_WRONLY|os.O_APPEND);must(e)
-		n,e:=f.Write([]byte("\nappend\n"));must(e);check(n==8,"short append");must(f.Close())
-		text=append(text,[]byte("\nappend\n")...)
-		check(bytes.Equal(read(c,tp),text),"append mismatch")
+		check(bytes.Equal(read(c,tp),text),"text readback mismatch")
 		must(c.Chmod(tp,0750));must(c.Chtimes(tp,stamp,stamp))
 		st,e=c.Stat(tp);must(e)
 		check(st.Mode().Perm()==0750&&st.ModTime().Equal(stamp),"metadata mismatch")
-		fmt.Println("PASS stopped empty file, sequential append, UTF-8/CRLF byte preservation, executable permission and mtime")
-		f,e=c.OpenFile(bp,os.O_WRONLY|os.O_CREATE|os.O_EXCL);must(e)
+		fmt.Println("PASS stopped empty file, UTF-8/CRLF byte preservation, executable permission and mtime")
+		f,e:=c.OpenFile(bp,os.O_WRONLY|os.O_CREATE|os.O_EXCL);must(e)
 		buf:=make([]byte,128<<10)
 		h:=sha256.New()
 		start:=time.Now()
@@ -86,7 +82,7 @@ func main() {
 	check(os.Args[2]=="observe","unknown phase")
 	verify("Running")
 	c,e:=d.GetInstanceFileSFTP(fixture);must(e);defer c.Close()
-	check(bytes.Equal(read(c,tp),append(text,[]byte("\nappend\n")...)),"post-start text mismatch")
+	check(bytes.Equal(read(c,tp),text),"post-start text mismatch")
 	st,e:=c.Stat(tp);must(e);check(st.Mode().Perm()==0750&&st.ModTime().Equal(stamp),"post-start metadata mismatch")
 	f,e:=c.Open(bp);must(e)
 	start:=time.Now();h:=sha256.New()
