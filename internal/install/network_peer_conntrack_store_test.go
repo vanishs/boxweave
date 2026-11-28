@@ -63,3 +63,28 @@ func TestS4B2ConntrackScopeMustComeFromFullSQLiteLedger(t *testing.T) {
 		t.Fatal("quarantined IPv4/IPv6 scope used for root conntrack")
 	}
 }
+
+func TestScopedConntrackUsesProtectedSQLiteLedger(t *testing.T) {
+	fixture, _ := pr178RootSDKFixture(t)
+	_, root, _, id := scopedInstallStore(t, fixture)
+
+	proof, err := root.ReadRootScopedPeerOriginal(
+		t.Context(),
+		id,
+		fixture.Intent.Project,
+		fixture.Intent.Bridge,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(proof.Inventory.Boxes) != len(fixture.Inventory.Boxes) {
+		t.Fatal("incomplete scoped ledger")
+	}
+
+	if proof.Intent.SourceUUID != fixture.Intent.SourceUUID ||
+		proof.Intent.TargetUUID != fixture.Intent.TargetUUID {
+		t.Fatal("incorrect scoped pair")
+	}
+}
+
