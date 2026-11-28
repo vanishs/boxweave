@@ -1,5 +1,7 @@
 # Consolidation progress and resumable handoff
 
+> **Reference only:** Dated observations and original evidence only; no entry, continuation or verification action is implied. #191 is merged.
+
 Canonical task: [plan](CONSOLIDATION_PLAN.md) | [inventory](RETIREMENT_INVENTORY.md) | [acceptance](CONSOLIDATION_ACCEPTANCE.md). Topic branch: `feat/v1-pre-release-consolidation-20261124`, base v1 at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. Owner requested one PR, Box-first iterative work and independent CI in parallel. P0 preflight is closed; P1 product implementation has begun with behavior-preserving helper extraction.
 
 ## Active P2-P5 handoff

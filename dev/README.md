@@ -1,15 +1,13 @@
 # BoxWeave Development Harness (BDH) — toolbox and workflow
 
-**Status: bootstrap plus bwdev v0.6.0-dev.1 (stacked candidate).** This is a task-side development and operational learning layer, not a product runtime feature. Use it on the next ordinary task; do not wait for future automation. The initial [script toolbox](../docs/development/BWDEV_DESIGN.md) is optional and ready for use. [Design and decisions](../docs/development/DEVELOPMENT_HARNESS.md) | [asset index](INDEX.md) | [learning inbox](LEARNING_INBOX.md).
-
-Universal activation and dual-loop design and rollout gates: [universal activation and dual-loop delivery plan](../docs/development/BDH_DUAL_LOOP_DELIVERY_PLAN.md).
+This is an optional CLI reference for the development harness, not an entry requirement or a task queue. Check the actual checkout's command help. Historical candidates and evaluation examples below are reference material; do not resume them by default.
 
 ## Universal entry
 
-Start every BoxWeave task with the canonical [bootstrap](BOOTSTRAP.md). External Agent/project configuration needs only the [minimal startup instruction](examples/REMOTE_ENTRY.md); the repository owns evolving rules. A tiny question can use only relevant knowledge and a learning judgment. For material work without a target checkout, use the portable [work envelope](examples/WORK_ENVELOPE.json) via GitHub or an independent control checkout. Unknown target fields stay null; the control repository SHA is not the installed version. A local record is not remote persistence. Use existing start/resume/finish for source development.
+There is no mandatory CLI startup. Use only relevant commands for the user's requested scope. If explicitly using the work-envelope protocol, its recorded fields are validated by the tool; ordinary work need not use that protocol.
 
 ```sh
-python3 dev/bwdev --json work plan --kind operations --query 'install migration'
+python3 dev/bwdev --json work plan --kind operations --query 'fresh install'
 python3 dev/bwdev --json work check dev/examples/WORK_ENVELOPE.json
 ```
 
@@ -483,28 +481,11 @@ capability checks. Use [Eval cases](evals/README.md) when changing the harness.
 
 ## Start, continue, finish
 
-1. Read [AGENTS.md](../AGENTS.md), confirm owner intent and active PR/branch/HEAD. Select the smallest workflow that fits the risk. For an ongoing task, locate its checkpoint and original workspace/operations before creating or changing anything.
-2. For nontrivial work, use bwdev start when a Python checkout is available, or fill [task card](templates/TASK.md) in the active PR or linked file. For small work, a few equivalent PR fields suffice. List observable acceptance, scope, dependencies and required knowledge/skills from the [index](INDEX.md).
-3. Prefer an authorized existing Box; use [environment skill](skills/box-development/SKILL.md). Local/VM/CI or direct GitHub docs edits are valid when sufficient; record why. Work in a topic branch.
-4. Implement, run focused tests, fix failures, and continue independent ready work. Use [verification skill](skills/verification/SKILL.md); final required gates remain governed by [quality policy](../docs/process/QUALITY_GATES.md) and product acceptance contracts. Never silently reduce scope or repeat a possible UNKNOWN effect.
-5. At material boundaries, before handoff, and when stopping, save [checkpoint](templates/CHECKPOINT.md) outside the Box using a branch/PR or approved durable store; preserve original IDs and dirty work. Use [resume skill](skills/task-resume/SKILL.md).
-6. At failures, material decisions, corrections and completion, capture a learning candidate or disposition in the task record. Apply [learning skill](skills/continuous-learning/SKILL.md). No new asset is required if nothing reusable was found. Small verified improvements can ship with the task; larger ones go to the inbox.
-7. Use bwdev finish for nontrivial work when records are available (or equivalent manual checks). Complete the PR template, including evidence, remaining gates and learning disposition. Keep working within scope until acceptance or a genuine blocker/budget boundary. Never claim CI/native PASS without exact evidence. Do not merge or release without applicable authorization.
+For an explicitly selected harness workflow, use start/resume/status/finish as appropriate. These commands observe or record work; they do not authorize new effects, require new improvement tasks or decide release acceptance. Ordinary tasks can use direct source checks and a concise report instead. Stop once the requested scope is complete or a concrete blocker remains.
 
 ## Workflow profiles
 
-| Profile | Typical use | Minimum path |
-| --- | --- | --- |
-| Lightweight | Small low-risk bug/docs | Scope → change → applicable checks → learning → PR |
-| Standard | Ordinary feature/refactor | Spec → tasks → implementation → verification → learning → CI |
-| Advanced | Network, security, host lifecycle, architecture | Research → design/authority review → phased work → native independent proof → learning → CI |
-| Experimental | External tools or uncertain approach | Isolated trial → comparison → evidence → adopt/reject decision |
-
-Risk, not diff size, determines profile. All profiles retain the existing safety/approval boundaries; product-specific gates always win. A task can be locally verified and submitted while CI remains pending. No background agent, scheduler, lock service or automatic status transition is installed by this bootstrap.
-
-## First use and next improvement
-
-The initial skills and templates are ready for the next task. Record actual friction and candidate improvements rather than build every planned feature upfront. The first CLI now covers environment observation, context discovery and basic checkpoint capture/check. Task continuity is now available via task init/next/status/transition. Verification planning and bounded local evidence are now available. The integrated start/resume/status/finish, profiles, CI navigation and behavior Eval are available. Future automation is driven by real product work and controlled evaluation; see the [bwdev roadmap](../docs/development/BWDEV_DESIGN.md). See the phased roadmap in the design. Use existing Makefile, Git, GitHub and MCP directly today.
+Select a profile only when using the CLI. Match the actual environment and task risk; no profile grants new authority.
 
 ## Local commit batches
 

@@ -1,6 +1,8 @@
 # BoxWeave Development Harness (BDH)
 
-**Scope update (2026-11-25):** The [active BDH development plan](BDH_DEVELOPMENT_PLAN.md) is the current implementation roadmap for #193. This original design remains the architecture reference; its early implementation status and rollout increments are historical.
+> **Reference only:** This is a historical architecture/design record, not a workflow or current capability claim. PR #193 is merged. Current command behavior is defined by dev/harness source. Harness use and improvement are optional unless explicitly requested.
+
+
 
 **Decision: adopt incrementally, starting with a minimum viable harness.** Approved direction: Box First (not Box Required/Only), document-driven, CLI and existing MCP both supported, Git + GitHub + Box hybrid, mixed external/native implementation, isolated experiments + gradual adoption. Initial activation: [canonical bootstrap](../../dev/BOOTSTRAP.md). This document records the target design; only the bootstrap assets and initial [bwdev v0.5.1](BWDEV_DESIGN.md) capabilities in the [developer toolbox](../../dev/README.md) are implemented. No change to product runtime or its tool catalog.
 
@@ -8,14 +10,7 @@
 
 ## Universal activation and dual loops
 
-Apply the [portable bootstrap](../../dev/BOOTSTRAP.md) to every BoxWeave
-task, including guidance, product operations, research and development.
-Solve Loop uses relevant assets, advances safely and validates the requested
-outcome. Evolve Loop links material feedback, reuses or improves assets,
-reconsiders deferred work and preserves reviewed evidence. No mandatory
-second task, automatic effects or new asset quota. The [delivery plan](BDH_DUAL_LOOP_DELIVERY_PLAN.md)
-defines rollout and acceptance; actual fresh Agent activation must be
-demonstrated separately.
+The historical dual-loop design does not require universal activation. Solve is the requested task; Evolve is a separate owner-authorized improvement task.
 
 ## 1. Objectives and boundaries
 

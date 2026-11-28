@@ -1,5 +1,7 @@
 # BDH evolution — agent-agnostic capability compensation
 
+> **Reference only:** Design research, not an Agent instruction or a queue of work. Improvement requires a separately requested scope.
+
 **Owner direction (2026-11-26), PR #191.** Preserve the existing BDH
 architecture and evolve it incrementally through the explicit owner request
 "BDH优化" (BDH optimization). This is a forward design and selection policy,

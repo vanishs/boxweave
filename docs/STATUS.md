@@ -14,6 +14,8 @@ Source integration is not release acceptance.
 
 ## Release readiness: NO-GO
 
+PR #198 is open. Its scoped replacements for the two obsolete shared-ACL tests were committed at b9937db and c2df2bf. Those changes have not yet established passing source or native acceptance; check exact-head CI. The observations below concern the explicitly identified older commits, not the PR #198 candidate.
+
 Actual final #191 Actions evidence (PR head cb67f99, not a stable build):
 
 | Gate | Result |
@@ -26,15 +28,13 @@ Actual final #191 Actions evidence (PR head cb67f99, not a stable build):
 | [S2.5](https://github.com/vanishs/boxweave/actions/runs/46098278831) | PASS, scoped independent nested lifecycle; not hostile recursive isolation. |
 | [Forward](https://github.com/vanishs/boxweave/actions/runs/46098278810) | PASS, three policy lanes; not public WAN reachability. |
 
-The same two Install tests fail across five jobs: the retired shared-ACL
+At the final #191 head, the same two Install tests failed across five jobs: the retired shared-ACL
 reader returns ErrResourceLocked before the old positive and interleaving
 oracles run. See [#194](https://github.com/vanishs/boxweave/issues/194),
 [current source](https://github.com/vanishs/boxweave/blob/b6f7ae09edb927d204fbcaaf9b2ecd6f98e7f211/internal/state/network_audit_ledger.go)
 and the [post-merge review](https://github.com/vanishs/boxweave/pull/191#issuecomment-7232991141).
 This does not establish a new live Scoped defect or pass the retained
-composed real protected SQLite/native interleaving obligation. The original
-refused test-write must not be replayed or delegated; preserve all coverage
-and seek legitimate review of the original denial where necessary.
+composed real protected SQLite/native interleaving obligation. Do not restore the retired reader to satisfy an obsolete test; verify the current scoped replacements and preserve coverage.
 
 The [owner's source-integration decision](https://github.com/vanishs/boxweave/pull/191#issuecomment-7232633581)
 reports removing required quality-gate protection for the merge. It did not
@@ -45,7 +45,7 @@ intended protection under owner authority; stable candidate and signed
 publication require protected v1. The
 [#197 quality run](https://github.com/vanishs/boxweave/actions/runs/46103061090)
 passed only the documentation fast path, skipping Go race/build.
-Actual current v1 push [quality](https://github.com/vanishs/boxweave/actions/runs/46103179949)
+The observed b6f7ae0 v1 push [quality](https://github.com/vanishs/boxweave/actions/runs/46103179949)
 and [candidate](https://github.com/vanishs/boxweave/actions/runs/46103179985)
 runs both FAIL at b6f7ae0; all four failed jobs reproduce the same two
 Install tests, and the manifest job is skipped. The previous draft status

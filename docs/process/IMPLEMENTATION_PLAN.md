@@ -10,9 +10,7 @@ fresh-only schema-7 architecture into v1. See the actual current
 [progress](../development/CONSOLIDATION_PROGRESS.md) preserve historical
 development decisions, not current merge state. The
 [acceptance ledger](../development/CONSOLIDATION_ACCEPTANCE.md) retains
-all mandatory obligations. H remains frozen, C01 is red, C04/C11 and
-final independent acceptance remain open; do not treat source integration
-as a waiver. Formal publication [#170](https://github.com/vanishs/boxweave/pull/170)
+all mandatory obligations. Previous H/C01/C04/C11 and independent acceptance results are revision-bound. The two old Install tests were replaced on PR #198; exact-head verification remains outstanding. Do not treat source integration as a waiver. Formal publication [#170](https://github.com/vanishs/boxweave/pull/170)
 must be reconciled with the current fresh-only architecture.
 
 ## Next authorized work after candidate acceptance
