@@ -2,6 +2,8 @@
 
 Status: R0 decision candidate, based on [native/SDK evidence](NATIVE_FILESYSTEM_R0_LAB.md) and [design](NATIVE_FILESYSTEM_DESIGN.md). This is not a product contract change or R0 independent signoff. The current 23 Tools, Schema 7 and existing fail-closed write semantics remain authoritative until owner approval and implementation acceptance.
 
+For the progressive explanation, worked API/workflow examples, architecture, sequence and data relationship diagrams, see the [Native Filesystem architecture walkthrough](NATIVE_FILESYSTEM_ARCHITECTURE.md). It is explanatory; the R0 contract candidate and measured evidence remain the scope and evidence references.
+
 ## 1. Minimum useful delivery
 
 Choose Resource-native interface C with Agent-facing operations from B. One bounded Go filesystem service and official Incus SFTP, one controller/SQLite and existing Operation system. Prefer ordinary MCP core over speculative extensions. Target Incus daemon/SDK 7.7, SFTP 1.13.13, Go 1.26.10; both MCP SDK 1.8 and 1.9-pre1 support tested core. Owner-selected 1.9-series development baseline is viable; retain 1.8 stable fallback if prerelease-specific value is absent or compatibility fails. Exact production dependency selection belongs to P0; no host update or dependency commit in R0.
