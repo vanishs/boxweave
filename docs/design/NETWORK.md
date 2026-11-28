@@ -2,7 +2,7 @@
 
 BoxWeave manages exact owned Boxes in a restricted Incus Project. Private peer access is denied by default; internet access is independently controlled. No arbitrary IP/CIDR/port ACL or host firewall editor. See [security](SECURITY.md), [MCP contracts](MCP_TOOL_CONTRACTS.md) and [installation modes](../getting-started/MANUAL_INSTALL.md).
 
-## Scoped Peer v2 (explicit fresh mode)
+## Scoped Peer v2 (current fresh-only candidate)
 
 - Create uses stopped quarantine, exact UUID/incarnation and an independent UUID-derived ACL and static dual-stack binding before start. New Boxes default to boot.autostart=true; explicit false is preserved.
 - A grant/revoke names two owned UUIDs and one direction. Controller stages the original and claims; bounded Root helpers independently verify ledger, ACL/ETag, addresses and kernel inventory. No arbitrary Root command.
@@ -16,9 +16,9 @@ See [N5 delivery](../history/development/V1_PR178_N5_DELIVERY_2026-11-23.md), [N
 
 1,024 owned Boxes is a logical limit, not physical capacity. Retired identities are bounded at 8,192; held addresses can exhaust sooner. No safe automatic reuse or compaction. At most 32 retained directional grants, including REVOKED; same-incarnation regrant reuses its row. Root history is bounded at 8,192 with reserve for active revokes. Synthetic ledger tests are not 1,024 physical guests or 8,192 real transitions. The #188 candidate reserves a future retired identity record for each owned or unresolved Create before admitting another Scoped Create. This preserves ordinary Delete headroom; it does not release address holds. Doctor and host_status separately report live slots, IPv4 union upper bound, identity reserve, retained Peer directions and remaining grant-history upper bound with revocation reserve. LOW means at most 20% remaining. Address reuse and authenticated history checkpointing are separate [unapproved reclamation proposals](../development/PR188_H4B_RECLAMATION_DESIGN.md). Existing /24 bridges are not silently enlarged; reviewed fresh native bootstrap can provision a /21 under exclusive conditions.
 
-## Legacy mode
+## Historical Legacy mode (not a current runtime)
 
-Legacy uses a shared ACL and separately reviewed Root/PRS workflow, not the scoped guard. Peer may require Host-local approval and disrupt other consumers during older maintenance. Never apply legacy all-consumer/shared-ACL remedies to scoped installations. Historical IPv4 reuse, IPv6 NDP, anti-spoof, ETag and global Scriptlet experiments are [archived](../history/README.md), not current scoped failures.
+Earlier installations used a shared ACL and separately reviewed Root/PRS workflow, not the scoped guard. Those installed builds had separate Host-local review requirements; consult their original version-bound evidence. Never apply legacy all-consumer/shared-ACL remedies to scoped installations. Historical IPv4 reuse, IPv6 NDP, anti-spoof, ETag and global Scriptlet experiments are [archived](../history/README.md), not current scoped failures.
 
 ## Native forwarding
 

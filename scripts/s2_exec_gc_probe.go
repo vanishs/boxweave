@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,13 +67,30 @@ func main() {
 	require(os.Getenv("GITHUB_ACTIONS") == "true" &&
 		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" && os.Geteuid() != 0,
 		"disposable nonroot GH runner only")
-	require(strings.HasPrefix(db, "/tmp/bw-v1-s2-ghci.") &&
-		strings.HasSuffix(db, "/mcp-quota-ledger/ledger.sqlite") && filepath.Clean(db) == db &&
-		strings.HasPrefix(project, "user-") && strings.HasPrefix(token, "bw1_") &&
-		len(uuid) == 36 &&
-		(socket == "/var/lib/incus/unix.socket.user" ||
-			socket == filepath.Join(filepath.Dir(filepath.Dir(db)), "ledger", "gc-delete-proxy.sock")),
-		"exact CI-only DB, Project, UUID and restricted socket required")
+	installed := os.Getenv("BW_S2_INSTALLED_SCOPED_GC") == "1"
+	endpoint := "http://127.0.0.1:18656/mcp"
+	if installed {
+		account, err := user.Lookup("boxweave")
+		info, statErr := os.Lstat(db)
+		dir := os.Getenv("BW_S2_GC_INSTALLED_WORK")
+		require(err == nil && account.Uid == strconv.Itoa(os.Geteuid()) &&
+			project == "user-"+account.Uid && db == "/var/lib/boxweave/ledger.sqlite" &&
+			statErr == nil && info.Mode().IsRegular() &&
+			strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci.") && filepath.Clean(dir) == dir &&
+			(socket == "/var/lib/incus/unix.socket.user" || socket == filepath.Join(dir, "ledger", "gc-delete-proxy.sock")) &&
+			strings.HasPrefix(token, "bw1_") && len(uuid) == 36 &&
+			mode != "release-test-fixture",
+			"exact installed disposable nonroot GC original required")
+		endpoint = "http://127.0.0.1:18650/mcp"
+	} else {
+		require(strings.HasPrefix(db, "/tmp/bw-v1-s2-ghci.") &&
+			strings.HasSuffix(db, "/mcp-quota-ledger/ledger.sqlite") && filepath.Clean(db) == db &&
+			strings.HasPrefix(project, "user-") && strings.HasPrefix(token, "bw1_") &&
+			len(uuid) == 36 &&
+			(socket == "/var/lib/incus/unix.socket.user" ||
+				socket == filepath.Join(filepath.Dir(filepath.Dir(db)), "ledger", "gc-delete-proxy.sock")),
+			"exact CI-only DB, Project, UUID and restricted socket required")
+	}
 	if mode != "create" {
 		require(len(opID) == 32 && len(nativeID) == 36, "original immutable receipt required")
 	}
@@ -80,7 +99,7 @@ func main() {
 	if mode == "create" || mode == "create-loss" || mode == "check" || mode == "loss-check" {
 		c := mcp.NewClient(&mcp.Implementation{Name: "s2-seven-day-retention-test", Version: "1"}, nil)
 		session, err := c.Connect(ctx, &mcp.StreamableClientTransport{
-			Endpoint:             "http://127.0.0.1:18656/mcp",
+			Endpoint:             endpoint,
 			HTTPClient:           &http.Client{Transport: authTransport{token}},
 			DisableStandaloneSSE: true, MaxRetries: -1,
 		}, nil)

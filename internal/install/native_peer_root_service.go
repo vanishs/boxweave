@@ -19,7 +19,6 @@ const nativePeerRootUnitPath = "/etc/systemd/system/boxweave-native-peer-root.se
 const nativeRetirementUnitPath = "/etc/systemd/system/boxweave-ipv4-retirement.service"
 const nativeRetirementUnitName = "boxweave-ipv4-retirement.service"
 const nativePeerRootInstalledBinary = "/usr/local/bin/boxweave"
-const nativePeerRootInstalledDB = "/var/lib/boxweave/ledger.sqlite"
 
 var nativePeerRootUnitToken = regexp.MustCompile("^[a-zA-Z0-9_-]+$")
 

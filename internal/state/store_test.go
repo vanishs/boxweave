@@ -34,17 +34,17 @@ func TestAdmissionIdempotencyAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := Admission{Layer: "L0", ActorID: token.ID, TokenID: token.ID, Key: "reusable-client-key-001", Action: "test-no-native-side-effect", SafeIntent: []byte(`{"safe":"value"}`), RequestID: "request-one"}
-	first, err := s.Admit(ctx, a)
+	first, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
 	a.RequestID = "request-two"
-	again, err := s.Admit(ctx, a)
+	again, err := s.AdmitScoped(ctx, a)
 	if err != nil || !again.Duplicate || first.ID != again.ID || first.TrackingID != again.TrackingID {
 		t.Fatalf("bad duplicate: %+v, %v", again, err)
 	}
 	a.SafeIntent = []byte(`{"safe":"other"}`)
-	if _, err = s.Admit(ctx, a); !errors.Is(err, ErrConflict) {
+	if _, err = s.AdmitScoped(ctx, a); !errors.Is(err, ErrConflict) {
 		t.Fatalf("wanted conflict: %v", err)
 	}
 	if err = s.RevokeToken(ctx, token.ID); err != nil {
@@ -69,7 +69,7 @@ func TestCrashRecoveryNeverRedispatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := Admission{Layer: "L1", ActorID: token.ID, TokenID: token.ID, Key: "client-intent-recovery-1", Action: "test", SafeIntent: []byte(`{"safe":1}`), RequestID: "r"}
-	r, err := s.Admit(ctx, a)
+	r, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestCrashRecoveryNeverRedispatches(t *testing.T) {
 		t.Fatal("unexpected native redispatch")
 	}
 	a.RequestID = "retry"
-	duplicate, err := s.Admit(ctx, a)
+	duplicate, err := s.AdmitScoped(ctx, a)
 	if err != nil || duplicate.ID != r.ID || duplicate.State != "UNKNOWN" {
 		t.Fatalf("unknown dedupe: %+v %v", duplicate, err)
 	}

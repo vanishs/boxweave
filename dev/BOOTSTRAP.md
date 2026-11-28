@@ -3,7 +3,9 @@
 This is the canonical startup entry for BDH on any Agent surface.
 Apply BDH to every BoxWeave task, not every message: usage, support,
 installation, diagnosis, design/research, docs, development, release and
-BDH itself. Use the smallest workflow that fits the goal and risk.
+BDH itself. Use the smallest workflow that fits the goal and risk. For material work,
+use the current authorized task checkout's feedback protocol and toolbox
+when available; retain the canonical safety and acceptance requirements.
 
 ## Load the task context
 
@@ -26,6 +28,55 @@ BDH itself. Use the smallest workflow that fits the goal and risk.
    current canonical instructions are inaccessible, report the limitation
    and do not assume stale rules, permissions or acceptance.
 
+For remote clients, group relevant capability discovery in one lookup where
+supported. Reuse exact discovered schemas within the task; discover further
+only when needed. Resolve the current checkpoint pointer first, then read
+that checkpoint and relevant acceptance rules rather than reloading long
+historical progress logs. Expand historical evidence only for a concrete
+gap, conflict, or required witness.
+
+For development follow [fast local reuse and strict acceptance](../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance):
+reuse authorized Box/worktree and Git objects; batch locally verified commits
+and publish at meaningful CI boundaries. Clean independent fixtures are
+reserved for gates that require them. Preserve remote freshness, original
+Operations and durable handoff.
+
+For staged development, use the active task plan and finite exit ledger;
+apply [adaptive stages](../docs/development/AGENT_WORKFLOW.md#outcome-first-adaptive-stages).
+At stage boundaries replan the next actions from evidence, not checkpoint
+counts. Do not expand scope merely because a dependency is blocked.
+
+## Choose the shortest applicable route
+
+Use the authorized task checkout's [short task routes](INDEX.md#short-task-routes)
+and actual capabilities; a candidate checkout does not replace canonical
+v1 authority. This is a choice, not an extra mandatory workflow.
+
+- Tiny read-only question: read the relevant contract and answer. No Box,
+  plan, work envelope or learning write solely for BDH.
+- Existing source check in a Python checkout: start with
+  `python3 dev/bwdev --json verify plan`; if a registered check matches,
+  use `verify run` and `verify inspect` as described in the toolbox.
+  A separate work plan is useful for material or ambiguous work, not a
+  prerequisite for a focused check. Use `--brief` only where supported.
+- Explicit owner request "BDH优化" (BDH optimization): use the
+  [agent-agnostic evolution direction](../docs/development/BDH_AGENT_AGNOSTIC_EVOLUTION.md)
+  and run one
+  [BDH improvement cycle](skills/harness-improver/SKILL.md#owner-invoked-improvement-cycle-candidate)
+  on the active authorized task branch. A quotation or discussion of the
+  phrase is not an execution request. Review-only requests remain read-only.
+- Owner-requested improvement review: start at the learning inbox; use
+  the compact existing review view where available, then exact current
+  records and original evidence. No implementation without owner scope.
+- No usable matching helper or local route: use the authorized manual
+  route, record the reason and actual evidence. Do not install a new
+  runner or invent a remote executor just for BDH.
+
+Current procedures and historical results are separate: load applicable
+rules and execution guidance before tests; consult historical evidence for
+recovery, review or comparison, not as a new result. Do not omit required
+safety or acceptance guidance to avoid historical exposure.
+
 ## Solve Loop and Evolve Loop
 
 3. Discover and reuse relevant knowledge, Skills, tools and workflows.
@@ -45,6 +96,15 @@ BDH itself. Use the smallest workflow that fits the goal and risk.
    improvements and sanitized material records through authorized Git/PR
    storage. If persistence is inaccessible, return an explicit pending
    record. Small read-only guidance needs no Box, PR or new asset.
+
+## Before ending material work
+
+Apply the [Finish Gate](skills/task-resume/SKILL.md#finish-gate-candidate)
+before returning a final report. Use bwdev finish for structured delivery
+where available, or the equivalent manual check. A pending CI run or
+completed Exec receipt alone is not a reason to stop. Continue safe ready
+work within the requested scope; record a concrete blocker or budget
+boundary and the next safe action if continuation is impossible.
 
 The repository owns the workflow; an Agent/project setting only locates
 this entry. Do not copy evolving rules into platform configuration. Repo

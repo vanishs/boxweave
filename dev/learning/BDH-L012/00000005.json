@@ -1,0 +1,47 @@
+{
+  "asset": "dev/skills/verification/SKILL.md",
+  "change_class": "L2",
+  "evidence": "GitHub Actions run 45550362915: cancelled during v0.3",
+  "fingerprint": "034255cb51d2698ca88e20e5195cfc840b83a19dea3d8449eb9ef92eaf26b19e",
+  "id": "BDH-L012",
+  "implementation": {
+    "asset_sha256": "8278fc3aa956a239b1c55fb06f28a6a37fccc6a7b69b7e7fc6242a2b1da643c9",
+    "evidence_ref": "Original Box 5f66fc639989e35dd373cdfc7e2e15a0 exit0: nine workflow tests, 14 Eval, format PASS; actual seven-row SHA list. Candidate, no controlled gain or native acceptance.",
+    "ref": "PR191: consolidated CI observation in existing verification Skill, reuse bwdev CI and connector",
+    "source": {
+      "base_commit": null,
+      "branch": null,
+      "commit": "d46d5b9452b7927b08165fa1ab2b5b892ff97276",
+      "worktree": "dirty"
+    }
+  },
+  "kind": "learning",
+  "observation": "A superseded quality-gate run can be cancelled by a later head; distinguish cancellation from test failure and inspect the current exact head.",
+  "observations": [
+    {
+      "attempt_ref": "20261125-close",
+      "evidence": "PR191 eb2cddf CI runs 45582511436,45582511508,45582511623; quality job 139095809783 PASS, native jobs 139095813678 and 139095814097 SKIPPED; Box Exec 80aa43b9f95b46f394c67fcf4d77eac4 exit 0",
+      "observation": "Exact-head connector CI and runtime diff separated merged harness/source checks from unchanged installed candidate and skipped native gates; full raw run association fields are unavailable in connector snapshot, so no fabricated bwdev CI result",
+      "outcome": "helped",
+      "work_ref": "pr191/p0-close"
+    },
+    {
+      "attempt_ref": "20261126",
+      "evidence": "PR191 d46d5b9: one authorized SHA-list read returned seven workflow rows; Box inventory 1d56e7736dd35e7449ad5daa475111e2 exit0",
+      "observation": "Reuse one existing repository-level list at decision boundaries. Raw association and completeness absent; retain mandatory job proof. Prior aggregate use already exists; no measured incremental gain.",
+      "outcome": "helped",
+      "work_ref": "pr191/bdh-ci-snapshot"
+    }
+  ],
+  "revision": 5,
+  "schema_version": 1,
+  "source": {
+    "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+    "branch": "feat/v1-bdh-bootstrap",
+    "commit": "c85da136280d268e2548b06bde7c07a5a35d3d40",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "validation": "Review prior and current exact-head CI status before classifying a regression",
+  "work_ref": "boxweave/pr189-bwdev"
+}

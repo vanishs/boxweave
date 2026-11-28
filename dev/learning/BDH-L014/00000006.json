@@ -1,0 +1,65 @@
+{
+  "asset": "dev/skills/box-development/SKILL.md",
+  "change_class": "L2",
+  "domains": [
+    "box-exec"
+  ],
+  "effort": "small",
+  "evidence": "dev/LEARNING_INBOX.md#first-bwdev-implementation-learning-pr-189: BDH-L005 historical observation",
+  "fingerprint": "300aa8370d3a03a93d6e7f999f66e8f3ffd99c0583ce1e9e4dda31de8fb8feb9",
+  "id": "BDH-L014",
+  "impact": "friction",
+  "implementation": {
+    "asset_sha256": "49d4f41bc8391265ac3e6bfae8552eb16c242f3c898350eb5e4b666604756e8c",
+    "evidence_ref": "U2 verified transfer f9e86facbe28dff3fba4aed216c6b4a5 and exit-zero 65bda5634d3a24637d5be3d92eba49a5; U4 rediscovery d8e6361ceba51dde865195afb52aa34b and 53 tests/8 Eval 74c163de9bac2021503798ad63024b4a",
+    "ref": "PR #189 dual loop: dev/skills/box-development/SKILL.md bounded source transfer",
+    "source": {
+      "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+      "branch": "feat/v1-bdh-bootstrap",
+      "commit": "df864c27ea08211a63d663e5eeecb167c1ab3ebf",
+      "worktree": "dirty"
+    }
+  },
+  "kind": "learning",
+  "observation": "Large argv source transfer rejected at admission; verified exclusive file creation worked",
+  "observations": [
+    {
+      "attempt_ref": "u1-u4",
+      "evidence": "U2 refused admission; file apply f9e86facbe28dff3fba4aed216c6b4a5 and execution 65bda5634d3a24637d5be3d92eba49a5",
+      "observation": "Large inline patch admission refused twice; exclusive patch file then short execution succeeded",
+      "outcome": "recurred",
+      "work_ref": "boxweave/pr189-dual-loop-u2"
+    },
+    {
+      "attempt_ref": "p0-retrospective",
+      "evidence": "PR #191 P0 source audit: 150144e21aa562490c155df17b3b30b18c556598; file 349f208b9bc026fda9e2a278c96087ee; exec e21a1b75e580e6781cd2d8f773ab8b5b exit 0",
+      "observation": "P0 recorded an oversized Exec admission refusal and reused L014 exclusive file creation plus short generator Exec; original file and Exec receipts independently read, Exec exit 0",
+      "outcome": "helped",
+      "work_ref": "pr191"
+    }
+  ],
+  "reconsider": {
+    "observation_count": 0,
+    "reason": "Do not interrupt universal entry and continuity implementation",
+    "when": "Revisit when a later Box development task encounters admission refusal or needs patch transfer"
+  },
+  "review_ref": "U4 rediscovery d8e6361ceba51dde865195afb52aa34b; explicit bounded selection, not promotion",
+  "revision": 6,
+  "schema_version": 1,
+  "signals": [
+    "admission"
+  ],
+  "source": {
+    "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+    "branch": "feat/v1-bdh-bootstrap",
+    "commit": "df864c27ea08211a63d663e5eeecb167c1ab3ebf",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "task_kinds": [
+    "development",
+    "harness"
+  ],
+  "validation": "Review original admission response and verify bounded exclusive file transfer and command execution without replay",
+  "work_ref": "boxweave/pr189-bwdev-v01"
+}

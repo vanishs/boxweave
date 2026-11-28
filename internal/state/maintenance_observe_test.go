@@ -28,7 +28,7 @@ func TestH1AMaintenanceRetainedAndUnknown(t *testing.T) {
 	}
 	snap2 := DiagnosticSnapshot{store: s2}
 	u, e := snap2.ReadMaintenanceLedger(ctx, "user-1001")
-	if e != nil || u.Claims != 8 || u.NonterminalRecordedClaims != 5 || len(u.Originals) != 1 {
+	if e != nil || u.Claims != 25 || u.NonterminalRecordedClaims != 5 || len(u.Originals) != 1 {
 		t.Fatal(u, e)
 	}
 	found := false
@@ -93,5 +93,50 @@ func TestH1BMaintenanceHistoryWitness(t *testing.T) {
 	after, e := snap.ReadMaintenanceLedger(ctx, b.Project)
 	if e != nil || after.Retired != a.Retired || after.Claims != a.Claims || after.HistorySHA256 == a.HistorySHA256 || after.ObservationDigest() == a.ObservationDigest() {
 		t.Fatal("same-count history drift missed", e)
+	}
+}
+
+// With no Legacy state, the new Scoped reader must preserve the exact
+// schema-6 observation digest used by reviewed maintenance and drain.
+func TestP1ScopedMaintenanceRetainsWitnessDigest(t *testing.T) {
+	ctx := context.Background()
+	s, b, _ := n3RetiredFixture(t)
+	snap := DiagnosticSnapshot{store: s}
+	legacy, e := snap.ReadMaintenanceLedger(ctx, b.Project)
+	if e != nil {
+		t.Fatal(e)
+	}
+	scoped, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || scoped.ObservationDigest() != legacy.ObservationDigest() || scoped.HistorySHA256 != legacy.HistorySHA256 {
+		t.Fatal(scoped, e)
+	}
+	drain, e := s.ReadScopedDrainWitness(ctx, b.Project)
+	if e != nil || drain.ObservationDigest() != scoped.ObservationDigest() {
+		t.Fatal(drain, e)
+	}
+}
+
+func TestP1ScopedMaintenanceRetainsHistoryDigest(t *testing.T) {
+	ctx := context.Background()
+	s, b, _ := n3RetiredFixture(t)
+	snap := DiagnosticSnapshot{store: s}
+	prior, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || len(prior.HistorySHA256) != 64 {
+		t.Fatal(prior, e)
+	}
+	drain, e := s.ReadScopedDrainWitness(ctx, b.Project)
+	if e != nil || drain.HistorySHA256 != prior.HistorySHA256 {
+		t.Fatal(drain, e)
+	}
+	after, e := snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || after.ObservationDigest() != prior.ObservationDigest() {
+		t.Fatal(after, e)
+	}
+	if _, e = s.db.Exec("UPDATE network_address_fences SET observed_at=observed_at+1 WHERE state='RELEASED'"); e != nil {
+		t.Fatal(e)
+	}
+	after, e = snap.ReadScopedMaintenanceLedger(ctx, b.Project)
+	if e != nil || after.HistorySHA256 == prior.HistorySHA256 {
+		t.Fatal("history change hidden", after, e)
 	}
 }

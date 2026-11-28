@@ -41,10 +41,7 @@ func (s Service) InspectPlan(ctx context.Context, t state.RecoveryTarget) (PlanW
 	// Scope and exact original intent are private. The digest is evidence,
 	// not authority. Missing fingerprint is never review-ready.
 	if (p.Kind == state.RecoverySettle || p.Kind == state.RecoveryBind || p.Kind == state.RecoveryRepairPin) && p.Fingerprint != "" {
-		checker, ok := s.ReadStore.(interface {
-			CheckPlanRecoveryProof(context.Context, state.RecoveryTarget, state.RecoveryProof) error
-		})
-		if !ok || checker.CheckPlanRecoveryProof(ctx, t, p) != nil {
+		if s.checkPlanRecovery(ctx, t, p) != nil {
 			out.Kind = state.RecoveryBlocked
 			out.Reason = "RECOVERY_PRECONDITIONS_UNVERIFIED"
 			return out, nil
@@ -55,4 +52,15 @@ func (s Service) InspectPlan(ctx context.Context, t state.RecoveryTarget) (PlanW
 		}
 	}
 	return out, nil
+}
+
+// No Scoped plan can fall back to a Legacy precondition checker.
+func (s Service) checkPlanRecovery(ctx context.Context, t state.RecoveryTarget, p state.RecoveryProof) error {
+	checker, ok := s.ReadStore.(interface {
+		CheckScopedPlanRecoveryProof(context.Context, state.RecoveryTarget, state.RecoveryProof) error
+	})
+	if !ok {
+		return state.ErrResourceLocked
+	}
+	return checker.CheckScopedPlanRecoveryProof(ctx, t, p)
 }

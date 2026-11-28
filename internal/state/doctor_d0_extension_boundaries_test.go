@@ -69,17 +69,11 @@ func TestPR177D0ExtensionScopedRetirementStatusMismatch(t *testing.T) {
 	if !holds.IPs[netip.MustParseAddr(retired.IPv4)] || !holds.IPs[netip.MustParseAddr(retired.IPv6)] || !holds.MACs[retired.MAC] {
 		t.Fatal("valid retired address or MAC no longer held")
 	}
-	// Characterization, not a desired D2 invariant. A future architecture-
-	// qualified status must NOT route this intentional retained identity
-	// to legacy helper activation/compaction.
-	status, err := s.ReadIPv4RetirementStatus(ctx, b.Project)
-	if err != nil {
-		t.Fatal(err)
+	// The retained identity is never queued for obsolete Legacy reclamation.
+	if _, err = s.ReadIPv4RetirementStatus(ctx, b.Project); !errors.Is(err, ErrResourceLocked) {
+		t.Fatal("legacy status allowed", err)
 	}
-	t.Logf("D0X_SCOPED_RETIRED_HELD legacy_pending=%d verified_retired=%d", status.Pending, len(l.Retired))
-	if status.Pending != 1 {
-		t.Log("legacy count behavior changed; update diagnostic characterization")
-	}
+
 }
 
 func TestPR177D0ExtensionOriginalCredentialRevocation(t *testing.T) {
@@ -103,7 +97,7 @@ func TestPR177D0ExtensionOriginalCredentialRevocation(t *testing.T) {
 	if err = s.RevokeToken(ctx, oldToken); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = ro.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", "bwbr0"); !errors.Is(err, ErrRevoked) {
+	if _, err = ro.ReadRootScopedPeerUnknownOriginal(ctx, id, "user-1001", purePeerBridge); !errors.Is(err, ErrRevoked) {
 		t.Fatal("revoked original did not fail closed", err)
 	}
 	// A fresh authenticated recovery actor alone cannot re-authorize a

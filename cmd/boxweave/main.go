@@ -10,8 +10,6 @@ import (
 	"golang.org/x/term"
 	"os"
 	"os/signal"
-	"os/user"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -27,15 +25,16 @@ var (
 	commit  = "unverified"
 )
 
-func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-scoped-fresh-plan|native-scoped-retirement-plan|native-scoped-retirement-resume-plan|native-scoped-retirement-restore|native-scoped-retirement-guard|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-retirement-check|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-plan|native-peer-root-reconcile|native-peer-root-unit-stage|native-peer-root-stage|native-peer-root-execute|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
-}
 func run() error {
 	if len(os.Args) < 2 {
 		usage()
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if len(os.Args) == 2 && (command == "--help" || command == "-h" || command == "-help") {
+		usage()
+		return nil
+	}
 	if e := install.CheckOfflineRetirementCommand(command); e != nil {
 		return e
 	}
@@ -85,6 +84,14 @@ func run() error {
 		}
 		return recoverWorker()
 	}
+	if retiredCLICommand(command) {
+		return errors.New("scoped fresh only: legacy installation mutation unsupported")
+	}
+	spec, ok := cliCommands[command]
+	if !ok {
+		usage()
+		return errors.New("unsupported command")
+	}
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
 	db := f.String("db", "/var/lib/boxweave/ledger.sqlite", "protected local SQLite path")
 	socket := f.String("incus-socket", "/var/lib/incus/unix.socket.user", "restricted Incus Unix socket")
@@ -99,10 +106,10 @@ func run() error {
 	serviceUser := f.String("service-user", "boxweave", "dedicated nonroot incus-only service account")
 	sourceBinary := f.String("source-binary", "", "source executable at approved exact digest")
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
-	scopedFresh := f.Bool("scoped-peer-fresh", false, "fresh-only scoped Peer v2")
+	scopedFresh := f.Bool("scoped-peer-fresh", true, "assert fresh-only scoped Peer v2")
 	scopedReview := f.String("scoped-fresh-review-sha256", "", "exact local scoped fresh review digest")
 	approve := f.Bool("approve-stage", false, "explicitly authorize staging service files; no automatic start")
-	approveLocal := f.Bool("approve-local", false, "host-local root authorization to activate, upgrade or rollback")
+	approveLocal := f.Bool("approve-local", false, "explicit host-local root authorization for the selected reviewed action")
 	nativePackageVersion := f.String("incus-package-version", "", "exact signed Ubuntu Incus package version (for fresh bootstrap)")
 	nativePlanSHA := f.String("native-plan-sha256", "", "operator-reviewed native APT simulation digest")
 	approveNative := f.Bool("approve-native-bootstrap", false, "approve exact signed APT plan on an empty local host")
@@ -110,22 +117,16 @@ func run() error {
 	preparePool := f.String("pool", "", "existing reviewed native dir pool for pre-first-Box preparation")
 	prepareNetwork := f.String("network", "", "existing reviewed managed native bridge")
 	prepareACL := f.String("acl", "", "new exclusively owned bw-prefixed Incus network ACL")
-	peerSource := f.String("peer-source-uuid", "", "exact original owned source UUID, only for root-local read-only peer review")
-	peerTarget := f.String("peer-target-uuid", "", "exact original owned target UUID, only for root-local read-only peer review")
-	peerOriginal := f.String("operation-id", "", "root peer handoff: immutable original claimed operation ID")
-	peerSHA := f.String("peer-plan-sha256", "", "root peer handoff: exact reviewed root-only plan digest")
-	retirementReview := f.Bool("retirement-review", false, "enable fixed-Project read-only original Delete retirement proof in the existing root helper")
-	retirementCompact := f.Bool("retirement-compact", false, "approve fixed-Project original-Delete ACL tombstone compaction in the local root helper; requires retirement-review")
 
 	prepareSHA := f.String("native-prepare-sha256", "", "operator-reviewed exact native prepare plan/journal digest")
-	scriptletWriter := f.String("scriptlet-writer-fingerprint", "", "exact existing restricted TLS certificate fingerprint for a single owned native ACL")
-	scriptletSHA := f.String("scriptlet-plan-sha256", "", "operator-reviewed exact global Scriptlet routing plan digest")
+	retirementCold := f.Bool("retirement-cold", false, "require exclusive cold ledger proof for settled offline retirement")
+
 	oldIncusPackage := f.String("old-incus-package", "", "exact current signed Ubuntu Incus package version")
 	confirmNativeHost := f.String("confirm-native-host-sha256", "", "operator-reviewed current local machine-ID digest")
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
 	ackNativeDowntime := f.Bool("acknowledge-native-downtime", false, "accept exact native daemon stop/restart on a verified zero-consumer host")
 
-	recoveryAction := f.String("action", "inspect", "manual recover diagnose|reconcile, inspect|challenge|release, create-*, delete-* or gc-*")
+	recoveryAction := f.String("action", "", "explicit scoped Exec log review: gc-inspect|gc-challenge|gc-release")
 	recoveryStream := f.String("stream", "", "original stdout|stderr only for locally reviewed Exec log GC")
 	recoveryKey := f.String("recovery-key", "", "distinct durable key for the safe reconcile action")
 	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
@@ -137,11 +138,16 @@ func run() error {
 
 	maintenance := f.Bool("maintenance", false, "doctor: root-local read-only maintenance evidence")
 	summary := f.Bool("summary", false, "doctor: concise operator summary on stderr; JSON unchanged")
+	f = commandFlagSet(f, spec)
 	if err := f.Parse(os.Args[2:]); err != nil {
 		return err
 	}
 	if f.NArg() != 0 {
 		return errors.New("unexpected arguments")
+	}
+	if *retirementCold && command != "native-scoped-retirement-plan" && command != "native-scoped-retirement-resume-plan" &&
+		command != "native-scoped-retirement-restore" && command != "native-scoped-retirement-guard" {
+		return errors.New("cold retirement proof is settled scoped retirement only")
 	}
 	if *summary && command != "doctor" {
 		return errors.New("summary is doctor-only")
@@ -170,11 +176,70 @@ func run() error {
 		}
 		return runMaintenanceDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser}, *summary)
 	}
-	switch command {
-	case "native-scoped-retirement-plan", "native-scoped-retirement-resume-plan", "native-scoped-retirement-restore", "native-scoped-retirement-guard", "native-scoped-fresh-plan", "native-scoped-guard-boot", "native-scoped-lifecycle-serve", "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-retirement-check", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-reconcile", "native-peer-root-unit-stage", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
-	default:
-		usage()
-		return errors.New("unsupported command")
+	// Exceptional offline retirement is root-local and uses only the exact
+	// installed Project and archived review. No caller-supplied target path.
+	if strings.HasPrefix(command, "native-scoped-offline-") {
+		valid := os.Geteuid() == 0 && state.SafeDiagnosticProject(*project)
+		f.Visit(func(v *flag.Flag) {
+			if v.Name != "project" && v.Name != "native-prepare-sha256" && v.Name != "approve-local" {
+				valid = false
+			}
+		})
+		if !valid {
+			return state.ErrInvalid
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		switch command {
+		case "native-scoped-offline-review":
+			if *approveLocal || *prepareSHA != "" {
+				return state.ErrInvalid
+			}
+			r, e := install.NativeScopedOfflineArchiveReview(ctx, *project)
+			if e != nil {
+				return e
+			}
+			return json.NewEncoder(os.Stdout).Encode(r)
+		case "native-scoped-offline-progress", "native-scoped-offline-final-plan":
+			if *approveLocal || *prepareSHA == "" {
+				return state.ErrInvalid
+			}
+			if command == "native-scoped-offline-progress" {
+				r, e := install.NativeScopedOfflineArchiveProgress(ctx, *project, *prepareSHA)
+				if e != nil {
+					return e
+				}
+				return json.NewEncoder(os.Stdout).Encode(r)
+			}
+			r, e := install.NativeScopedOfflineFinalPlan(ctx, *project, *prepareSHA)
+			if e != nil {
+				return e
+			}
+			return json.NewEncoder(os.Stdout).Encode(r)
+		case "native-scoped-offline-step", "native-scoped-offline-restore", "native-scoped-offline-guard":
+			if !*approveLocal || *prepareSHA == "" {
+				return state.ErrInvalid
+			}
+			release, e := acquireMaintenanceLock()
+			if e != nil {
+				return e
+			}
+			defer release()
+			if command == "native-scoped-offline-step" {
+				r, e := install.NativeScopedOfflineArchiveStep(ctx, *project, *prepareSHA, true)
+				if e != nil {
+					return e
+				}
+				return json.NewEncoder(os.Stdout).Encode(r)
+			}
+			r, e := install.NativeScopedOfflineFinalApply(ctx, *project, *prepareSHA, command == "native-scoped-offline-guard", true)
+			if e != nil {
+				return e
+			}
+			return json.NewEncoder(os.Stdout).Encode(r)
+		default:
+			return state.ErrInvalid
+		}
 	}
 	if command == "native-scoped-retirement-plan" || command == "native-scoped-retirement-resume-plan" ||
 		command == "native-scoped-retirement-restore" || command == "native-scoped-retirement-guard" {
@@ -190,14 +255,14 @@ func run() error {
 			if *approveLocal || *prepareSHA != "" {
 				return errors.New("read-only scoped retirement plan does not accept approval")
 			}
-			report, err = install.NativeScopedRetirementPlan(ctx, *project, command == "native-scoped-retirement-resume-plan")
+			report, err = install.NativeScopedRetirementPlan(ctx, *project, command == "native-scoped-retirement-resume-plan", *retirementCold)
 		default:
 			release, e := acquireMaintenanceLock()
 			if e != nil {
 				return e
 			}
 			defer release()
-			report, err = install.NativeScopedRetirementApply(ctx, *project, *prepareSHA, command == "native-scoped-retirement-guard", *approveLocal)
+			report, err = install.NativeScopedRetirementApply(ctx, *project, *prepareSHA, command == "native-scoped-retirement-guard", *approveLocal, *retirementCold)
 		}
 		if err != nil {
 			return err
@@ -224,21 +289,21 @@ func run() error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(r)
 	}
-	if *scopedReview != "" && (!*scopedFresh || command != "install-stage") {
+	if !*scopedFresh {
+		return errors.New("legacy controller mode unsupported; scoped fresh required")
+	}
+	if *scopedReview != "" && command != "install-stage" {
 		return errors.New("scoped review is fresh stage only")
 	}
-	if *scopedFresh && command != "serve" && command != "status" && command != "doctor" && command != "install-stage" {
-		return errors.New("scoped mode requires fresh installation")
-	}
-	if *scopedFresh && command == "install-stage" && *scopedReview == "" {
+	if command == "install-stage" && *scopedReview == "" {
 		return errors.New("scoped fresh review required")
 	}
 	// One fail-closed root-local mutex for every installer or native dependency
 	// mutation, including a reviewed UNKNOWN claim release. Read-only status
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
-	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
-		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback", "native-prepare-archive", "native-scriptlet-apply", "native-scriptlet-rollback", "native-scriptlet-reconcile",
+	case "install-stage", "install-activate",
+		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback", "native-prepare-archive",
 		"native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
 		if err != nil {
@@ -311,162 +376,6 @@ func run() error {
 			return e
 		}
 		return err
-	}
-	if command == "native-peer-root-unit-stage" {
-		if !*approveLocal {
-			return errors.New("explicit host-local root unit approval required")
-		}
-		if *project == "" || *prepareNetwork == "" || *prepareACL == "" ||
-			(*peerOriginal == "") != (*peerSHA == "") ||
-			(*peerOriginal == "" && !*retirementReview) ||
-			(*retirementCompact && !*retirementReview) {
-			return errors.New("fixed Project, bridge and ACL plus exact original approval or explicit retirement scope required")
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
-		defer cancel()
-		if err := install.NativePeerRootUnitStage(ctx, install.NativePeerRootScope{
-			DBPath: *db, Project: *project, Bridge: *prepareNetwork, ACL: *prepareACL,
-			OriginalID: *peerOriginal, ApprovedPlanSHA: *peerSHA, RetirementReview: *retirementReview, RetirementCompact: *retirementCompact, Approved: true,
-		}); err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(struct {
-			Status string `json:"status"`
-		}{
-			Status: "UNIT_STAGED_NOT_ACTIVE",
-		})
-	}
-	if command == "native-peer-root-plan" {
-		if os.Geteuid() != 0 {
-			return errors.New("root pre-isolation plan requires host root")
-		}
-		db, err := state.OpenNetworkAuditReadOnly(*db)
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		allow, err := db.PeerOperationDirection(ctx, *peerOriginal, "DISPATCHING")
-		if err != nil {
-			return err
-		}
-		var plan install.NativePeerConntrackPlan
-		if allow {
-			plan, err = install.NativePeerRootGrantReviewOperation(ctx, db, *project, *prepareNetwork, *prepareACL, *peerOriginal)
-		} else {
-			plan, err = install.NativePeerRootIntegratedReviewOperation(ctx, db, *project, *prepareNetwork, *prepareACL, *peerOriginal)
-		}
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(plan)
-	}
-	if command == "native-peer-root-serve" {
-		if os.Geteuid() != 0 || !*approveLocal {
-			return errors.New("root peer helper requires explicit local host-root approval")
-		}
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		defer stop()
-		return install.NativePeerRootServe(ctx, install.NativePeerRootScope{
-			DBPath: *db, Project: *project, Bridge: *prepareNetwork,
-			ACL: *prepareACL, Approved: *approveLocal,
-			OriginalID: *peerOriginal, ApprovedPlanSHA: *peerSHA, RetirementReview: *retirementReview, RetirementCompact: *retirementCompact,
-		})
-	}
-	if command == "native-peer-root-request" {
-		ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
-		defer cancel()
-		result, err := install.NativePeerRootCall(ctx, *peerOriginal, *peerSHA)
-		if e := json.NewEncoder(os.Stdout).Encode(result); e != nil {
-			return e
-		}
-		return err
-	}
-	if command == "native-peer-purge-plan" {
-		if os.Geteuid() != 0 {
-			return errors.New("native conntrack review requires host root")
-		}
-		reader, err := state.OpenNetworkAuditReadOnly(*db)
-		if err != nil {
-			return err
-		}
-		defer reader.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		plan, err := install.NativePeerConntrackReview(ctx, reader, *project, *prepareNetwork, *prepareACL, *peerSource, *peerTarget)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(plan)
-	}
-	if command == "native-peer-audit" {
-		if os.Geteuid() != 0 {
-			return errors.New("native peer read-only audit requires local host root")
-		}
-		// Read-only host-root operator witness. Not an MCP Tool or
-		// permission to mutate the shared network or grant a Peer.
-		reader, err := state.OpenNetworkAuditReadOnly(*db)
-		if err != nil {
-			return err
-		}
-		defer reader.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		report, err := install.NativePeerBridgeAuditFromStore(ctx, reader, *project, *prepareNetwork, *prepareACL)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(report)
-	}
-	if command == "native-scriptlet-apply" {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		report, err := install.NativeScriptletApply(ctx, install.NativeScriptletTarget{
-			OwnerProject: *project, ACLProject: "default", ACL: *prepareACL,
-			WriterFingerprint: *scriptletWriter,
-		}, *scriptletSHA, *approveLocal)
-		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
-			return e
-		}
-		return err
-	}
-	if command == "native-scriptlet-status" {
-		report, err := install.NativeScriptletStatus()
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(report)
-	}
-	if command == "native-scriptlet-reconcile" {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		report, err := install.NativeScriptletReconcile(ctx, *scriptletSHA, *approveLocal)
-		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
-			return e
-		}
-		return err
-	}
-	if command == "native-scriptlet-rollback" {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		report, err := install.NativeScriptletRollback(ctx, *scriptletSHA, *approveLocal)
-		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
-			return e
-		}
-		return err
-	}
-	if command == "native-scriptlet-plan" {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		report, err := install.NativeScriptletPlanReview(ctx, install.NativeScriptletTarget{
-			OwnerProject: *project, ACLProject: "default", ACL: *prepareACL,
-			WriterFingerprint: *scriptletWriter,
-		})
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(report)
 	}
 	if command == "native-migrate-plan" || command == "native-migrate-apply" ||
 		command == "native-migrate-status" || command == "native-migrate-reconcile" || command == "native-migrate-rollback" ||
@@ -541,20 +450,11 @@ func run() error {
 			Commit  string `json:"commit"`
 		}{Version: version, Commit: commit})
 	}
-	if command == "install-stage" || command == "install-activate" || command == "install-status" || command == "upgrade" || command == "rollback" || command == "install-commit" {
+	if command == "install-stage" || command == "install-activate" || command == "install-status" {
 		p := install.Plan{User: *serviceUser, StateDir: "/var/lib/boxweave",
 			BinaryPath: "/usr/local/bin/boxweave", UnitPath: "/etc/systemd/system/boxweave.service",
 			SourceBinary: *sourceBinary, Project: *project, Socket: *socket, Version: version,
 			ExpectedDigest: *digest, ScopedFreshReviewSHA: *scopedReview}
-		if command == "install-stage" && (*retirementReview || *retirementCompact) {
-			if !*retirementReview || !*retirementCompact {
-				return errors.New("fresh retirement install requires both explicit retirement scope flags")
-			}
-			p.RetirementTarget = &install.NativePrepareTarget{Project: *project, Pool: *preparePool, Network: *prepareNetwork, ACL: *prepareACL}
-			p.RetirementReviewSHA = *prepareSHA
-		} else if command != "install-stage" && (*retirementReview || *retirementCompact) {
-			return errors.New("retirement installer scope is fresh-stage only")
-		}
 		var m install.Manifest
 		var err error
 		switch command {
@@ -562,12 +462,6 @@ func run() error {
 			m, err = install.Stage(p, *approve)
 		case "install-activate":
 			m, err = install.Activate(p, *approveLocal)
-		case "upgrade":
-			m, err = install.Upgrade(p, *approveLocal)
-		case "rollback":
-			m, err = install.Rollback(p, *approveLocal)
-		case "install-commit":
-			m, err = install.CommitUpgrade(p, *approveLocal)
 		case "install-status":
 			m, err = install.Status(p)
 		}
@@ -580,7 +474,7 @@ func run() error {
 		return runDoctor(doctorArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser}, *summary)
 	}
 	if command == "serve" {
-		if err := install.CheckScopedServeMode(*scopedFresh); err != nil {
+		if err := install.CheckScopedServeMode(); err != nil {
 			return err
 		}
 	}
@@ -611,47 +505,6 @@ func run() error {
 		if _, err := s.RecoverExecGC(ctx); err != nil {
 			return err
 		}
-	}
-	if command == "native-peer-root-stage" || command == "native-peer-root-execute" || command == "native-peer-root-reconcile" {
-		if os.Geteuid() == 0 {
-			return errors.New("root peer controller must run as restricted service account")
-		}
-		if *peerOriginal == "" || *project == "" {
-			return errors.New("exact original and Project required")
-		}
-		serviceUser, err := user.Lookup("boxweave")
-		if err != nil || strconv.Itoa(os.Geteuid()) != serviceUser.Uid || *project != "user-"+serviceUser.Uid {
-			return errors.New("host root peer controller requires installed boxweave UID and exact Project")
-		}
-		svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}}
-		expected := "DISPATCHING"
-		if command == "native-peer-root-stage" {
-			expected = "ADMITTED"
-		}
-		if command == "native-peer-root-reconcile" {
-			expected = "UNKNOWN"
-		}
-		allow, err := s.PeerOperationDirection(context.Background(), *peerOriginal, expected)
-		if err != nil {
-			return err
-		}
-		if command == "native-peer-root-stage" {
-			if allow {
-				return svc.PrepareRootPeerGrant(*peerOriginal)
-			}
-			return svc.PrepareRootPeerRevocation(*peerOriginal)
-		}
-		if command == "native-peer-root-reconcile" {
-			if *peerSHA == "" {
-				return errors.New("exact original approved root digest required")
-			}
-			_ = allow // The durable pending original is independently selected by PRS.
-			return svc.ReconcileCompletedUnknownRootPeer(*peerOriginal, *peerSHA)
-		}
-		if allow {
-			return svc.ExecutePreparedRootPeerGrant(*peerOriginal)
-		}
-		return svc.ExecutePreparedRootPeerRevocation(*peerOriginal)
 	}
 	// OAuth configuration is host-local only. A browser request may never
 	// alter the approval secret, public issuer, grants or server identity.
@@ -707,7 +560,7 @@ func run() error {
 			return s.RevokeOAuthGrant(ctx, *tokenID)
 		}
 	}
-	svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}, BuildVersion: version, BuildCommit: commit, Listener: *listener, ScopedPeerFresh: *scopedFresh}
+	svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}, BuildVersion: version, BuildCommit: commit, Listener: *listener}
 	switch command {
 	case "serve":
 		external := os.Getenv("BOXWEAVE_FORWARD_EXTERNAL_ALLOW")
@@ -748,6 +601,9 @@ func run() error {
 }
 func main() {
 	if err := run(); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		fmt.Fprintln(os.Stderr, "boxweave:", err)
 		os.Exit(1)
 	}

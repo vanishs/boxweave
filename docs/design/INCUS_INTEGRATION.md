@@ -6,7 +6,7 @@ Official typed Incus Go SDK APIs supply native instances, Exec, operations, file
 
 Nonroot service user in incus, not incus-admin, uses /var/lib/incus/unix.socket.user. Require the restricted per-user Project, reviewed profile/bridge/pool, native extensions and exact owned UUID/incarnation. UseProject selects a Project, not authority. Native API authorization and packet isolation are distinct. Root/general Host maintenance is not exposed over MCP.
 
-Legacy shared-ACL changes use independently reviewed Root authority. Scoped mode installs bounded guard/lifecycle helpers, independently verifies original claims, native identity/ETag and kernel policy. [Network](NETWORK.md) and [security](SECURITY.md) are authoritative. Historical restricted TLS/global Scriptlet tests are not authorization for current daemon-global changes.
+Historical Legacy installations used a separately reviewed shared-ACL authority path; it is not a current #191 runtime. The current Scoped candidate installs bounded guard/lifecycle helpers, independently verifies original claims, native identity/ETag and kernel policy. [Network](NETWORK.md) and [security](SECURITY.md) are authoritative. Historical restricted TLS/global Scriptlet tests are not authorization for current daemon-global changes.
 
 ## Dependencies and evidence
 

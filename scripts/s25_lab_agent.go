@@ -238,7 +238,7 @@ func connectActor(ctx context.Context, actor string) *mcp.ClientSession {
 }
 func isInner() bool { return os.Getenv("BW_S25_INNER") == "1" }
 func boxName() string {
-	if isInner() {
+	if isInner() && os.Getenv("P1B_S25_SCOPED") != "1" {
 		return "bw-s25-mcp-l2"
 	}
 	return "bw-s25-mcp-l1"
@@ -315,10 +315,18 @@ func execGuest(ctx context.Context, s *mcp.ClientSession, uuid, key, script, age
 	saveCheckpoint(m)
 	fmt.Println("S25_GUEST_EXEC_ORIGINAL_OPERATION_ID=" + original)
 	final := wait(ctx, s, original)
-	out := request(ctx, s, "operation_output_get", map[string]any{"operation_id": original, "stream": "stdout", "limit": 4096})
+	limit := 4096
+	if key == "s25-outer-l1-guest-bootstrap-once" {
+		limit = 65536 // bounded original startup evidence, not a second Exec
+	}
+	out := request(ctx, s, "operation_output_get", map[string]any{"operation_id": original, "stream": "stdout", "limit": limit})
 	buf, err := base64.StdEncoding.DecodeString(str(out, "content_base64"))
 	if err != nil {
 		panic(err)
+	}
+	if key == "s25-outer-l1-guest-bootstrap-once" {
+		must(out["ended"] == true && out["truncated"] != true,
+			"bootstrap original stdout exceeds bounded evidence read")
 	}
 	exit, ok := out["exit_code"].(float64)
 	must(ok, "guest Exec returned no verified exit code")
@@ -366,12 +374,19 @@ func bootstrap(ctx context.Context) {
 	// Transport is a PRIVATE temporary root-only CI bridge server. The guest
 	// verifies the pinned setup script digest, then setup validates candidate
 	// and Agent binary digests before starting its independent L1 Incus+v1.
+	mode := ""
+	extra := ""
+	if os.Getenv("P1B_S25_SCOPED") == "1" {
+		mode = "P1B_S25_SCOPED=1 "
+		extra = " '" + environmental("BW_S25_SCOPED_HELPER_SHA") + "' '" + environmental("BW_S25_INSTALL_SHA") + "'" +
+			" '" + environmental("BW_S25_IMAGE_FINGERPRINT") + "' '" + environmental("BW_S25_IMAGE_META_SHA") + "' '" + environmental("BW_S25_IMAGE_ROOT_SHA") + "'"
+	}
 	cmd := "set -eu; curl -fsSL --max-time 45 " + stage + "/s25_inner_setup.sh -o /tmp/s25_inner_setup.sh; " +
 		"printf '%s  %s\\n' '" + sha + "' /tmp/s25_inner_setup.sh | sha256sum -c -; " +
-		"sh /tmp/s25_inner_setup.sh '" + stage + "' '" + environmental("BW_S25_BINARY_SHA256") +
+		mode + "sh /tmp/s25_inner_setup.sh '" + stage + "' '" + environmental("BW_S25_BINARY_SHA256") +
 		"' '" + environmental("BW_S25_AGENT_SHA256") + "' '" +
 		environmental("BW_S25_PACKAGE_PROXY_URL") + "' '" +
-		environmental("BW_S25_SIMWAN6_HELPER_SHA") + "'"
+		environmental("BW_S25_SIMWAN6_HELPER_SHA") + "'" + extra
 	s := connectActor(ctx, "a")
 	defer s.Close()
 	final, out, exit := execGuest(ctx, s, m["uuid"], "s25-outer-l1-guest-bootstrap-once", cmd, "agent-outer-alpha", 900000)
@@ -380,6 +395,12 @@ func bootstrap(ctx context.Context) {
 	must(strings.Contains(out, "S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS"),
 		"nested independent routed IPv6 HTTPS SDK proof missing")
 	fmt.Println("S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS")
+	if os.Getenv("P1B_S25_SCOPED") == "1" {
+		for _, marker := range []string{"P1B_S25_SCOPED_NATIVE_BOOTSTRAP=inner:PASS", "P1B_S25_INNER_EXACT_IMAGE_IMPORTED=PASS", "P1B_S25_INNER_LOCAL_DAEMON_SOCKET_BOUNDARY=PASS", "P1B_S25_SCOPED_STALE_REVIEW_REFUSED=inner:PASS", "P1B_S25_SCOPED_FRESH_INSTALL=inner:PASS"} {
+			must(strings.Contains(out, marker), "nested Scoped installation evidence missing")
+			fmt.Println(marker)
+		}
+	}
 	m = readCheckpoint()
 	m["bootstrap_op"] = str(final, "operation_id")
 	saveCheckpoint(m)
@@ -626,8 +647,9 @@ func afterControllerRestart(ctx context.Context) {
 // installer rollback. It reads ONLY the durable original receipts, then
 // replays one already-SUCCEEDED idempotency key with byte-identical intent.
 // This must never dispatch a new native Create or adopt a Box by name.
-func round2PostRollback(ctx context.Context) {
-	must(!isInner(), "offline rollback original recovery is L0-only")
+func round2PostRollback(ctx context.Context, scoped bool) {
+	must(!isInner(), "maintenance original recovery is L0-only")
+	must(scoped == (os.Getenv("P1B_S25_SCOPED") == "1"), "maintenance lane mismatch")
 	m := readCheckpoint()
 	require := []string{
 		"create_op", "delete_op", "peer_delete_op",
@@ -648,7 +670,11 @@ func round2PostRollback(ctx context.Context) {
 	replay := request(ctx, a, "box_create", firstCreateArgs())
 	must(opid(replay) == m["create_op"] && replay["duplicate"] == true,
 		"offline rollback redispatched previously succeeded Create")
-	fmt.Println("S25_R2_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_ROLLBACK=PASS")
+	if scoped {
+		fmt.Println("P1B_S25_SCOPED_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_MAINTENANCE=PASS")
+	} else {
+		fmt.Println("S25_R2_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_ROLLBACK=PASS")
+	}
 }
 func rotatedPeer(ctx context.Context) {
 	must(!isInner(), "token rotation assertion is L0-only")
@@ -775,6 +801,56 @@ func guestGitWorkflow(ctx context.Context) {
 	fmt.Println("S25_MCP_GUEST_GIT_FIX_AND_RETEST=PASS")
 }
 
+// Same-name fixtures are independently admitted in separate installed
+// controllers. Foreign identity calls must produce typed absence, not
+// merely a transport failure. The read-only verifier checks no admission.
+func dualScope(ctx context.Context) {
+	must(os.Getenv("P1B_S25_SCOPED") == "1", "Scoped installed lane only")
+	m := readCheckpoint()
+	foreign, original := environmental("BW_S25_FOREIGN_UUID"), environmental("BW_S25_FOREIGN_ORIGINAL")
+	must(len(foreign) == 36 && len(original) == 32 && m["uuid"] != foreign &&
+		m["create_op"] != original && m["name"] == "bw-s25-mcp-l1", "independent same-name fixtures")
+	c := connectActor(ctx, "b")
+	defer c.Close()
+	check := func() {
+		boxes, ok := request(ctx, c, "box_list", map[string]any{})["boxes"].([]any)
+		expected := map[string]bool{m["uuid"]: true}
+		// Inner WAN6 peer is intentionally still live until its original cleanup.
+		if isInner() {
+			must(m["wan6_peer_uuid"] != "", "original inner WAN6 peer missing")
+			expected[m["wan6_peer_uuid"]] = true
+		}
+		must(ok && len(boxes) == len(expected), "independent controller list scope")
+		for _, item := range boxes {
+			box, ok := item.(map[string]any)
+			must(ok && expected[str(box, "box_id")], "unexpected UUID in own controller")
+			delete(expected, str(box, "box_id"))
+		}
+		must(len(expected) == 0, "own scoped inventory incomplete")
+		own := child(request(ctx, c, "box_get", map[string]any{"box_id": m["uuid"]}), "box")
+		must(str(own, "box_id") == m["uuid"], "own UUID missing")
+		op := child(request(ctx, c, "operation_get", map[string]any{"operation_id": m["create_op"]}), "operation")
+		must(str(op, "operation_id") == m["create_op"] && str(op, "state") == "SUCCEEDED", "own original missing")
+	}
+	refuse := func(name, code string, args map[string]any) {
+		r, err := c.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		must(err == nil && r != nil && r.IsError && len(r.Content) == 1, "expected typed cross-controller refusal")
+		part, ok := r.Content[0].(*mcp.TextContent)
+		var f map[string]any
+		must(ok && json.Unmarshal([]byte(part.Text), &f) == nil && str(f, "code") == code &&
+			str(f, "category") == "AUTHORIZATION_OR_ABSENCE" &&
+			str(child(f, "next_action"), "kind") == "CHECK_AUTHORIZED_SCOPE" &&
+			str(child(f, "next_action"), "operation_id") == "" && str(f, "original_state") == "", "foreign scope error leaked identity")
+	}
+	check()
+	refuse("box_get", "BOX_NOT_FOUND_OR_NOT_OWNED", map[string]any{"box_id": foreign})
+	refuse("box_delete", "BOX_NOT_FOUND_OR_NOT_OWNED", map[string]any{"box_id": foreign,
+		"idempotency_key": "s25-cross-controller-delete-refusal", "work_ref": "lab/s25/dual-refused"})
+	refuse("operation_get", "RESOURCE_NOT_FOUND_OR_NOT_OWNED", map[string]any{"operation_id": original})
+	check()
+	fmt.Printf("P1B_S25_SCOPED_CROSS_ID_REFUSED=%s:PASS\n", m["layer"])
+}
+
 func cleanup(ctx context.Context) {
 	m := readCheckpoint()
 	must(m["uuid"] != "", "original Box missing")
@@ -827,7 +903,9 @@ func main() {
 	case "post-restart":
 		afterControllerRestart(ctx)
 	case "round2-postrollback":
-		round2PostRollback(ctx)
+		round2PostRollback(ctx, false)
+	case "scoped-maintenance-readback":
+		round2PostRollback(ctx, true)
 	case "rotated-peer":
 		rotatedPeer(ctx)
 	case "nested-exec":
@@ -836,6 +914,8 @@ func main() {
 		simulatedWan6(ctx)
 	case "wan6-clean":
 		simulatedWan6Clean(ctx)
+	case "dual-scope":
+		dualScope(ctx)
 	case "cleanup":
 		cleanup(ctx)
 	case "inner-clean":

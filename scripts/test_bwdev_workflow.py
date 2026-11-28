@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dev"))
-from harness import ci, evaluation, profiles, tasks, workflow, verification
+from harness import ci, evaluation, profiles, records, tasks, workflow, verification
 from harness.common import HarnessError
 
 SHA = "a" * 40
@@ -78,6 +78,7 @@ class WorkflowTests(unittest.TestCase):
             parent = Path(tmp)
             root = parent / "repo"
             root.mkdir()
+            (root / "dev/learning").mkdir(parents=True)
             def git(*args):
                 return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
             git("init", "-q")
@@ -107,11 +108,89 @@ class WorkflowTests(unittest.TestCase):
             args = argparse.Namespace(history=history, checkpoint=cp, evidence=[str(evidence)],
                        inbox=None, repo=REPO, ci_snapshot=snap, pr=1, base_sha="c"*40,
                        learning_disposition="no-new-asset: fixture only", export=None)
+            work_history = parent / "work"
+            envelope = {"kind": "work", "schema_version": 1, "feedback_protocol": 1,
+                        "work_ref": "fixture/handoff", "attempt_ref": "one",
+                        "task_kind": "development", "objective": "test", "risk": "standard",
+                        "authority": "fixture only", "state": "RECORDED", "boundary": "completion",
+                        "target": {"kind": "repository", "ref": REPO, "version": None, "source_sha": sha},
+                        "next_safe_action": "review", "evidence": ["fixture"], "used_assets": [],
+                        "learning": {"kind": "none", "ref": "fixture has no reusable feedback"}}
+            initial = dict(envelope, state="ACTIVE", learning=None)
+            initial.pop("boundary")
+            records.publish(work_history, 0, initial)
+            records.publish(work_history, 1, envelope)
             with patch.dict(verification.CHECKS, {"fixture": ("python", "-c", "pass")}):
                 verification.execute(root, "fixture", evidence, 10)
+                missing, missing_code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(missing_code, 1)
+                self.assertIn("No structured work feedback history supplied", missing["issues"])
+                args.work_history = work_history
+                args.learning_disposition = None
+                unreviewed, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)
+                self.assertEqual(unreviewed["finish_gate"]["decision"], "REVIEW_REQUIRED")
+                args.operations_reviewed = True
+                args.pending_output = ["fixture-original"]
+                unread, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)
+                self.assertEqual(unread["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
+                self.assertEqual(unread["finish_gate"]["pending_output"], ["fixture-original"])
+                args.pending_output = []
+                saved = json.loads(cp.read_text())
+                saved["original_operations"] = [{"operation_id": "original-unreviewed"},
+                    {"operation_id": "original-pending", "output_review": "PENDING"},
+                    {"operation_id": "original-consumed", "output_review": "CONSUMED"},
+                    {"operation_id": "original-no-output", "output_review": "NOT_REQUIRED"}]
+                cp.write_text(json.dumps(saved))
+                status, _ = workflow.summary(args, root)
+                self.assertEqual(status["checkpoint"]["pending_output"],
+                                 ["original-pending", "original-unreviewed"])
+                args.pending_output = ["explicit-pending", "original-pending"]
+                blocked, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)
+                self.assertEqual(blocked["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
+                self.assertEqual(blocked["finish_gate"]["pending_output"],
+                                 ["explicit-pending", "original-pending", "original-unreviewed"])
+                for original in saved["original_operations"]:
+                    original["output_review"] = "CONSUMED"
+                cp.write_text(json.dumps(saved))
+                args.pending_output = []
+                reviewed, code = workflow.summary(args, root, finishing=True)
+                self.assertEqual(code, 1)  # original remote evidence still requires review
+                self.assertEqual(reviewed["finish_gate"]["pending_output"], [])
+                self.assertEqual(reviewed["finish_gate"]["decision"], "REVIEW_REQUIRED")
+                saved["original_operations"][0]["output_review"] = "invented"
+                cp.write_text(json.dumps(saved))
+                with self.assertRaisesRegex(HarnessError, "output_review"):
+                    workflow.summary(args, root)
+                saved["original_operations"] = []
+                cp.write_text(json.dumps(saved))
+                args.expect_work_ref = "different-phase"
+                with self.assertRaisesRegex(HarnessError,"work_ref"):
+                    workflow.summary(args, root, finishing=True)
+                args.expect_work_ref = "fixture/handoff"
                 result, code = workflow.summary(args, root, finishing=True)
                 self.assertEqual(code, 0, result)
+                self.assertEqual(result["finish_gate"]["decision"], "HANDOFF_READY")
                 self.assertEqual(result["status"], "HANDOFF_SUMMARY")
+                for field, value, message in (
+                    ("attempt_ref", "other", "Feedback attempt differs from checkpoint"),
+                    ("objective", "other", "Feedback objective differs from task history"),
+                    ("target", dict(envelope["target"], source_sha="b"*40),
+                     "Feedback target differs from exact delivery repository and source"),
+                ):
+                    wrong = parent / ("work-" + field)
+                    changed = dict(envelope, **{field: value})
+                    first = dict(changed, state="ACTIVE", learning=None)
+                    first.pop("boundary")
+                    records.publish(wrong, 0, first)
+                    records.publish(wrong, 1, changed)
+                    args.work_history = wrong
+                    invalid, invalid_code = workflow.summary(args, root, finishing=True)
+                    self.assertEqual(invalid_code, 1)
+                    self.assertIn(message, invalid["issues"])
+                args.work_history = work_history
                 args.base_sha = "d"*40
                 self.assertEqual(workflow.summary(args, root, finishing=True)[1], 1)
                 args.repo = "wrong/repository"
@@ -153,6 +232,8 @@ class WorkflowTests(unittest.TestCase):
             result, code = workflow.summary(args, ROOT, finishing=True)
             self.assertEqual(code, 1)
             self.assertIn("No local evidence supplied", result["issues"])
+            self.assertEqual(result["finish_gate"]["decision"], "CONTINUE_OR_RESOLVE")
+            self.assertEqual(result["finish_gate"]["ready"], ["a"])
             self.assertEqual(json.loads(Path(args.export).read_text())["work_ref"], "example")
             with self.assertRaises(FileExistsError):
                 workflow.summary(args, ROOT, finishing=True)

@@ -23,7 +23,7 @@ func TestPR177D2ScopedRetiredAndLegacyRoutes(t *testing.T) {
 		t.Fatal(l.Network)
 	}
 	legacy, e := snap.ReadLedger(ctx, b.Project, "LEGACY", "incusbr-1001")
-	if e != nil || legacy.LegacyRetirement == nil || legacy.LegacyRetirement.Pending != 1 || legacy.PeerCapacity != nil {
+	if e != nil || legacy.LegacyRetirement != nil || legacy.PeerCapacity != nil {
 		t.Fatal(legacy, e)
 	}
 	unknown, e := snap.ReadLedger(ctx, b.Project, "UNVERIFIED", "incusbr-1001")
@@ -55,7 +55,7 @@ func TestPR177D2ScopedUnknownAndFailedRecoveryHistory(t *testing.T) {
 		t.Fatal(e)
 	}
 	snap := DiagnosticSnapshot{store: s}
-	l, e := snap.ReadLedger(ctx, target.Layer, "SCOPED_V2", "bwbr0")
+	l, e := snap.ReadLedger(ctx, target.Layer, "SCOPED_V2", purePeerBridge)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -72,6 +72,10 @@ func TestPR177D2ScopedUnknownAndFailedRecoveryHistory(t *testing.T) {
 	if e != nil || other.ActiveCount != 0 || other.HistoricalFailures != 0 {
 		t.Fatal(other, e)
 	}
+	foreign, e := snap.ReadLedger(ctx, "user-9999", "SCOPED_V2", "")
+	if e != nil || foreign.ForeignRows == 0 || foreign.ActiveCount != 0 || len(foreign.Active) != 0 {
+		t.Fatal(foreign, e)
+	}
 	t.Log("D2_UNKNOWN_RETAINED_BLOCKED_ATTEMPT_HISTORY_PASS")
 }
 func TestPR177D2CapacityAndRedactedOAuth(t *testing.T) {
@@ -86,12 +90,12 @@ func TestPR177D2CapacityAndRedactedOAuth(t *testing.T) {
 		t.Fatal(e)
 	}
 	snap := DiagnosticSnapshot{store: s}
-	l, e := snap.ReadLedger(ctx, "user-1001", "SCOPED_V2", "bwbr0")
+	l, e := snap.ReadLedger(ctx, "user-1001", "SCOPED_V2", purePeerBridge)
 	if e != nil || !l.OAuth.Enabled {
 		t.Fatal(l, e)
 	}
 	raw, e := json.Marshal(l)
-	if e != nil || strings.Contains(string(raw), "private.example") || strings.Contains(string(raw), "secret-password-hash") || strings.Contains(string(raw), "bwbr0") || strings.Contains(string(raw), "safe_intent") {
+	if e != nil || strings.Contains(string(raw), "private.example") || strings.Contains(string(raw), "secret-password-hash") || strings.Contains(string(raw), purePeerBridge) || strings.Contains(string(raw), "safe_intent") {
 		t.Fatal("redaction failed", e)
 	}
 	t.Log("D2_CAPACITY_RESERVE_AND_OAUTH_REDACTION_PASS")
@@ -131,5 +135,24 @@ func TestPR177D2ReleasedHistoryAndGuestExitSeparate(t *testing.T) {
 	b, e := json.Marshal(l)
 	if e != nil || strings.Contains(string(b), "private-output-path") {
 		t.Fatal("output path leaked", e)
+	}
+}
+
+func TestP3R2DiagnosticDigestBindsCapacityAndScope(t *testing.T) {
+	d := DiagnosticLedger{PeerCapacity: &DiagnosticPeerCapacity{}, ScopedIdentityCapacity: &ScopedIdentityCapacity{}}
+	before := d.ObservationDigest()
+	d.PeerCapacity.CompletedLedgerEvents++
+	if d.ObservationDigest() == before {
+		t.Fatal("peer epoch not bound")
+	}
+	before = d.ObservationDigest()
+	d.ForeignRows++
+	if d.ObservationDigest() == before {
+		t.Fatal("foreign scope not bound")
+	}
+	before = d.ObservationDigest()
+	d.ScopedIdentityCapacity = nil
+	if d.ObservationDigest() == before {
+		t.Fatal("identity coverage not bound")
 	}
 }

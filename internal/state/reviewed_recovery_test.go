@@ -134,10 +134,10 @@ func TestPR177D4ReviewedConcurrencyAndIdentityBinding(t *testing.T) {
 	for _, same := range []bool{true, false} {
 		t.Run(fmt.Sprint(same), func(t *testing.T) {
 			s := newStore(t)
-			r0, target := recoveryOriginal(t, s, "box_start", rUUID)
+			r0, target := recoveryOriginalMode(t, s, "box_start", true)
 			p := recoverProof(target)
 			p.LifecycleBinding = target.LifecycleBinding
-			r, _ := d4Review(t, s, r0.Layer, r0.OriginalID, "LEGACY", "MCP_SETTLE_ORIGINAL_NO_REPLAY", p)
+			r, _ := d4Review(t, s, r0.Layer, r0.OriginalID, "SCOPED_V2", "MCP_SETTLE_ORIGINAL_NO_REPLAY", p)
 			type outcome struct {
 				rec RecoveryRecord
 				e   error
@@ -171,17 +171,22 @@ func TestPR177D4ReviewedConcurrencyAndIdentityBinding(t *testing.T) {
 			}
 		})
 	}
-	s := newStore(t)
-	r0, target := recoveryOriginal(t, s, "box_create", "")
-	p := RecoveryProof{Kind: RecoveryBind, Reason: "CREATE_MARKER_EXACT_IDENTITY", UUID: rUUID, Fingerprint: "reviewed-marker"}
-	r, _ := d4Review(t, s, r0.Layer, r0.OriginalID, "LEGACY", "MCP_BIND_ORIGINAL_IDENTITY", p)
-	rec, e := s.CommitRecovery(ctx, r, target, p)
-	if e != nil || rec.Disposition != "IDENTITY_BOUND" {
-		t.Fatal(rec, e)
+	s, original, _, _ := p1CreateFixture(t, false)
+	if e := s.Unknown(ctx, original.ID, "DISPATCHING", "ACK_LOST"); e != nil {
+		t.Fatal(e)
 	}
-	post, e := s.ReadReviewedRecoveryPostcheck(ctx, r, rec)
-	if e != nil || post.State != "DURABLE_ORIGINAL_POSTSTATE_VERIFIED" || post.OriginalState != "UNKNOWN" || post.OriginalProtection != "RETAINED" {
-		t.Fatal(post, e)
+	r0, target := a4Request(t, s, original.ID)
+	p := RecoveryProof{Kind: RecoveryBind, Reason: "CREATE_MARKER_EXACT_IDENTITY", UUID: p1UUID, Fingerprint: "reviewed-marker"}
+	r, _ := d4Review(t, s, r0.Layer, r0.OriginalID, "SCOPED_V2", "MCP_BIND_ORIGINAL_IDENTITY", p)
+	if _, e := s.CommitScopedRecovery(ctx, r, target, p); e == nil {
+		t.Fatal("retired reviewed bind accepted")
+	}
+	current, e := s.ReadRecoveryTarget(ctx, r.Layer, target.ID)
+	if e != nil || current != target || current.State != "UNKNOWN" || current.Released {
+		t.Fatal(current, e)
+	}
+	if _, e = s.ReplayRecovery(ctx, r); !errors.Is(e, ErrNotFound) {
+		t.Fatal("refusal created receipt", e)
 	}
 	t.Log("D4_CONCURRENT_REVIEW_AND_IDENTITY_PROTECTION_PASS")
 }
@@ -194,5 +199,21 @@ func TestPR177D4ExistingOnlyWriter(t *testing.T) {
 	}
 	if _, e := os.Lstat(filepath.Dir(path)); !os.IsNotExist(e) {
 		t.Fatal("created source parent", e)
+	}
+}
+
+func TestP3R3HistoricalReviewedLeavesAreNotNewAuthority(t *testing.T) {
+	for _, mode := range []string{"LEGACY", "UNSUPPORTED_LEGACY", "UNVERIFIED", "CONFLICT"} {
+		if reviewedRecoveryLeaf(RecoveryTarget{Action: "box_start"}, RecoveryProof{Kind: RecoverySettle}, mode) != "" {
+			t.Fatal("historical reconciliation leaf", mode)
+		}
+	}
+	for _, kind := range []string{RecoveryBind, RecoveryRepairPin} {
+		if reviewedRecoveryLeaf(RecoveryTarget{Action: "box_create"}, RecoveryProof{Kind: kind}, "SCOPED_V2") != "" {
+			t.Fatal("retired leaf", kind)
+		}
+	}
+	if reviewedRecoveryLeaf(RecoveryTarget{Action: "box_start"}, RecoveryProof{Kind: RecoverySettle}, "SCOPED_V2") != "MCP_SETTLE_ORIGINAL_NO_REPLAY" {
+		t.Fatal("current leaf lost")
 	}
 }

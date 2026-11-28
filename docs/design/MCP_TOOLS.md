@@ -10,7 +10,7 @@ Current v1 source registers 23 public Tools, including Activity and Recovery. Th
 
 | Tool | Kind | Contract |
 |---|---|---|
-| `box_create` | Mutation | Create owned Ubuntu-LTS-default agentless Linux Box, configurable CPU/RAM/disk, start=true by default, start=false opt-out, opt-in nesting, readiness check; current scoped mode defaults boot.autostart=true and preserves explicit false. |
+| `box_create` | Mutation | Create owned Ubuntu-LTS-default agentless Linux Box, configurable CPU/RAM/disk, start=true by default, start=false opt-out, opt-in nesting, readiness check; the Scoped candidate defaults boot.autostart=true and preserves explicit false. |
 | `box_list` | Read | Paginated owned Box identities and current states. |
 | `box_get` | Read | One exact owned Box's state/readiness/resources and effective directional private-peer grants; optional `detail=true` for a live authenticated management Actor returns native `InstanceFull` (State/Snapshots/Backups, potentially sensitive config) and `observed_at`; requires single-request native extension. |
 | `box_update` | Mutation | Allowlisted CPU, RAM, safe disk growth, opt-in nesting and per-Box internet toggle only. Never raw Incus configs or disk shrink. |
@@ -27,12 +27,12 @@ Current v1 source registers 23 public Tools, including Activity and Recovery. Th
 | `box_activity_get` | Read | `overview/issues/evidence`: Layer-authenticated bounded SQLite original/evidence readback; issues distinguish blockers and history; native_network adds bounded read-only same-Project native comparison; signed cursors; no native effects or task checkpoint. |
 | `operation_output_get` | Read | Bounded/paginated guest Exec output and observed exit details after reconnect. |
 | `operation_cancel` | Mutation | Cancel only a proven queued-undispatched original; detached running Exec/native work is not cancelable through the verified SDK path. No speculative undo or UNKNOWN resolution. |
-| `operation_recover` | Read diagnose / durable reconcile | Exact original evidence; deterministic settlement or identity binding; no re-dispatch or unproven claim release. |
+| `operation_recover` | Read diagnose / durable reconcile | Exact authorized original evidence and supported Scoped settlement; separate durable reconciliation receipt, no re-dispatch, legacy identity adoption or unproven claim release. |
 | `port_forward_list` | Read | List only native BoxWeave-owned TCP/UDP forwards and host binds. |
 | `port_forward_create` | Mutation | Native Incus host listener protocol/address/port -> verified owned Box UUID/guest port; default loopback is not LAN-reachable, explicit LAN/public bind authorized, native device verification and external reachability are separate. |
 | `port_forward_delete` | Mutation | Remove verified owned native forwarding only. |
-| `box_peer_set` | Mutation | Allow or revoke directional private access from exact owned source Box UUID to target Box UUID; no CIDR/IP/port/protocol policy DSL. Scoped mode supports routine authenticated MCP grant/revoke; legacy may require local review. |
-| `host_status` | Read | Read-only this-layer controller **VERSION/build SHA**, Incus version/API capabilities and health with no foreign host inventory. |
+| `box_peer_set` | Mutation | Allow or revoke directional private access from exact owned source Box UUID to target Box UUID; no CIDR/IP/port/protocol policy DSL. Current Scoped candidate supports routine authenticated MCP grant/revoke; historical Legacy workflows are not current fallback. |
+| `host_status` | Read | Read-only this-layer controller **VERSION/build SHA**, Incus version/API capabilities and bounded readiness, attention and Scoped capacity with no foreign host inventory. |
 
 No `http_route_*`, `acl_rule_*`, `diagnostic_get`, Caddy API, generic host shell/file/Incus management or additional management transport. Read-only failures return Tracking ID + safe classified error; admitted Operation failures include diagnostic summary in `operation_get`. Detailed logs remain host-local.
 

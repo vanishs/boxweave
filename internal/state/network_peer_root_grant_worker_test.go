@@ -2,70 +2,67 @@ package state
 
 import (
 	"context"
-	"errors"
 	"testing"
 )
 
 func TestS4B3GrantAtomicFinalizeOnlyVerifiedOriginal(t *testing.T) {
-	s, id := s4b3GrantFixture(t)
+
 	ctx := context.Background()
-	if err := s.StagePeerGrant(ctx, id); err != nil {
-		t.Fatal(err)
+	s, r, id := pr178ScopedReadyToStage(t, true)
+	if e := s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+		t.Fatal(e)
 	}
-	if err := s.FinalizeRootPeerGrant(ctx, id); !errors.Is(err, ErrState) {
-		t.Fatalf("unverified staged grant marked CONFIRMED: %v", err)
+	p := scopedTestReceipt(t, r, id, false)
+	bad := p
+	bad.ProofSHA256 = "bad"
+	if e := s.FinalizeScopedPeerOriginal(ctx, bad); e == nil {
+		t.Fatal("unverified staged grant")
 	}
-	if err := s.Claim(ctx, id); err != nil {
-		t.Fatal(err)
+	if e := s.FinalizeScopedPeerOriginal(ctx, p); e != nil {
+		t.Fatal(e)
 	}
-	if err := s.AckSynchronousACL(ctx, id); err != nil {
-		t.Fatal(err)
+	rec, e := s.Get(ctx, id)
+	if e != nil || rec.State != "SUCCEEDED" {
+		t.Fatal(rec, e)
 	}
-	if err := s.FinalizeRootPeerGrant(ctx, id); err != nil {
-		t.Fatal(err)
-	}
-	rec, err := s.Get(ctx, id)
-	if err != nil || rec.State != "SUCCEEDED" {
-		t.Fatalf("grant receipt not succeeded %+v %v", rec, err)
-	}
-	var status string
+	var status, verified string
 	var desired int
-	if err := s.db.QueryRowContext(ctx, "SELECT desired,status FROM peer_grants").Scan(&desired, &status); err != nil ||
-		desired != 1 || status != "CONFIRMED" {
-		t.Fatalf("grant row not atomically confirmed: %d %s %v", desired, status, err)
+	if e = s.db.QueryRow("SELECT desired,status,last_verified_operation_id FROM peer_grants WHERE source_uuid=? AND target_uuid=?", purePeerUUID(1), purePeerUUID(2)).Scan(&desired, &status, &verified); e != nil || desired != 1 || status != "CONFIRMED" || verified != id {
+		t.Fatal(desired, status, verified, e)
 	}
-	if err := s.FinalizeRootPeerGrant(ctx, id); !errors.Is(err, ErrState) {
-		t.Fatalf("replayed final original: %v", err)
+	if e = s.FinalizeScopedPeerOriginal(ctx, p); e == nil {
+		t.Fatal("replayed final")
 	}
 	t.Log("S4_B3_GRANT_SQLITE_ONE_ORIGINAL_ATOMIC_POST_KERNEL_FINALIZE=PASS")
+
 }
 
 func TestS4B3GrantFinalizeRefusesAmbiguousLedger(t *testing.T) {
-	for _, query := range []string{"UPDATE peer_grants SET status='UNKNOWN'", "UPDATE peer_grants SET desired=0",
-		"DELETE FROM peer_grants"} {
-		t.Run(query, func(t *testing.T) {
-			s, id := s4b3GrantFixture(t)
-			ctx := context.Background()
-			if err := s.StagePeerGrant(ctx, id); err != nil {
-				t.Fatal(err)
+
+	ctx := context.Background()
+	for _, sql := range []string{"UPDATE peer_grants SET status='UNKNOWN' WHERE operation_id=?", "UPDATE peer_grants SET desired=0 WHERE operation_id=?", "DELETE FROM peer_grants WHERE operation_id=?"} {
+		t.Run(sql, func(t *testing.T) {
+			s, r, id := pr178ScopedReadyToStage(t, true)
+			if e := s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+				t.Fatal(e)
 			}
-			if err := s.Claim(ctx, id); err != nil {
-				t.Fatal(err)
+			proof := scopedTestReceipt(t, r, id, false)
+			res, e := s.db.Exec(sql, id)
+			if e != nil {
+				t.Fatal(e)
 			}
-			if err := s.AckSynchronousACL(ctx, id); err != nil {
-				t.Fatal(err)
+			if n, e := res.RowsAffected(); e != nil || n == 0 {
+				t.Fatal(n, e)
 			}
-			if _, err := s.db.Exec(query); err != nil {
-				t.Fatal(err)
+			if e = s.FinalizeScopedPeerOriginal(ctx, proof); e == nil {
+				t.Fatal("untrusted ledger")
 			}
-			if err := s.FinalizeRootPeerGrant(ctx, id); err == nil {
-				t.Fatal("untrusted grant ledger was confirmed")
-			}
-			rec, err := s.Get(ctx, id)
-			if err != nil || rec.State == "SUCCEEDED" {
-				t.Fatalf("unsafe receipt %+v %v", rec, err)
+			rec, e := s.Get(ctx, id)
+			if e != nil || rec.State == "SUCCEEDED" {
+				t.Fatal(rec, e)
 			}
 		})
 	}
 	t.Log("S4_B3_GRANT_FINALIZE_UNKNOWN_LEDGER_FAIL_CLOSED=PASS")
+
 }

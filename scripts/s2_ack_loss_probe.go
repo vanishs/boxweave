@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -41,7 +42,8 @@ func require(ok bool, msg string) {
 
 func session(ctx context.Context) *mcp.ClientSession {
 	addr, secret := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
-	require(strings.HasPrefix(addr, "http://127.0.0.1:18652/") && secret != "",
+	scoped := os.Getenv("BW_S2_SCOPED_UPDATE") == "1" && os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" && len(os.Args) == 2 && (os.Args[1] == "scoped_update" || os.Args[1] == "scoped_resume")
+	require((!scoped && strings.HasPrefix(addr, "http://127.0.0.1:18652/") || scoped && ((os.Args[1] == "scoped_update" && addr == "http://127.0.0.1:18652/mcp") || (os.Args[1] == "scoped_resume" && addr == "http://127.0.0.1:18650/mcp"))) && secret != "",
 		"only private disposable MCP listener and explicit authenticated actor allowed")
 	client := mcp.NewClient(&mcp.Implementation{Name: "s2-native-ack-loss-verifier", Version: "1"}, nil)
 	out, err := client.Connect(ctx, &mcp.StreamableClientTransport{
@@ -405,7 +407,85 @@ func testAcceptedUpdatePostread(ctx context.Context, s *mcp.ClientSession, resum
 	fmt.Println("S2_NATIVE_UPDATE_ACCEPTED_ACK_DELIVERED_POSTREAD_UNKNOWN=PASS")
 }
 
+// Same official SDK and UNKNOWN assertions; this mode consumes an
+// independently created exact Scoped fixture rather than issuing Create
+// through the fault transport. Resume is read-only apart from exact replay
+// and the expected rejected requests, never a new original Update.
+type scopedUpdateCheckpoint struct {
+	Mode, BoxID, OriginalID, TrackingID, NativeID string
+}
+
+func scopedUpdate(ctx context.Context, s *mcp.ClientSession, resume bool) {
+	require(os.Getenv("BW_S2_SCOPED_UPDATE") == "1" && os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted", "one-use installed Update fault only")
+	mode, uuid, file := os.Getenv("BW_S2_SCOPED_UPDATE_MODE"), os.Getenv("BW_S2_SCOPED_UPDATE_UUID"), os.Getenv("BW_S2_SCOPED_UPDATE_CHECKPOINT")
+	require((mode == "etag" || mode == "ack" || mode == "postread") &&
+		regexp.MustCompile("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$").MatchString(uuid) &&
+		strings.HasPrefix(file, "/tmp/bw-v1-s2-ghci.") && strings.HasSuffix(file, "/scoped-update-original.json"), "exact fixture and checkpoint required")
+	req := map[string]any{"box_id": uuid, "cpu": 2, "idempotency_key": "p1b-scoped-transport-" + mode, "work_ref": "p1b/scoped-update-transport-" + mode}
+	var cp scopedUpdateCheckpoint
+	if resume {
+		b, err := os.ReadFile(file)
+		require(err == nil && json.Unmarshal(b, &cp) == nil && cp.Mode == mode && cp.BoxID == uuid && len(cp.OriginalID) == 32 && len(cp.TrackingID) == 32, "exact saved original required")
+	} else {
+		_, err := os.Lstat(file)
+		require(os.IsNotExist(err), "preexisting original checkpoint")
+		r, e := invoke(ctx, s, "box_update", req)
+		require(e == nil, "original Update admission refused")
+		cp = scopedUpdateCheckpoint{Mode: mode, BoxID: uuid, OriginalID: field(r, "operation_id"), TrackingID: field(r, "tracking_id")}
+		require(len(cp.OriginalID) == 32 && len(cp.TrackingID) == 32, "missing original receipt")
+		fmt.Printf("P1B_SCOPED_UPDATE_TRANSPORT_ADMITTED %s %s %s %s\n", mode, cp.OriginalID, cp.TrackingID, cp.BoxID)
+	}
+	var observed map[string]any
+	if mode != "postread" {
+		observed = checkUnknown(ctx, s, cp.OriginalID)
+	} else {
+		for n := 0; n < 100; n++ {
+			r, e := invoke(ctx, s, "operation_get", map[string]any{"operation_id": cp.OriginalID, "wait_ms": 300})
+			require(e == nil, "original read failed")
+			observed = child(r, "operation")
+			st := field(observed, "state")
+			if st == "UNKNOWN" {
+				break
+			}
+			require(st != "FAILED" && st != "SUCCEEDED" && st != "CANCELLED" && n < 99, "unverified original incorrectly settled")
+		}
+		require(field(observed, "native_operation_id") != "" && field(observed, "error_class") == "POSTCONDITION_UNVERIFIED" && field(child(observed, "next_action"), "kind") == "HOST_LOCAL_REVIEW", "postread original lacks exact locked receipt")
+	}
+	require(field(observed, "tracking_id") == cp.TrackingID && field(observed, "box_uuid") == uuid, "original identity changed")
+	if resume {
+		require(cp.NativeID == field(observed, "native_operation_id"), "native receipt changed after restart")
+	} else {
+		cp.NativeID = field(observed, "native_operation_id")
+	}
+	replay, err := invoke(ctx, s, "box_update", req)
+	require(err == nil && field(replay, "operation_id") == cp.OriginalID && field(replay, "tracking_id") == cp.TrackingID && replay["duplicate"] == true, "same-key original changed")
+	bad := map[string]any{"box_id": uuid, "cpu": 3, "idempotency_key": req["idempotency_key"], "work_ref": req["work_ref"]}
+	_, err = invoke(ctx, s, "box_update", bad)
+	require(err != nil, "changed original intent accepted")
+	bad["idempotency_key"] = "p1b-scoped-transport-fresh-refused-" + mode
+	_, err = invoke(ctx, s, "box_update", bad)
+	require(err != nil, "fresh key escaped UNKNOWN lock")
+	if !resume {
+		f, e := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if e != nil {
+			panic(e)
+		}
+		require(json.NewEncoder(f).Encode(cp) == nil && f.Sync() == nil && f.Close() == nil, "original checkpoint write failed")
+	}
+	fmt.Printf("P1B_SCOPED_UPDATE_TRANSPORT_SDK_ORIGINAL %s %s %s %s %t\n", mode, cp.OriginalID, cp.TrackingID, cp.BoxID, resume)
+}
+
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "scoped_update" || os.Args[1] == "scoped_resume") {
+		require(os.Getenv("BW_S2_SCOPED_UPDATE") == "1" && os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted", "guarded hosted Update test only")
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		s := session(ctx)
+		defer s.Close()
+		scopedUpdate(ctx, s, os.Args[1] == "scoped_resume")
+		return
+	}
+
 	require(len(os.Args) == 2 && (os.Args[1] == "start" || os.Args[1] == "resume" || os.Args[1] == "etag" ||
 		os.Args[1] == "update_ack" || os.Args[1] == "update_ack_resume" ||
 		os.Args[1] == "postread" || os.Args[1] == "postread_resume" ||

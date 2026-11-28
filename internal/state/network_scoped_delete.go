@@ -16,7 +16,14 @@ type ScopedDeleteOriginalProof struct {
 }
 
 func readScopedDeleteOriginalTx(ctx context.Context, tx *sql.Tx, id, project, bridge string) (ScopedDeleteOriginalProof, error) {
+	return readScopedDeleteOriginalTxPhase(ctx, tx, id, project, bridge, "VERIFYING")
+}
+
+func readScopedDeleteOriginalTxPhase(ctx context.Context, tx *sql.Tx, id, project, bridge, expected string) (ScopedDeleteOriginalProof, error) {
 	var zero ScopedDeleteOriginalProof
+	if expected != "VERIFYING" && expected != "UNKNOWN" {
+		return zero, ErrInvalid
+	}
 	if !validHexID(id) || !auditName(project) || !auditName(bridge) {
 		return zero, ErrInvalid
 	}
@@ -32,8 +39,14 @@ func readScopedDeleteOriginalTx(ctx context.Context, tx *sql.Tx, id, project, br
 	canonical, err := json.Marshal(struct {
 		BoxID string `json:"box_id"`
 	}{p.Box.UUID})
-	if err != nil || !bytes.Equal(raw, canonical) || action != "box_delete" || phase != "VERIFYING" || resource != "box:"+p.Box.Name || p.Box.State != "OWNED" || p.Box.Project != project || p.Box.Incarnation != p.Box.UUID || p.NativeID == "" {
+	if err != nil || !bytes.Equal(raw, canonical) || action != "box_delete" || phase != expected || resource != "box:"+p.Box.Name || p.Box.State != "OWNED" || p.Box.Project != project || p.Box.Incarnation != p.Box.UUID || p.NativeID == "" {
 		return zero, ErrResourceLocked
+	}
+	if expected == "UNKNOWN" {
+		var released int
+		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM recovery_audit WHERE operation_id=? AND decision='RELEASED'", id).Scan(&released); err != nil || released != 0 {
+			return zero, ErrResourceLocked
+		}
 	}
 	active, err := activeCredentialForActor(ctx, tx, actor, token)
 	if err != nil || !active {
@@ -68,6 +81,14 @@ func readScopedDeleteOriginalTx(ctx context.Context, tx *sql.Tx, id, project, br
 	return p, nil
 }
 func (s *Store) ReadRootScopedDeleteOriginal(ctx context.Context, id, project, bridge string) (ScopedDeleteOriginalProof, error) {
+	return s.readRootScopedDeleteOriginalPhase(ctx, id, project, bridge, "VERIFYING")
+}
+
+func (s *Store) ReadRootScopedDeleteUnknownOriginal(ctx context.Context, id, project, bridge string) (ScopedDeleteOriginalProof, error) {
+	return s.readRootScopedDeleteOriginalPhase(ctx, id, project, bridge, "UNKNOWN")
+}
+
+func (s *Store) readRootScopedDeleteOriginalPhase(ctx context.Context, id, project, bridge, expected string) (ScopedDeleteOriginalProof, error) {
 	var zero ScopedDeleteOriginalProof
 	if s == nil || s.db == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, ErrInvalid
@@ -77,7 +98,7 @@ func (s *Store) ReadRootScopedDeleteOriginal(ctx context.Context, id, project, b
 		return zero, err
 	}
 	defer tx.Rollback()
-	p, err := readScopedDeleteOriginalTx(ctx, tx, id, project, bridge)
+	p, err := readScopedDeleteOriginalTxPhase(ctx, tx, id, project, bridge, expected)
 	if err != nil {
 		return zero, err
 	}

@@ -16,6 +16,48 @@ References: [workflow](../../../docs/development/AGENT_WORKFLOW.md), [nesting](.
 
 Optional v0.5: use bwdev profile or start --profile to observe task-specific prerequisites from [profiles](../../profiles.json). Presence of Incus/systemctl is not native readiness. Use existing authorized recipes and independent capability checks; the profile does not install or provision.
 
+## Reuse-first iteration
+
+Follow the [fast development policy](../../../docs/development/AGENT_WORKFLOW.md#fast-development-strict-acceptance).
+Retain worktree and pinned dependencies across slices; reconcile the remote
+at resume/publication boundaries. Reuse known immutable local objects.
+Bundle compatible local commands; avoid duplicate provisioning, fetching
+or dispatch while an original holds the resource. A clean fixture must
+be justified by its acceptance oracle, not by the number of slices.
+
 ## Bounded guest source transfer
 
 If large inline argv is refused at admission, distinguish an explicit refusal with no receipt from a lost acknowledgement. Read any original Operation before further effects; never replay uncertain work or bypass admission. For a new patch or source file in the owned isolated guest, use exclusive box_file_apply create, confirm terminal success and verified file readback, then execute a short explicit argv referencing the reviewed file in the correct checkout. Check actual guest exit and output, and inspect the changed files. Do not infer an exact size limit, overwrite a pre-existing file, or apply this as authorization on a Host. See [BDH-L014](../../learning/BDH-L014/00000003.json).
+
+For repeated or multi-part source transfers, prefer the candidate
+[offline transfer planner](../../transfer_plan.py) when a reviewed Python
+checkout is available. It prepares explicit exclusive-create request JSON,
+a stable bounded manifest and canonical immutable journal; it never
+dispatches MCP. Keep the original bundle outside Git if source bytes are
+sensitive. Use assess BUNDLE and durably begin the exact next action
+BEFORE dispatch (including assembly); only a newly successful begin
+may be used once with existing authority. Append original receipts and
+readback with record; never reset, replay or restore a stale snapshot.
+If interruption or missing/unknown/conflicting evidence occurs, inspect
+the original key/Operation or request manual reconciliation. Assemble
+with the reviewed helper in the owned guest only after all part and
+manifest receipts/readbacks are verified and assembly begin succeeded;
+confirm guest exit zero and independently hash all final readback pages. Existing target, missing/corrupt chunks,
+unproven outcome or unsupported exclusive publication must stop. The
+manual procedure remains the fallback, not authorization to bypass
+admission. The helper is a candidate until independent review and real
+ordinary-task benefit evidence.
+
+## Direct MCP orchestration
+
+Use the authorized MCP calls directly with the existing Python planner.
+Retain the actual admission response, original Operation ID and nested
+Tracking ID, exact request and key, Box/incarnation, work, journal revision
+and claim digest. Do not reconstruct a missing original association from
+matching bytes or a same-work lookup. Stop on missing or inconsistent
+evidence. Use the original journal and manual read-only reconciliation
+before further effects. Never replay an uncertain operation or use an
+old client-template checkpoint as new dispatch permission. Preserve
+independent readback and exclusive create requirements. The former JS
+template is retired; the Python planner is still a candidate, not proof
+of independent utility. See [Python workflow](../../README.md#remote-transfer-composition-candidate).

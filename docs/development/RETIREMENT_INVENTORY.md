@@ -1,0 +1,273 @@
+# Consolidation retirement inventory
+
+Initial source audit at `9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d`. This is a seeded decision/verification queue, not a proven exhaustive call graph or permission for bulk deletion. P0 expands to exact symbols, SQL readers/writers, CLI leaves, artifact paths, tests and evidence with one disposition per entry: RETIRE, EXTRACT_SHARED, RETAIN, REPLACE_TEST, ARCHIVE or DECISION_REQUIRED. Check dynamic callers, generated/embedded scripts, build tags, test-only callers and external protocol boundaries. For each retired item record replacement (or why obsolete), references removed, negative test where appropriate, source SHA and evidence.
+
+| Area / source anchor | Initial disposition and dependency caution |
+| --- | --- |
+| [Controller](../../internal/control/server.go), [Peer](../../internal/control/peer_tools.go), [Box lifecycle](../../internal/control/box_tools.go) | Remove Legacy branches and mode selection; preserve Scoped admission, root lifecycle, replay, deletion dependency handling, capacity, auth and public tools. Trace all ScopedPeerFresh and legacy-mode values including tests and startup. |
+| [Legacy Root path](../../internal/control/peer_root.go), internal/install/native_peer_root_*, internal/state/network_peer_root_* | Retire old per-original manual PRS, all-consumer stop/restart, legacy handoff/worker. Identify shared root socket identity, proof, readback and error helpers before moving/removing. Retain bounded scoped guard/lifecycle service and verified old artifact refusal. |
+| [Scoped executor](../../internal/install/network_peer_scoped_execute.go), [root transition](../../internal/install/network_peer_scoped_root_transition.go), [conntrack](../../internal/install/network_peer_scoped_conntrack.go) | EXTRACT_SHARED/RETAIN: NativePeerGuardPlan, nativePeerGuardReplaceOnce, nativePeerGuardWitness/Batch, nativePeerConntrackRun, nativePrepareStateDigest, kernel/SDK/ETag/global overlap and exact scope checks. Non-scoped filenames may be live dependencies. |
+| [Fresh admission](../../internal/install/network_peer_fresh_admission.go), [Scoped install](../../internal/install/network_peer_scoped_install.go), [Scoped retirement](../../internal/install/network_peer_scoped_retirement.go) | Retain preimage, boot guard, quarantine, lifecycle fencing, native absence and exact retirement proof. Keep minimum old-artifact detection as fail-closed refusal, not old execution support. Shared host digest helper also used by native preparation/existing Incus; do not remove with migration code. |
+| [Scriptlet apply](../../internal/install/native_scriptlet_apply.go), native_scriptlet_plan/policy and native-scriptlet-* CLI | Retire historic daemon-global authorization experiment and execution paths after caller proof; retain any necessary read-only refusal for foreign/active old policy, no global mutation. Historical tests/evidence in Git. |
+| [IPv4 retirement](../../internal/control/ipv4_retirement.go), network_ipv4_retirement/compaction families | Retire Legacy-only background sweep, Root service, queue/compaction and old address reuse. Scoped retains identity/address holds and capacity/reserve; do not imply new reclamation. Audit shared fences and lifecycle admissions before deletion. |
+| [Schema](../../internal/state/store.go), [claim digest](../../internal/state/network_claims.go), [Scoped delete](../../internal/state/network_scoped_delete.go) | Current schema 6 has network_ipv4_retirements, network_ipv4_retirement_queue and network_ipv4_compactions; candidate removals after dependency analysis. One new direct schema with version bump/refusal, not data migration. Keep operations/events/claims, auth, cursor, Exec GC, network bindings/fences/peer/forward and scoped lineage. Do not change digest/receipt protections for new originals. |
+| [Install wrapper](../../install.sh), [local installer](../../internal/install/local.go), [lifecycle](../../internal/install/lifecycle.go) | Current legacy fresh/upgrade/rollback and scoped explicit flag; remove legacy dispatch and obsolete backup path only after identifying shared install manifests, native preparation, stage/activate health and safe retirement checks. Preserve honest unsupported upgrade; no silent downgrade or removal of useful native preparation rollback. |
+| [Uninstall coordinator](../../scripts/uninstall_core.py), [wrapper](../../uninstall.sh), [manifest packaging](../../scripts/v1_release_manifest.py) | Separate legacy retirement from common file/identity/observation/plan/archive/purge and Scoped drain/resume. Verify packaged embedded Python bytes, historical/mixed evidence refusal, completed archive proof and foreign resource preservation. Retain recognized LXC compatibility route without modifying inherited policy. |
+| [CLI](../../cmd/boxweave/main.go), [diagnostic observer](../../internal/install/diagnostic_observe.go), [maintenance observer](../../internal/install/maintenance_observe.go), [classification](../../internal/diagnostic/classify.go), internal/recovery | 54 leaves in baseline usage including nine native-peer, five native-scriptlet, six native-migrate. Categorize actual dispatched leaves (including hidden systemd commands) by public/operator/internal/obsolete, then update caller references/help and recovery routing. No arbitrary target count. Preserve legacy evidence refusal, not legacy repair. |
+| [Native dependencies](../process/DEPENDENCY_LIFECYCLE.md), internal/install/native_migration_*, native_existing.go, native_prereq_prepare.go | RETAIN/REVIEW: Incus installation/reuse, version checks and separately authorized package lifecycle are distinct from BoxWeave RC migration. Six native-migrate leaves may be consolidated only with equivalent supported capability or explicit owner scope decision. No foreign-project modification. |
+| [Installed lifecycle workflow](../../.github/workflows/v1-n2-installed-lifecycle.yml), [script](../../scripts/n2_installed_lifecycle.sh) | Baseline four lanes legacy, scoped, scoped-retirement, legacy-offline. Replace obsolete modes with current clean and retirement coverage, transfer real crash/recovery/active/offline/purge/foreign negative witnesses; do not lose unique Legacy-hosted generic assertions. |
+| [RC workflow](../../.github/workflows/v1-release.yml), [S2](../../scripts/accept_s2_native.sh), [nested](../../scripts/s25_bridgehead_lab.sh) | P0 critical dependency: S2 directly launches serve repeatedly without Scoped flag; nested historical startup/rollback and hard-coded RC build identity need review. Convert real release test setup and verify exact artifacts, including old official SDK probe on current product. Do not use test-only legacy server or mock to satisfy installed release proof. |
+| [Stable gate](../../scripts/v1_stable_gate.py), [candidate](../../.github/workflows/v1-stable-candidate.yml), [publication](../../.github/workflows/v1-stable-release.yml) | RETAIN signature, 12 S5A/B gates, exact four-job candidate inventory, asset identities. #170 owns further candidate automation; coordinated change must update verifier and review evidence, not weaken acceptance. |
+| [Workflows](../../.github/workflows), [quality policy](../process/QUALITY_GATES.md) | Baseline 47 YAML workflow files, not 47 active jobs. Inventory triggers, paths, manual-only old branches, dependencies, assertions and evidence. Old Scriptlet, PRS and RC-specific jobs are retirement candidates. Consolidate only after replacement/obsolete decision and run evidence; stable required quality-gate remains. |
+| [BDH index](../../dev/INDEX.md), profiles, skills, evals, [learning inbox](../../dev/LEARNING_INBOX.md) | Update live references to renamed/deleted files as each slice changes. Preserve immutable learning histories and evidence, reassess applicability; do not rewrite historical facts. |
+| [Docs index](../INDEX.md), boundary/defaults, scope, maintenance, network, MCP, status, acceptance | Current contracts must match final source. Move superseded guidance to history or reference exact old revisions; do not delete original evidence or edit published tags. |
+
+P0 must also search the entire checkout for alternative mode flags, old protocol/role/data fixtures, hard-coded RC tags, obsolete journal paths, old compatibility claims and disconnected CI-only code. A name match alone is not a deletion proof. No measured deletion count or fully verified dependency graph yet.
+
+## P1 closeout and P2-P5 disposition refresh (2026-11-27)
+
+Source review at 0e903a2; this is the active priority overlay on the
+seed inventory above, not a new deletion authorization.
+
+| Current anchor | Disposition / phase |
+| --- | --- |
+| install.sh reviewed fresh path and cmd/boxweave/main.go | P2 retain/reconcile fresh stage/activate/guard/manifest. Existing installer rejects Legacy and existing installation. P3 review flags/help and internal callers; do not restore upgrade/rollback. |
+| scripts/uninstall_core.py scoped_drain_capture, scoped_main, purge_main | P2 RETAIN normal path; current N2 scoped-retirement PASS including Legacy fresh refusal and purge/reinstall. Reuse unaffected proof. |
+| offline_scope_blockers / offline_plan / offline_resume_main | P2 REPLACE Legacy-only offline mode/lease/ACL predicates with justified Scoped contract. Preserve bounded original/claim, archive, native and foreign scope and interrupted resume; version-only fix is insufficient. Keep fail-closed for unsupported cases. |
+| native-prepare-* and native-migrate-* CLI | P3 RETAIN/REVIEW separately authorized Incus dependency lifecycle; do not delete by name or equate with obsolete BoxWeave migration. |
+| Two S4B2 Install failures and third vacuous cancellation test | H deferred P1 acceptance: old positive/read-count oracles obsolete; real Scoped identity and composed reader/native behavior still required. Preserve tests/evidence until legitimate equivalent proof and disposition. |
+| network_audit_ledger.go and retired callers | P4 review actual remaining callers and negative refusal, shared helpers and shipped reachability; do not restore retired reader or remove needed proof. |
+| scripts/pr191_s2_ci_gate.py, v1-s2-native.yml | RETAIN actual exact PR #191 crosswalk PASS (72/23). Consumer explicitly binds pull_request/event/source, not release. |
+| v1-release.yml native-s2-gate and accept_s2_native.sh | P2 R4 REPLACE old startup with current installed Scoped candidate and exact release-event provenance. Preserve S2/S25, signatures and publish dependencies; no release trigger in this task. |
+| v1-n2-installed-lifecycle.yml | P2 R3/R4 disposition two failing Legacy lanes only after retained witnesses; 26 Scoped jobs PASS. P4 consolidate verified consumers. |
+| Required quality, dual arch and stable publication | RETAIN, P4 negative scope calibration and P5 exact final acceptance; #170 owns separate stable publication. |
+| MANUAL_INSTALL.md, DOCTOR_RECOVER.md, dependency lifecycle and BDH assets | P3/P4 align actual target, archive historical examples; preserve agent-agnostic direction, open utility gates and evidence. |
+
+No arbitrary deletion/count goals. Preserve source/evidence in Git.
+See [active delivery plan](CONSOLIDATION_PLAN.md#active-delivery-plan-p2-p5-2026-11-27).
+
+## Active retirement sequence
+
+Historical initial sequence; use the current overlay above.
+
+The [R0-R5 recovery plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
+supersedes historical ordering holds, not safety requirements. In R0
+classify each remaining live dependency by required behavior, actual
+consumer, disposition, proof and exact blocking stage. Remove obsolete
+execution in the coherent cutover; do not keep it solely to satisfy a
+historical implementation-specific test. Convert necessary install,
+CLI and CI consumers alongside it. Preserve historical Git/evidence;
+retain fail-closed old-state refusal. No bulk deletion, arbitrary count,
+new migration or compatibility shim. Keep the live ledger concise.
+
+## P0 exit baseline and implementation hold points
+
+Baseline `1cfcd3da43bc47dfc42edac58d0041c02aa16e56` was independently built twice with identical binary digest, then installed, exercised, retired, purged and reinstalled in the isolated L1 native lab. See [progress and operation evidence](CONSOLIDATION_PROGRESS.md).
+
+- [Workflow and runtime reference inventory](CONSOLIDATION_P0_WITNESSES.md): 47 workflows, mode/CLI/SQL/dependency anchors and conversion routes.
+- [Script witness inventory](CONSOLIDATION_P0_SCRIPT_WITNESSES.md): 87 selected script files, startup calls and literal acceptance markers.
+- [Go witness inventory](CONSOLIDATION_P0_GO_WITNESSES.md): 280 test files, 604 test/fuzz/benchmark declarations; retain build constraints and assertion behavior.
+- [Acceptance crosswalk](CONSOLIDATION_ACCEPTANCE.md): preservation rules; OPEN means no replacement or deletion approval yet.
+
+EXTRACT_SHARED first: installed ledger constant, guard proof and witness/batch, replacement, conntrack and preparation digest helpers. RETAIN exact proof, fencing, authorization, original recovery and address holds. Convert all SQL consumers before retiring old retirement/compaction tables. Actual CLI dispatch inventory is 56 leaves (54 listed and two hidden service entries); retain fixed Scoped service entry points. The 16 direct S2 starts and 10 alternate fault-shell scripts must be converted with their intended failure semantics, not blindly given a flag. Native normal/duplicate/restart Scoped startup has been rehearsed; alternate ledger/proxy fault seams and full S2/S2.5 conversion are implementation gates. The nested install rehearsal is L1-local, not recursive isolation certification or a complete two-layer release test.
+
+All generated, dynamic and indirect callers and per-assertion dispositions remain mandatory checks at the affected implementation slice before deletion. No bulk deletion or source change in P0; no product CI inferred from docs-only success.
+
+### P0f current disposition
+
+See [P0f rehearsal and concrete conversion schedule](CONSOLIDATION_P0F_REHEARSAL.md). The actual candidate accepted a separate scratch DB for read-only unavailable-transport status, but correctly reported native unready and no native effects. This does not authorize alternate DB use for real Scoped lifecycle effects. The fixed Root helper must remain tied to its installed original ledger; preserve independent scope and UID proof. P1a helper extraction can proceed; all affected real native fault witnesses remain required.
+
+L2 candidate transfer succeeded; exact Incus bootstrap stopped at partial initialization before BoxWeave. Preserve the original failure, native partial state and parent policy; read-only re-plan refused the incomplete default Profile. Complete two-layer S2.5 acceptance remains BLOCKED in this lab; use an independent clean runner and retain C09/C11. P2/P3 diagnostic work should preserve bounded, sanitized original native-init failure detail without enabling automatic retry/adoption. No root-cause claim beyond the observed partial init.
+
+P0 final closeout: the independent clean L2 diagnostic reproduced the native AppArmor dnsmasq profile-load denial (exit 243), before BoxWeave installation. See [P0f final reproduction](CONSOLIDATION_P0F_REHEARSAL.md#final-diagnostic-reproduction--2026-11-25). Preflight complete with capability blocker documented; full C09/C11 and real ACK/WAL witnesses remain mandatory in suitable independent CI at P1/P2/P5. Retain both diagnostic guests and original evidence; no parent policy changes. P2/P3 must preserve sanitized native initialization error provenance without auto-adoption/reset.
+
+### P1a shared declarations retained
+
+See [P1a progress](CONSOLIDATION_PROGRESS.md#p1a--shared-native-helpers-box-verified-source-checkpoint). Fixed ledger and native preparation dependencies extracted into native_scope_common.go; pure binding, ACL rule key, guard plan and bounded conntrack remain in neutral files. The explicitly named network_peer_conntrack_legacy.go contains the legacy all-stopped bidirectional path, not permission to remove it before callers/tests convert. Source race and exact body comparison passed; all tests and native gate mappings retained. Remaining shared SQL and runtime dispatch dispositions OPEN.
+
+### P1b source fixture checkpoint
+
+Common source MCP fixture converted to Scoped; retained missing-peer classification, exact replay and actor/ownership denial. Real native ACK/WAL fixtures and Scoped read-only recovery proof remain OPEN; do not remove legacy recovery/dispatch/SQL until equivalent assertions are proven. See [P1b progress](CONSOLIDATION_PROGRESS.md#p1b--scoped-common-source-fixture-and-replay-checkpoint).
+
+P1b follow-up: exact `d1f4d305c1e552d6723abdb5a68dae39917334b2` first ACK loss and completed-journal native recovery CI_VERIFIED; real SQLite child-process cuts BOX_VERIFIED with synthetic native receipts. Actual installed native WAL and generic S2/S2.5 conversion remain OPEN. Retain all existing original fault witnesses and Legacy paths until equivalent assertions pass. See [progress](CONSOLIDATION_PROGRESS.md#p1b--first-ackfinal-commit-native-ci-pass-sqlite-process-cut-source-verified).
+
+P1b-05: four installed Scoped WAL-cut replacement candidates added; source selector verified, actual native CI pending. Keep existing S2 Exec/Update WAL and ACK witnesses and Legacy runtime until equivalent proof. See [progress](CONSOLIDATION_PROGRESS.md#p1b-05--exact-installed-scoped-wal-cut-fixtures-ready-for-independent-ci).
+
+P1b-06a: first original S2 Exec process-crash/duplicate-serve/restart witness converted as candidate on the fixed installed Scoped ledger. Existing probe unchanged; new CI mode pending. Original historical S2 gate and all other fault/transport/nested assertions retained. See [progress](CONSOLIDATION_PROGRESS.md#p1b-06a--first-s2-installed-scoped-exec-process-crash-conversion-candidate).
+
+P1b WAL remediation: parent a3cef61 installed ACK/final-commit, WAL-before and Scoped Exec crash verified; WAL-after Create/Delete failed and Legacy reviewed apply failed. Idle reader repair, original identity anchors and stronger independent cold oracle source verified; final installed revalidation pending. Legacy fresh review fixture is not proven root-cause repair. No original witness retirement or C02/C03/C05/C11 closure. [Evidence](CONSOLIDATION_PROGRESS.md#p1b-0506a--wal-visibility-remediation-and-reviewed-recovery-revalidation).
+
+P1b WAL revalidation: c3dcc9d four actual installed WAL modes and Legacy reviewed recovery PASS, no weakened assertions. Generic S2/S2.5 and remaining phase gates open. [Evidence and BDH feedback](CONSOLIDATION_PROGRESS.md#p1b-wal-remediation--exact-candidate-independent-revalidation).
+
+P1b-06b1: C03/C11 previous official SDK native protocol/lifecycle witness retained; new fixed installed Scoped candidate uses unchanged v1.6.1 probe and independent original receipt/retirement witness. Local build and private regression PASS, native CI_PENDING. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b1--pinned-previous-official-sdk-on-installed-scoped). No retirement waiver.
+
+P1b-06b2: C03/C05/C11 current SDK shared catalog and output/reconnect/cancel assertions reused unchanged in installed Scoped subset; private fixed-ledger witness and exact Go build verified. Independent installed CI_PENDING; actual storage/GC, full S2 and S2.5 gates retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b2--current-official-sdk-shared-output-and-catalog-assertions).
+
+P1b-06b4: 0842da7 SDK/Exec WAL CI_VERIFIED (N2 14/14); generic Update ACK durability BOX_VERIFIED, native CI_PENDING. Transport ACK/ETag/postread and quota/GC retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b4--generic-update-ack-durability-candidate).
+
+P1b-06b5: Update ACK durability CI_VERIFIED at 0b0b0fb; full original S2 SDK/packet candidate on fixed installed Scoped BOX_VERIFIED, CI_PENDING. Physical quota, other fault and S2.5 gates retained. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b5--full-original-s2-protocolpacket-probe-on-installed-scoped).
+
+P1b-06b5a: c843166 installed S2 protocol/history partial actual PASS, foreign inventory blocked original Create; corrected fixture retains global guard and read-only foreign negative. Legacy reviewed recovery conflict root cause OPEN; redacted phase diagnosis BOX_VERIFIED. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b5a--foreign-inventory-refusal-and-reviewed-recovery-diagnosis).
+
+P1b-06b6: original S2 private SQLite FULL producer extracted and reused; installed Scoped GC replacement candidate BOX_VERIFIED, native CI_PENDING. No old witness retirement or runtime deletion. [Checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b6--installed-scoped-exec-retention-and-private-sqlite-enospc).
+
+P1b-06b8: exact 5d513eb installed S2 subset and physical 16MiB spool CI_VERIFIED; isolated ENOSPC CI_VERIFIED; actual GC deletion/ACK-loss partial CI_VERIFIED; restricted review identity correction BOX_VERIFIED, complete installed GC CI_PENDING. Public WAN, physical quota, native transport and S2.5 remain open; [checkpoint](CONSOLIDATION_PROGRESS.md#p1b-06b8--independent-s2-and-physical-spool-pass-scoped-gc-review-correction).
+
+P1b-06b9: See CONSOLIDATION_PROGRESS.md exact c237e78 retention failure and single-lock correction, plus actual native Update transport trio source-verified / CI_PENDING. Prior ENOSPC, two-stream GC removal and lost ACK evidence retained; reviewed GC release/restart, physical quota, public WAN and nested S2.5 remain open. No retirement waiver.
+
+P1b-06b10: exact 426a9b6 GC reviewed release/restart and all three Update transport faults CI_VERIFIED; shared original physical quota/SDK/archive witness BOX_VERIFIED, new Scoped native CI_PENDING. Original S2 direct-native quota and remaining fault/consumer mapping retained. See CONSOLIDATION_PROGRESS.md; no retirement waiver.
+
+P1b-06c6: C03/C05/C11 independent noquota Doctor/mount and physical EDQUOT replacements BOX_VERIFIED source only; installed CI_PENDING. Public IPv4 original-ledger oracle strengthened, positive WAN still UNVERIFIED; reserved denial and development-Box direct HTTPS are not substitutes. See [progress](CONSOLIDATION_PROGRESS.md#p1b-06c6-noquota-independent-edquot-and-public-ipv4-oracle). Preserve old witnesses and gates; no retirement waiver.
+
+P1b-06d2: REPLACE_TEST candidate for original s2_p1_token_inflight.sh and s2_p1_token_inflight_probe.go. Preserve held read auth and signed-cursor filter change on installed Scoped, exact independent ledger and no native effect. Legacy original unchanged in coverage; replacement BOX_VERIFIED, installed CI_PENDING. Prior staged alternate-pool tree separate; no runtime/test retirement.
+
+P1b-06d3: REPLACE_TEST candidate s2_p2_malformed_exec_fault.sh with installed fixed-ledger Scoped transport witness, original proxy/SDK retained. No native teardown of UNKNOWN in replacement; deliberate disposable runner retention. BOX_VERIFIED, CI_PENDING. No runtime removal.
+
+P1b-06d4: REPLACE_TEST standalone Stop portion of original s2_p1_stop_delete_fault.sh with restricted native 202/ACK-loss and exact fixed Scoped ledger; original SDK/proxy retained and old Stop/Delete gate unchanged. BOX_VERIFIED, CI_PENDING. Held operation_get/cursor replacement CI_VERIFIED; no retirement waiver.
+
+P1b-06d5: REPLACE_TEST candidate s2_p1_native_create_delete_overlap.sh on fixed installed Scoped ledger, same Root helper/guard, one-use source overlay, independent pre/post native and ledger witness. BOX_VERIFIED, CI_PENDING. Malformed Exec replacement CI_VERIFIED. Original legacy gates retained.
+
+P1b-06d6: REPLACE_TEST candidate original s2_p1_bound_create_receipt_fault.sh using existing Scoped installed final-commit rollback/reviewed recovery plus exact SDK negative and independent no-effect checks. BOX_VERIFIED, installed CI_PENDING. Legacy copy-only UUID binding not a supported Scoped recovery path; source negative and installed positive reviewed recovery retained. Stop replacement CI_VERIFIED.
+
+P1b-06d8: legacy s2_p1_two_controllers.sh / SDK witness mapping: two supported fixed installed Scoped controllers in nested independent native daemons, same-name distinct UUID/original, independent ACLs/ledger/socket, cross-token and typed foreign Get/Delete/OperationGet denial, no admission, existing cleanup and same-daemon foreign Project witness retained. Source verified, installed CI pending; old gate not removed.
+
+P1b-06d10: see CONSOLIDATION_P1B_WITNESS_CROSSWALK.md; 72 markers mapped, no retirement waiver or deletion.
+
+P1-06d14: [real public WAN and runtime/schema consumer checkpoint](CONSOLIDATION_P1_06D14_CHECKPOINT.md). Actual public IPv4 BOX_VERIFIED at 92ffeda, hosted positive UNVERIFIED; P1c/d source BOX_VERIFIED, CI_PENDING; alternate pool BLOCKED, no waiver.
+
+P1-06d15: [completed-original pin and maintenance separation](CONSOLIDATION_P1_06D15_CHECKPOINT.md). Parent 3df436b 7/7 CI, N2 27/27, all 11 Go race packages PASS. New Delete separation, Scoped pin repair and maintenance snapshot/drain BOX_VERIFIED, native CI_PENDING. Alternate pool remains BLOCKED; no DDL/Legacy runtime removal or gate waiver.
+
+P1-06d15b: [exclusive recovery observers and installed pin witness](CONSOLIDATION_P1_06D15B_CHECKPOINT.md). Scoped PRS callback removed; actual completed-original pin repair witness added to existing N2 lane. Source verified, native CI_PENDING. No retirement waiver.
+
+P1-06d25/d26: [controller status and Legacy lifecycle isolation](CONSOLIDATION_P1_06D25_D26_CHECKPOINT.md). Box verified; independent CI pending. Legacy bodies retained, not yet retired.
+
+P1-06d27/d28: [pin repair and exact schema DDL isolation](CONSOLIDATION_P1_06D27_D28_CHECKPOINT.md). Box verification PASS, independent CI pending. Schema 6 unchanged. No retirement waiver.
+
+### P2 R2 settled offline entry checkpoint
+
+Current offline CLI dispatch is Scoped-only and shares the existing
+drain/archive/restore path for exact settled stopped installations.
+Historical offline execution helpers and tests remain pending caller and
+witness disposition; historical receipts refuse new/resume execution in
+the current wrapper. Do not retire old N2 gates on this basis. Bounded
+power UNKNOWN archival needs a distinct exact proof without business
+Delete/claim settlement or replay. C07/C11 remain open.
+
+### P2 R3 offline installed witnesses
+
+Add three clean hosted Scoped offline lanes and the missing-ACK negative
+to the existing stop-ack lane. Existing Legacy lanes and assertions remain
+until the candidate passes real native acceptance and the obsolete-only
+requirements are explicitly disposed. See
+[acceptance crosswalk](CONSOLIDATION_ACCEPTANCE.md#p2-r3-installed-lifecycle-replacement-checkpoint-candidate).
+No Legacy runtime restoration, no deletion of existing safety evidence.
+
+R3 follow-up 8786dc2: all three installed offline positives and actual
+missing-ACK refusal CI_VERIFIED. Exact empty LXC full retirement and
+archive/native postcheck BOX_VERIFIED. Normal handoff regression
+correction and I3 current Project drift oracle in new candidate.
+Assertion-by-assertion proposed Legacy disposition recorded in
+CONSOLIDATION_ACCEPTANCE.md; keep old gates until owner approval and
+actual retained normal/drift proof. No obsolete assertion marked PASS.
+
+2026-11-27 owner approved the assertion-level R3 Legacy-only gate
+disposition. e674d15 actual normal + three offline positives PASS;
+retained generic recovery/no-replay and negative evidence in acceptance
+crosswalk. Remove only legacy and legacy-offline active N2 entries;
+historical source/history stays available for P4. Keep all 29 Scoped
+lanes, original markers and negative controls; do not mark obsolete
+behavior PASS. Exact new-head revalidation required.
+
+### P2 R4 release S2 consumer candidate
+
+Replace only the active RC direct-serve call with installed Scoped N2
+plus real independent S25 and exact RC receipt/asset binding. Retain
+all 72 historical markers/23 producers, 29 N2 lane assertions and
+S25 checker. Historical accept_s2_native.sh and non-191 caller remain
+for P4 inventory; no source fixture deletion. Release-specific
+producer/consumer code BOX_VERIFIED; independent PR CI pending;
+actual release-only evidence OPEN. No release/quality/signature waiver.
+
+### P3 R1 operator parser disposition
+
+Three obsolete BoxWeave mutation names (upgrade/rollback/install-commit)
+are explicit early refusals, not active CLI help or maintenance dispatch.
+Retain the refusal and negative calibration. Keep native-prepare-rollback
+and native-migrate-* separate: these are reviewed Incus dependency
+lifecycle, not BoxWeave migration. Current generated serve/guard/lifecycle
+unit and wrapper/scoped offline/drain entries retain their actual flags.
+Old guided install helper bodies/tests have no current main dispatch;
+record their historical-only candidate disposition for R4/P4, not a
+blanket deletion. Historical uninstaller recognition and original
+retirement paths need separate reachability/evidence classification.
+
+### P3 R2 diagnostic disposition
+
+Legacy installation classification is retained only as unsupported
+historical/conflict evidence; no healthy current mode or legacy
+retirement-capacity projection in Doctor. Historical preparation
+journal, pinned RC13/RC14 adapter recognition and maintenance artifact
+inventory are retained for original evidence, not current health or
+authority. Current maintenance ledger remains Scoped-only. Revisit
+transitive old observations at P4; do not discard original artifacts.
+
+### P3 R3 recovery disposition
+
+Retire Legacy local reviewed plan and transaction-leaf authorization;
+retain historical binding syntax for exact receipt lookup and bounded
+historical navigation, not new effects. Preserve Scoped MCP lifecycle
+reconciliation, current settle-only reviewed leaf, existing GC review
+and original UNKNOWN/claims. R4/P4 retain transitive caller/evidence
+disposition. No H composition changes.
+
+### P3 R4 caller and oracle mapping
+
+[P3 caller disposition](P3_CALLER_DISPOSITION.md) classifies active
+CLI/unit/wrapper/recovery, historical branches and tests. S25 current
+entrypoints are Scoped-only before any setup; retain old bodies for
+P4 transitive audit. Historical audit/purge CLI no-dispatch negatives
+are not a replacement for actual reader evidence. Keep H frozen.
+
+### P4 R1 retired and retained ledger
+
+A01-A03 retired: no current product upgrade dispatch or bodies.
+Historical direct positive and failure-path tests remain at parent
+13fee95. Current explicit old-command/selector refusals and generic
+fresh review/digest/schema/metadata/OAuth checks retained. A08 inner
+S25 Legacy branches retired; current Scoped branch exact statements
+and markers retained. A04 shared lock and old workflow consumers,
+A05/A06 archive and residual SQL/dispatch, A08 outer/N2 old callers
+remain R2 mapping or further bounded cleanup after proof; not retired
+or waived. H-associated composition unchanged; no replacement.
+
+### P4 R2 workflow and remaining caller disposition
+
+[P4 workflow ledger](P4_WORKFLOW_DISPOSITION.md) accounts for
+48 prior workflow files, seven current, two stable, 38 retained
+historical/optional, one archived with its sole script. Keep historic
+assertions and original source; no mass deletion. A04/A05/A06/A08
+shared and old consumer dispositions remain pending per-slice proof.
+No H change or waiver.
+
+### C10 A06 — historical uninstall entry retirement candidate
+
+Owner-directed C10 correction after P5 review, baseline 29201239.
+Retire only the current wrapper's non-Scoped plan/apply/full/resume
+dispatch; refuse before Host observation, after existing incompatible
+maintenance option validation. Keep typed old selectors for explicit
+refusal and existing N2 refusal substring. Source and embedded release
+wrapper use the same core. Normal Scoped, exceptional offline Scoped,
+maintenance preview and separately reviewed completed-data purge
+dispatch remain unchanged. Historical archive readers and original
+helper regression bodies remain; no old execution is reachable in the
+bounded direct-name AST graph from main. This is not whole-language
+reachability proof or physical native acceptance.
+
+Original CLI-positive tests and old approval/audit navigation oracles
+remain at exact parent 29201239. Old matching/stale digest and STARTED
+resume CLI tests now verify explicit refusal, no mutation and evidence
+preservation; historical helper-level archive/retirement/lock/resume
+tests remain. Guided Exec archive read-only test now invokes retained
+historical helper and also checks CLI refusal. Guided decline/drift
+test uses supported Scoped full path with no-effect checks.
+No H or current native lane modification.

@@ -64,35 +64,14 @@ func (s *Store) StageCreateBinding(ctx context.Context, id, project, name string
 	if e != nil {
 		return false, e
 	}
-	if schema != 0 && schema != 2 || schema == 2 && b.ACL != peerscope.QuarantineACL || schema == 0 && b.ACL == peerscope.QuarantineACL {
+	if schema != 2 || b.ACL != peerscope.QuarantineACL {
 		return false, ErrResourceLocked
 	}
-	if err = verifyIPv4RetirementHistory(ctx, tx, project, b.Bridge, b.ACL); err != nil {
+	clear, err := scopedCreateBindingAvailableTx(ctx, tx, project, b)
+	if err != nil || !clear {
 		return false, err
-	}
-	if err = tx.QueryRowContext(ctx, `SELECT
-  (SELECT COUNT(*) FROM network_address_fences WHERE bridge=? AND ((family='ipv4' AND address=?) OR (family='ipv6' AND address=?) OR (project!=? AND state!='RELEASED')))+
-  (SELECT COUNT(*) FROM network_bindings n WHERE bridge=? AND (mac=? OR (ipv4=? AND NOT EXISTS (SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation)) OR ipv6=? OR (project!=? AND state!='RELEASED')))`, b.Bridge, b.IPv4, b.IPv6, project, b.Bridge, b.MAC, b.IPv4, project, b.IPv6, project).Scan(&n); err != nil {
-		return false, err
-	}
-	if n != 0 {
-		return false, nil
 	}
 	keys := b.reservationKeys()
-	for i, key := range keys[:3] {
-		query := "SELECT COUNT(*) FROM operation_resource_claims WHERE resource_key=?"
-		args := []any{key}
-		if i == 0 {
-			query = "SELECT COUNT(*) FROM operation_resource_claims c WHERE resource_key=? AND NOT EXISTS (SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.bridge=? AND r.ipv4=? AND r.create_operation_id=c.operation_id AND c.layer=r.project)"
-			args = append(args, project, b.Bridge, b.IPv4)
-		}
-		if err = tx.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
-			return false, err
-		}
-		if n != 0 {
-			return false, nil
-		}
-	}
 	for _, key := range keys {
 		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES(?,?,?)", id, project, key); err != nil {
 			return false, err

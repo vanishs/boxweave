@@ -37,7 +37,7 @@ Use box_file_apply only for supported exclusive create. Use guest Git/Exec for o
 
 ## Connect workloads
 
-Grant only the required directional Peer relationship; reverse access is not implied. Legacy Peer operations can require Host-local review and may affect other consumers during maintenance. Current v1's explicit fresh scoped architecture supports ordinary authenticated MCP grant/revoke without repeated Host approval and preserves unrelated flows under its verified native conditions. RC13 is not scoped.
+Grant only the required directional Peer relationship; reverse access is not implied. The PR #191 fresh-only Scoped candidate supports ordinary authenticated MCP grant/revoke without repeated Host approval and preserves unrelated flows under its verified native conditions. RC13 is not scoped; older installations require their matching version-specific contract, not a current Legacy fallback.
 
 A TCP/UDP forward maps a host listener to an owned Box port. Default host bind is loopback; external binds require explicit acknowledgement and operator-approved native/service policy. Native device verification is not a guest listener, LAN or public IPv6 test. Test the actual application from the intended client.
 

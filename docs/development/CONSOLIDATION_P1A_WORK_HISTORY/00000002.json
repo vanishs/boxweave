@@ -1,0 +1,82 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-first",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "P1a inline admission refused; file f28d6c41407c92c3577a43c4b928d8c7; verified 3478 bytes; Exec 27487bec36beb5c71213f07adb730edb exit 0",
+      "observation": "Exclusive source script creation and short Exec recovered the actual P1a admission refusal; compile checks passed.",
+      "outcome": "helped",
+      "reason": "Existing L014 reuse, not a new improvement"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-first",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "7093aa4a1aad520bd196a44bded5adb5 and 686909479c83de5e0f351d5c629fec07 guest exit 0",
+      "observation": "Full Go source/race and affected install race plus Python gates passed; current candidate CI remains separate.",
+      "outcome": "helped",
+      "reason": "L012 cancellation/superseded CI not involved in these local checks"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-first",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Original 7093aa4a1aad520bd196a44bded5adb5 terminal exit 0 recovered before changes",
+      "observation": "Retained running original and reused dirty work rather than repeating tests or overwriting.",
+      "outcome": "helped",
+      "reason": "Existing resume guidance sufficient"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-first",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 revision 10 observation a412c14b59bd18d884e0d247fa11a88f exit 0",
+      "observation": "Recorded actual transfer reuse and preserved review state.",
+      "outcome": "helped",
+      "reason": "No new harness implementation justified"
+    }
+  ],
+  "attempt_ref": "20261125-first",
+  "authority": "Owner authorized P1 development in existing isolated Box, no merge, release or physical host changes",
+  "boundary": "progress",
+  "evidence": [
+    "P1a inline admission refused; file f28d6c41407c92c3577a43c4b928d8c7; verified 3478 bytes; Exec 27487bec36beb5c71213f07adb730edb exit 0",
+    "7093aa4a1aad520bd196a44bded5adb5 and 686909479c83de5e0f351d5c629fec07 guest exit 0",
+    "Original 7093aa4a1aad520bd196a44bded5adb5 terminal exit 0 recovered before changes",
+    "L014 revision 10 observation a412c14b59bd18d884e0d247fa11a88f exit 0"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "L014 reuse; no promotion"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Publish verified P1a bytes and exact CI; convert P1b runtime fixtures before dependent legacy removal",
+  "objective": "Extract shared native helpers without behavior change before legacy retirement",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "179b0efd45989add97c3a3038bf0f8c58893ff41",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "skill.task-resume",
+    "skill.continuous-learning"
+  ],
+  "work_ref": "pr191/p1a"
+}

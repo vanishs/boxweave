@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -153,7 +154,7 @@ func applyReviewedEnvelope(q reviewedApplyRequest) error {
 	// native evidence and the transaction checks original/ledger again.
 	identity := install.ObserveDiagnosticInstallation(ctx, doctorInstallPlan(a), a.DB)
 	if identity.Mode != p.Mode || identity.IdentitySHA256 != p.InstallationSHA256 || !p.ReviewMatches(time.Now()) {
-		return state.ErrConflict
+		return fmt.Errorf("reviewed recovery: root installation identity changed: %w", state.ErrConflict)
 	}
 	return spawnReviewedApply(ctx, q, uid, gid)
 }
@@ -221,8 +222,8 @@ func recoverApplyWorker() error {
 	defer cancel()
 	recheck := func(ctx context.Context) error {
 		i := install.ObserveDiagnosticInstallation(ctx, doctorInstallPlan(a), a.DB)
-		if i.Candidate != p.Mode || i.InstalledIdentity != "VERIFIED" || i.Runtime != "VERIFIED" || i.IdentitySHA256 != p.InstallationSHA256 || i.Mode == "CONFLICT" || p.Mode == "LEGACY" && i.Mode != "LEGACY" || !p.ReviewMatches(time.Now()) {
-			return state.ErrConflict
+		if p.Mode != "SCOPED_V2" || !doctorCurrentScope(i) || i.IdentitySHA256 != p.InstallationSHA256 || !p.ReviewMatches(time.Now()) {
+			return fmt.Errorf("reviewed recovery: restricted installation identity changed: %w", state.ErrConflict)
 		}
 		if p.OriginalAction == "port_forward_create" {
 			policy, ok := install.ObserveDiagnosticForwardPolicy(ctx, doctorInstallPlan(a), i)
@@ -254,10 +255,10 @@ func recoverApplyWorker() error {
 	if st := doctorNativeActive(ctx, n); !st.Ready {
 		return state.ErrResourceLocked
 	}
-	svc := recovery.Service{Store: db, Native: n, Layer: a.Project, PeerWitness: recovery.ObserveCompletedPeer}
-	if p.Mode == "SCOPED_V2" {
-		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
+	if p.Mode != "SCOPED_V2" {
+		return state.ErrInvalid
 	}
+	svc := recovery.Service{Store: db, Native: n, Layer: a.Project, ScopedPeerWitness: install.NativeScopedPeerRecoverCall, ScopedLifecycleWitness: install.NativeScopedLifecycleRecoverCall}
 	r := reviewedRequest(q)
 	rec, e := svc.ReconcileReviewed(ctx, r, recheck)
 	if e != nil {

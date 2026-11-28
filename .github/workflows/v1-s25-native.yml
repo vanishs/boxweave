@@ -12,7 +12,8 @@ permissions:
 jobs:
   s25-native-rehearsal:
     name: s25-native-rehearsal
-    if: github.repository == 'vanishs/boxweave'
+    # Historical source only; the current Scoped contract uses N2/S25.
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s25-native-readiness-20261111'
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:

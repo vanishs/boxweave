@@ -17,6 +17,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 
@@ -171,24 +172,6 @@ def private_json(path, owner):
     if not isinstance(value, dict):
         raise InstallError("invalid installer metadata: " + path.name)
     return value, digest(raw)
-
-
-def file_digest(path, limit):
-    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as f:
-        info = os.fstat(f.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-            raise InstallError("unsafe installed file: " + path.name)
-        if info.st_size > limit:
-            raise InstallError("installed file exceeds size limit")
-        data = f.read(limit + 1)
-    if len(data) > limit:
-        raise InstallError("installed file exceeds size limit")
-    return digest(data)
-
-
-def identity_args(args):
-    return ["-project", args.project, "-service-user", args.service_user,
-            "-incus-socket", args.incus_socket]
 
 
 def command_json(command):
@@ -354,169 +337,6 @@ def print_scoped_review(review):
     print("scoped_fresh_review_sha256=" + review["ReviewSHA256"], flush=True)
 
 
-def guided_upgrade_review(args):
-    """Inspect the canonical existing install, without opening its SQLite ledger."""
-    if os.geteuid() != 0:
-        raise InstallError("upgrade review requires root (use sudo --plan --upgrade)")
-    uid = pwd.getpwnam("boxweave").pw_uid
-    if uid == 0:
-        raise InstallError("service identity must be non-root")
-    expected = {"schema": 2, "service_user": "boxweave", "native_project": "user-" + str(uid),
-                "native_socket": RESTRICTED_SOCKET, "state_dir": str(STATE_DIR),
-                "binary_path": str(INSTALLED_BINARY)}
-    manifest, manifest_sha = private_json(STATE_DIR / "install-manifest.json", uid)
-    if manifest.get("scoped_peer_mode") not in (None, ""):
-        raise InstallError("scoped manifest: preserve original, no legacy upgrade")
-    if any(manifest.get(k) != v for k, v in expected.items()):
-        raise InstallError("not a canonical verified v1 installation; refuse adoption")
-    if args.project is not None and args.project != expected["native_project"]:
-        raise InstallError("selected project conflicts with installed identity")
-    if args.service_user != expected["service_user"] or args.incus_socket != expected["native_socket"]:
-        raise InstallError("selected service or socket conflicts with installed identity")
-    args.project = expected["native_project"]
-    sock = Path(args.incus_socket)
-    if sock.is_symlink() or not stat.S_ISSOCK(sock.stat().st_mode):
-        raise InstallError("restricted native Incus socket unavailable")
-    if (not TAG_RE.fullmatch("v" + str(manifest.get("version", ""))) or
-            not COMMIT_RE.fullmatch(str(manifest.get("build_commit", "")))):
-        raise InstallError("guided upgrade requires a published v1 installed build; use explicit reviewed apply for development installs")
-    if (file_digest(INSTALLED_BINARY, MAX_BINARY) != manifest.get("binary_sha256") or
-            file_digest(INSTALLED_UNIT, MAX_METADATA) != manifest.get("unit_sha256")):
-        raise InstallError("installed binary/unit does not match its manifest")
-    current = command_json([str(INSTALLED_BINARY), "install-status", *identity_args(args)])
-    if (any(current.get(k) != v for k, v in manifest.items() if k != "service_active") or
-            current.get("service_active") is not True or current.get("restart_required") is not False):
-        raise InstallError("installed service is inactive, unsettled or changed; inspect original install")
-    previous = None
-    if os.path.lexists(BACKUP_DIR):
-        info = BACKUP_DIR.lstat()
-        if not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700 or info.st_uid != 0:
-            raise InstallError("unsafe installer backup directory")
-        receipt, receipt_sha = private_json(BACKUP_DIR / "receipt.json", 0)
-        old = receipt.get("Previous")
-        if (receipt.get("Schema") != 1 or not isinstance(old, dict) or
-                any(old.get(k) != v for k, v in expected.items()) or
-                not SHA_RE.fullmatch(str(old.get("binary_sha256", ""))) or
-                not COMMIT_RE.fullmatch(str(old.get("build_commit", ""))) or
-                not re.fullmatch(r"[0-9A-Za-z.+-]{1,80}", str(old.get("version", "")))):
-            raise InstallError("previous recovery receipt does not match this installation")
-        previous = {"version": old["version"], "binary_sha256": old["binary_sha256"],
-                    "build_commit": old["build_commit"], "receipt_sha256": receipt_sha}
-    return {"current": current, "manifest_sha256": manifest_sha, "previous": previous}
-
-
-def release_order(version):
-    match = re.fullmatch(r"1\.([0-9]+)\.([0-9]+)(?:-rc\.([1-9][0-9]*))?", version)
-    if not match:
-        raise InstallError("invalid published upgrade version")
-    minor, patch, rc = match.groups()
-    return int(minor), int(patch), rc is None, int(rc or 0)
-
-
-def print_upgrade_review(review, sha):
-    current, previous = review["current"], review["previous"]
-    print("installed_version=" + current["version"])
-    print("installed_commit=" + current["build_commit"])
-    print("installed_binary_sha256=" + current["binary_sha256"])
-    print("installed_unit_sha256=" + current["unit_sha256"])
-    print("installed_service_active=true")
-    print("upgrade_change=" + ("already current" if current["binary_sha256"] == sha else "replace and restart controller"))
-    if previous is None:
-        print("previous_backup=none")
-    else:
-        print("previous_backup_version=" + previous["version"])
-        print("previous_backup_receipt_sha256=" + previous["receipt_sha256"])
-        print("previous_backup_policy=" + ("retain unchanged" if current["binary_sha256"] == sha else
-              "approval closes this older recovery window using verified install-commit"))
-    print("new_backup_policy=retain current installation for rollback after a successful upgrade")
-    print("native_policy=preserve existing Incus, service unit/overrides, OAuth and tunnel")
-    if current["binary_sha256"] != sha and previous:
-        print("WARNING: approval permanently closes the older backup before upgrading; if upgrade later fails, that older rollback is no longer available.")
-    print("Stop other maintenance and mutating MCP work during upgrade; rollback cannot undo native effects.", flush=True)
-
-
-def require_unchanged_upgrade(args, reviewed, host_digest):
-    if current_host_digest() != host_digest or guided_upgrade_review(args) != reviewed:
-        raise InstallError("host/install/backup changed after review; run a new plan before approval")
-
-
-def service_health(args, binary, expected):
-    status = command_json(service_command(args, binary, "status",
-                          "-db", str(STATE_DIR / "ledger.sqlite"), "-project", args.project,
-                          "-incus-socket", args.incus_socket))
-    if (status.get("version") != expected["version"] or
-            status.get("commit") != expected["build_commit"] or
-            status.get("mcp_ready") is not True or status.get("native", {}).get("service_ready") is not True):
-        raise InstallError("restricted service preflight/postflight not ready or identity changed")
-    return status
-
-
-def apply_guided_upgrade(args, candidate, sha, version, source, reviewed, host_digest):
-    original = reviewed["current"]
-    require_unchanged_upgrade(args, reviewed, host_digest)
-    if original["binary_sha256"] == sha:
-        print("UPGRADE_ALREADY_CURRENT: existing backup retained; no service restart")
-        return
-    with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
-        out.write("Type UPGRADE " + args.project + " to approve this exact plan: ")
-        out.flush()
-        if inp.readline().strip() != "UPGRADE " + args.project:
-            raise InstallError("upgrade not approved; no installer changes")
-    require_unchanged_upgrade(args, reviewed, host_digest)
-    # The explicit candidate hash was reviewed; execute build-info only as
-    # the existing restricted service identity, never as root.
-    build = command_json(service_command(args, candidate, "build-info"))
-    if (not re.fullmatch(r"[0-9A-Za-z.+-]{1,80}", str(build.get("version", ""))) or
-            not COMMIT_RE.fullmatch(str(build.get("commit", ""))) or
-            (not args.local_binary and (build.get("version") != version or build.get("commit") != source))):
-        raise InstallError("candidate build identity differs from reviewed release")
-    # Health checks that open SQLite run only after terminal approval.
-    service_health(args, INSTALLED_BINARY, original)
-    # Never close a previous recovery window for an incompatible candidate.
-    # In particular, pre-stable schema 6 refuses the older schema explicitly.
-    service_health(args, candidate, {"version": build["version"], "build_commit": build["commit"]})
-    require_unchanged_upgrade(args, reviewed, host_digest)
-    if reviewed["previous"]:
-        # Delegate all backup verification/deletion to the installed Go
-        # implementation. Each Go mutation retains its maintenance lock.
-        subprocess.run([str(INSTALLED_BINARY), "install-commit", *identity_args(args),
-                        "-approve-local"], check=True)
-        expected = dict(reviewed, previous=None)
-        require_unchanged_upgrade(args, expected, host_digest)
-        print("PREVIOUS_BACKUP_COMMITTED", flush=True)
-    print("UPGRADE_START: on any failure inspect the original manifest/backup; never retry or rollback blindly.", flush=True)
-    subprocess.run([str(candidate), "upgrade", *identity_args(args),
-                    "-source-binary", str(candidate), "-expect-sha256", sha,
-                    "-approve-local"], check=True)
-    # Local dev candidates can be used in an explicitly approved upgrade,
-    # but the resulting build must still match the reviewed executable.
-    current = command_json([str(INSTALLED_BINARY), "install-status", *identity_args(args)])
-    if (current.get("binary_sha256") != sha or current.get("version") != build["version"] or
-            current.get("build_commit") != build["commit"] or current.get("unit_sha256") != original["unit_sha256"] or
-            current.get("service_active") is not True or current.get("restart_required") is not False or
-            any(current.get(k) != original.get(k) for k in ("schema", "native_project", "native_socket", "service_user", "state_dir", "binary_path", "retirement_unit_sha256", "retirement_bridge", "retirement_acl", "retirement_native_review_sha256"))):
-        raise InstallError("upgrade postflight mismatch; retain rollback backup and inspect")
-    backup, _ = private_json(BACKUP_DIR / "receipt.json", 0)
-    if (backup.get("Schema") != 1 or
-            any(backup.get("Previous", {}).get(k) != v for k, v in original.items())):
-        raise InstallError("new rollback backup does not bind the reviewed previous installation")
-    health = service_health(args, INSTALLED_BINARY, current)
-    print("Installed:", json.dumps(current), flush=True)
-    print("Service status:", json.dumps(health), flush=True)
-    print("GUIDED_UPGRADE_COMPLETE: service ready; previous version backup retained; not HOST_GO PASS")
-
-
-def legacy_fresh_review(candidate, args, native_args):
-    retirement_reader_preflight()
-    plan = subprocess.check_output([str(candidate), "native-prepare-plan", *native_args],
-                                   text=True, timeout=90)
-    review = json.loads(plan)
-    expected = dict(project=args.project, pool=args.pool, network=args.network, acl=args.acl)
-    if review.get("target") != expected or not SHA_RE.fullmatch(review.get("review_sha256", "")):
-        raise InstallError("native plan identity missing or mismatched")
-    return plan, review
-
-
 def phase_unverified(name):
     return InstallError("INSTALL_PHASE_UNVERIFIED: " + name +
                         "; retain original files and journals; inspect install-status and doctor locally; do not reinstall blindly")
@@ -530,6 +350,51 @@ def install_phase(name, command, capture=False):
         subprocess.run(command, check=True)
     except (OSError, ValueError, InstallError, subprocess.SubprocessError) as exc:
         raise phase_unverified(name) from exc
+
+
+def doctor_postflight(command):
+    """Reobserve only the exact installed Doctor; never repeat installation."""
+    print("INSTALL_PHASE=CONTROLLER_DOCTOR", flush=True)
+    for attempt in range(3):
+        try:
+            return command_json(command)
+        except subprocess.CalledProcessError as exc:
+            # Doctor emits redacted JSON even when preflight is incomplete.
+            # Log only bounded typed classifications, never raw stdout/intent.
+            try:
+                report = json.loads(exc.output or "")
+                d = report["diagnostic"]
+                i = d["installation"]
+                fields = {
+                    "mode": i.get("mode"), "candidate": i.get("candidate"),
+                    "manifest": i.get("manifest"), "identity": i.get("installed_identity"),
+                    "runtime": i.get("runtime"), "installation_reason": i.get("reason"),
+                    "guard": i.get("guard_unit"), "lifecycle": i.get("lifecycle_unit"),
+                    "root_journal": i.get("root_journal"), "root_proof": i.get("root_proof"),
+                    "artifacts": i.get("scoped_artifacts"), "dependencies": i.get("dependencies"),
+                    "database": d["database"].get("state"), "database_reason": d["database"].get("reason"),
+                    "native": d["native"].get("state"), "native_reason": d["native"].get("reason"),
+                    "mcp": d["mcp"].get("state"), "mcp_reason": d["mcp"].get("reason"),
+                }
+                fields = {k: v if isinstance(v, str) and re.fullmatch(r"[A-Z0-9_]{1,100}", v)
+                          else "UNAVAILABLE" for k, v in fields.items()}
+                print("CONTROLLER_DOCTOR_INCOMPLETE " + json.dumps(fields, sort_keys=True),
+                      file=sys.stderr, flush=True)
+                # A startup/observation gap may settle. A legacy/mixed
+                # identity, wrong schema or foreign ledger is not retried.
+                retry = (i.get("candidate") == "SCOPED_V2" and i.get("mode") in ("SCOPED_V2", "UNVERIFIED")
+                         and i.get("manifest") == i.get("installed_identity") == "VERIFIED"
+                         and report.get("schema_version") == 7 and d["database"].get("state") == "OBSERVED"
+                         and isinstance(d.get("ledger"), dict) and d["ledger"].get("foreign_rows", 0) == 0
+                         and i.get("service_unit") == "ACTIVE"
+                         and d["mcp"].get("reason") in ("LOCAL_MCP_UNAVAILABLE", "CONTROLLER_RUNTIME_UNVERIFIED"))
+            except (ValueError, KeyError, TypeError, AttributeError):
+                retry = False
+            if not retry or attempt == 2:
+                raise phase_unverified("CONTROLLER_DOCTOR") from exc
+            time.sleep(1)
+        except (OSError, ValueError, InstallError, subprocess.SubprocessError) as exc:
+            raise phase_unverified("CONTROLLER_DOCTOR") from exc
 
 
 def normalize_oauth_origin(raw):
@@ -640,17 +505,17 @@ def main():
     parser.add_argument("--local-binary", help="approved absolute path to pre-release candidate")
     parser.add_argument("--sha256", help="required 64-hex SHA256 for local candidate")
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--interactive", action="store_true", help="review and install/upgrade in one terminal")
+    mode.add_argument("--interactive", action="store_true", help="review and fresh install in one terminal")
     mode.add_argument("--plan", action="store_true", help="read-only plan (default)")
     mode.add_argument("--apply", action="store_true", help="apply on exact approved host")
-    parser.add_argument("--guided-fresh-plan", action="store_true", help="with --plan: full root-local Legacy fresh preview, no approval or writes")
-    parser.add_argument("--scoped-peer-fresh", action="store_true", help="fresh-only scoped Peer v2; no legacy migration")
+    parser.add_argument("--guided-fresh-plan", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--scoped-peer-fresh", action="store_true", help="optional assertion of the sole fresh Scoped contract; no legacy migration")
     parser.add_argument("--scoped-fresh-review-sha256", help="exact root-local native-scoped-fresh-plan review digest for --apply")
-    parser.add_argument("--upgrade", action="store_true", help="explicitly upgrade an existing verified install")
+    parser.add_argument("--upgrade", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--project", help="pre-provisioned restricted native Incus Project")
-    parser.add_argument("--pool", help="existing Incus storage pool (guided install)")
-    parser.add_argument("--network", help="existing managed Incus bridge (guided install)")
-    parser.add_argument("--acl", help="exclusive new ACL (guided install)")
+    parser.add_argument("--pool", help=argparse.SUPPRESS)
+    parser.add_argument("--network", help=argparse.SUPPRESS)
+    parser.add_argument("--acl", help=argparse.SUPPRESS)
     parser.add_argument("--public-origin", help="optional already-operated HTTPS origin (guided install)")
     parser.add_argument("--service-user", default="boxweave")
     parser.add_argument("--incus-socket", default="/var/lib/incus/unix.socket.user")
@@ -659,31 +524,20 @@ def main():
     if os.path.lexists("/var/lib/boxweave-offline-retirement-v1.json"):
         raise InstallError("OFFLINE_RETIREMENT_IN_PROGRESS: preserve original local retirement receipt")
     refuse_scoped_existing()
-    if args.guided_fresh_plan and (not args.plan or args.upgrade or args.scoped_peer_fresh or args.public_origin):
-        raise InstallError("--guided-fresh-plan requires --plan, Legacy fresh mode and no OAuth options")
-    if args.scoped_peer_fresh and args.upgrade:
-        raise InstallError("scoped Peer requires a new installation; upgrade refused before backup or health changes")
-    if args.scoped_fresh_review_sha256 and (not args.scoped_peer_fresh or not args.apply):
-        raise InstallError("scoped review digest requires explicit scoped --apply")
-    if args.scoped_peer_fresh and args.apply and not SHA_RE.fullmatch(args.scoped_fresh_review_sha256 or ""):
+    if args.guided_fresh_plan or args.upgrade:
+        raise InstallError("scoped fresh only: legacy installation and upgrade unsupported")
+    if args.scoped_fresh_review_sha256 and not args.apply:
+        raise InstallError("scoped review digest requires explicit --apply")
+    if args.apply and not SHA_RE.fullmatch(args.scoped_fresh_review_sha256 or ""):
         raise InstallError("scoped --apply requires exact --scoped-fresh-review-sha256")
-    if args.scoped_peer_fresh and any((args.pool,args.network,args.acl)):
+    if any((args.pool, args.network, args.acl)):
         raise InstallError("scoped fresh native scope is derived, never caller-selected")
-    # Source is a heredoc: use the controlling terminal for human consent.
     guided = args.interactive or (not args.plan and not args.apply and
                                  os.geteuid() == 0 and sys.stdout.isatty())
     if (guided or args.plan) and args.confirm_host_sha256:
         raise InstallError("interactive or plan-only mode does not accept supplied approval")
-    guided_upgrade = args.upgrade and guided
-    fresh_guided = guided and not args.upgrade
-    legacy_preview = args.guided_fresh_plan
-    if not (fresh_guided or legacy_preview) and any((args.pool, args.network, args.acl, args.public_origin)):
-        raise InstallError("native/OAuth options require interactive fresh install")
-    if args.upgrade and not (guided or args.apply or args.plan):
-        raise InstallError("noninteractive upgrade requires --plan or explicit --apply")
-    upgrade_review = None
-    if args.upgrade and (guided_upgrade or args.plan):
-        upgrade_review = guided_upgrade_review(args)
+    if args.public_origin and not guided:
+        raise InstallError("OAuth options require interactive fresh install")
 
     if platform.system() != "Linux":
         raise InstallError("Linux required")
@@ -724,40 +578,28 @@ def main():
 
     if not args.service_user or not PROJECT_RE.fullmatch(args.service_user):
         raise InstallError("invalid service identity")
-    if fresh_guided or legacy_preview or args.scoped_peer_fresh:
-        if os.geteuid() != 0:
-            raise InstallError("interactive or scoped native review requires local root")
-        if (args.scoped_peer_fresh or legacy_preview or fresh_guided) and args.incus_socket != RESTRICTED_SOCKET:
-            raise InstallError("guided fresh review requires the canonical restricted socket")
-        if args.scoped_peer_fresh and args.apply and args.project is None:
-            raise InstallError("scoped --apply requires explicit --project")
-        uid = pwd.getpwnam(args.service_user).pw_uid
-        args.project = args.project or ("user-" + str(uid))
-        if uid == 0 or args.service_user != "boxweave" or args.project != "user-" + str(uid):
-            raise InstallError("guided install requires exact dedicated restricted identity/Project")
-        if not args.scoped_peer_fresh:
-            args.pool = args.pool or "default"
-            args.network = args.network or ("incusbr-" + str(uid))
-            args.acl = args.acl or ("bw-" + args.project + "-acl")
-            if any(not PROJECT_RE.fullmatch(x) for x in (args.pool, args.network, args.acl)):
-                raise InstallError("invalid guided native target")
+    if os.geteuid() != 0:
+        raise InstallError("scoped native review requires local root")
+    if args.incus_socket != RESTRICTED_SOCKET:
+        raise InstallError("fresh review requires the canonical restricted socket")
+    if args.apply and args.project is None:
+        raise InstallError("scoped --apply requires explicit --project")
+    uid = pwd.getpwnam(args.service_user).pw_uid
+    args.project = args.project or ("user-" + str(uid))
+    if uid == 0 or args.service_user != "boxweave" or args.project != "user-" + str(uid):
+        raise InstallError("fresh install requires exact dedicated restricted identity/Project")
     if args.project is not None and not PROJECT_RE.fullmatch(args.project):
         raise InstallError("invalid project name")
     sock = Path(args.incus_socket)
     if not sock.is_absolute() or ".." in sock.parts or not str(sock).startswith("/var/lib/incus/"):
         raise InstallError("restricted Incus socket must be an approved absolute path")
-    if upgrade_review and not args.local_binary:
-        current = upgrade_review["current"]
-        if release_order(version) < release_order(current["version"]) or (version == current["version"] and sha != current["binary_sha256"]):
-            raise InstallError("refuse downgrade or changed bytes under installed version")
-    if not args.upgrade and os.geteuid() == 0 and (fresh_guided or legacy_preview or args.scoped_peer_fresh or args.apply):
-        previous = Path("/var/lib/boxweave-uninstall-v1-audit.json")
-        if os.path.lexists(previous):
-            audit, _ = private_json(previous, 0)
-            if audit.get("status") != "COMPLETE":
-                raise InstallError("UNINSTALL_AUDIT_STARTED_OR_UNVERIFIED: preserve original audit; inspect matching uninstall --resume-plan, not a fresh install")
-    if args.plan and not args.upgrade and os.path.lexists(STATE_DIR / "install-manifest.json"):
-        raise InstallError("existing installation; use sudo sh install.sh --plan --upgrade --version TAG")
+    previous = Path("/var/lib/boxweave-uninstall-v1-audit.json")
+    if os.path.lexists(previous):
+        audit, _ = private_json(previous, 0)
+        if audit.get("status") != "COMPLETE":
+            raise InstallError("UNINSTALL_AUDIT_STARTED_OR_UNVERIFIED: preserve original audit; inspect matching uninstall --resume-plan, not a fresh install")
+    if os.path.lexists(STATE_DIR / "install-manifest.json"):
+        raise InstallError("existing installation; scoped fresh only, no adoption")
 
     print("BoxWeave v1 external distribution plan")
     print("host_machine_id_sha256=" + host_digest)
@@ -768,41 +610,24 @@ def main():
     print("project=" + str(args.project or "(not selected)"))
     print("socket=" + str(sock))
     print("service_user=" + args.service_user)
-    print("operation=" + ("upgrade" if args.upgrade else "fresh install"))
-    if args.scoped_peer_fresh:
-        print("changes=fresh-only exact scoped guard, quarantine ACL/profile, fixed systemd units, binary and SQLite; no legacy upgrade or tunnel")
-    elif fresh_guided or legacy_preview:
-        print("changes=reviewed fresh Legacy Project/Profile/ACL, retirement verifier, binary/unit/SQLite; no shared Incus bootstrap or tunnel")
-    else:
-        print("changes=only v1 Go installer-owned binary/unit/SQLite; no native preparation or tunnel")
+    print("operation=fresh install")
+    print("changes=fresh-only exact scoped guard, quarantine ACL/profile, fixed systemd units, binary and SQLite; no legacy upgrade or tunnel")
     print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
-    if not args.upgrade and os.geteuid() == 0 and (args.scoped_peer_fresh or fresh_guided or legacy_preview):
-        print_lifecycle_preflight(scoped=args.scoped_peer_fresh)
-
-    if args.upgrade:
-        print("forward_policy=preserve existing systemd unit and operator overrides; native Project permissions remain unchanged")
-        if upgrade_review:
-            print_upgrade_review(upgrade_review, sha)
-    else:
-        print("forward_policy=current fresh installer defaults to all; older candidate binaries keep their original defaults")
-        print("forward_risk=explicit external Forward may expose guest services on public and future Host interfaces; default bind stays loopback; reviewed fresh native preparation explicitly grants Project proxy permission; service-only installation does not")
-    if not args.apply and not guided and not legacy_preview:
-        if args.scoped_peer_fresh:
-            with tempfile.TemporaryDirectory(prefix="boxweave-v1-scoped-review-") as folder:
-                candidate = Path(folder) / "boxweave"
-                candidate.write_bytes(binary)
-                candidate.chmod(0o700)
-                review = scoped_review(candidate, args.project)
-                if current_host_digest() != host_digest:
-                    raise InstallError("Host changed during scoped review")
-                print_scoped_review(review)
-            print("PLAN_ONLY: no persistent host changes (review exact candidate and native digest; use --interactive or explicit --apply with --project, --confirm-host-sha256 and --scoped-fresh-review-sha256)")
-        elif args.upgrade:
-            print("PLAN_ONLY: no host changes (run sudo sh install.sh --upgrade --version TAG for terminal approval)")
-        else:
-            print("PLAN_ONLY: no host changes (pass --apply, --project, --confirm-host-sha256 after approval)")
+    print_lifecycle_preflight(scoped=True)
+    print("forward_policy=current fresh installer defaults to all")
+    print("forward_risk=explicit external Forward may expose guest services on public and future Host interfaces; default bind stays loopback")
+    if not args.apply and not guided:
+        with tempfile.TemporaryDirectory(prefix="boxweave-v1-scoped-review-") as folder:
+            candidate = Path(folder) / "boxweave"
+            candidate.write_bytes(binary)
+            candidate.chmod(0o700)
+            review = scoped_review(candidate, args.project)
+            if current_host_digest() != host_digest:
+                raise InstallError("Host changed during scoped review")
+            print_scoped_review(review)
+        print("PLAN_ONLY: no persistent host changes (review exact candidate and native digest; use --interactive or explicit --apply with --project, --confirm-host-sha256 and --scoped-fresh-review-sha256)")
         return
-    if os.geteuid() != 0 or (not guided and not legacy_preview and args.confirm_host_sha256 != host_digest):
+    if not guided and args.confirm_host_sha256 != host_digest:
         raise InstallError("--apply requires root and exact current --confirm-host-sha256")
     if args.project is None:
         raise InstallError("--apply requires explicit --project")
@@ -811,16 +636,8 @@ def main():
     user = pwd.getpwnam(args.service_user)
     if user.pw_uid == 0:
         raise InstallError("service identity must be non-root")
-    installed_manifest = Path("/var/lib/boxweave/install-manifest.json")
-    installed = os.path.lexists(installed_manifest)
-    if installed and not args.upgrade:
-        raise InstallError("existing v1 state; refuse implicit upgrade (use --upgrade after rollback review)")
-    if not installed and args.upgrade:
-        raise InstallError("no verified installation to upgrade")
-    if not installed and any(os.path.lexists(path) for path in ("/usr/local/bin/boxweave", "/etc/systemd/system/boxweave.service", "/var/lib/boxweave")):
-        raise InstallError("unmanaged or legacy main installation detected: refuse adoption/co-installation")
-    if (fresh_guided or legacy_preview) and os.path.lexists("/var/lib/boxweave-native-prereq-v1.json"):
-        raise InstallError("existing Native journal; review and reconcile before guided install")
+    if any(os.path.lexists(path) for path in ("/usr/local/bin/boxweave", "/etc/systemd/system/boxweave.service", "/var/lib/boxweave")):
+        raise InstallError("existing installation detected: refuse adoption/co-installation")
     # The downloaded executable is public but Go installer verifies it under
     # the restricted service account. Use an accessible temporary directory.
     with tempfile.TemporaryDirectory(prefix="boxweave-v1-reviewed-") as folder:
@@ -828,98 +645,54 @@ def main():
         candidate = Path(folder) / "boxweave"
         candidate.write_bytes(binary)
         candidate.chmod(0o755)
-        if guided_upgrade:
-            apply_guided_upgrade(args, candidate, sha, version, source, upgrade_review, host_digest)
-            return
-        native_args = ["-project", args.project, "-pool", args.pool,
-                       "-network", args.network, "-acl", args.acl] if fresh_guided or legacy_preview else []
-        if (fresh_guided or legacy_preview) and not args.scoped_peer_fresh:
-            plan, review = legacy_fresh_review(candidate, args, native_args)
-            print("Reviewed native preparation:", plan, flush=True)
-            print("Will install, prepare Native, stage the fixed-Project IPv4 retirement verifier, verify and check doctor; no shared Incus rebuild.", flush=True)
-            if legacy_preview:
-                if current_host_digest() != host_digest:
-                    raise InstallError("host changed during guided preview")
-                print("GUIDED_FRESH_PLAN_ONLY: no persistent host changes; use --interactive for fresh review and approval")
-                return
+        scoped = scoped_review(candidate, args.project)
+        scoped_sha = scoped["ReviewSHA256"]
+        print_scoped_review(scoped)
+        if guided:
             with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
-                out.write("Type INSTALL " + args.project + " to approve this exact plan: ")
+                out.write("Type INSTALL SCOPED " + args.project + " to approve this exact plan: ")
                 out.flush()
-                if inp.readline().strip() != "INSTALL " + args.project:
-                    raise InstallError("OPERATOR_APPROVAL_REQUIRED: installation not approved; no installation changes")
-            if current_host_digest() != host_digest:
-                raise InstallError("host changed after approval")
-            fresh_plan, _ = legacy_fresh_review(candidate, args, native_args)
-            if fresh_plan != plan:
-                raise InstallError("native plan changed after approval; review again")
-        if args.scoped_peer_fresh:
-            scoped = scoped_review(candidate, args.project)
-            scoped_sha = scoped["ReviewSHA256"]
-            print_scoped_review(scoped)
-            if guided:
-                with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
-                    out.write("Type INSTALL SCOPED " + args.project + " to approve this exact plan: ")
-                    out.flush()
-                    if inp.readline().strip() != "INSTALL SCOPED " + args.project:
-                        raise InstallError("OPERATOR_APPROVAL_REQUIRED: scoped installation not approved; no installation changes")
-            elif scoped_sha != args.scoped_fresh_review_sha256:
-                raise InstallError("scoped fresh review digest changed")
-            if current_host_digest() != host_digest or scoped_review(candidate, args.project) != scoped:
-                raise InstallError("Host or scoped native plan changed after approval; review again")
+                if inp.readline().strip() != "INSTALL SCOPED " + args.project:
+                    raise InstallError("OPERATOR_APPROVAL_REQUIRED: scoped installation not approved; no installation changes")
+        elif scoped_sha != args.scoped_fresh_review_sha256:
+            raise InstallError("scoped fresh review digest changed")
+        if current_host_digest() != host_digest or scoped_review(candidate, args.project) != scoped:
+            raise InstallError("Host or scoped native plan changed after approval; review again")
         command = [
-            str(candidate), "upgrade" if args.upgrade else "install-stage",
+            str(candidate), "install-stage",
             "-project", args.project,
             "-service-user", args.service_user,
             "-incus-socket", str(sock),
             "-source-binary", str(candidate),
             "-expect-sha256", sha,
-            "-approve-local" if args.upgrade else "-approve-stage",
+            "-approve-stage", "-scoped-fresh-review-sha256", scoped_sha,
         ]
-        if args.scoped_peer_fresh:
-            command += ["-scoped-peer-fresh", "-scoped-fresh-review-sha256", scoped_sha]
-        elif fresh_guided:
-            command += ["-retirement-review", "-retirement-compact", "-pool", args.pool,
-                        "-network", args.network, "-acl", args.acl,
-                        "-native-prepare-sha256", review["review_sha256"]]
-        # Only the dedicated Go executable is permitted to own installer
-        # writes, backup, service health, and rollback.
-        install_phase("UPGRADE" if args.upgrade else "STAGE", command)
-        if fresh_guided and not args.scoped_peer_fresh:
-            prepared = install_phase("NATIVE_PREPARE", [str(candidate), "native-prepare-apply", *native_args,
-                 "-native-prepare-sha256", review["review_sha256"], "-approve-local"], capture=True)
-            if prepared.get("status") != "APPLIED":
-                raise phase_unverified("NATIVE_PREPARE")
-            prereq = install_phase("NATIVE_READBACK", [str(candidate), "native-prereq-plan", "-project", args.project], capture=True)
-            if not prereq.get("config_ready") or not SHA_RE.fullmatch(prereq.get("review_sha256", "")):
-                raise phase_unverified("NATIVE_READBACK")
-            print("Native prerequisite readback:", json.dumps(prereq), flush=True)
-            install_phase("NATIVE_VERIFY", [str(candidate), "native-prereq-verify", "-project", args.project,
-                            "-native-prereq-sha256", prereq["review_sha256"], "-approve-local"])
-        if not args.upgrade:
-            install_phase("ACTIVATE", [str(candidate), "install-activate", "-project", args.project,
-                            "-service-user", args.service_user, "-incus-socket", str(sock), "-approve-local"])
+        install_phase("STAGE", command)
+        install_phase("ACTIVATE", [str(candidate), "install-activate", "-project", args.project,
+                        "-service-user", args.service_user, "-incus-socket", str(sock), "-approve-local"])
         installed_status = install_phase("INSTALLED_STATUS", [str(candidate), "install-status", "-project", args.project,
                         "-service-user", args.service_user, "-incus-socket", str(sock)], capture=True)
         print(json.dumps(installed_status), flush=True)
-        if fresh_guided:
-            if (installed_status.get("binary_sha256") != sha or
-                    installed_status.get("native_project") != args.project or
-                    installed_status.get("service_user") != args.service_user or
-                    installed_status.get("service_active") is not True or
-                    installed_status.get("restart_required") is not False):
-                raise phase_unverified("INSTALLED_STATUS")
-            installed = "/usr/local/bin/boxweave"
-            identity = ["runuser", "-u", args.service_user, "--", installed]
-            doctor = install_phase("CONTROLLER_DOCTOR", identity + ["doctor", "-project", args.project], capture=True)
-            print("Doctor:", json.dumps(doctor), flush=True)
-            if (doctor.get("version") != installed_status.get("version") or
-                    doctor.get("commit") != installed_status.get("build_commit") or
-                    (not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source)) or
-                    not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready"))):
-                raise phase_unverified("CONTROLLER_DOCTOR")
-            policy = doctor.get("diagnostic", {}).get("forward_policy", {})
-            effective = policy.get("reason") if policy.get("state") == "OBSERVED" else "unverified"
-            print("RUNNING_SERVICE_FORWARD_POLICY=" + str(effective))
+        if (installed_status.get("binary_sha256") != sha or
+                installed_status.get("native_project") != args.project or
+                installed_status.get("service_user") != args.service_user or
+                installed_status.get("scoped_peer_mode") != "SCOPED_PEER_FRESH_V2" or
+                installed_status.get("service_active") is not True or
+                installed_status.get("restart_required") is not False):
+            raise phase_unverified("INSTALLED_STATUS")
+        installed = "/usr/local/bin/boxweave"
+        identity = ["runuser", "-u", args.service_user, "--", installed]
+        doctor = doctor_postflight(service_command(args, Path(installed), "doctor", "-project", args.project))
+        print("Doctor:", json.dumps(doctor), flush=True)
+        if (doctor.get("version") != installed_status.get("version") or
+                doctor.get("commit") != installed_status.get("build_commit") or
+                (not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source)) or
+                not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready"))):
+            raise phase_unverified("CONTROLLER_DOCTOR")
+        policy = doctor.get("diagnostic", {}).get("forward_policy", {})
+        effective = policy.get("reason") if policy.get("state") == "OBSERVED" else "unverified"
+        print("RUNNING_SERVICE_FORWARD_POLICY=" + str(effective))
+        if guided:
             print("GUIDED_INSTALL_COMPLETE: native config ready; packet/quota/PRS acceptance remains separate", flush=True)
             args.oauth_password_configured = doctor.get("diagnostic", {}).get("ledger", {}).get("oauth", {}).get("password_configured")
             optional_oauth(identity, args)

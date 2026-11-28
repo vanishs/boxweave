@@ -40,3 +40,20 @@ func TestH3BOperatorSummaryAuthorityAndHealth(t *testing.T) {
 		t.Fatal(p)
 	}
 }
+
+func TestP3R2SummaryNeverCertifiesUnsupportedOrMissingRoot(t *testing.T) {
+	r := NewReport("user-1001")
+	r.Installation = install.DiagnosticInstallation{Mode: "SCOPED_V2", Runtime: "VERIFIED", ServiceUnit: "ACTIVE"}
+	for _, s := range []*Source{&r.Database, &r.Native, &r.MCP, &r.ForwardDevices, &r.ForwardPolicy} {
+		s.State = "OBSERVED"
+	}
+	if got := Summarize(r, 0); got.Status != "UNVERIFIED" {
+		t.Fatal(got)
+	}
+	r.RootPolicy.State = "OBSERVED"
+	r.Installation.Mode = "UNSUPPORTED_LEGACY"
+	r.ClassifyInstallation()
+	if got := Summarize(r, 0); got.Status != "BLOCKED" || got.ConfirmedIssues != 1 {
+		t.Fatal(got)
+	}
+}

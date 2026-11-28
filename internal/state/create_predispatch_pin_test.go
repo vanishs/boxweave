@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"errors"
+	"github.com/vanishs/boxweave/internal/peerscope"
 	"testing"
 	"time"
 )
@@ -15,12 +16,12 @@ func n3AdmittedNoEffectCreate(t *testing.T) (*Store, Admission, Receipt, Verifie
 	if e != nil {
 		t.Fatal(e)
 	}
-	a := Admission{Layer: "user-1001", ActorID: tok.ID, TokenID: tok.ID, Key: "n3-create-predispatch-original", RequestID: "create", Action: "box_create", ResourceKey: "box:alpha", SafeIntent: []byte(`{"name":"alpha","cpu":1,"memory_mib":1024,"disk_gib":10,"start":false,"nesting":false,"internet":true,"instance_options":{}}`)}
-	rec, e := s.Admit(ctx, a)
+	a := Admission{Layer: "user-1001", ActorID: tok.ID, TokenID: tok.ID, Key: "n3-create-predispatch-original", RequestID: "create", Action: "box_create", ResourceKey: "box:alpha", SafeIntent: []byte(`{"schema":2,"project":"user-1001","bridge":"incusbr-1001","name":"alpha","cpu":1,"memory_mib":1024,"disk_gib":10,"start":false,"nesting":false,"internet":true,"boot_autostart":true,"instance_options":{}}`)}
+	rec, e := s.AdmitScoped(ctx, a)
 	if e != nil {
 		t.Fatal(e)
 	}
-	return s, a, rec, VerifiedCreateBinding{"bwbr0", "bw-peer", "02:16:3e:11:22:33", "10.24.18.11", "fd43:18::11"}
+	return s, a, rec, VerifiedCreateBinding{"incusbr-1001", peerscope.QuarantineACL, "02:16:3e:11:22:33", "10.24.18.11", "fd43:18::11"}
 }
 func n3CountOriginalStaticHolds(t *testing.T, s *Store, id string) int {
 	t.Helper()
@@ -61,7 +62,7 @@ func TestN3WorkerVerifiedNoDispatchCreateReturnsExactReservation(t *testing.T) {
 	}
 	a.Key = "n3-reuse-proved-zero-dispatch-address"
 	a.RequestID = "recreate"
-	next, e := s.Admit(ctx, a)
+	next, e := s.AdmitScoped(ctx, a)
 	if e != nil {
 		t.Fatal("proved unused Box name still blocked", e)
 	}

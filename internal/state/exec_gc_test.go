@@ -22,7 +22,7 @@ func setupS2ExecGCTest(t *testing.T) (*Store, string, string, string, string) {
 	if err := s.RegisterOwnedBox(ctx, boxUUID, "L0", name, boxUUID); err != nil {
 		t.Fatal(err)
 	}
-	r, err := s.Admit(ctx, Admission{
+	r, err := s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
 		Key: "gc-original-command-000000001", Action: "box_exec",
 		SafeIntent: []byte("{}"), RequestID: "test-original", BoxUUID: boxUUID,
@@ -78,7 +78,7 @@ func TestS2ExecGCRequiresSevenDaysAndExactTerminalOwnership(t *testing.T) {
 		t.Fatalf("claim missing: %q %v", state, err)
 	}
 	// Concurrent new native actions must not bypass the GC interlock.
-	_, err = s.Admit(ctx, Admission{
+	_, err = s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: actor, TokenID: actor,
 		Key: "gc-conflicting-action-00000001", Action: "box_stop",
 		SafeIntent: []byte("{}"), RequestID: "conflict",
@@ -140,7 +140,7 @@ func TestS2ExecGCInterruptedNativeDELETEBecomesReviewOnlyNoRetry(t *testing.T) {
 	if _, err := s.PrepareExecGC(ctx, op, "stdout", now); !errors.Is(err, ErrState) {
 		t.Fatalf("ambiguous DELETE reissued: %v", err)
 	}
-	_, err = s.Admit(ctx, Admission{
+	_, err = s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: actor, TokenID: actor,
 		Key: "gc-blocked-after-crash-000001", Action: "box_delete",
 		SafeIntent: []byte("{}"), RequestID: "blocked",
@@ -241,7 +241,7 @@ func TestS2ExecGCManualChallengeRecoveryNeverRedispatchesOriginal(t *testing.T) 
 	}
 	// The manual action releases only the coordination claim, so a NEW
 	// idempotency key can be considered normally; the original is unchanged.
-	_, err = s.Admit(ctx, Admission{
+	_, err = s.AdmitScoped(ctx, Admission{
 		Layer: "L0", ActorID: actor, TokenID: actor, Key: "fresh-after-reviewed-gc-0001",
 		Action: "box_stop", SafeIntent: []byte("{}"), RequestID: "new",
 		BoxUUID: boxUUID, Incarnation: boxUUID, ResourceKey: "box:bw-s2-retention-test",

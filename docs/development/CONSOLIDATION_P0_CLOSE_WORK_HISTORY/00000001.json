@@ -1,0 +1,25 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-close",
+  "authority": "Owner authorized P0 closeout in isolated retained labs; no physical host changes, merge, publication or safety bypass",
+  "evidence": [],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Reconcile source and native original; preserve partial fixture; reproduce native initialization with diagnostics only in a distinct clean fixture",
+  "objective": "Close P0 preflight with precise native initialization evidence and explicit residual gates",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "eb2cddf74e2f5129bebb4dda9cef3a0acd7bfe17",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [],
+  "work_ref": "pr191/p0-close"
+}

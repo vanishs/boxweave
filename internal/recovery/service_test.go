@@ -80,29 +80,29 @@ func TestS5A2DomainProofMatrix(t *testing.T) {
 			t.Incarnation = ""
 			t.OwnedState = ""
 			t.NativeID = ""
-		}, "BIND_IDENTITY", "CREATE_MARKER_EXACT_IDENTITY"},
+		}, "BLOCKED", "SCOPED_ORIGINAL_REQUIRED"},
 		{"create no marker", func(t *state.RecoveryTarget, w *witness) {
 			t.Action = "box_create"
 			t.UUID = ""
 			t.Incarnation = ""
 			w.markerErr = errors.New("wrong marker")
-		}, "BLOCKED", "CREATE_MARKER_IDENTITY_UNPROVED"},
-		{"bound create", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_create" }, "APPROVAL_REQUIRED", "CREATE_IDENTITY_BOUND_OUTCOME_UNPROVED"},
+		}, "BLOCKED", "SCOPED_ORIGINAL_REQUIRED"},
+		{"bound create", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_create" }, "BLOCKED", "SCOPED_ORIGINAL_REQUIRED"},
 		{"delete", func(t *state.RecoveryTarget, w *witness) {
 			t.Action = "box_delete"
 			w.deleteObs.Box = native.BoxObservation{Project: t.Layer, Name: t.Name, ExpectedUUID: t.UUID, State: "ABSENT_UNCERTAIN"}
 			w.deleteObs.NativeID = t.NativeID
 			w.deleteObs.Class = "ORIGINAL_TERMINAL_DELETE_VERIFIED"
 			w.deleteObs.Fingerprint = "DELETE_SUCCESS:test"
-		}, "SETTLE", "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED"},
+		}, "BLOCKED", "SCOPED_ORIGINAL_REQUIRED"},
 		{"delete absent alone", func(t *state.RecoveryTarget, w *witness) {
 			t.Action = "box_delete"
 			w.deleteObs.Box = native.BoxObservation{Project: t.Layer, Name: t.Name, ExpectedUUID: t.UUID, State: "ABSENT_UNCERTAIN"}
 			w.deleteObs.NativeID = t.NativeID
 			w.deleteObs.Class = "NATIVE_RECEIPT_UNAVAILABLE"
-		}, "APPROVAL_REQUIRED", "DELETE_TERMINAL_ABSENCE_NOT_PROVED"},
-		{"dependent delete", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_delete"; t.DependentDelete = true }, "BLOCKED", "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED"},
-		{"peer", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_peer_set" }, "BLOCKED", "PEER_ROOT_COMPLETED_PROOF_REQUIRED"},
+		}, "BLOCKED", "SCOPED_ORIGINAL_REQUIRED"},
+		{"dependent delete", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_delete"; t.DependentDelete = true }, "BLOCKED", "SCOPED_ORIGINAL_REQUIRED"},
+		{"peer", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_peer_set" }, "BLOCKED", "SCOPED_ORIGINAL_REQUIRED"},
 		{"forward", func(t *state.RecoveryTarget, w *witness) { t.Action = "port_forward_create" }, "BLOCKED", "FORWARD_ORIGINAL_CLAIM_UNVERIFIED"},
 		{"readiness", func(t *state.RecoveryTarget, w *witness) { t.Action = state.ReadinessAction }, "APPROVAL_REQUIRED", "READINESS_HISTORICAL_OUTCOME_UNPROVED"},
 		{"matching file", func(t *state.RecoveryTarget, w *witness) {
@@ -143,6 +143,8 @@ func TestS5A4GenericReleaseAuditDoesNotOverrideNetworkBarrier(t *testing.T) {
 			target := original(action)
 			target.Released = true
 			target.DependentDelete = action == "box_delete"
+			target.ScopedLifecycle = action == "box_delete"
+			target.ScopedPeer = action == "box_peer_set"
 			v, p := (Service{}).observe(context.Background(), target, "")
 			if v.ClaimProtection != "RETAINED" || v.Disposition != "BLOCKED" || p.Kind != state.RecoveryBlocked || p.Reason != "NETWORK_LEGACY_RELEASE_REVIEW_REQUIRED" {
 				t.Fatalf("misleading release diagnosis %+v %+v", v, p)

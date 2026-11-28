@@ -1,6 +1,10 @@
 #!/bin/sh
 # Exact-head clean-VM N2 installer lifecycle. Never run on a shared Host.
 set -eu
+# Owner-approved retirement of the two unsupported Legacy N2 lanes.
+# Retain historical fixture bodies for the P4 caller/source inventory.
+test "${PR178_SCOPED_N2:-0}" = 1
+test "${PR188_OFFLINE_RETIREMENT:-0}" = 0
 test "${GITHUB_ACTIONS:-}" = true
 test "${RUNNER_ENVIRONMENT:-}" = github-hosted
 test "$(id -u)" != 0
@@ -30,13 +34,31 @@ chmod 0755 "$work"
 commit="$(git rev-parse HEAD)"
 test "$commit" = "${N2_EXACT_HEAD:?}"
 echo "N2_INSTALL_SOURCE=$commit"
+echo "N2_EVIDENCE_LANE=${N2_EVIDENCE_LANE:?}"
+# Observe the pre-existing runner environment before native bootstrap.
+# This is read-only diagnostic evidence, never a WAN positive control.
+if test "${P1B_S2_NATIVE:-0}" = 1; then
+  sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted python3 scripts/pr191_wan_host_observe.py prebootstrap
+fi
+release_version=""
+case "${GITHUB_REF:-}" in
+  refs/heads/release/*) release_version="$(python3 scripts/pr191_s2_ci_gate.py --release-version)" ;;
+esac
 for version in a b; do
-  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-dev.n2-$version -X main.commit=$commit -buildid=" -o "$work/candidate-$version" ./cmd/boxweave
+  stamp="1.0.0-dev.n2-$version"
+  if test "$version" = a && test -n "$release_version"; then
+    stamp="$release_version"
+  fi
+  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=$stamp -X main.commit=$commit -buildid=" -o "$work/candidate-$version" ./cmd/boxweave
 done
 first="$(sha256sum "$work/candidate-a" | cut -d' ' -f1)"
 next="$(sha256sum "$work/candidate-b" | cut -d' ' -f1)"
 test "$first" != "$next"
-sudo apt-get update -qq
+echo "N2_INSTALL_CANDIDATE_SHA256=$first"
+# CI package selection: unrelated optional repository is not needed.
+# Required repository signatures and exact package checks are unchanged.
+sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_ci_apt_sources.py
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base conntrack nftables iproute2 >/dev/null
 # N3 guard prerequisite, not final installed Peer acceptance.
 if test "${PR178_SCOPED_N2:-0}" = 1; then
@@ -50,7 +72,7 @@ curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/key.asc"
 test "$(gpg --show-keys --with-colons "$work/key.asc" | awk -F: '$1=="fpr"{print $10;exit}')" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
 sudo install -m 0644 "$work/key.asc" /etc/apt/keyrings/bw-n2-install.asc
 echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/bw-n2-install.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/bw-n2-install.list >/dev/null
-sudo apt-get update -qq
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
 sudo "$work/candidate-a" native-plan -incus-package-version "$pkg" > "$work/bootstrap-plan.json"
@@ -69,7 +91,48 @@ project="user-$uid"
 bridge="incusbr-$uid"
 test "$(sudo incus project get "$project" restricted)" = true
 test -z "$(sudo incus list --all-projects -c n -f csv)"
+if test "${P1B_S2_NOQUOTA:-0}" = 1; then
+  test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 0
+  test "${P1B_S2_ALTPOOL:-0}" = 0
+  . scripts/pr191_scoped_noquota_lab.sh
+fi
+if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1 || test "${P1B_S2_ALTPOOL:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  test "${P1B_S2_NOQUOTA:-0}" = 0
+  if test "${P1B_S2_ALTPOOL:-0}" = 1; then
+    test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 0
+  fi
+  # Select the original independent quota fixture before the fresh review,
+  # never alter an installed or populated Scoped Project.
+  . scripts/s2_ext4_quota_pool_lab.sh
+  sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
+  test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-native-pool
+  if test "${P1B_S2_ALTPOOL:-0}" = 1; then
+    test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 0
+    . scripts/s2_p2_alternate_pool_setup.sh
+  fi
+fi
 if test "${PR178_SCOPED_N2:-0}" = 1; then
+  if test "${PR182_SCOPED_RETIREMENT:-0}" = 1; then
+    # Retired positive Legacy plan becomes explicit refusal/no-effect proof.
+    sudo incus project show "$project" > "$work/legacy-project-before"
+    sudo incus profile show default --project "$project" > "$work/legacy-profile-before"
+    if sudo sh install.sh --plan --guided-fresh-plan --local-binary "$work/candidate-a" --sha256 "$first" > "$work/legacy-refusal.log" 2>&1; then
+      echo "retired Legacy plan unexpectedly accepted" >&2
+      exit 1
+    fi
+    grep -Fq 'scoped fresh only: legacy installation and upgrade unsupported' "$work/legacy-refusal.log"
+    test ! -e /var/lib/boxweave
+    test ! -e /var/lib/boxweave-native-prereq-v1.json
+    test ! -e /var/lib/boxweave-scoped-peer-v2
+    test ! -e /usr/local/bin/boxweave
+    sudo incus project show "$project" > "$work/legacy-project-after"
+    sudo incus profile show default --project "$project" > "$work/legacy-profile-after"
+    cmp "$work/legacy-project-before" "$work/legacy-project-after"
+    cmp "$work/legacy-profile-before" "$work/legacy-profile-after"
+    test -z "$(sudo incus list --all-projects -c n -f csv)"
+    echo P1B_SCOPED_LEGACY_FRESH_PLAN_REFUSED_NO_EFFECT=PASS
+  fi
   sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$work/candidate-a" --sha256 "$first" > "$work/scoped-plan.txt"
   grep -Eq '^scoped_fresh_review_sha256=[a-f0-9]{64}$' "$work/scoped-plan.txt"
   grep -Fxq "project=$project" "$work/scoped-plan.txt"
@@ -133,6 +196,9 @@ else
   python3 scripts/n2_installed_lifecycle.py tty-install "$project" "$work/candidate-a" "$first"
 fi
 installed=/usr/local/bin/boxweave
+installed_sha="$(sudo sha256sum "$installed" | cut -d' ' -f1)"
+test "$installed_sha" = "$first"
+echo "N2_INSTALLED_CANDIDATE_SHA256=$installed_sha"
 if test "${PR178_SCOPED_N2:-0}" != 1; then
 sudo systemctl is-active --quiet boxweave.service
 sudo systemctl is-active --quiet boxweave-ipv4-retirement.service
@@ -168,7 +234,7 @@ import json,sys
 root,svc=(json.load(open(p)) for p in sys.argv[1:3])
 for x in (root,svc):
     d=x["diagnostic"]
-    assert x["ready"] and x["native"]["ready"] and x["schema_version"]==6
+    assert x["ready"] and x["native"]["ready"] and x["schema_version"]==7
     assert d["version"]==1 and d["database"]["state"]=="OBSERVED" and d["database"]["epoch_ns"]>0
     assert d["coverage"]=="PARTIAL_D2_DIAGNOSIS" and not d["cross_source_atomic"] and d["mcp"]["reason"]=="LOCAL_HTTP_401_ONLY_AUTHENTICATED_MCP_NOT_CHECKED"
     assert d["installation"]["installed_identity"]=="VERIFIED" and d["installation"]["runtime"]=="VERIFIED"
@@ -199,6 +265,25 @@ print("PR177_D1_INSTALLED_MODE_AND_AUTHORITY=PASS",flush=True)
 D1CHECK
 test "$d1_pid" = "$(sudo systemctl show boxweave.service -p MainPID --value)"
 echo PR177_D1_INSTALLED_NO_SERVICE_RESTART=PASS
+if test "${P1B_S2_NOQUOTA:-0}" = 1; then
+  test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-noquota-pool
+  test "$(sudo incus storage get bw-s2-noquota-pool source)" = "$work/noquota-mounted/native-pool"
+  test "$(findmnt -n -o SOURCE --mountpoint "$work/noquota-mounted")" = "$noquota_loop"
+  test "$(stat -Lc '%d' "$work/noquota-mounted/native-pool")" != "$(stat -Lc '%d' /)"
+  python3 - "$work/d1-root.json" "$work/d1-boxweave.json" "$first" "$commit" <<'NOQUOTA'
+import json,sys
+for path in sys.argv[1:3]:
+    d=json.load(open(path))
+    n=d["native"]
+    assert d["ready"] is True and n["ready"] is True
+    assert d["commit"]==sys.argv[4]
+    assert n["selected_storage_pool_ready"] is True and n["selected_storage_quota_verified"] is False
+    assert any("STORAGE_QUOTA_UNVERIFIED" in w for w in n["warnings"])
+print("P1B_SCOPED_NOQUOTA_INSTALLED_ROOT_AND_RESTRICTED_WARNING=PASS")
+NOQUOTA
+  test "$(sudo sha256sum "$installed" | cut -d' ' -f1)" = "$first"
+  test -z "$(sudo incus list --all-projects -c n -f csv)"
+fi
 d3_absent="d1-$(printf '%064d' 0)"
 d3_rc=0
 sudo "$installed" recover --plan --issue "$d3_absent" -project "$project" > "$work/d3-absent.json" || d3_rc=$?
@@ -224,6 +309,142 @@ sudo systemctl is-active --quiet boxweave.service
 (umask 077; sudo runuser -u boxweave -- "$installed" token-create -project "$project" -ttl 30m > "$work/actor.receipt")
 sudo python3 scripts/pr188_h3b_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
 sudo python3 scripts/pr188_h4a_installed.py "$project" "$work/actor.receipt" "${PR178_SCOPED_N2:-0}"
+if test "${P1B_S2_NOQUOTA:-0}" = 1; then
+  test -z "$(sudo incus list --all-projects -c n -f csv)"
+  test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-noquota-pool
+  sudo systemctl is-active --quiet boxweave.service boxweave-scoped-guard.service boxweave-scoped-lifecycle.service
+  echo P1B_SCOPED_NOQUOTA_INSTALLED_LIFECYCLE_NATIVE_ABSENCE=PASS
+  exit 0
+fi
+if test "${P1B_S2_ALTPOOL:-0}" = 1; then
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-altpool-probe" ./scripts/s2_p2_alternate_pool_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_altpool.py "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
+if test "${P1B_S2_AUTH_RACES:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/s2_p1_operation_list_boundary_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-private-read-probe" ./scripts/s2_p1_private_read_inflight_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-private-read-proxy" ./scripts/s2_p1_private_read_delay_proxy.go
+  sh scripts/pr191_scoped_auth_races.sh "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
+if test "${P1B_S2_PHYSICAL_QUOTA:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
+  sh scripts/pr191_scoped_s2_quota.sh "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
+if test "${P1B_S2_UPDATE_TRANSPORT:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_update_transport.py "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
+if test "${P1B_S2_RETENTION:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-sqlite-fsync-probe" ./scripts/s2_sqlite_fsync_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-exec-gc-probe" ./scripts/s2_exec_gc_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-gc-delete-proxy" ./scripts/s2_gc_delete_proxy.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
+  sh scripts/pr191_scoped_s2_retention.sh "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
+if test "${P1B_S2_NATIVE:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-sdk-probe" ./scripts/s2_native_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
+  sh scripts/pr191_scoped_s2_native.sh "$project" "$work/actor.receipt" "$first" "$work/s2-native-sdk-probe" "$work/s2-queued-cancel-seed"
+  exit 0
+fi
+if test "${P1B_S2_OLD_SDK:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  # Same independent old-SDK module recipe as accept_s2_native.sh.
+  legacy_client_dir="$work/legacy-sdk-client"
+  mkdir -m 0700 "$legacy_client_dir"
+  sed '1,2d' scripts/s2_legacy_sdk_probe.go > "$legacy_client_dir/main.go"
+  (
+    cd "$legacy_client_dir"
+    GOWORK=off go mod init boxweave-s2-legacy-client
+    GOWORK=off go get github.com/modelcontextprotocol/go-sdk@v1.6.1
+    GOWORK=off go mod tidy
+    test "$(GOWORK=off go list -m -f '{{.Version}}' github.com/modelcontextprotocol/go-sdk)" = v1.6.1
+    GOWORK=off CGO_ENABLED=0 go build -trimpath -o "$work/s2-legacy-sdk-probe" .
+  )
+  go version -m "$work/s2-legacy-sdk-probe" | grep -F 'github.com/modelcontextprotocol/go-sdk'
+  echo P1B_SCOPED_OLD_SDK_PINNED_1_6_1=PASS
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-sdk-probe" ./scripts/s2_native_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_sdk_compat.py "$project" "$work/actor.receipt" "$first" "$work/s2-legacy-sdk-probe" "$work/s2-native-sdk-probe"
+  exit 0
+fi
+if test "${P1B_S2_MALFORMED_EXEC:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-probe" ./scripts/s2_p2_malformed_exec_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-proxy" ./scripts/s2_p2_malformed_exec_proxy.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_malformed_exec.py "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
+
+if test "${P1B_S2_OVERLAP:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  parent="$(mktemp -d -p /tmp bw-v1-s2-ghci.XXXXXX)"
+  chmod 0711 "$parent"
+  lab="$parent/p1-native-overlap"
+  mkdir -m 0700 "$lab"
+  BW_S2_OVERLAP_SCOPED=1 python3 scripts/s2_p1_build_overlap_overlay.py "$PWD/internal/state/lifecycle.go" "$lab"
+  CGO_ENABLED=1 go build -trimpath -buildvcs=false -overlay="$lab/go-overlay.json" -ldflags "-X main.version=1.0.0-dev.n2-overlap -X main.commit=$commit" -o "$work/s2-scoped-overlap-service" ./cmd/boxweave
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-scoped-overlap-sdk" ./scripts/s2_p1_native_create_delete_overlap_probe.go
+  overlay_sha="$(sha256sum "$work/s2-scoped-overlap-service" | cut -d' ' -f1)"
+  echo "P1B_SCOPED_OVERLAP_TEST_BINARY_SHA256=$overlay_sha"
+  test -z "$(git status --porcelain)"
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_overlap.py "$project" "$work/actor.receipt" "$first" "$lab" "$overlay_sha"
+  exit 0
+fi
+if test -n "${P2_R3_OFFLINE:-}"; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  case "$P2_R3_OFFLINE" in
+    original) CGO_ENABLED=1 go test -c -o "$work/p2-offline-original.test" ./internal/install
+              chmod 0755 "$work/p2-offline-original.test" ;;
+    empty|settled) ;;
+    *) exit 1 ;;
+  esac
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_p2_offline.py "$project" "$work/actor.receipt" "$first" "$P2_R3_OFFLINE"
+  exit 0
+fi
+if test "${P1B_S2_STOP_ACK:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-stop-delete-probe" ./scripts/s2_p1_stop_delete_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-stop-delete-proxy" ./scripts/s2_p1_stop_delete_proxy.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_stop_ack.py "$project" "$work/actor.receipt" "$first"
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_p2_offline.py --missing-ack "$project" "$work/actor.receipt" "$first"
+  exit 0
+fi
+if test "${P1B_S2_EXEC_CRASH:-0}" = 1; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_exec_crash.py "$project" "$work/actor.receipt" "$first" "$work/s2-crash-probe"
+  exit 0
+fi
+if test -n "${P1B_UPDATE_ACK_WAL:-}"; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-p0-native-sqlite-probe" ./scripts/s2_p0_native_sqlite_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-p0-native-sqlite-proxy" ./scripts/s2_p0_native_sqlite_proxy.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr191_scoped_update_ack_wal.py "$project" "$work/actor.receipt" "$first" "$P1B_UPDATE_ACK_WAL"
+  exit 0
+fi
+if test -n "${P1B_WAL_CUT:-}"; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_wal_cut.py "$project" "$work/actor.receipt" "$first" "$P1B_WAL_CUT"
+  exit 0
+fi
+if test -n "${P1B_ACK_CUT:-}"; then
+  test "${PR178_SCOPED_N2:-0}" = 1
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_ack_loss.py "$project" "$work/actor.receipt" "$first" "$P1B_ACK_CUT"
+  # Unresolved original must be retained until this disposable VM ends.
+  exit 0
+fi
 if test "${PR188_OFFLINE_RETIREMENT:-0}" = 1; then
   CGO_ENABLED=1 go test -c -o "$work/h2b-original.test" ./internal/install
   chmod 0755 "$work/h2b-original.test"
@@ -234,9 +455,11 @@ if test "${PR178_SCOPED_N2:-0}" = 1; then
   sudo python3 scripts/pr178_n2_scoped_lifecycle.py "$project" "$work/actor.receipt"
   echo PR178_N2_CLEAN_INSTALLED_LIFECYCLE_PASS
   if test "${PR182_SCOPED_RETIREMENT:-0}" = 1; then
-    sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt" "$work/candidate-a" "$first"
+    sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" N2_EXACT_HEAD="$N2_EXACT_HEAD" python3 scripts/pr182_scoped_retirement.py "$project" "$work/actor.receipt" "$work/candidate-a" "$first"
     exit 0
   fi
+  CGO_ENABLED=1 go build -trimpath -o "$work/s2-bound-create-probe" ./scripts/s2_p1_bound_create_receipt_fault_probe.go
+  sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_scoped_lifecycle_recovery.py "$project" "$work/actor.receipt" "$first" "$work/s2-bound-create-probe"
   sudo python3 scripts/pr178_n3_scoped_peer.py "$project" "$work/actor.receipt"
   sudo python3 scripts/pr188_h1a_observe.py "$project" live
   sudo python3 scripts/pr188_h1b_plan.py "$project" live --negative-fixtures

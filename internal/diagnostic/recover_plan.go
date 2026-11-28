@@ -216,15 +216,15 @@ func (p *RecoverPlan) SetOriginal(o state.DiagnosticOriginal) bool {
 		return false
 	}
 
-	if p.Mode != "SCOPED_V2" && p.Mode != "LEGACY" || !validSHA(p.InstallationSHA256) {
+	if p.Mode != "SCOPED_V2" || !validSHA(p.InstallationSHA256) {
 		p.Block("INSTALLED_ARCHITECTURE_OR_IDENTITY_UNVERIFIED")
 		return false
 	}
-	if t.Action == "box_peer_set" && (t.ScopedPeer != (p.Mode == "SCOPED_V2")) {
+	if t.Action == "box_peer_set" && !t.ScopedPeer {
 		p.Block("ORIGINAL_ARCHITECTURE_MISMATCH")
 		return false
 	}
-	if p.Mode == "SCOPED_V2" && (t.Action == "box_create" || t.Action == "box_delete") {
+	if t.Action == "box_create" || t.Action == "box_delete" {
 		p.Block("SCOPED_LIFECYCLE_RECOVERY_UNSUPPORTED")
 		return false
 	}
@@ -256,24 +256,12 @@ func (p *RecoverPlan) SetWitness(w recovery.PlanWitness) {
 	switch w.Kind {
 	case state.RecoverySettle:
 		switch p.OriginalAction {
-		case "box_start", "box_stop", "box_update", "box_exec", "box_create", "box_delete", "box_peer_set", "port_forward_create", "port_forward_delete":
+		case "box_start", "box_stop", "box_update", "box_exec", "box_peer_set", "port_forward_create", "port_forward_delete":
 			p.Leaf = "MCP_SETTLE_ORIGINAL_NO_REPLAY"
 		default:
 			p.Block("UNSUPPORTED_RECOVERY_LEAF")
 			return
 		}
-	case state.RecoveryBind:
-		if p.Mode != "LEGACY" || p.OriginalAction != "box_create" {
-			p.Block("UNSUPPORTED_IDENTITY_BIND")
-			return
-		}
-		p.Leaf = "MCP_BIND_ORIGINAL_IDENTITY"
-	case state.RecoveryRepairPin:
-		if p.Mode != "LEGACY" || p.OriginalAction != "box_create" {
-			p.Block("UNSUPPORTED_PIN_REPAIR")
-			return
-		}
-		p.Leaf = "MCP_REPAIR_ORIGINAL_PIN_LEDGER"
 	default:
 		p.Block("UNSUPPORTED_RECOVERY_LEAF")
 		return
@@ -305,7 +293,7 @@ func (p RecoverPlan) reviewDigest() string {
 // ReviewMatches is pure structural verification for future D4. It does
 // NOT verify current native state or authorize a caller.
 func (p RecoverPlan) ReviewMatches(now time.Time) bool {
-	return p.Version == RecoverPlanVersion && p.Status == "REVIEW_READY" && p.CanRepair && p.ApplyAvailable == (p.ObserverUID == 0) && !p.NativeRetried && p.IssuedNS <= now.UnixNano() && now.UnixNano() < p.ExpiresNS && p.ExpiresNS == p.IssuedNS+RecoverPlanTTL.Nanoseconds() && validSHA(p.ReviewSHA256) && p.ReviewSHA256 == p.reviewDigest()
+	return p.Version == RecoverPlanVersion && p.Mode == "SCOPED_V2" && p.Leaf == "MCP_SETTLE_ORIGINAL_NO_REPLAY" && p.Status == "REVIEW_READY" && p.CanRepair && p.ApplyAvailable == (p.ObserverUID == 0) && !p.NativeRetried && p.IssuedNS <= now.UnixNano() && now.UnixNano() < p.ExpiresNS && p.ExpiresNS == p.IssuedNS+RecoverPlanTTL.Nanoseconds() && validSHA(p.ReviewSHA256) && p.ReviewSHA256 == p.reviewDigest()
 }
 
 // MatchesFresh compares all semantic review fields; only observation time

@@ -1,0 +1,39 @@
+import pathlib,re,subprocess
+p=pathlib.Path
+root=p('/root/pr191-consolidation')
+assert subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()=='1cfcd3da43bc47dfc42edac58d0041c02aa16e56'
+out=['# P0 baseline witness inventory','','Exact source: `1cfcd3da43bc47dfc42edac58d0041c02aa16e56`. All entries OPEN: preserve until a reviewed equivalent or explicit obsolete-only rationale exists. Literal source index, not exhaustive dynamic call graph or test acceptance.','']
+def route(n):
+ if n in ('quality-gate','v1-s1-check','v1-s2-format-snapshot'): return 'P4: C01/C11 quality and format'
+ if n in ('v1-release','v1-stable-candidate','v1-stable-release'): return 'P4/P5: C01/C09/C11/C12 exact artifacts and stable gates'
+ if n=='v1-n2-installed-lifecycle': return 'P1/P2/P3: C04-C08/C11 Scoped lifecycle, retirement and recovery'
+ if 'guided-upgrade' in n: return 'P2: C06/C07/C11 fresh/negative and old upgrade-only retirement review'
+ if 'forward' in n or 'b4-' in n: return 'P1/P2: C03/C05/C06/C11 real TCP/UDP, policies, dependent Delete'
+ if 'n4-capacity' in n: return 'P1: C04/C05 capacity and retention'
+ if 'a071' in n: return 'P2/P5: C01/C06/C09 real block and quota'
+ if 'scriptlet' in n: return 'P1/P4: C04/C05/C10/C11 old global execution retirement review, retain foreign refusal and kernel/packet proof'
+ if '-b1-' in n or '-b2-' in n or '-b3-' in n or 'peer-production' in n: return 'P1/P3: C04/C05/C08/C11 scoped ACL/direction, native readback, foreign denial, UNKNOWN'
+ if 'rc10' in n: return 'P1/P3/P4: C03/C05/C08/C11 obsolete RC paths vs generic original recovery'
+ if 's5a2' in n: return 'P3: C05/C08/C11 review/recovery/archive'
+ if 's25' in n or 's3-' in n or 's5b' in n: return 'P1/P2/P5: C03/C05/C07/C09/C11 installed/nested/auth/file/packet/continuity'
+ return 'P1/P3: C02/C03/C05/C11 original receipts, auth, fault and SDK semantics'
+for f in sorted((root/'.github/workflows').glob('*.yml')):
+ out.extend(['## '+f.name,'',route(f.stem)+'.',''])
+ for i,l in enumerate(f.read_text().splitlines(),1):
+  m=sorted(set(re.findall(r'scripts/[A-Za-z0-9_./-]+\.(?:sh|py|go)|\b[A-Z][A-Z0-9_]{6,}(?==PASS\b)|\bTest[A-Za-z0-9_]+',l)))
+  if m: out.append('- '+str(i)+': '+', '.join('`'+x+'`' for x in m))
+ out.extend(['','Dynamic selectors, script exits and inline assertions remain OPEN.',''])
+out.extend(['## Runtime/SQL reference index','','All entries OPEN; retain shared helper consumers and fail-closed old-state refusal.',''])
+pat=re.compile(r'ScopedPeerFresh|scoped-peer-fresh|network_ipv4_retirements|network_ipv4_retirement_queue|network_ipv4_compactions|native-peer-root|native-scriptlet|NativePeerGuardPlan|nativePeerGuardReplaceOnce|nativePeerGuardWitness|nativePeerGuardBatch|nativePeerConntrackRun|nativePrepareStateDigest')
+for name in subprocess.check_output(['git','-C',str(root),'ls-files'],text=True).splitlines():
+ f=root/name
+ if f.suffix not in ('.go','.sh','.py','.yml','.service','.json','.md') or name.startswith(('docs/history/','docs/development/CONSOLIDATION_')): continue
+ try: lines=f.read_text().splitlines()
+ except (UnicodeDecodeError,OSError): continue
+ matches=[str(i) for i,l in enumerate(lines,1) if pat.search(l)]
+ if matches: out.append('- `'+name+'`: '+', '.join(matches))
+out.extend(['','Next: S2 normal/duplicate/restart serve vs alternate fault DB/socket; S2.5 outer/inner Scoped startup; installed offline/resume/purge parity. Do not substitute old SDK compatibility with old runtime support. All replacement proof remains OPEN.',''])
+dest=root/'docs/development/CONSOLIDATION_P0_WITNESSES.md'
+with dest.open('x') as stream: stream.write('\n'.join(out))
+assert not any(l.rstrip()!=l for l in dest.read_text().splitlines())
+print(dest.stat().st_size,len(out))

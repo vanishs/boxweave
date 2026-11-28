@@ -20,7 +20,7 @@ func TestS5A2HTTPRecoveryRefusesCrossLayerAndUntrustedApproval(t *testing.T) {
 	}
 	seed := func(layer, key string) state.Receipt {
 		t.Helper()
-		r, e := st.Admit(ctx, state.Admission{Layer: layer, ActorID: token.ID, TokenID: token.ID, Key: key, Action: "operation_cancel", RequestID: "test-original", SafeIntent: []byte("{}")})
+		r, e := st.AdmitScoped(ctx, state.Admission{Layer: layer, ActorID: token.ID, TokenID: token.ID, Key: key, Action: "operation_cancel", RequestID: "test-original", SafeIntent: []byte("{}")})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -32,7 +32,7 @@ func TestS5A2HTTPRecoveryRefusesCrossLayerAndUntrustedApproval(t *testing.T) {
 		}
 		return r
 	}
-	original := seed("bw-test", "recovery-http-owned-original")
+	original := seed(testScopedProject, "recovery-http-owned-original")
 	foreign := seed("foreign-layer", "recovery-http-foreign-original")
 	connect := func(raw string) *mcp.ClientSession {
 		t.Helper()
@@ -103,5 +103,12 @@ func TestS5A2HTTPRecoveryRefusesCrossLayerAndUntrustedApproval(t *testing.T) {
 	g, e := st.Get(ctx, original.ID)
 	if e != nil || g.State != "UNKNOWN" || g.ErrorClass != "TEST_ORIGINAL_UNKNOWN" {
 		t.Fatalf("original changed %+v %v", g, e)
+	}
+}
+
+func TestP1RecoveryWitnessModeExclusive(t *testing.T) {
+	v := (&Service{}).recoveryObserver("user-1001")
+	if v.Layer != "user-1001" || v.ScopedPeerWitness == nil || v.ScopedLifecycleWitness == nil {
+		t.Fatal("controller did not select exclusively Scoped recovery")
 	}
 }

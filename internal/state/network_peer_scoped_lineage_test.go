@@ -10,10 +10,10 @@ import (
 // not the v2 original to be staged. A prior success/status bit alone is
 // insufficient without the canonical immutable intent, claimed native
 // resources and the original kernel-verified terminal event.
-func TestPR178V2ScopedRootRefusesForgedLegacyPeerHistory(t *testing.T) {
+func TestPR178V2ScopedRootRefusesForgedScopedPeerHistory(t *testing.T) {
 	cases := []struct{ name, sql string }{
 		{"deleted-verified-id", "UPDATE peer_grants SET last_verified_operation_id=NULL WHERE source_uuid='" + s4b2RootThird + "'"},
-		{"verified-id-points-to-v2", "UPDATE peer_grants SET last_verified_operation_id=(SELECT id FROM operations WHERE state='DISPATCHING') WHERE source_uuid='" + s4b2RootThird + "'"},
+		{"verified-id-points-to-current-original", "UPDATE peer_grants SET last_verified_operation_id=(SELECT id FROM operations WHERE state='DISPATCHING') WHERE source_uuid='" + s4b2RootThird + "'"},
 		{"forged-confirmation-row", "UPDATE peer_grants SET operation_id='cccccccccccccccccccccccccccccccc' WHERE source_uuid='" + s4b2RootThird + "'"},
 		{"terminal-unknown", "UPDATE operations SET state='UNKNOWN' WHERE id=(SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid='" + s4b2RootThird + "')"},
 		{"terminal-failed", "UPDATE operations SET state='FAILED' WHERE id=(SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid='" + s4b2RootThird + "')"},
@@ -30,7 +30,7 @@ func TestPR178V2ScopedRootRefusesForgedLegacyPeerHistory(t *testing.T) {
 		{"terminal-missing-native-completion", "DELETE FROM operation_events WHERE state='SUCCEEDED' AND operation_id=(SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid='" + s4b2RootThird + "')"},
 		{"terminal-faked-native-completion", "UPDATE operation_events SET safe_detail='SPURIOUS_SUCCESS' WHERE state='SUCCEEDED' AND operation_id=(SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid='" + s4b2RootThird + "')"},
 		{"terminal-reversed-intent", "UPDATE operations SET safe_intent=replace(safe_intent,'\"allow\":true','\"allow\":false') WHERE id=(SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid='" + s4b2RootThird + "')"},
-		{"terminal-foreign-ACL", "UPDATE operations SET safe_intent=replace(safe_intent,'bw-s4b2','bw-foreign') WHERE id=(SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid='" + s4b2RootThird + "')"},
+		{"terminal-foreign-bridge", "UPDATE operations SET safe_intent=replace(safe_intent,'incusbr-1001','foreign-bridge') WHERE id=(SELECT last_verified_operation_id FROM peer_grants WHERE source_uuid='" + s4b2RootThird + "')"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -41,20 +41,20 @@ func TestPR178V2ScopedRootRefusesForgedLegacyPeerHistory(t *testing.T) {
 			if _, err := s.db.Exec(tc.sql); err != nil {
 				t.Fatal(err)
 			}
-			got, err := r.ReadRootScopedPeerOriginal(context.Background(), id, "user-1001", "bwbr0")
+			got, err := r.ReadRootScopedPeerOriginal(context.Background(), id, "user-1001", purePeerBridge)
 			if err == nil || len(got.After) != 0 {
 				t.Fatalf("forged previous successful C->A operation authorized v2 A->B: %+v", got)
 			}
 		})
 	}
 }
-func TestPR178V2StageRefusesForgedLegacyPeerHistory(t *testing.T) {
+func TestPR178V2StageRefusesForgedScopedPeerHistory(t *testing.T) {
 	cases := []struct{ name, sql string }{
 		{"missing-verified-id", "UPDATE peer_grants SET last_verified_operation_id=NULL WHERE source_uuid='" + s4b2RootThird + "'"},
-		{"spoof-past-native-event", "UPDATE operation_events SET safe_detail='UNVERIFIED' WHERE state='SUCCEEDED'"},
-		{"orphan-success", "UPDATE operations SET state='UNKNOWN' WHERE state='SUCCEEDED'"},
-		{"forged-historical-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%'"},
-		{"missing-old-ACL-intent", "UPDATE operations SET safe_intent='{}' WHERE state='SUCCEEDED'"},
+		{"spoof-past-native-event", "UPDATE operation_events SET safe_detail='UNVERIFIED' WHERE state='SUCCEEDED' AND operation_id IN (SELECT last_verified_operation_id FROM peer_grants)"},
+		{"orphan-success", "UPDATE operations SET state='UNKNOWN' WHERE id IN (SELECT last_verified_operation_id FROM peer_grants)"},
+		{"forged-historical-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%' AND operation_id IN (SELECT last_verified_operation_id FROM peer_grants)"},
+		{"missing-historical-intent", "UPDATE operations SET safe_intent='{}' WHERE id IN (SELECT last_verified_operation_id FROM peer_grants)"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,7 +109,7 @@ func TestPR178V2OldCredentialRevocationAfterSuccessKeepsHistoricalProof(t *testi
 	if err = s.Claim(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	proof, err := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0")
+	proof, err := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge)
 	if err != nil || len(proof.Before) != 1 || len(proof.After) != 2 {
 		t.Fatal("completed historical root proof was mistaken for a currently active credential", err)
 	}
@@ -123,7 +123,7 @@ func TestPR178V2UnknownHistoryDoesNotPermitNativeRecovery(t *testing.T) {
 	if _, err := s.db.Exec("UPDATE peer_grants SET last_verified_operation_id=NULL WHERE status='CONFIRMED'"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", "bwbr0"); !errors.Is(err, ErrResourceLocked) {
+	if _, err := r.ReadRootScopedPeerOriginal(ctx, id, "user-1001", purePeerBridge); !errors.Is(err, ErrResourceLocked) {
 		t.Fatal("missing past kernel event was treated as current authority", err)
 	}
 }

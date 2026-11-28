@@ -3,6 +3,8 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +26,7 @@ func TestPR178ScopedCreateAtomicACLExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := Admission{Layer: project, ActorID: token.ID, TokenID: token.ID, Key: "n2-scoped-create-atomic", RequestID: "create", Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw}
-	rec, err := s.Admit(ctx, a)
+	rec, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,4 +85,155 @@ func TestPR178ScopedCreateAtomicACLExchange(t *testing.T) {
 	if err != nil || got.State != "SUCCEEDED" || got.BoxUUID != uuid {
 		t.Fatal(got, err)
 	}
+}
+
+// The transitional schema has legacy archive tables, but a Scoped controller
+// cannot treat archived addresses as reusable or trust any mixed history.
+func TestP1ScopedAddressHoldsPreserveUnknownClaims(t *testing.T) {
+	ctx := context.Background()
+	s, original, in, pin := p1CreateFixture(t, false)
+	if e := s.Unknown(ctx, original.ID, "DISPATCHING", "NATIVE_OUTCOME_AMBIGUOUS"); e != nil {
+		t.Fatal(e)
+	}
+	h, e := s.ReadScopedCreateAddressHolds(ctx, in.Project, in.Bridge)
+	if e != nil || len(h.IPs) != 2 || len(h.MACs) != 1 ||
+		!h.IPs[netip.MustParseAddr(pin.IPv4)] || !h.IPs[netip.MustParseAddr(pin.IPv6)] || !h.MACs[pin.MAC] {
+		t.Fatal("original prospective holds missing", h, e)
+	}
+	legacy, e := s.ReadCreateAddressHolds(ctx, in.Project, in.Bridge)
+	if e != nil || len(legacy.IPs) != 2 || len(legacy.MACs) != 1 ||
+		!legacy.IPs[netip.MustParseAddr(pin.IPv4)] || !legacy.IPs[netip.MustParseAddr(pin.IPv6)] || !legacy.MACs[pin.MAC] {
+		t.Fatal("legacy unarchived holds changed", legacy, e)
+	}
+	other, e := s.ReadScopedCreateAddressHolds(ctx, in.Project, "incusbr-other")
+	if e != nil || len(other.IPs) != 0 || len(other.MACs) != 0 {
+		t.Fatal("foreign bridge holds leaked", other, e)
+	}
+	p1AssertOriginal(t, s, original.ID, "UNKNOWN", "")
+	var n int
+	if e = s.db.QueryRow("SELECT COUNT(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", original.ID).Scan(&n); e != nil || n != 4 {
+		t.Fatal("original claims changed", n, e)
+	}
+}
+
+func TestP1ScopedAddressHoldsRetainRetiredIdentity(t *testing.T) {
+	ctx := context.Background()
+	s, b, _ := n3RetiredFixture(t)
+	ledger, e := s.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, "incusbr-1001")
+	if e != nil || len(ledger.Retired) != 1 {
+		t.Fatal(ledger, e)
+	}
+	pin := ledger.Retired[0]
+	h, e := s.ReadScopedCreateAddressHolds(ctx, b.Project, ledger.Bridge)
+	if e != nil || !h.IPs[netip.MustParseAddr(pin.IPv4)] || !h.IPs[netip.MustParseAddr(pin.IPv6)] || !h.MACs[pin.MAC] {
+		t.Fatal(h, e)
+	}
+	if e = s.RetireVerifiedIPv4(ctx, b.Project, pin.DeleteID, nil); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("old release admitted", e)
+	}
+	_, actor, e := s.IssueToken(ctx, time.Hour)
+	if e != nil {
+		t.Fatal(e)
+	}
+	in := ScopedCreateIntent{Schema: 2, Project: b.Project, Bridge: ledger.Bridge, Name: "next", CPU: 1, MemoryMiB: 1024, DiskGiB: 10, Options: json.RawMessage("{}")}
+	raw, e := json.Marshal(in)
+	if e != nil {
+		t.Fatal(e)
+	}
+	rec, e := s.AdmitScoped(ctx, Admission{Layer: b.Project, ActorID: actor.ID, TokenID: actor.ID, Key: "p1-retired-slot-reuse-refused", RequestID: "create", Action: "box_create", ResourceKey: "box:next", SafeIntent: raw})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Claim(ctx, rec.ID); e != nil {
+		t.Fatal(e)
+	}
+	old := VerifiedCreateBinding{ledger.Bridge, peerscope.QuarantineACL, pin.MAC, pin.IPv4, pin.IPv6}
+	if ok, e := s.StageCreateBinding(ctx, rec.ID, b.Project, "next", old); e != nil || ok {
+		t.Fatal("retired pin reused", ok, e)
+	}
+	var n int
+	if e = s.db.QueryRow("SELECT count(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", rec.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+}
+
+// The completed original still owns the exact pin. Missing ledger records
+// can be repaired, but neither a different ACL nor mixed retirement history
+// can authorize a repair. Fixtures use real SQLite, not native evidence.
+func TestP1ScopedPinRepairRetainsOriginal(t *testing.T) {
+	ctx := context.Background()
+	s, orig, in, pin := p1CreateFixture(t, true)
+	pin.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
+	if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, pin); e != nil {
+		t.Fatal(e)
+	}
+	req, target := a4Request(t, s, orig.ID)
+	if got, e := s.ReadOriginalCreatePin(ctx, target); e != nil || got != pin {
+		t.Fatal(got, e)
+	}
+	if _, e := s.db.Exec("DELETE FROM network_address_fences WHERE box_uuid=? AND family='ipv4'", p1UUID); e != nil {
+		t.Fatal(e)
+	}
+	p := RecoveryProof{Kind: RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED", NativeID: target.NativeID, UUID: p1UUID, Fingerprint: "synthetic-exact-pin", CreateBinding: pin}
+	bad := p
+	bad.CreateBinding.ACL = "bw-peer"
+	if e := s.CheckCreatePinRepair(ctx, target, bad); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("wrong ACL", e)
+	}
+	if e := s.CheckCreatePinRepair(ctx, target, p); e != nil {
+		t.Fatal(e)
+	}
+	rec, e := s.CommitScopedRecovery(ctx, req, target, p)
+	if e != nil || rec.Disposition != "SETTLED" || rec.Receipt.ID == orig.ID {
+		t.Fatal(rec, e)
+	}
+	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
+	if got, e := s.ReadOriginalCreatePin(ctx, target); e != nil || got != pin {
+		t.Fatal(got, e)
+	}
+	if _, e = s.ReadCompleteScopedNetworkAuditLedger(ctx, in.Project, in.Bridge); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestP1ScopedPinRepairRefusesDuplicateTerminalClaim(t *testing.T) {
+	ctx := context.Background()
+	s, orig, in, pin := p1CreateFixture(t, true)
+	pin.ACL, _ = peerscope.ACLName(in.Project, in.Bridge, p1UUID)
+	if e := s.FinalizeVerifiedScopedCreate(ctx, orig.ID, in.Project, in.Name, p1UUID, pin); e != nil {
+		t.Fatal(e)
+	}
+	req, target := a4Request(t, s, orig.ID)
+	if _, e := s.db.Exec("DELETE FROM network_address_fences WHERE box_uuid=? AND family='ipv4'", p1UUID); e != nil {
+		t.Fatal(e)
+	}
+	_, actor, e := s.IssueToken(ctx, time.Hour)
+	if e != nil {
+		t.Fatal(e)
+	}
+	other, e := s.AdmitScoped(ctx, Admission{Layer: in.Project, ActorID: actor.ID, TokenID: actor.ID, Key: "p1-scoped-pin-repair-duplicate", RequestID: "fixture", Action: "box_create", ResourceKey: "box:other", SafeIntent: []byte("{}")})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.CancelQueued(ctx, in.Project, other.ID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec("INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES(?,?,?)", other.ID, in.Project, pin.reservationKeys()[0]); e != nil {
+		t.Fatal(e)
+	}
+	proof := RecoveryProof{Kind: RecoveryRepairPin, Reason: "CREATE_PIN_LEDGER_REPAIRED", NativeID: target.NativeID, UUID: p1UUID, Fingerprint: "synthetic-exact-pin", CreateBinding: pin}
+	if e = s.CheckCreatePinRepair(ctx, target, proof); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("duplicate retained claim preflight accepted", e)
+	}
+	if _, e = s.CommitScopedRecovery(ctx, req, target, proof); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("duplicate retained claim repair accepted", e)
+	}
+	var n int
+	if e = s.db.QueryRow("SELECT count(*) FROM network_address_fences WHERE box_uuid=?", p1UUID).Scan(&n); e != nil || n != 1 {
+		t.Fatal(n, e)
+	}
+	if e = s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=?", orig.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+	p1AssertOriginal(t, s, orig.ID, "SUCCEEDED", target.NativeID)
 }

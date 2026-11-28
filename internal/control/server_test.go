@@ -25,7 +25,14 @@ func (t bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	cp.Header.Set("Authorization", "Bearer "+t.token)
 	return t.base.RoundTrip(cp)
 }
+
+const testScopedProject = "user-1001"
+
+// Source-only loopback MCP fixture: real SQLite, SDK and scoped routing,
+// deliberately absent native socket. Not installed/native proof.
 func fixture(t *testing.T) (*state.Store, *httptest.Server, string, string) {
+	t.Helper()
+
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0700); err != nil {
@@ -45,7 +52,7 @@ func fixture(t *testing.T) (*state.Store, *httptest.Server, string, string) {
 		t.Fatal(err)
 	}
 	_ = a
-	srv := &Service{Store: st, Native: native.Reader{Socket: "/nonexistent", Project: "bw-test"}, BuildVersion: "s1-test", BuildCommit: "test-commit", Listener: "127.0.0.1:18650"}
+	srv := &Service{Store: st, Native: native.Reader{Socket: filepath.Join(dir, "absent-incus.socket"), Project: testScopedProject}, BuildVersion: "s1-test", BuildCommit: "test-commit", Listener: "127.0.0.1:18650"}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return st, ts, admin, viewer

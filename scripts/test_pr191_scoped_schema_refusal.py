@@ -1,0 +1,102 @@
+"""Source-only tests for invalid ledger creation and refusal oracle."""
+import json
+from pathlib import Path
+import sqlite3
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from pr191_scoped_schema_refusal import fixtures, refused, require_schema7, status_refused, STATUS_REFUSAL
+import pr191_scoped_update_transport as update
+
+
+class SchemaRefusal(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.directory = Path(temp.name)
+        self.cases = dict(fixtures(self.directory, 7))
+
+    def result(self, code=1, ready=False, reason="DIAGNOSTIC_DB_SCHEMA_OR_INTEGRITY_UNVERIFIED"):
+        return subprocess.CompletedProcess([], code, json.dumps({
+            "ready":ready,"diagnostic":{"database":{"state":"UNVERIFIED","reason":reason}}}),"")
+
+    def test_seven_distinct_layouts(self):
+        self.assertEqual(len(self.cases),7)
+        for name in ("old","future","partial","ambiguous","versioned-foreign"):
+            with sqlite3.connect(self.cases[name]) as db:
+                expected = {"old":[(6,)],"future":[(8,)],"partial":[(7,)],"ambiguous":[(7,),(7,)],"versioned-foreign":[(7,)]}[name]
+                self.assertEqual(db.execute("SELECT version FROM schema_version").fetchall(),expected)
+        for path in self.cases.values():
+            refused(self.result(),path,path.read_bytes())
+
+    def test_status_exact_refusal_and_no_effect(self):
+        self.assertEqual(set(STATUS_REFUSAL),set(self.cases))
+        for name,path in self.cases.items():
+            with self.subTest(name=name):
+                expected=path.read_bytes()
+                result=subprocess.CompletedProcess([],1,"","boxweave: "+STATUS_REFUSAL[name])
+                status_refused(result,name,path,expected)
+                for bad in (subprocess.CompletedProcess([],0,"",result.stderr),
+                            subprocess.CompletedProcess([],1,"","boxweave: unrelated failure"),
+                            subprocess.CompletedProcess([],1,"{}",result.stderr)):
+                    with self.assertRaises(AssertionError):
+                        status_refused(bad,name,path,expected)
+                with self.assertRaises(AssertionError):
+                    status_refused(result,name,path,b"changed")
+                sidecar=path.with_name(path.name+".serve.lock")
+                sidecar.write_bytes(b"unexpected")
+                try:
+                    with self.assertRaises(AssertionError):
+                        status_refused(result,name,path,expected)
+                finally:
+                    sidecar.unlink()
+
+    def test_exact_installed_schema(self):
+        require_schema7([(7,)])
+        for rows in ([], [(6,)], [(8,)], [(7,), (7,)]):
+            with self.assertRaises(AssertionError):
+                require_schema7(rows)
+
+    def test_not_generic_failure(self):
+        path = self.cases["foreign"]
+        for result in (self.result(code=0),self.result(ready=True),self.result(reason="DIAGNOSTIC_DB_IDENTITY_UNVERIFIED")):
+            with self.assertRaises(AssertionError):
+                refused(result,path,path.read_bytes())
+
+    def test_detect_byte_or_sidecar_change(self):
+        path = self.cases["corrupt"]
+        with self.assertRaises(AssertionError):
+            refused(self.result(),path,b"different")
+        path.with_name(path.name+"-wal").write_bytes(b"new sidecar")
+        with self.assertRaises(AssertionError):
+            refused(self.result(),path,path.read_bytes())
+
+
+class ObsoleteUnknownRoute(unittest.TestCase):
+    def test_all_obsolete_actions_refused(self):
+        original = ([("a","b","UNKNOWN")],[("user-1001","box:fixture")],[],[])
+        reply = subprocess.CompletedProcess([],1,"","scoped original requires the reviewed recovery route")
+        with patch.object(update,"snapshot",return_value=original), patch.object(update,"rows",return_value=[]), patch.object(update.subprocess,"run",return_value=reply) as run:
+            update.legacy_unknown_refusals("user-1001","a"*32,"b"*36)
+            self.assertEqual([c.args[0][c.args[0].index("-action")+1] for c in run.call_args_list],["inspect","challenge","release"])
+
+    def test_generic_failure_does_not_pass(self):
+        original = ([("a","b","UNKNOWN")],[("user-1001","box:fixture")],[],[])
+        reply = subprocess.CompletedProcess([],1,"","unrelated failure")
+        with patch.object(update,"snapshot",return_value=original), patch.object(update,"rows",return_value=[]), patch.object(update.subprocess,"run",return_value=reply):
+            with self.assertRaises(AssertionError):
+                update.legacy_unknown_refusals("user-1001","a"*32,"b"*36)
+
+    def test_changed_original_detected(self):
+        original = ([("a","b","UNKNOWN")],[("user-1001","box:fixture")],[],[])
+        changed = (original[0],[],[],[])
+        reply = subprocess.CompletedProcess([],1,"","scoped original requires the reviewed recovery route")
+        with patch.object(update,"snapshot",side_effect=[original,changed]), patch.object(update,"rows",return_value=[]), patch.object(update.subprocess,"run",return_value=reply):
+            with self.assertRaises(AssertionError):
+                update.legacy_unknown_refusals("user-1001","a"*32,"b"*36)
+
+
+if __name__=="__main__":
+    unittest.main()

@@ -159,7 +159,7 @@ func diagnosticContains(raw, want string) bool {
 
 // Runtime scope is selected by actual argv, not the invoking CLI flags or
 // a systemd file that has not been daemon-reloaded. Never expose raw argv.
-func diagnosticRuntimeArgs(raw []byte, project, socket, db string) (bool, bool) {
+func diagnosticRuntimeArgs(raw []byte, project, socket, db string, defaultScoped bool) (bool, bool) {
 	if len(raw) == 0 || len(raw) > 16384 || raw[len(raw)-1] != 0 {
 		return false, false
 	}
@@ -167,7 +167,7 @@ func diagnosticRuntimeArgs(raw []byte, project, socket, db string) (bool, bool) 
 	if len(args) < 2 || args[1] != "serve" {
 		return false, false
 	}
-	got := map[string]string{"db": "/var/lib/boxweave/ledger.sqlite", "incus-socket": "/var/lib/incus/unix.socket.user", "project": "", "scoped-peer-fresh": "false"}
+	got := map[string]string{"db": "/var/lib/boxweave/ledger.sqlite", "incus-socket": "/var/lib/incus/unix.socket.user", "project": "", "listen": "127.0.0.1:18650", "scoped-peer-fresh": strconv.FormatBool(defaultScoped)}
 	seen := map[string]bool{}
 	// Known serve flags can be followed by a value; unknown or duplicate
 	// values are not trustworthy runtime evidence.
@@ -185,7 +185,7 @@ func diagnosticRuntimeArgs(raw []byte, project, socket, db string) (bool, bool) 
 			if v != "true" && v != "false" {
 				return false, false
 			}
-		case "db", "incus-socket", "project", "listen", "service-user":
+		case "db", "incus-socket", "project", "listen":
 			if !eq {
 				i++
 				if i >= len(args) {
@@ -201,7 +201,7 @@ func diagnosticRuntimeArgs(raw []byte, project, socket, db string) (bool, bool) 
 		}
 		got[k] = v
 	}
-	return got["scoped-peer-fresh"] == "true", got["project"] == project && got["db"] == db && got["incus-socket"] == socket
+	return got["scoped-peer-fresh"] == "true", got["project"] == project && got["db"] == db && got["incus-socket"] == socket && got["listen"] == "127.0.0.1:18650"
 }
 
 func diagnosticClassify(o DiagnosticInstallation, runtimeScoped bool) DiagnosticInstallation {
@@ -228,12 +228,11 @@ func diagnosticClassify(o DiagnosticInstallation, runtimeScoped bool) Diagnostic
 		return o
 	}
 	if o.Candidate == "LEGACY" && o.RootJournal == "ABSENT" && o.GuardUnit == "ABSENT" && o.LifecycleUnit == "ABSENT" && o.ScopedArtifacts == "ABSENT" && o.Dependencies == "LEGACY_ABSENT" {
-		o.Mode = "LEGACY"
-		o.Coverage = "MODE_PROVEN"
-		o.Reason = ""
+		o.Mode = "UNSUPPORTED_LEGACY"
+		o.Reason = "LEGACY_INSTALLATION_UNSUPPORTED"
 		return o
 	}
-	if o.Candidate == "SCOPED_V2" && o.RootJournal == "PRESENT" && o.ScopedArtifacts == "PRESENT" && o.RootProof == "VERIFIED" && o.GuardUnit != "ABSENT" && o.GuardUnit != "UNVERIFIED" && o.LifecycleUnit != "ABSENT" && o.LifecycleUnit != "UNVERIFIED" && o.Dependencies == "OBSERVED" {
+	if o.Candidate == "SCOPED_V2" && o.RootJournal == "PRESENT" && o.ScopedArtifacts == "PRESENT" && o.RootProof == "VERIFIED" && o.StaticContract == "VERIFIED" && o.GuardUnit != "ABSENT" && o.GuardUnit != "UNVERIFIED" && o.LifecycleUnit != "ABSENT" && o.LifecycleUnit != "UNVERIFIED" && o.Dependencies == "OBSERVED" {
 		o.Mode = "SCOPED_V2"
 		o.Coverage = "MODE_PROVEN"
 		o.Reason = ""
@@ -374,7 +373,12 @@ func ObserveDiagnosticInstallation(ctx context.Context, p Plan, db string) Diagn
 	}
 	raw, e := io.ReadAll(io.LimitReader(f, 16385))
 	f.Close()
-	scoped, valid := diagnosticRuntimeArgs(raw, p.Project, p.Socket, db)
+	// Only infer the current parser default from this exact installed executable.
+	// An alternate historical observer must see the explicit installed flag.
+	self, selfErr := os.Stat("/proc/self/exe")
+	defaultScoped := m.ScopedPeerMode == nativePeerFreshMode && m.Version == p.Version &&
+		selfErr == nil && os.SameFile(self, exeStat)
+	scoped, valid := diagnosticRuntimeArgs(raw, p.Project, p.Socket, db, defaultScoped)
 	again := diagnosticSystemd(ctx, "boxweave.service", "MainPID", "ActiveState", "FragmentPath")
 	ps2, e2 := os.Stat(proc)
 	actual2, e3 := os.Stat(filepath.Join(proc, "exe"))

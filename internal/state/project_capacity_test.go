@@ -43,7 +43,7 @@ func TestProjectCapacityConcurrentAdmissionAndReplay(t *testing.T) {
 		next.Key = fmt.Sprintf("capacity-concurrent-create-%d", i)
 		next.ResourceKey = fmt.Sprintf("box:capacity-%d", i)
 		next.SafeIntent = []byte(fmt.Sprintf("{\"name\":\"capacity-%d\"}", i))
-		go func(in Admission) { r, e := st.Admit(ctx, in); ch <- result{in, r, e} }(next)
+		go func(in Admission) { r, e := st.AdmitScoped(ctx, in); ch <- result{in, r, e} }(next)
 	}
 	successes, denials := 0, 0
 	for i := 0; i < 2; i++ {
@@ -56,7 +56,7 @@ func TestProjectCapacityConcurrentAdmissionAndReplay(t *testing.T) {
 			t.Fatal(x.e)
 		}
 		successes++
-		replay, e := st.Admit(ctx, x.a)
+		replay, e := st.AdmitScoped(ctx, x.a)
 		if e != nil || !replay.Duplicate || replay.ID != x.r.ID {
 			t.Fatal(replay, e)
 		}
@@ -110,7 +110,7 @@ func TestProjectCapacityUnknownCreateStillOccupiesSlot(t *testing.T) {
 	a.Key = "capacity-new-create-after-unknown"
 	a.ResourceKey = "box:capacity-new"
 	a.SafeIntent = []byte("{\"name\":\"capacity-new\"}")
-	if _, e := st.Admit(ctx, a); !errors.Is(e, ErrProjectCapacity) {
+	if _, e := st.AdmitScoped(ctx, a); !errors.Is(e, ErrProjectCapacity) {
 		t.Fatal(e)
 	}
 	// The original is replayable at capacity without admitting anything new.

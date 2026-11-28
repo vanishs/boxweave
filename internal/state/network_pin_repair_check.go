@@ -22,11 +22,12 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 		return ErrResourceLocked
 	}
 	pin := p.CreateBinding
-	if e = requireNoIPv4Compaction(ctx, tx, t.Layer); e != nil {
+	scoped, e := checkCreatePinPolicyTx(ctx, tx, t, pin)
+	if e != nil {
 		return e
 	}
-	if e = verifyIPv4RetirementHistory(ctx, tx, t.Layer, pin.Bridge, pin.ACL); e != nil {
-		return e
+	if !scoped {
+		return ErrResourceLocked
 	}
 	if e = requireCreateBindingReservation(ctx, tx, t.ID, t.Layer, pin); e != nil {
 		return e
@@ -35,7 +36,7 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 	e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations c WHERE c.id=? AND c.layer=? AND c.action='box_create'
  AND c.state='SUCCEEDED' AND c.box_uuid=? AND c.incarnation=? AND c.resource_key=?
  AND EXISTS(SELECT 1 FROM operation_events e WHERE e.operation_id=c.id AND e.state='SUCCEEDED')
- AND `+retirementCreateEvidence, t.ID, t.Layer, t.UUID, t.Incarnation, t.Resource).Scan(&n)
+ AND `+successfulCreateLineageEvidence, t.ID, t.Layer, t.UUID, t.Incarnation, t.Resource).Scan(&n)
 	if e != nil {
 		return e
 	}
@@ -57,7 +58,15 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 	if n != 0 {
 		return ErrResourceLocked
 	}
-	e = tx.QueryRowContext(ctx, `SELECT
+	return checkScopedPinRepairCollisionsTx(ctx, tx, t, pin)
+}
+
+const pinRepairClaimQuery = "SELECT COUNT(*) FROM operation_resource_claims c WHERE c.resource_key=? AND c.operation_id!=?"
+
+// Both policies validate the same existing binding, fences and exact
+// ownership. Only the trusted mode-specific caller chooses the IPv4 term.
+func checkPinRepairBindingCollisionsTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, pin VerifiedCreateBinding, ipv4Collision string) error {
+	collisionQuery := `SELECT
  (SELECT COUNT(*) FROM network_bindings WHERE project=? AND box_uuid=? AND
  (incarnation!=? OR nic!='eth0' OR state!='PINNED' OR bridge!=? OR acl!=? OR mac!=? OR ipv4!=? OR ipv6!=?))+
  (SELECT COUNT(*) FROM network_address_fences WHERE project=? AND box_uuid=? AND
@@ -65,12 +74,14 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
  NOT ((family='ipv4' AND address=?) OR (family='ipv6' AND address=?))))+
  (SELECT COUNT(*) FROM network_bindings n WHERE bridge=? AND
  NOT (project=? AND box_uuid=? AND incarnation=?) AND
- (mac=? OR ipv6=? OR (ipv4=? AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=n.project AND r.box_uuid=n.box_uuid AND r.incarnation=n.incarnation))
+ (mac=? OR ipv6=? OR ` + ipv4Collision + `
  OR (project!=? AND state!='RELEASED')))+
  (SELECT COUNT(*) FROM network_address_fences WHERE bridge=? AND
  ((family='ipv4' AND address=?) OR (family='ipv6' AND address=?) OR (project!=? AND state!='RELEASED'))
  AND NOT (project=? AND box_uuid=? AND incarnation=?))+
- (SELECT COUNT(*) FROM owned_boxes WHERE uuid=? AND NOT (project=? AND incarnation=? AND name=? AND state='OWNED'))`,
+ (SELECT COUNT(*) FROM owned_boxes WHERE uuid=? AND NOT (project=? AND incarnation=? AND name=? AND state='OWNED'))`
+	var n int
+	e := tx.QueryRowContext(ctx, collisionQuery,
 		t.Layer, t.UUID, t.Incarnation, pin.Bridge, pin.ACL, pin.MAC, pin.IPv4, pin.IPv6,
 		t.Layer, t.UUID, t.Incarnation, pin.Bridge, t.ID, pin.IPv4, pin.IPv6,
 		pin.Bridge, t.Layer, t.UUID, t.Incarnation, pin.MAC, pin.IPv6, pin.IPv4, t.Layer,
@@ -82,14 +93,16 @@ func checkCreatePinRepairTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, p
 	if n != 0 {
 		return ErrResourceLocked
 	}
-	for i, key := range pin.reservationKeys()[:3] {
-		sqlText := "SELECT COUNT(*) FROM operation_resource_claims c WHERE c.resource_key=? AND c.operation_id!=?"
-		args := []any{key, t.ID}
-		if i == 0 {
-			sqlText += " AND NOT EXISTS(SELECT 1 FROM network_ipv4_retirements r WHERE r.project=? AND r.bridge=? AND r.ipv4=? AND r.create_operation_id=c.operation_id AND r.project=c.layer)"
-			args = append(args, t.Layer, pin.Bridge, pin.IPv4)
-		}
-		if e = tx.QueryRowContext(ctx, sqlText, args...).Scan(&n); e != nil {
+	return nil
+}
+
+func checkScopedPinRepairCollisionsTx(ctx context.Context, tx *sql.Tx, t RecoveryTarget, pin VerifiedCreateBinding) error {
+	if e := checkPinRepairBindingCollisionsTx(ctx, tx, t, pin, "ipv4=?"); e != nil {
+		return e
+	}
+	for _, key := range pin.reservationKeys()[:3] {
+		var n int
+		if e := tx.QueryRowContext(ctx, pinRepairClaimQuery, key, t.ID).Scan(&n); e != nil {
 			return e
 		}
 		if n != 0 {

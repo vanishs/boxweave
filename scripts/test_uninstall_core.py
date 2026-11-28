@@ -125,6 +125,40 @@ class FakeHost(unittest.TestCase):
         self.paths["STATE"].joinpath("install-manifest.json").chmod(0o600)
         self.box = "11111111-2222-3333-4444-555555555555"
 
+    def test_scoped_sqlite_refuses_old_schema_and_mixed_history(self):
+        self.db.parent.chmod(0o700)
+        for version in (5, 6):
+            with sqlite3.connect(str(self.db)) as db:
+                db.execute("UPDATE schema_version SET version=?", (version,))
+            for cold in (False, True):
+                before = self.db.read_bytes()
+                with self.assertRaisesRegex(u.UninstallError, "SCOPED_LEDGER_SCHEMA_UNVERIFIED"):
+                    u.inspect_sqlite(self.db, guided=True, cold=cold, scoped=True)
+                self.assertEqual(self.db.read_bytes(), before)
+        with sqlite3.connect(str(self.db)) as db:
+            db.execute("UPDATE schema_version SET version=7")
+        tables = ("network_ipv4_retirements", "network_ipv4_retirement_queue",
+                  "network_ipv4_compactions")
+        for cold in (False, True):
+            before = self.db.read_bytes()
+            result = u.inspect_sqlite(self.db, guided=True, cold=cold, scoped=True)
+            self.assertEqual(result["version"], 7)
+            self.assertEqual(result["blockers"], [])
+            with self.assertRaisesRegex(u.UninstallError, "SCOPED_LEDGER_REQUIRES_SCOPED_UNINSTALL"):
+                u.inspect_sqlite(self.db, guided=True, cold=cold)
+            self.assertEqual(self.db.read_bytes(), before)
+            for table in tables:
+                with self.subTest(cold=cold, table=table):
+                    with sqlite3.connect(str(self.db)) as db:
+                        db.execute("CREATE TABLE " + table + "(project TEXT)")
+                    before = self.db.read_bytes()
+                    with self.assertRaisesRegex(u.UninstallError, "SCOPED_LEGACY_RETIREMENT_PRESENT:" + table):
+                        u.inspect_sqlite(self.db, guided=True, cold=cold, scoped=True)
+                    self.assertEqual(self.db.read_bytes(), before)
+                    with sqlite3.connect(str(self.db)) as db:
+                        db.execute("DROP TABLE " + table)
+        self.assertEqual(self.cmds, [])
+
     def test_scoped_journal_blocks_every_legacy_retirement_entry(self):
         plan = self.plan()
         u.SCOPED_JOURNAL.mkdir()
@@ -295,19 +329,34 @@ class FakeHost(unittest.TestCase):
             u.inspect("full", "user-1001", [], None, guided=True)
         self.assertEqual(self.cmds, [])
 
+
     def test_original_started_audit_navigation_without_complete_controller(self):
         u.audited_write({"status": "STARTED", "review_sha256": "a"*64})
         prior = u.AUDIT.read_bytes()
         u.BINARY.unlink()
-        with mock.patch.object(u.os, "geteuid", return_value=0), mock.patch("sys.stdout") as out:
-            self.assertEqual(u.main(["--plan", "--scope", "full", "--project", "user-1001"]), 2)
-            printed = "".join(c.args[0] for c in out.write.call_args_list)
-            self.assertIn("ORIGINAL_AUDIT_ONLY", printed)
-            self.assertIn("--resume-plan", printed)
-            self.assertNotIn("review_sha256", printed)
-            with self.assertRaisesRegex(u.UninstallError, "UNINSTALL_AUDIT_STARTED"):
-                u.main(["--full", "--project", "user-1001"])
+        for argv in (["--plan", "--scope", "full", "--project", "user-1001"],
+                     ["--full", "--project", "user-1001"],
+                     ["--resume-plan", "--retirement-archive", "/unused"],
+                     ["--resume", "--retirement-archive", "/unused"]):
+            with self.subTest(argv=argv), self.assertRaisesRegex(
+                    u.UninstallError, "LEGACY_RETIREMENT_UNSUPPORTED.*matching original artifact"):
+                u.main(argv)
         self.assertEqual(prior, u.AUDIT.read_bytes())
+        self.assertEqual(self.cmds, [])
+
+    def test_legacy_selectors_refuse_before_any_host_observation(self):
+        # Refusal is independent of any installed or missing historical
+        # state. No read, native command or original approval is needed.
+        before = {p: p.read_bytes() for p in Path(self.t.name).rglob("*") if p.is_file()}
+        for flags in (["--plan"], ["--plan", "--guided-full-plan"],
+                      ["--apply"], ["--full"], ["--resume-plan"], ["--resume"]):
+            with self.subTest(flags=flags), \
+                    mock.patch.object(u.os.path, "lexists", side_effect=AssertionError("host path read")), \
+                    mock.patch.object(u, "inspect", side_effect=AssertionError("legacy inspect")), \
+                    mock.patch.object(u, "inspect_interrupted_retirement", side_effect=AssertionError("legacy resume")):
+                with self.assertRaisesRegex(u.UninstallError, "LEGACY_RETIREMENT_UNSUPPORTED"):
+                    u.main(flags)
+        self.assertEqual(before, {p: p.read_bytes() for p in Path(self.t.name).rglob("*") if p.is_file()})
         self.assertEqual(self.cmds, [])
 
     def test_help_default_is_read_only(self):
@@ -327,31 +376,25 @@ class FakeHost(unittest.TestCase):
         self.assertEqual(self.cmds, [])
         self.assertTrue(self.db.exists())
 
+
     def test_service_apply_requires_fresh_approval_and_keeps_state(self):
         self.service = "active"
         earlier = self.plan()
         self.service = "inactive"
         changed = self.plan()
         self.assertNotEqual(earlier["review_sha256"], changed["review_sha256"])
-        with mock.patch.object(u.os, "geteuid", return_value=0), \
-                contextlib.redirect_stdout(io.StringIO()):
-            with self.assertRaisesRegex(u.UninstallError, "host/scope/inventory drift"):
+        # Even a matching historical approval no longer grants entry.
+        before = self.db.read_bytes()
+        for plan in (earlier, changed):
+            with self.assertRaisesRegex(u.UninstallError, "LEGACY_RETIREMENT_UNSUPPORTED"):
                 u.main(["--apply", "--scope", "service", "--project", "user-1001",
-                        "--confirm-host-sha256", earlier["host_machine_id_sha256"],
-                        "--confirm-review-sha256", earlier["review_sha256"]])
-            self.assertFalse(u.AUDIT.exists())
-            self.assertEqual(u.main([
-                "--apply", "--scope", "service", "--project", "user-1001",
-                "--confirm-host-sha256", changed["host_machine_id_sha256"],
-                "--confirm-review-sha256", changed["review_sha256"],
-            ]), 0)
-        self.assertEqual(u.audit_status()["status"], "COMPLETE")
-        self.assertFalse(u.UNIT.exists())
-        self.assertFalse(u.BINARY.exists())
-        self.assertTrue(self.db.exists())
-        self.assertTrue((u.STATE / "install-manifest.json").exists())
-        self.assertTrue(u.AUDIT.exists())
-        self.assertFalse(any(a[0] == "incus" for a in self.cmds))
+                        "--confirm-host-sha256", plan["host_machine_id_sha256"],
+                        "--confirm-review-sha256", plan["review_sha256"]])
+        self.assertFalse(u.AUDIT.exists())
+        self.assertTrue(u.UNIT.exists())
+        self.assertTrue(u.BINARY.exists())
+        self.assertEqual(before, self.db.read_bytes())
+        self.assertEqual(self.cmds, [])
 
     def test_apply_wrong_hash_and_nonroot_refused_before_audit(self):
         p = self.plan()
@@ -359,10 +402,10 @@ class FakeHost(unittest.TestCase):
                 "--confirm-host-sha256", p["host_machine_id_sha256"],
                 "--confirm-review-sha256", "f" * 64]
         with mock.patch.object(u.os, "geteuid", return_value=0):
-            with self.assertRaisesRegex(u.UninstallError, "drift"):
+            with self.assertRaisesRegex(u.UninstallError, "LEGACY_RETIREMENT_UNSUPPORTED"):
                 u.main(args)
         with mock.patch.object(u.os, "geteuid", return_value=1001):
-            with self.assertRaisesRegex(u.UninstallError, "root on"):
+            with self.assertRaisesRegex(u.UninstallError, "LEGACY_RETIREMENT_UNSUPPORTED"):
                 u.main(args)
         self.assertFalse(u.AUDIT.exists())
         self.assertTrue(u.BINARY.exists())
@@ -657,11 +700,11 @@ class FakeHost(unittest.TestCase):
         # CI synthetic user != host's dedicated uid; preserve all other checks.
         with mock.patch.object(u, "inspect_exec_archive",
                                side_effect=lambda uid: original(directory.stat().st_uid)), \
-                mock.patch.object(u.os, "geteuid", return_value=0), \
-                contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertEqual(u.main(["--plan", "--guided-full-plan", "--scope", "full",
-                                     "--project", "user-1001"]), 0)
-        data = json.loads(output.getvalue())
+                mock.patch.object(u.os, "geteuid", return_value=0):
+            data = u.inspect("full", "user-1001", [], None, guided=True)
+            with self.assertRaisesRegex(u.UninstallError, "LEGACY_RETIREMENT_UNSUPPORTED"):
+                u.main(["--plan", "--guided-full-plan", "--scope", "full",
+                        "--project", "user-1001"])
         self.assertTrue(data["ready"])
         self.assertEqual(data["scope"], "full")
         self.assertTrue(data["guided"])
@@ -809,22 +852,28 @@ class FakeHost(unittest.TestCase):
                 REAL_REQUIRE_QUIET("user-1001")
 
     def test_guided_denial_and_drift_do_not_mutate(self):
-        with mock.patch.object(u.os, "geteuid", return_value=0), \
-                mock.patch("builtins.open", side_effect=[io.StringIO("NO\n"), io.StringIO()]), \
-                contextlib.redirect_stdout(io.StringIO()):
-            with self.assertRaisesRegex(u.UninstallError, "not approved"):
-                u.main(["--full"])
-        self.assertFalse(u.AUDIT.exists())
-        self.assertTrue(u.BINARY.exists())
-        initial = u.inspect("full", "user-1001", [], None, guided=True)
-        changed = {**initial, "review_sha256": "0"*64}
-        with mock.patch.object(u.os, "geteuid", return_value=0), \
-                mock.patch("builtins.open", side_effect=[io.StringIO("REMOVE user-1001\n"), io.StringIO()]), \
-                mock.patch.object(u, "inspect", side_effect=[initial, changed]), \
-                contextlib.redirect_stdout(io.StringIO()):
-            with self.assertRaisesRegex(u.UninstallError, "drift"):
-                u.main(["--full"])
-        self.assertFalse(u.AUDIT.exists())
+        # Current full-only Scoped coordinator retains decline and stale
+        # review refusal. No native or file effect is allowed.
+        from contextlib import nullcontext
+        initial = {"ready": True, "mode": u.SCOPED_MODE, "project": "user-1001"}
+        changed = {**initial, "ready": False}
+        for answer, plans, reason in (
+                ("NO", [initial], "not approved"),
+                ("REMOVE SCOPED user-1001", [initial, changed], "evidence changed")):
+            with self.subTest(answer=answer), \
+                    mock.patch.object(u.os, "geteuid", return_value=0), \
+                    mock.patch.object(u, "scoped_plan", side_effect=plans), \
+                    mock.patch.object(u, "scoped_incus_active"), \
+                    mock.patch.object(u, "native_instances", return_value=[]), \
+                    mock.patch.object(u, "scoped_lock", side_effect=lambda path: nullcontext()), \
+                    mock.patch("builtins.open", side_effect=[io.StringIO(answer+"\n"), io.StringIO()]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(u.UninstallError, reason):
+                    u.main(["--scoped", "--full", "--project", "user-1001"])
+            self.assertFalse(u.AUDIT.exists())
+            self.assertFalse(u.SCOPED_FENCE.exists())
+            self.assertTrue(u.BINARY.exists())
+            self.assertEqual(self.cmds, [])
 
     def test_separate_root_peer_or_active_scriptlet_blocks(self):
         u.ROOT_UNIT.write_text("peer root helper")
@@ -878,6 +927,113 @@ class FakeHost(unittest.TestCase):
                     u.require_quiescent_scoped_native("user-1001")
         with mock.patch.object(u, "command", return_value=(json.dumps([terminal]), 0)):
             REAL_REQUIRE_QUIET("user-1001")
+
+    def test_offline_cli_uses_current_scoped_coordinator_only(self):
+        for flag, attribute in (("--offline-plan", "plan"), ("--offline-full", "full"),
+                                ("--offline-resume-plan", "resume_plan"), ("--offline-resume", "resume")):
+            with self.subTest(flag=flag), mock.patch.object(u, "scoped_main", return_value=0) as scoped, \
+                    mock.patch.object(u, "offline_main") as legacy, mock.patch.object(u, "offline_resume_main") as old_resume:
+                self.assertEqual(u.main([flag, "--project", "user-1001"]), 0)
+                self.assertTrue(getattr(scoped.call_args.args[0], attribute))
+                self.assertEqual(scoped.call_args.kwargs, {"offline": True})
+                legacy.assert_not_called()
+                old_resume.assert_not_called()
+
+    def test_offline_historical_fence_blocks_new_and_resume_without_effect(self):
+        u.OFFLINE_FENCE.write_text("preserve exact original")
+        before = u.OFFLINE_FENCE.read_bytes()
+        with mock.patch.object(u, "scoped_main") as scoped:
+            for flag in ("--offline-plan", "--offline-full", "--offline-resume-plan", "--offline-resume"):
+                with self.subTest(flag=flag), self.assertRaisesRegex(u.UninstallError, "historical offline receipt"):
+                    u.main([flag, "--project", "user-1001"])
+            scoped.assert_not_called()
+        self.assertEqual(u.OFFLINE_FENCE.read_bytes(), before)
+        self.assertEqual(self.cmds, [])
+
+    def test_offline_empty_preview_uses_cold_scoped_review(self):
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                mock.patch.object(u, "scoped_inactive") as inactive, \
+                mock.patch.object(u, "scoped_incus_active"), \
+                mock.patch.object(u, "scoped_plan", return_value={"ready": True, "offline_entry": True}) as plan, \
+                mock.patch.object(u, "scoped_drain_plan") as drain, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(u.main(["--offline-plan", "--project", "user-1001"]), 0)
+            plan.assert_called_once_with("user-1001", offline=True)
+            inactive.assert_called_once_with(u.UNIT.name)
+            drain.assert_not_called()
+        self.assertFalse(u.AUDIT.exists())
+        self.assertFalse(u.SCOPED_FENCE.exists())
+
+    def test_settled_retirement_reader_mode_is_explicit_for_every_phase(self):
+        report = {"project": "user-1001", "review_sha256": "a" * 64,
+                  "table": "bw_pg_" + "b" * 16, "phase": "INSTALLED", "retired": 0}
+        for offline in (False, True):
+            for action in ("plan", "resume-plan", "restore", "guard"):
+                with self.subTest(offline=offline, action=action), \
+                        mock.patch.object(u, "file_fingerprint", return_value={"sha256": "c"}), \
+                        mock.patch.object(u, "require_root_owned"), \
+                        mock.patch.object(u, "command", return_value=(json.dumps(report), 0)) as call:
+                    plan = {"project": "user-1001", "binary": {"sha256": "c"},
+                            "scoped_native": report, "offline_entry": offline}
+                    self.assertEqual(u.scoped_native(plan, action), report)
+                    argv = call.call_args.args[0]
+                    self.assertEqual(argv[:4], [str(u.BINARY), "native-scoped-retirement-" + action,
+                                               "-project", "user-1001"])
+                    self.assertEqual("-retirement-cold" in argv, offline)
+                    self.assertEqual("-approve-local" in argv, action in ("restore", "guard"))
+                    self.assertEqual(call.call_count, 1)
+
+    def test_offline_unknown_route_never_normal_drain_approve(self):
+        self.native = [{"uuid": "12345678-1234-1234-1234-123456789012"}]
+        blocked = {"ready": False, "blockers": ["DRAIN_UNSETTLED_ORIGINALS"]}
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                mock.patch.object(u, "scoped_inactive"), mock.patch.object(u, "scoped_incus_active"), \
+                mock.patch.object(u, "scoped_drain_plan", return_value=blocked), \
+                mock.patch.object(u, "scoped_drain_approve") as drain, \
+                mock.patch.object(u, "scoped_plan", return_value={"ready": False}) as plan, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(u.main(["--offline-plan", "--project", "user-1001"]), 2)
+            plan.assert_called_once_with("user-1001", offline=True, exceptional=True)
+            drain.assert_not_called()
+        self.assertFalse(u.AUDIT.exists())
+
+    def test_offline_prefix_steps_require_exact_advance(self):
+        initial = {"completed": 0, "total": 2, "next": "VERIFY_ONLY"}
+        one = {"completed": 1, "total": 2, "next": "DISPATCH"}
+        done = {"completed": 2, "total": 2, "next": "COMPLETE"}
+        with mock.patch.object(u, "scoped_offline_progress", side_effect=[initial, one, done]) as step, \
+                mock.patch.object(u, "scoped_offline_effect_proof", return_value={"proof": "a"}) as proof:
+            self.assertEqual(u.scoped_offline_complete_prefix({}, u.RETIRED), {"proof": "a"})
+            self.assertEqual(step.call_args_list, [mock.call({}), mock.call({}, effect=True), mock.call({}, effect=True)])
+            proof.assert_called_once()
+        with mock.patch.object(u, "scoped_offline_progress", side_effect=[initial, done]) as step, \
+                mock.patch.object(u, "scoped_offline_effect_proof") as proof:
+            with self.assertRaisesRegex(u.UninstallError, "advance exactly once"):
+                u.scoped_offline_complete_prefix({}, u.RETIRED)
+            self.assertEqual(step.call_count, 2)
+            proof.assert_not_called()
+
+    def test_offline_effect_archive_requires_exact_receipts(self):
+        d = Path(self.t.name)
+        target = "12345678-1234-1234-1234-123456789012"
+        review = "a" * 64
+        plan = {"offline_archive": {"targets": [{"uuid": target}], "review_sha256": review}}
+        for i in range(2):
+            for status in ("INTENT", "VERIFIED"):
+                path = d / f"offline-effect-{i:04d}-{status.lower()}.json"
+                path.write_text(json.dumps({"Schema": 1, "Review": review, "Index": i,
+                                            "Kind": "ACL" if i else "INSTANCE", "UUID": target,
+                                            "Status": status, "NativeID": ""}))
+                path.chmod(0o600)
+        with mock.patch.object(u, "scoped_private_file", side_effect=lambda p, cap: u.file_fingerprint(p)):
+            self.assertEqual(len(u.scoped_offline_effect_proof(d, plan)), 4)
+            extra = d / "offline-effect-0002-intent.json"
+            extra.write_text("{}")
+            with self.assertRaisesRegex(u.UninstallError, "unexpected archived"):
+                u.scoped_offline_effect_proof(d, plan)
+            extra.unlink()
+            (d / "offline-effect-0000-verified.json").write_text("{}")
+            with self.assertRaisesRegex(u.UninstallError, "identity changed"):
+                u.scoped_offline_effect_proof(d, plan)
 
     def test_scoped_full_only_refuses_legacy_apply(self):
         with mock.patch.object(u.os, "geteuid", return_value=0):

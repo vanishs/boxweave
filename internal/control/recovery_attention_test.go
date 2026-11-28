@@ -22,7 +22,7 @@ func TestS5A5HTTPReconnectRecoveryNavigationAndAttention(t *testing.T) {
 	}
 	seed := func(layer, key string) state.Receipt {
 		t.Helper()
-		r, e := st.Admit(ctx, state.Admission{Layer: layer, ActorID: tok.ActorID, TokenID: tok.ID, Key: key, Action: "operation_cancel", RequestID: key, SafeIntent: []byte("{}"), WorkRef: "s5a5/reconnect"})
+		r, e := st.AdmitScoped(ctx, state.Admission{Layer: layer, ActorID: tok.ActorID, TokenID: tok.ID, Key: key, Action: "operation_cancel", RequestID: key, SafeIntent: []byte("{}"), WorkRef: "s5a5/reconnect"})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -34,7 +34,7 @@ func TestS5A5HTTPReconnectRecoveryNavigationAndAttention(t *testing.T) {
 		}
 		return r
 	}
-	orig := seed("bw-test", "a5-http-unknown-original")
+	orig := seed(testScopedProject, "a5-http-unknown-original")
 	foreign := seed("foreign", "a5-http-foreign-original")
 	connect := func() *mcp.ClientSession {
 		s, e := activityMCPClient(ctx, ts.URL, &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: raw}})

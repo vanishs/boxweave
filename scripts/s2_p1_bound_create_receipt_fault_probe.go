@@ -54,14 +54,84 @@ func invoke(ctx context.Context, s *mcp.ClientSession, name string, args map[str
 }
 func stringField(m map[string]any, name string) string { v, _ := m[name].(string); return v }
 
-func refused(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any, expected error) {
+func refused(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any, code, category, admission, originalID string) {
 	r, err := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	ensure(err == nil && r != nil && r.IsError, "negative request was not a structured MCP refusal")
-	content, err := json.Marshal(r.Content)
-	ensure(err == nil && strings.Contains(string(content), expected.Error()), "negative request had unexpected refusal class")
+	ensure(err == nil && r != nil && r.IsError && len(r.Content) == 1, "negative request was not a structured MCP refusal")
+	part, ok := r.Content[0].(*mcp.TextContent)
+	var failure struct {
+		Code          string           `json:"code"`
+		Category      string           `json:"category"`
+		Admission     string           `json:"admission"`
+		OriginalState string           `json:"original_state"`
+		Next          state.NextAction `json:"next_action"`
+	}
+	ensure(ok && json.Unmarshal([]byte(part.Text), &failure) == nil, "negative request missing typed refusal")
+	ensure(failure.Code == code && failure.Category == category && failure.Admission == admission,
+		"negative request had unexpected refusal class: "+name+" "+failure.Code)
+	if originalID != "" {
+		ensure(failure.OriginalState == "UNKNOWN" && failure.Next.Tool == "operation_recover" &&
+			failure.Next.Kind == "INSPECT_RECOVERY" && failure.Next.Mode == "inspect" &&
+			failure.Next.OperationID == originalID, "refusal lost exact UNKNOWN recovery navigation")
+	} else {
+		ensure(failure.Next.OperationID == "" && failure.OriginalState == "" &&
+			failure.Next.Kind == "CHECK_AUTHORIZED_SCOPE", "unowned refusal exposed original identity")
+	}
+}
+
+// Verify the existing installed Scoped final-commit fault before the
+// independent reviewed recovery. No trigger, native effect or DB write here.
+func verifyScoped(dir, token, project string) {
+	ensure(os.Geteuid() != 0 && project == fmt.Sprintf("user-%d", os.Geteuid()) &&
+		os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" &&
+		filepath.Dir(dir) == "/tmp" && strings.HasPrefix(filepath.Base(dir), "bw-n2-installed.") &&
+		strings.HasPrefix(token, "bw1_"), "only exact installed one-use Scoped fixture")
+	raw, err := os.ReadFile(filepath.Join(dir, "scoped-final-cut-original.json"))
+	ensure(err == nil, "missing existing original checkpoint")
+	var cp struct {
+		Request    map[string]any `json:"request"`
+		OriginalID string         `json:"original_id"`
+		NativeID   string         `json:"native_id"`
+		Tracking   string         `json:"tracking_id"`
+		UUID       string         `json:"uuid"`
+	}
+	ensure(json.Unmarshal(raw, &cp) == nil && len(cp.OriginalID) == 32 && len(cp.Tracking) == 32 &&
+		len(cp.NativeID) == 36 && len(cp.UUID) == 36 && cp.Request["name"] == "p1b-recovery-final-cut" &&
+		cp.Request["work_ref"] == "p1b/scoped-create-final-cut" &&
+		cp.Request["idempotency_key"] == "pr191-scoped-create-final-cut", "wrong existing Scoped fixture")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	client := mcp.NewClient(&mcp.Implementation{Name: "s2-scoped-original-rollback", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "http://127.0.0.1:18650/mcp",
+		HTTPClient: &http.Client{Transport: bearer{token}}, DisableStandaloneSSE: true, MaxRetries: -1}, nil)
+	ensure(err == nil && session != nil, "installed official SDK failed")
+	defer session.Close()
+	r, err := invoke(ctx, session, "operation_get", map[string]any{"operation_id": cp.OriginalID})
+	op, _ := r["operation"].(map[string]any)
+	ensure(err == nil && stringField(op, "state") == "UNKNOWN" && stringField(op, "box_uuid") == "" &&
+		stringField(op, "incarnation") == "" && stringField(op, "native_operation_id") == cp.NativeID &&
+		stringField(op, "tracking_id") == cp.Tracking, "existing original not exact unbound UNKNOWN")
+	replay, err := invoke(ctx, session, "box_create", cp.Request)
+	ensure(err == nil && stringField(replay, "operation_id") == cp.OriginalID &&
+		stringField(replay, "native_operation_id") == cp.NativeID && stringField(replay, "tracking_id") == cp.Tracking &&
+		stringField(replay, "state") == "UNKNOWN" && replay["duplicate"] == true, "replay changed original")
+	next := map[string]any{}
+	for k, v := range cp.Request {
+		next[k] = v
+	}
+	next["idempotency_key"] = "pr191-scoped-final-cut-different-create"
+	refused(ctx, session, "box_create", next, "UNKNOWN_BLOCKER", "EFFECT_UNVERIFIED", "NOT_ADMITTED", cp.OriginalID)
+	refused(ctx, session, "box_delete", map[string]any{"box_id": cp.UUID, "idempotency_key": "pr191-scoped-final-cut-different-delete"},
+		"BOX_NOT_FOUND_OR_NOT_OWNED", "AUTHORIZATION_OR_ABSENCE", "UNVERIFIED", "")
+	refused(ctx, session, "box_get", map[string]any{"box_id": cp.UUID},
+		"BOX_NOT_FOUND_OR_NOT_OWNED", "AUTHORIZATION_OR_ABSENCE", "UNVERIFIED", "")
+	fmt.Println("P1B_SCOPED_CREATE_ROLLBACK_SAME_KEY_AND_TYPED_NEW_KEY_REFUSALS=PASS")
 }
 
 func main() {
+	if os.Getenv("BW_S2_BOUND_SCOPED") == "1" {
+		verifyScoped(os.Getenv("BW_S2_BOUND_LAB"), os.Getenv("BW_S2_BOUND_TOKEN"), os.Getenv("BW_S2_BOUND_PROJECT"))
+		return
+	}
 	dir := os.Getenv("BW_S2_BOUND_LAB")
 	token := os.Getenv("BW_S2_BOUND_TOKEN")
 	project := os.Getenv("BW_S2_BOUND_PROJECT")
@@ -145,11 +215,11 @@ func main() {
 		otherCreate[k] = v
 	}
 	otherCreate["idempotency_key"] = "s2-bound-final-different-create"
-	refused(ctx, session, "box_create", otherCreate, state.ErrResourceLocked)
+	refused(ctx, session, "box_create", otherCreate, "UNKNOWN_BLOCKER", "EFFECT_UNVERIFIED", "NOT_ADMITTED", originalID)
 	refused(ctx, session, "box_delete", map[string]any{
 		"box_id": uuid, "idempotency_key": "s2-bound-final-different-delete",
-	}, state.ErrNotFound)
-	refused(ctx, session, "box_get", map[string]any{"box_id": uuid}, state.ErrNotFound)
+	}, "BOX_NOT_FOUND_OR_NOT_OWNED", "AUTHORIZATION_OR_ABSENCE", "UNVERIFIED", "")
+	refused(ctx, session, "box_get", map[string]any{"box_id": uuid}, "BOX_NOT_FOUND_OR_NOT_OWNED", "AUTHORIZATION_OR_ABSENCE", "UNVERIFIED", "")
 	after, err := reader.ObserveCreatedByOperation(ctx, name, originalID)
 	ensure(err == nil && after.UUID == uuid && after.NativeState == "Stopped",
 		"original native UUID changed after refused Delete")

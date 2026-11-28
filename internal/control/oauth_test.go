@@ -43,7 +43,7 @@ func newOAuthServerTest(t *testing.T) (*state.Store, *httptest.Server, string) {
 	if err = st.SetOAuthOrigin(context.Background(), oauthPublicOrigin); err != nil {
 		t.Fatal(err)
 	}
-	svc := &Service{Store: st, Native: native.Reader{Socket: "/nonexistent", Project: "test"}, Listener: "127.0.0.1:18650", BuildVersion: "oauth-unit"}
+	svc := &Service{Store: st, Native: native.Reader{Socket: "/nonexistent", Project: testScopedProject}, Listener: "127.0.0.1:18650", BuildVersion: "oauth-unit"}
 	ts := httptest.NewServer(svc.Handler())
 	t.Cleanup(ts.Close)
 	return st, ts, pwd
@@ -235,6 +235,12 @@ func TestEmbeddedOAuthMetadataDCRBrowserCallbackAndSDK(t *testing.T) {
 	status, err := session.CallTool(sessctx, &mcp.CallToolParams{Name: "host_status", Arguments: map[string]any{}})
 	if err != nil || status.IsError {
 		t.Fatalf("host_status: %+v %v", status, err)
+	}
+	var hs HostStatus
+	data, err := json.Marshal(status.StructuredContent)
+	if err != nil || json.Unmarshal(data, &hs) != nil || hs.PeerMode != "SCOPED_V2" ||
+		hs.AddressRetirementPolicy != "SCOPED_RETAIN_IDENTITIES" || hs.AddressRetirement != nil {
+		t.Fatal("OAuth fixture did not exercise Scoped status", string(data), err)
 	}
 	form := url.Values{"grant_type": {"refresh_token"}, "client_id": {f.client}, "refresh_token": {f.refresh}, "resource": {oauthPublicOrigin + "/mcp"}}
 	refreshed := oauthReq(t, ts, "POST", "/token", form.Encode(), "application/x-www-form-urlencoded", "", oauthPublicHost)

@@ -92,7 +92,7 @@ func TestBH018ExecFailureDispatchBoundaryPreservesOriginal(t *testing.T) {
 				BoxUUID: "bh018-exact-uuid", Incarnation: "bh018-exact-uuid",
 				SafeIntent: []byte(`{"box_id":"bh018-exact-uuid","command_digest":"test"}`),
 			}
-			original, err := store.Admit(ctx, input)
+			original, err := store.AdmitScoped(ctx, input)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -121,7 +121,7 @@ func TestBH018ExecFailureDispatchBoundaryPreservesOriginal(t *testing.T) {
 			}
 			if tc.wantState == "UNKNOWN" {
 				input.Key = "bh018-second-distinct-key"
-				if _, err := store.Admit(ctx, input); !errors.Is(err, ErrResourceLocked) {
+				if _, err := store.AdmitScoped(ctx, input); !errors.Is(err, ErrResourceLocked) {
 					t.Fatalf("UNKNOWN effect claim was unlocked: %v", err)
 				}
 			}

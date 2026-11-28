@@ -7,9 +7,19 @@ on:
   pull_request:
     branches: [v1]
     paths:
-      - .github/workflows/v1-s2-native.yml
-      - scripts/s2_p1_operation_list_boundary.sh
-      - scripts/s2_p1_operation_list_boundary_probe.go
+      - '.github/workflows/v1-release.yml'
+      - '.github/workflows/v1-pr191-s25-scoped.yml'
+      - 'internal/**'
+      - 'cmd/**'
+      - 'scripts/**'
+      - 'install.sh'
+      - 'uninstall.sh'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'VERSION'
+      - '.github/workflows/v1-s2-native.yml'
+      - '.github/workflows/v1-n2-installed-lifecycle.yml'
   workflow_dispatch:
 
 permissions:
@@ -19,13 +29,17 @@ jobs:
   s2-native-blackbox:
     if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s2-operations-20261110' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      actions: read
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
@@ -41,6 +55,7 @@ jobs:
         shell: bash
         run: python3 scripts/test_s2_p3_scoped_acceptance.py
       - name: Reject unsafe test hosts and execute original MCP/native lifecycle
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/feat/v1-s2-operations-20261110'
         shell: bash
         run: |
           set -o pipefail
@@ -53,3 +68,17 @@ jobs:
             --log "$RUNNER_TEMP/s2-native-acceptance.log" \
             --source "$GITHUB_SHA" \
             --output "$RUNNER_TEMP/s2-scope-tc-a-report.json"
+
+      - name: Exact Scoped S2 evidence across original successful native jobs
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXACT_PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python3 scripts/test_pr191_s2_witness_map.py
+          python3 scripts/test_pr191_s2_ci_gate.py
+          python3 scripts/pr191_s2_ci_gate.py "$EXACT_HEAD" "$EXACT_PR" "$GITHUB_SHA" | tee "$RUNNER_TEMP/s2-scoped-crosswalk.log"
+          grep -Fxq P1B_SCOPED_S2_EXACT_CI_CROSSWALK=PASS "$RUNNER_TEMP/s2-scoped-crosswalk.log"

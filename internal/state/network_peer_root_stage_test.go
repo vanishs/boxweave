@@ -14,30 +14,30 @@ func s4b2PendingExistingGrantToConfirmed(t *testing.T, s *Store) {
 }
 
 func TestS4B2ControllerStagesOriginalPeerRevocation(t *testing.T) {
+
 	ctx := context.Background()
-	s, reader, id := s4b2RootOperationFixture(t)
-	s4b2PendingExistingGrantToConfirmed(t, s)
-	if err := s.StageRootPeerRevocation(ctx, id); err != nil {
-		t.Fatal("original revoke was not safely staged: ", err)
+	s, r, id := pr178ScopedReadyToStage(t, false)
+	if e := s.StageScopedPeerOriginal(ctx, id); e != nil {
+		t.Fatal(e)
 	}
 	var desired int
 	var status, linked string
-	if err := s.db.QueryRowContext(ctx, "SELECT desired,status,operation_id FROM peer_grants").Scan(&desired, &status, &linked); err != nil {
-		t.Fatal(err)
+	e := s.db.QueryRow("SELECT desired,status,operation_id FROM peer_grants WHERE source_uuid=? AND target_uuid=?", purePeerUUID(1), purePeerUUID(2)).Scan(&desired, &status, &linked)
+	if e != nil || desired != 0 || status != "PENDING" || linked != id {
+		t.Fatal(desired, status, linked, e)
 	}
-	if desired != 0 || status != "PENDING" || linked != id {
-		t.Fatalf("stage altered wrong durable grant: desired=%d status=%s op=%s", desired, status, linked)
+	if e = s.Claim(ctx, id); e != nil {
+		t.Fatal(e)
 	}
-	if err := s.Claim(ctx, id); err != nil {
-		t.Fatal(err)
+	p, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge)
+	if e != nil || p.OriginalID != id || p.Intent.Allow || len(p.RevokedAfter) != 1 {
+		t.Fatal(p, e)
 	}
-	if p, err := reader.ReadRootPeerRevocation(ctx, id, "user-1001", "bwbr0", "bw-s4b2"); err != nil || p.OperationID != id {
-		t.Fatalf("root could not independently read the staged original: %+v %v", p, err)
-	}
-	if err := s.StageRootPeerRevocation(ctx, id); err == nil {
-		t.Fatal("staged DISPATCHING original was staged again")
+	if e = s.StageScopedPeerOriginal(ctx, id); e == nil {
+		t.Fatal("staged twice")
 	}
 	t.Log("S4_B2_CONTROLLER_DURABLE_REVOCATION_STAGE_TO_ROOT_PROOF=PASS")
+
 }
 
 func TestS4B2ControllerCannotStageInvalidPeerGrant(t *testing.T) {

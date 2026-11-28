@@ -2,10 +2,12 @@ package state
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -62,7 +64,7 @@ func TestScopedRetirementLedgerRetainsTerminalClaims(t *testing.T) {
 		raw, _ := json.Marshal(struct {
 			BoxID string `json:"box_id"`
 		}{uuid})
-		rec, err := s.Admit(ctx, Admission{Layer: project, ActorID: token.ID, TokenID: token.ID, Key: "retire-" + box.Name, RequestID: box.Name, Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: uuid, Incarnation: box.Incarnation, SafeIntent: raw})
+		rec, err := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: token.ID, TokenID: token.ID, Key: "retire-" + box.Name, RequestID: box.Name, Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: uuid, Incarnation: box.Incarnation, SafeIntent: raw})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,5 +90,56 @@ func TestScopedRetirementLedgerRetainsTerminalClaims(t *testing.T) {
 	}
 	if _, err = s.ReadScopedRetirementLedger(ctx, project, bridge); err == nil {
 		t.Fatal("foreign claim admitted")
+	}
+}
+
+func TestP2ScopedColdRetirementLedgerPreservesOriginal(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "ledger.sqlite")
+	bytes := func() map[string][32]byte {
+		t.Helper()
+		result := map[string][32]byte{}
+		for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
+			b, e := os.ReadFile(path + suffix)
+			if os.IsNotExist(e) {
+				continue
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			result[suffix] = sha256.Sum256(b)
+		}
+		return result
+	}
+	for _, populated := range []bool{false, true} {
+		st, e := Open(path)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if populated {
+			s4b2InsertAuditFixture(t, st)
+		}
+		if e = st.Close(); e != nil {
+			t.Fatal(e)
+		}
+		before := bytes()
+		snap, e := OpenDiagnosticSnapshot(ctx, path)
+		if e != nil {
+			t.Fatal(e)
+		}
+		l, e := snap.ReadScopedColdRetirementLedger(ctx, "user-1001", "bwbr0")
+		if populated == (e == nil) || (!populated && (len(l.Boxes) != 0 || len(l.Retired) != 0)) {
+			t.Fatal(l, e)
+		}
+		if e = snap.Close(); e != nil {
+			t.Fatal(e)
+		}
+		if !reflect.DeepEqual(before, bytes()) {
+			t.Fatal("retirement read changed original SQLite bytes or inventory")
+		}
 	}
 }

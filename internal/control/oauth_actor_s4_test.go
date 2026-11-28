@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/peerscope"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
@@ -29,22 +29,18 @@ func TestS4OAuthRefreshHTTPMCPOriginalReceiptNotRedispatched(t *testing.T) {
 	}
 	const name = "s4-http-replay-only"
 	const key = "s4-http-oauth-grant-replay-0001"
-	intent, err := safeJSON(struct {
-		Name      string                 `json:"name"`
-		CPU       int                    `json:"cpu"`
-		MemoryMiB int64                  `json:"memory_mib"`
-		DiskGiB   int64                  `json:"disk_gib"`
-		Image     string                 `json:"image,omitempty"`
-		Start     bool                   `json:"start"`
-		Nesting   bool                   `json:"nesting"`
-		Internet  bool                   `json:"internet"`
-		Options   native.InstanceOptions `json:"instance_options"`
-	}{Name: name, CPU: 1, MemoryMiB: 1024, DiskGiB: 10, Start: true, Internet: true})
+	const bridge = "incusbr-1001"
+	const uuid = "00000000-0000-4000-8000-000000000003"
+	intent, err := safeJSON(state.ScopedCreateIntent{
+		Schema: 2, Project: testScopedProject, Bridge: bridge, Name: name,
+		CPU: 1, MemoryMiB: 1024, DiskGiB: 10, Start: true, Internet: true,
+		BootAutostart: true, Options: json.RawMessage("{}"),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	original, err := st.Admit(ctx, state.Admission{
-		Layer: "test", ActorID: oldToken.ActorID, TokenID: oldToken.ID,
+	original, err := st.AdmitScoped(ctx, state.Admission{
+		Layer: testScopedProject, ActorID: oldToken.ActorID, TokenID: oldToken.ID,
 		Key: key, RequestID: "original-http", Action: "box_create",
 		ResourceKey: "box:" + name, SafeIntent: intent,
 	})
@@ -54,10 +50,18 @@ func TestS4OAuthRefreshHTTPMCPOriginalReceiptNotRedispatched(t *testing.T) {
 	if err := st.Claim(ctx, original.ID); err != nil {
 		t.Fatal(err)
 	}
+	pin := state.VerifiedCreateBinding{Bridge: bridge, ACL: peerscope.QuarantineACL, MAC: "02:16:3e:00:00:33", IPv4: "10.243.18.33", IPv6: "fd43:18::33"}
+	if ok, err := st.StageCreateBinding(ctx, original.ID, testScopedProject, name, pin); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
 	if err := st.NativeAck(ctx, original.ID, "test-only-synthetic-op-not-native"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Verified(ctx, original.ID); err != nil {
+	pin.ACL, err = peerscope.ACLName(testScopedProject, bridge, uuid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.FinalizeVerifiedScopedCreate(ctx, original.ID, testScopedProject, name, uuid, pin); err != nil {
 		t.Fatal(err)
 	}
 	form := url.Values{
@@ -115,7 +119,7 @@ func TestS4OAuthRefreshHTTPMCPOriginalReceiptNotRedispatched(t *testing.T) {
 	// The synthetic original is not a real native Box. A second path through
 	// native Create would fail: a successful reply proves replay bypassed it.
 	if _, err := st.Replay(ctx, state.Admission{
-		Layer: "test", ActorID: oldToken.ActorID, TokenID: oldToken.ID,
+		Layer: testScopedProject, ActorID: oldToken.ActorID, TokenID: oldToken.ID,
 		Key: key, Action: "box_create", SafeIntent: intent,
 	}); !errors.Is(err, state.ErrRevoked) {
 		t.Fatalf("old credential borrowed original: %v", err)
@@ -131,8 +135,8 @@ func TestS4OAuthViewerHistoryAfterRefreshHTTPMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original, err := st.Admit(ctx, state.Admission{
-		Layer: "test", ActorID: old.ActorID, TokenID: old.ID,
+	original, err := st.AdmitScoped(ctx, state.Admission{
+		Layer: testScopedProject, ActorID: old.ActorID, TokenID: old.ID,
 		Key: "s4-viewer-history-immutable-original", RequestID: "viewer",
 		Action: "test-viewer-observation", SafeIntent: []byte(`{"read":true}`),
 	})

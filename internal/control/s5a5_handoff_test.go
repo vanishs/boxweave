@@ -45,7 +45,7 @@ func TestS5A5BoxHandoffLostRecoveryAndArchive(t *testing.T) {
 	}
 	seed := func(layer, key, action, box, resource string) state.Receipt {
 		t.Helper()
-		r, e := st.Admit(ctx, state.Admission{Layer: layer, ActorID: first.ActorID, TokenID: first.ID, Key: key, RequestID: key, Action: action, BoxUUID: box, Incarnation: box, ResourceKey: resource, SafeIntent: []byte("{}"), WorkRef: work, AgentRef: "agent-one"})
+		r, e := st.AdmitScoped(ctx, state.Admission{Layer: layer, ActorID: first.ActorID, TokenID: first.ID, Key: key, RequestID: key, Action: action, BoxUUID: box, Incarnation: box, ResourceKey: resource, SafeIntent: []byte("{}"), WorkRef: work, AgentRef: "agent-one"})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -79,7 +79,7 @@ func TestS5A5BoxHandoffLostRecoveryAndArchive(t *testing.T) {
 	// Explicit synthetic independent native proof at the state boundary.
 	// The installed native CI independently exercises actual MCP settlement.
 	exit := 7
-	settled, e := st.CommitRecovery(ctx, state.RecoveryRequest{Layer: "bw-test", ActorID: first.ActorID, TokenID: first.ID, OriginalID: exec.ID, Key: "a5-handoff-fixture-settle", WorkRef: work}, target, state.RecoveryProof{Kind: state.RecoverySettle, Reason: "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED", NativeID: nativeID, UUID: uuid, Fingerprint: "synthetic-test-witness", Exit: &exit, StdoutPath: output})
+	settled, e := st.CommitScopedRecovery(ctx, state.RecoveryRequest{Layer: "bw-test", ActorID: first.ActorID, TokenID: first.ID, OriginalID: exec.ID, Key: "a5-handoff-fixture-settle", WorkRef: work}, target, state.RecoveryProof{Kind: state.RecoverySettle, Reason: "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED", NativeID: nativeID, UUID: uuid, Fingerprint: "synthetic-test-witness", Exit: &exit, StdoutPath: output})
 	if e != nil || settled.Disposition != "SETTLED" {
 		t.Fatal("fixture settlement", e)
 	}

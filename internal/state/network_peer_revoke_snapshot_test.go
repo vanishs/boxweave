@@ -18,22 +18,18 @@ func s4b3RootAddOtherConfirmed(t *testing.T, s *Store) {
 }
 
 func TestS4B3RevokeOneDirectionPreservesOtherConfirmed(t *testing.T) {
+
 	ctx := context.Background()
-	s, reader, original := s4b2RootOperationFixture(t)
-	s4b2PendingExistingGrantToConfirmed(t, s)
-	s4b3RootAddOtherConfirmed(t, s)
-	if err := s.StageRootPeerRevocation(ctx, original); err != nil {
-		t.Fatal(err)
+	s, r, id := pr178ScopedReadyToStage(t, false)
+	if e := s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
+		t.Fatal(e)
 	}
-	if err := s.Claim(ctx, original); err != nil {
-		t.Fatal(err)
-	}
-	before, after, err := reader.ReadPeerRevocationSnapshot(ctx, "user-1001", "bwbr0", "bw-s4b2", original)
-	if err != nil || len(before) != 2 || len(after) != 1 ||
-		after[0].SourceUUID != s4b2RootDst || after[0].TargetUUID != s4b2RootThird {
-		t.Fatalf("revoke removed other grant: before=%+v after=%+v error=%v", before, after, err)
+	p, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge)
+	if e != nil || len(p.Before) != 2 || len(p.After) != 1 || len(p.RevokedAfter) != 1 || p.After[0].SourceUUID != purePeerUUID(3) || p.After[0].TargetUUID != purePeerUUID(1) || p.RevokedAfter[0].SourceUUID != purePeerUUID(1) {
+		t.Fatal(p, e)
 	}
 	t.Log("S4_B3_REVOKE_ONE_DIRECTION_OTHER_CONFIRMED_STAYS=PASS")
+
 }
 
 func TestS4B3RevokeSnapshotRejectsUnknownOrStaleSibling(t *testing.T) {

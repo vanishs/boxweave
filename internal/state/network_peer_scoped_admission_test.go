@@ -55,7 +55,7 @@ func TestPR178N3InstalledAdmissionReplayAndRecovery(t *testing.T) {
 	rr := ScopedPeerRootReceipt{OriginalID: r.ID, Project: a.Layer, Bridge: "incusbr-1001", Status: "COMPLETE_VERIFIED", ProofSHA256: ScopedPeerProofSHA256(proof), PlanSHA256: strings.Repeat("a", 64), FinalSHA256: strings.Repeat("b", 64), VerifiedSteps: 4, RecoveryOnly: true}
 	request := RecoveryRequest{Layer: a.Layer, ActorID: a.ActorID, TokenID: a.TokenID, OriginalID: r.ID, Key: "n3-installed-recover-key"}
 	p := RecoveryProof{Kind: RecoverySettle, Reason: "SCOPED_PEER_COMPLETED_NO_REPLAY", Fingerprint: "fixture", ScopedPeer: rr}
-	result, e := s.CommitRecovery(ctx, request, target, p)
+	result, e := s.CommitScopedRecovery(ctx, request, target, p)
 	if e != nil || result.Disposition != "SETTLED" {
 		t.Fatal(result, e)
 	}

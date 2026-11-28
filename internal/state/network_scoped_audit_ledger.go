@@ -19,9 +19,7 @@ type ScopedNetworkAuditBinding struct {
 	ACL string
 }
 
-// ScopedNetworkAuditLedger is an atomic SQLite snapshot of a fully converted
-// Project. ReadCompleteNetworkAuditLedger remains the conservative v1 shared-
-// ACL implementation. This new endpoint is NOT wired to MCP/Root mutation.
+// ScopedNetworkAuditLedger is an atomic schema-7 snapshot including retained identities.
 type ScopedNetworkAuditLedger struct {
 	Project, Bridge string
 	Boxes           []ScopedNetworkAuditBinding
@@ -29,10 +27,8 @@ type ScopedNetworkAuditLedger struct {
 }
 
 // ReadCompleteScopedNetworkAuditLedger requires a complete, nonempty Project
-// with one exact derived ACL for EVERY owned Box. Current v1 databases
-// (shared ACL, partially migrated, deleted/retired historical rows) fail
-// closed. Historical retirement migration requires a separate reviewed
-// provenance contract; this reader never silently discards prior leases.
+// with exact derived ACLs and retained Create/Delete lineage. No historical
+// lease is discarded. Older schemas are rejected when opening the ledger.
 func (s *Store) ReadCompleteScopedNetworkAuditLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
 	var zero ScopedNetworkAuditLedger
 	if s == nil || s.db == nil || !strings.HasPrefix(project, "user-") ||
@@ -68,6 +64,21 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 	if s == nil || s.db == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, ErrInvalid
 	}
+	return s.readScopedRetirementLedger(ctx, project, bridge)
+}
+
+// ReadScopedColdRetirementLedger uses the same strict settled inventory
+// verifier on an exclusive private copy. No SQLite connection is made to
+// the original stopped controller's DB/WAL/SHM.
+func (s *DiagnosticSnapshot) ReadScopedColdRetirementLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	if s == nil || s.store == nil || s.Capture != "SQLITE_EXCLUSIVE_COLD_COPY" {
+		return ScopedNetworkAuditLedger{}, ErrDiagnosticBusy
+	}
+	return s.store.readScopedRetirementLedger(ctx, project, bridge)
+}
+
+func (s *Store) readScopedRetirementLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	var zero ScopedNetworkAuditLedger
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return zero, err
@@ -93,9 +104,6 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 		"SELECT count(*) FROM peer_grants WHERE project!=? OR status!='REVOKED'",
 		"SELECT count(*) FROM forward_claims WHERE project!=? OR state!='REVOKED'",
 		"SELECT count(*) FROM operation_resource_claims c LEFT JOIN operations o ON o.id=c.operation_id WHERE c.layer!=? OR o.id IS NULL OR o.layer!=c.layer OR o.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','TIMED_OUT')",
-		"SELECT count(*) FROM network_ipv4_compactions WHERE project!=? OR 1=1",
-		"SELECT count(*) FROM network_ipv4_retirements WHERE project!=? OR 1=1",
-		"SELECT count(*) FROM network_ipv4_retirement_queue WHERE project!=? OR 1=1",
 	} {
 		var n int
 		if err = tx.QueryRowContext(ctx, q, project).Scan(&n); err != nil {
@@ -104,6 +112,9 @@ func (s *Store) ReadScopedRetirementLedger(ctx context.Context, project, bridge 
 		if n != 0 {
 			return zero, ErrResourceLocked
 		}
+	}
+	if err = checkScopedRetiredForwardHistory(ctx, tx, project); err != nil {
+		return zero, err
 	}
 	p, err := readScopedTerminalPeerPolicyTx(ctx, tx, project, bridge)
 	if err != nil || len(p.Active) != 0 {
@@ -122,17 +133,9 @@ func readCompleteScopedNetworkAuditLedgerModeTx(ctx context.Context, tx *sql.Tx,
 		return zero, ErrInvalid
 	}
 
-	// A migration cannot silently proceed past deleted or archived
-	// historical leases whose ACL shape has not been separately proved.
-	var retired int
-	if err := tx.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM network_ipv4_retirements WHERE project=? AND bridge=?", project, bridge,
-	).Scan(&retired); err != nil {
-		return zero, err
-	}
-	if retired != 0 {
-		return zero, ErrResourceLocked
-	}
+	// A Scoped ledger may never borrow Legacy retirement or compaction
+	// history. The transitional guard refuses any mixed state before
+	// ordinary live audit as well as retirement.
 
 	rows, err := tx.QueryContext(ctx,
 		"SELECT uuid,name,incarnation FROM owned_boxes WHERE project=? AND state='OWNED' ORDER BY uuid", project)
@@ -286,6 +289,14 @@ func readCompleteScopedNetworkAuditLedgerModeTx(ctx context.Context, tx *sql.Tx,
 	}
 	if err != nil {
 		return zero, err
+	}
+	// Project rows on a different bridge are not covered by the bridge scan.
+	// Refuse them rather than silently accepting an extra historical lease.
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM network_address_fences WHERE project=? AND bridge!=?", project, bridge).Scan(&foreign); err != nil {
+		return zero, err
+	}
+	if foreign != 0 {
+		return zero, ErrResourceLocked
 	}
 	if len(seen) != 2*(len(claimed)+len(historical)) {
 		return zero, ErrResourceLocked

@@ -12,6 +12,13 @@ Before an actual task: record branch/current HEAD, existing local/remote edits, 
 
 For phase-specific context, each phase card has two tiers: **required on entry** (few files) and **read only at named subtask**. Open the relevant path/section, not the whole repo. A referenced acceptance ID may be fetched just before its test; no need to preload all of [ACCEPTANCE](../verification/ACCEPTANCE.md).
 
+For PR #191 P1, the historical S1–S5 entry above is superseded for execution order; read only the active consolidation plan and live ledger, plus relevant witness contracts. The current
+[recovery plan](CONSOLIDATION_PLAN.md#p1-convergence-recovery-r0-r5-active)
+and live exit ledger govern execution order. Apply
+[outcome-first adaptive stages](AGENT_WORKFLOW.md#outcome-first-adaptive-stages):
+review at each stage, change next actions on evidence, not mandatory
+acceptance, and avoid optional work that cannot advance an exit condition.
+
 ## 2. One phase = one continuous end-to-end execution
 
 **Exception in ordering, not a weakened gate:** after formally accepted S2, execute [S2.5 BRIDGEHEAD](../history/development/phases/025_BRIDGEHEAD.md) as one separate bounded, rigorous real-host/nested safety campaign before S3. Its [BH-001–BH-017](../history/verification/BRIDGEHEAD_ACCEPTANCE.md) need exact deployed/native/independent evidence and fresh physical-host authority; they do not count as S4/S5 PASS. The owner approving this plan does **not** authorize a production installation or global Incus modifications. If the early physical-host pilot cannot meet security/host-readiness requirements, record NO_GO, preserve evidence and proceed with **safe S3 work in an independent lab**, without pretending host readiness. Never create an unreviewed 'minimum MVP' code fork. Read the new card **only after S2**, not during S1/S2 unrelated work.

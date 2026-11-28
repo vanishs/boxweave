@@ -77,7 +77,14 @@ func scopedFreshPrepare(p Plan) error {
 }
 func scopedWriteExclusive(path, body string) error {
 	parent := filepath.Dir(path)
-	if err := os.MkdirAll(parent, 0755); err != nil {
+	// The public systemd unit directory has an explicit intended mode.
+	// A restrictive installer umask must not make its newly created
+	// directory unobservable to the service user. Never change an
+	// existing directory or private journal permissions.
+	created := false
+	if err := os.Mkdir(parent, 0755); err == nil {
+		created = true
+	} else if !errors.Is(err, os.ErrExist) {
 		return err
 	}
 	physical, err := filepath.EvalSymlinks(parent)
@@ -92,11 +99,23 @@ func scopedWriteExclusive(path, body string) error {
 	if !ok || sys.Uid != 0 || !st.IsDir() || st.Mode().Perm()&0022 != 0 {
 		return errors.New("unsafe scoped unit parent")
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if created {
+		// Only the new root-owned, non-symlink systemd directory.
+		if err := os.Chmod(parent, 0755); err != nil {
+			return err
+		}
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
 	_, err = f.WriteString(body)
+	if err == nil {
+		// These fixed public systemd fragments contain no secrets.
+		// Match the exact maintenance contract even under umask 0077.
+		// Change only the newly and exclusively created descriptor.
+		err = f.Chmod(0644)
+	}
 	if err == nil {
 		err = f.Sync()
 	}
@@ -117,7 +136,7 @@ func scopedWriteExclusive(path, body string) error {
 
 // CheckScopedServeMode prevents an installed scoped journal from silently
 // entering the legacy controller, including when an operator omits the flag.
-func CheckScopedServeMode(enabled bool) error {
+func CheckScopedServeMode() error {
 	if e := CheckScopedDrainFence(); e != nil {
 		return e
 	}
@@ -126,16 +145,13 @@ func CheckScopedServeMode(enabled bool) error {
 	}
 	st, err := os.Lstat(nativePeerFreshJournalDir)
 	if errors.Is(err, os.ErrNotExist) {
-		if enabled {
-			return errors.New("scoped installation journal missing")
-		}
-		return refuseScopedLegacy()
+		return errors.New("scoped installation journal missing")
 	}
 	if err != nil {
 		return err
 	}
 	owner, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || owner.Uid != 0 || !st.IsDir() || st.Mode().Perm() != 0700 || !enabled {
+	if !ok || owner.Uid != 0 || !st.IsDir() || st.Mode().Perm() != 0700 {
 		return errors.New("scoped journal requires scoped controller mode")
 	}
 	return nil

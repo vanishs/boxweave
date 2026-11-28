@@ -1,0 +1,222 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-gc-restricted-review",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Exclusive patch 79c1dae56863b3ffb9e1d5ee9fc56d57 8202 bytes SHA256 f3ecd10d9eb2f50a8753c61bca312377ab0a338dc4eb2f599c8f43274ee8b358 verified readback; Box focused race/vet/build 8759047ad6c40cc8411cefe2750a5e49 exit0",
+      "observation": "Reused verified exclusive patch transfer for bounded GC root/restricted identity correction. No measured independent efficiency claim.",
+      "outcome": "helped",
+      "reason": "Existing transfer asset reused"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-gc-restricted-review",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "Exact 5d513eb N2 45771368470 full S2 job 139744533253 PASS, retention 139744533150 FAIL at restricted worker Root-only Status after actual ENOSPC and GC removal/lost ACK PASS",
+      "observation": "Exact CI and partial native evidence checked before correction",
+      "outcome": "helped",
+      "reason": "No stale CI confusion"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-gc-restricted-review",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Resume 772724ac2c8899c7ffacdafe0553940d exit0 clean exact head; original UNKNOWN lookup empty",
+      "observation": "Clean original worktree and original operation checked",
+      "outcome": "helped",
+      "reason": "Existing asset sufficient"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-gc-restricted-review",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 revision46 observation in linked private work; prior revision45 retained, no independent measured efficiency gain",
+      "observation": "Actual reuse observed; no promotion",
+      "outcome": "helped",
+      "reason": "No new asset"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-gc-restricted-review",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Exclusive patch 79c1dae56863b3ffb9e1d5ee9fc56d57 8202 bytes SHA256 f3ecd10d9eb2f50a8753c61bca312377ab0a338dc4eb2f599c8f43274ee8b358 verified readback; Box focused race/vet/build 8759047ad6c40cc8411cefe2750a5e49 exit0",
+      "observation": "Focused race/vet/build via source checks",
+      "outcome": "helped",
+      "reason": "Existing manual fallback appropriate"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-update-transport-and-gc-lock",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Exclusive transfer 6a1a18f01322b633c518969de0ec64c3 11198 bytes c51ea3b5adf7a4e84804d7e4615e7fd8498bc65c620950c5da6ed0eb83c25e8f; wrapper 37f74e44edf80f0fc1705bb3de091f5f 12504 bytes 3ae36f6b7ab93f4776d8ab70496d2feb6b3812257a240a83111aecf8f778e9a5; readback verified; source gate f5bb710fe3cda2bc9513ab043fcfcbbe exit0",
+      "observation": "Reused verified exclusive transfer for two bounded transport test files; no independent measured efficiency gain.",
+      "outcome": "helped",
+      "reason": "Existing transfer asset reused"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-update-transport-and-gc-lock",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "Exact c237e78 N2 retention 139753038251 FAIL duplicate maintenance lock; prior actual ENOSPC and GC native removal/lost ACK PASS; correction gate 78c6d4498d72c0ca247a712067c4fde1 exit0",
+      "observation": "Checked exact failing job and verified source correction",
+      "outcome": "helped",
+      "reason": "No stale CI confusion"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-update-transport-and-gc-lock",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Transport final build and exact staged mode gate 9633e17bc23a903a06ca478d7b4003a7 exit0; prior source gate f5bb710fe3cda2bc9513ab043fcfcbbe exit0, 18 Python tests; actual native transport pending",
+      "observation": "Original gates and staged modes checked before publication",
+      "outcome": "helped",
+      "reason": "Existing asset sufficient"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-update-transport-and-gc-lock",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 revision47 exact observation recorded; no new asset or measured independent benefit",
+      "observation": "Recorded actual reuse without promotion",
+      "outcome": "helped",
+      "reason": "No new asset"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-update-transport-and-gc-lock",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Transport final build and exact staged mode gate 9633e17bc23a903a06ca478d7b4003a7 exit0; prior source gate f5bb710fe3cda2bc9513ab043fcfcbbe exit0, 18 Python tests; actual native transport pending",
+      "observation": "Source checks and exact mode verification",
+      "outcome": "helped",
+      "reason": "Existing manual fallback appropriate"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-shared-physical-quota",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Exclusive patch aa86f09c0ffb252dd2462067f830dd86 9457 bytes SHA256 8407a1f42ea4024fad7241235c7f30236067858531f1aaf79ea1614be5114bc7 exact readback; source gate 16360bc1a199be83e89c35b287a1b740 and final build/20 tests/format 09a3512c8e58d40a837f2d4a3a06eb04 exit0",
+      "observation": "Reused bounded exclusive transfer and independent readback for shared original quota test extraction; exact original assertions byte-identical. No independent measured efficiency gain.",
+      "outcome": "helped",
+      "reason": "Existing transfer asset reused"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-shared-physical-quota",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "426a9b6 N2 45775200961 exact retention 139757072286 and transport 139757072237 completed SUCCESS; actual GC reviewed release and all three Update transport faults passed.",
+      "observation": "Exact original CI checked before next independent slice",
+      "outcome": "helped",
+      "reason": "No stale CI confusion"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-shared-physical-quota",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Resume fc7cb02c567a93010c4e2d834e961efb exit0 clean exact head, original UNKNOWN empty; gate 09a3512c8e58d40a837f2d4a3a06eb04 exit0; previous original quota bodies byte-identical.",
+      "observation": "Resumed exact clean work and verified original source extraction",
+      "outcome": "helped",
+      "reason": "Existing asset sufficient"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-shared-physical-quota",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 rev48 observation 411768860b5896ed06cba17d10a03fff exit0; work plan found IMPLEMENTATION_CHANGED_OR_MISSING, keep candidate and no promotion.",
+      "observation": "Recorded actual reuse and existing audit limitation",
+      "outcome": "helped",
+      "reason": "No new asset or promotion"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-shared-physical-quota",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Resume fc7cb02c567a93010c4e2d834e961efb exit0 clean exact head, original UNKNOWN empty; gate 09a3512c8e58d40a837f2d4a3a06eb04 exit0; previous original quota bodies byte-identical.",
+      "observation": "Registered plan reviewed; focused candidate-specific checks use manual fallback",
+      "outcome": "helped",
+      "reason": "No matching native quota registration"
+    }
+  ],
+  "attempt_ref": "20261125-shared-physical-quota",
+  "authority": "Owner authorized P1 development in isolated Box; no shared host changes, merge or release",
+  "boundary": "handoff",
+  "evidence": [
+    "Exclusive patch 79c1dae56863b3ffb9e1d5ee9fc56d57 8202 bytes SHA256 f3ecd10d9eb2f50a8753c61bca312377ab0a338dc4eb2f599c8f43274ee8b358 verified readback; Box focused race/vet/build 8759047ad6c40cc8411cefe2750a5e49 exit0",
+    "Exact 5d513eb N2 45771368470 full S2 job 139744533253 PASS, retention 139744533150 FAIL at restricted worker Root-only Status after actual ENOSPC and GC removal/lost ACK PASS",
+    "Resume 772724ac2c8899c7ffacdafe0553940d exit0 clean exact head; original UNKNOWN lookup empty",
+    "Prior history reached 32-reference and 32-feedback limits; private boundary bd189bc1557c4f516dd77e078311226e exit2; linked new work without modifying prior history or promoting assets.",
+    "L014 revision46 observation in linked private work; prior revision45 retained, no independent measured efficiency gain",
+    "Exclusive transfer 6a1a18f01322b633c518969de0ec64c3 11198 bytes c51ea3b5adf7a4e84804d7e4615e7fd8498bc65c620950c5da6ed0eb83c25e8f; wrapper 37f74e44edf80f0fc1705bb3de091f5f 12504 bytes 3ae36f6b7ab93f4776d8ab70496d2feb6b3812257a240a83111aecf8f778e9a5; readback verified; source gate f5bb710fe3cda2bc9513ab043fcfcbbe exit0",
+    "Exact c237e78 N2 retention 139753038251 FAIL duplicate maintenance lock; prior actual ENOSPC and GC native removal/lost ACK PASS; correction gate 78c6d4498d72c0ca247a712067c4fde1 exit0",
+    "Transport final build and exact staged mode gate 9633e17bc23a903a06ca478d7b4003a7 exit0; prior source gate f5bb710fe3cda2bc9513ab043fcfcbbe exit0, 18 Python tests; actual native transport pending",
+    "L014 revision47 exact observation recorded; no new asset or measured independent benefit",
+    "Exclusive patch aa86f09c0ffb252dd2462067f830dd86 9457 bytes SHA256 8407a1f42ea4024fad7241235c7f30236067858531f1aaf79ea1614be5114bc7 exact readback; source gate 16360bc1a199be83e89c35b287a1b740 and final build/20 tests/format 09a3512c8e58d40a837f2d4a3a06eb04 exit0",
+    "426a9b6 N2 45775200961 exact retention 139757072286 and transport 139757072237 completed SUCCESS; actual GC reviewed release and all three Update transport faults passed.",
+    "Resume fc7cb02c567a93010c4e2d834e961efb exit0 clean exact head, original UNKNOWN empty; gate 09a3512c8e58d40a837f2d4a3a06eb04 exit0; previous original quota bodies byte-identical.",
+    "L014 rev48 observation 411768860b5896ed06cba17d10a03fff exit0; work plan found IMPLEMENTATION_CHANGED_OR_MISSING, keep candidate and no promotion."
+  ],
+  "evolve_handoff": {
+    "items": [],
+    "status": "NO_MATCHED_PENDING"
+  },
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Check exact new installed Scoped physical quota lane; remaining original native fault mapping, public WAN exception and independent S2.5. No P1c/d retirement waiver, merge or release.",
+  "objective": "Installed Scoped GC root/restricted recovery review and remaining P1b witness",
+  "original_operations": [
+    "79c1dae56863b3ffb9e1d5ee9fc56d57",
+    "8759047ad6c40cc8411cefe2750a5e49",
+    "6a1a18f01322b633c518969de0ec64c3",
+    "37f74e44edf80f0fc1705bb3de091f5f",
+    "f5bb710fe3cda2bc9513ab043fcfcbbe",
+    "9633e17bc23a903a06ca478d7b4003a7",
+    "78c6d4498d72c0ca247a712067c4fde1",
+    "aa86f09c0ffb252dd2462067f830dd86",
+    "16360bc1a199be83e89c35b287a1b740",
+    "09a3512c8e58d40a837f2d4a3a06eb04"
+  ],
+  "related_work": [
+    "pr191/p1b-lifecycle-recovery",
+    "docs/development/CONSOLIDATION_P1B_LIFECYCLE_WORK_HISTORY/00000009.json"
+  ],
+  "revision": 4,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "426a9b62273c3854c59d98e9ba58c1a46a0a78f2",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "skill.task-resume",
+    "skill.continuous-learning",
+    "tool.bwdev"
+  ],
+  "work_ref": "pr191/p1b-gc-restricted-review"
+}

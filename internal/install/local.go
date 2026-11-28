@@ -3,7 +3,6 @@
 package install
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -17,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 )
 
 type Plan struct {
@@ -211,16 +209,9 @@ func Status(p Plan) (Manifest, error) {
 // drop-in may narrow the effective startup policy. Manual serve stays local.
 func unit(p Plan) string {
 	header := "[Unit]\nDescription=BoxWeave v1 local MCP controller\nAfter=network.target incus.service\n"
-	if p.RetirementTarget != nil {
-		header += "Wants=boxweave-ipv4-retirement.service\n"
-	}
-	scopedFlag := ""
-	if p.ScopedFreshReviewSHA != "" {
-		// Root effects remain independently fail-closed. Keep the unprivileged
-		// read/recovery API available if the helper refuses a partial journal.
-		header += "Wants=" + scopedLifecycleUnitName + "\nAfter=" + scopedLifecycleUnitName + "\n"
-		scopedFlag = " -scoped-peer-fresh"
-	}
+	// Keep read/recovery available when the privileged helper refuses an effect.
+	header += "Wants=" + scopedLifecycleUnitName + "\nAfter=" + scopedLifecycleUnitName + "\n"
+	scopedFlag := " -scoped-peer-fresh"
 	return header + "\n[Service]\n" +
 		"Type=simple\nUser=" + p.User + "\nUMask=0077\n" +
 		"Environment=BOXWEAVE_FORWARD_EXTERNAL_ALLOW=all\n" +
@@ -264,11 +255,10 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	if err := safe(p); err != nil {
 		return Manifest{}, err
 	}
-	if p.ScopedFreshReviewSHA != "" {
-		if err := scopedFreshEffectiveAbsent(); err != nil {
-			return Manifest{}, err
-		}
-	} else if err := refuseScopedLegacy(); err != nil {
+	if !validRetirementReviewSHA(p.ScopedFreshReviewSHA) || p.RetirementTarget != nil || p.RetirementReviewSHA != "" {
+		return Manifest{}, errors.New("exact scoped fresh review required; legacy installation unsupported")
+	}
+	if err := scopedFreshEffectiveAbsent(); err != nil {
 		return Manifest{}, err
 	}
 	uid, gid, err := ServiceIdentity(p)
@@ -302,59 +292,13 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	if _, err = os.Lstat(p.UnitPath); err == nil {
-		old, e := Status(p)
-		if e != nil {
-			return Manifest{}, fmt.Errorf("existing unit/install not owned or unchanged: %w", e)
+	for _, path := range []string{p.UnitPath, p.BinaryPath, p.StateDir} {
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+			return Manifest{}, fmt.Errorf("fresh install requires absent target: %s", path)
 		}
-		if old.BinarySHA256 != h {
-			return Manifest{}, errors.New("different binary: explicit inspected upgrade required")
-		}
-		if p.RetirementTarget != nil && (old.RetirementBridge != p.RetirementTarget.Network || old.RetirementACL != p.RetirementTarget.ACL || old.RetirementNativeReviewSHA != p.RetirementReviewSHA) {
-			return Manifest{}, errors.New("existing installer retirement scope differs; no adoption")
-		}
-		return old, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
+	}
+	if err = scopedFreshPrepare(p); err != nil {
 		return Manifest{}, err
-	}
-	if _, err = os.Lstat(p.BinaryPath); err == nil {
-		return Manifest{}, errors.New("target binary exists but is not a verified BoxWeave install")
-	}
-	if _, e := os.Lstat(p.StateDir); e == nil {
-		return Manifest{}, errors.New("existing state directory not governed by a verified manifest; refuse adoption")
-	} else if !errors.Is(e, os.ErrNotExist) {
-		return Manifest{}, e
-	}
-	retirementBody := ""
-	if p.RetirementTarget != nil {
-		if e := verifyRetirementExecutables(); e != nil {
-			return Manifest{}, e
-		}
-		t := *p.RetirementTarget
-		if p.User != "boxweave" || t.Project != p.Project || !validRetirementReviewSHA(p.RetirementReviewSHA) {
-			return Manifest{}, errors.New("exact reviewed native retirement scope required")
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		reviewed, e := NativePreparePlanReview(ctx, t)
-		cancel()
-		if e != nil || reviewed.ReviewSHA256 != p.RetirementReviewSHA {
-			return Manifest{}, errors.New("native retirement scope review drifted")
-		}
-		retirementBody, e = NativePeerRootUnitText(NativePeerRootScope{DBPath: nativePeerRootInstalledDB, Project: p.Project, Bridge: t.Network, ACL: t.ACL, Approved: true, RetirementReview: true, RetirementCompact: true})
-		if e != nil {
-			return Manifest{}, e
-		}
-		if _, e = os.Lstat(nativeRetirementUnitPath); !errors.Is(e, os.ErrNotExist) {
-			return Manifest{}, errors.New("existing retirement unit not owned by fresh installation")
-		}
-		if _, e = os.Lstat(nativeRetirementSocketPath); !errors.Is(e, os.ErrNotExist) {
-			return Manifest{}, errors.New("existing retirement socket requires review")
-		}
-	}
-	if p.ScopedFreshReviewSHA != "" {
-		if err = scopedFreshPrepare(p); err != nil {
-			return Manifest{}, err
-		}
 	}
 	fmt.Fprintln(os.Stderr, "Fresh install: external Forward policy defaults to all; explicit external binds may expose public interfaces. Default bind is loopback; native Project authorization is unchanged.")
 	if err = os.MkdirAll(p.StateDir, 0700); err != nil {
@@ -375,43 +319,9 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	}
 	digestUnit := sha256.Sum256([]byte(unit(p)))
 	m := Manifest{Schema: manifestSchema, Version: build.Version, BuildCommit: build.Commit, BinarySHA256: h, UnitSHA256: hex.EncodeToString(digestUnit[:]), BinaryPath: p.BinaryPath, StateDir: p.StateDir, ServiceUser: p.User, Project: p.Project, Socket: p.Socket, RestartRequired: true}
-	if p.ScopedFreshReviewSHA != "" {
-		m.ScopedPeerMode = nativePeerFreshMode
-		if err = scopedStageUnits(); err != nil {
-			return m, err
-		}
-	}
-	if retirementBody != "" {
-		dig := sha256.Sum256([]byte(retirementBody))
-		m.RetirementUnitSHA256 = hex.EncodeToString(dig[:])
-		m.RetirementBridge = p.RetirementTarget.Network
-		m.RetirementACL = p.RetirementTarget.ACL
-		m.RetirementNativeReviewSHA = p.RetirementReviewSHA
-		// Never overwrite or adopt an independently installed privileged unit.
-		f, e := os.OpenFile(nativeRetirementUnitPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-		if e != nil {
-			return m, e
-		}
-		_, e = f.WriteString(retirementBody)
-		if e == nil {
-			e = f.Sync()
-		}
-		cerr := f.Close()
-		if e != nil {
-			return m, e
-		}
-		if cerr != nil {
-			return m, cerr
-		}
-		dir, e := os.Open(filepath.Dir(nativeRetirementUnitPath))
-		if e != nil {
-			return m, e
-		}
-		e = dir.Sync()
-		dir.Close()
-		if e != nil {
-			return m, e
-		}
+	m.ScopedPeerMode = nativePeerFreshMode
+	if err = scopedStageUnits(); err != nil {
+		return m, err
 	}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

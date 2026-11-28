@@ -151,7 +151,7 @@ func readNativeNetworkLedgerTx(ctx context.Context, tx *sql.Tx, project string) 
 			var valid int
 			e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations c WHERE c.id=? AND c.layer=? AND c.action='box_create'
 			AND c.state='SUCCEEDED' AND EXISTS(SELECT 1 FROM operation_events ev WHERE ev.operation_id=c.id AND ev.state='SUCCEEDED')
-			AND `+retirementCreateEvidence, v.OriginalID, project).Scan(&valid)
+			AND `+successfulCreateLineageEvidence, v.OriginalID, project).Scan(&valid)
 			if e != nil {
 				return NativeNetworkLedger{}, e
 			}

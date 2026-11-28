@@ -2,8 +2,11 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -155,61 +158,50 @@ func b5RootReader(t *testing.T, s *Store) *Store {
 	return reader
 }
 func TestB5DeletePeerRootLinkedProofAndRetainedDropHistory(t *testing.T) {
+
 	ctx := context.Background()
-	s := newStore(t)
-	s4b2InsertAuditFixture(t, s)
-	b5Peer(t, s, s4b2RootSrc, s4b2RootDst, "10.243.18.11", "10.243.18.12", "fd43:18::11", "fd43:18::12")
-	b5Peer(t, s, s4b2RootThird, s4b2RootSrc, "10.243.18.13", "10.243.18.11", "fd43:18::13", "fd43:18::11")
-	s4b3RootAddOtherConfirmed(t, s)
-	a := b5DeleteAdmission(t, s, s4b2RootSrc, "a")
-	r, e := s.Admit(ctx, a)
+	s, b, token := n3ScopedOwnedFixture(t)
+	for i, p := range [][2]int{{1, 2}, {3, 1}, {2, 3}} {
+		purePeerComplete(t, s, purePeerAdmit(t, s, token, fmt.Sprint("delete-grant-", i), p[0], p[1], true))
+	}
+	a := scopedDeleteAdmission(t, s, b)
+	r, e := s.AdmitScoped(ctx, a)
 	if e != nil {
 		t.Fatal(e)
 	}
 	if e = s.Claim(ctx, r.ID); e != nil {
 		t.Fatal(e)
 	}
-	root := b5RootReader(t, s)
+	ro := purePeerReadOnly(t, s)
 	for i := 0; i < 2; i++ {
 		child, e := s.NextDeleteChild(ctx, r.ID, true)
 		if e != nil || child.Receipt.Action != "box_peer_set" {
-			t.Fatalf("peer child %+v %v", child, e)
+			t.Fatal(child, e)
 		}
 		id := child.Receipt.ID
-		if e = s.StageRootPeerRevocation(ctx, id); e != nil {
+		if e = s.StageAndClaimScopedPeerOriginal(ctx, id); e != nil {
 			t.Fatal(e)
 		}
-		op, e := s.Get(ctx, id)
-		if e != nil || op.State != "DISPATCHING" {
-			t.Fatalf("non-atomic child claim %+v %v", op, e)
+		p, e := ro.ReadRootScopedPeerOriginal(ctx, id, b.Project, purePeerBridge)
+		if e != nil || p.ParentID != r.ID || p.Intent.Allow || len(p.Before) != 3-i || len(p.After) != 2-i {
+			t.Fatal(p, e)
 		}
-		proof, e := root.ReadRootPeerRevocation(ctx, id, a.Layer, "bwbr0", "bw-s4b2")
-		if e != nil || proof.Intent.Allow {
-			t.Fatalf("root proof %+v %v", proof, e)
-		}
-		// Independent read-only root proof must reject a forged parent link.
-		if _, e = s.db.Exec("UPDATE operation_resource_claims SET resource_key=? WHERE operation_id=? AND resource_key=?", deleteParentKey("00000000000000000000000000000000"), id, deleteParentKey(r.ID)); e != nil {
+		bad := deleteParentKey(strings.Repeat("0", 32))
+		if _, e = s.db.Exec("UPDATE operation_resource_claims SET resource_key=? WHERE operation_id=? AND resource_key=?", bad, id, deleteParentKey(r.ID)); e != nil {
 			t.Fatal(e)
 		}
-		if _, e = root.ReadRootPeerRevocation(ctx, id, a.Layer, "bwbr0", "bw-s4b2"); e == nil {
-			t.Fatal("forged parent link accepted")
+		if _, e = ro.ReadRootScopedPeerOriginal(ctx, id, b.Project, purePeerBridge); e == nil {
+			t.Fatal("forged parent")
 		}
-		if _, e = s.db.Exec("UPDATE operation_resource_claims SET resource_key=? WHERE operation_id=? AND resource_key=?", deleteParentKey(r.ID), id, deleteParentKey("00000000000000000000000000000000")); e != nil {
+		if _, e = s.db.Exec("UPDATE operation_resource_claims SET resource_key=? WHERE operation_id=? AND resource_key=?", deleteParentKey(r.ID), id, bad); e != nil {
 			t.Fatal(e)
 		}
-		before, after, e := root.ReadPeerRevocationSnapshot(ctx, a.Layer, "bwbr0", "bw-s4b2", id)
-		if e != nil || len(before) != 3-i || len(after) != 2-i {
-			t.Fatalf("before/after %v %v %v", before, after, e)
-		}
-		if e = s.AckSynchronousACL(ctx, id); e != nil {
-			t.Fatal(e)
-		}
-		if e = s.FinalizeRootPeerRevocation(ctx, id); e != nil {
+		if e = s.FinalizeScopedPeerOriginal(ctx, scopedTestReceipt(t, ro, id, false)); e != nil {
 			t.Fatal(e)
 		}
 	}
-	if done, e := s.NextDeleteChild(ctx, r.ID, false); e != nil || done.Receipt.ID != "" {
-		t.Fatalf("final %+v %v", done, e)
+	if child, e := s.NextDeleteChild(ctx, r.ID, false); e != nil || child.Receipt.ID != "" {
+		t.Fatal(child, e)
 	}
 	if e = s.AuthorizeCascadeFinal(ctx, r.ID); e != nil {
 		t.Fatal(e)
@@ -217,31 +209,20 @@ func TestB5DeletePeerRootLinkedProofAndRetainedDropHistory(t *testing.T) {
 	if e = s.NativeAck(ctx, r.ID, "native-delete-proof"); e != nil {
 		t.Fatal(e)
 	}
-	box, e := s.OwnedBox(ctx, a.Layer, a.BoxUUID)
-	if e != nil {
+	if e = s.FinalizeVerifiedScopedDelete(ctx, r.ID, b); e != nil {
 		t.Fatal(e)
 	}
-	if e = s.FinalizeVerifiedDelete(ctx, r.ID, box); e != nil {
+	p, e := ro.ReadScopedTerminalPeerPolicy(ctx, b.Project, purePeerBridge)
+	if e != nil || len(p.Revoked) != 2 || len(p.Active) != 1 || p.Active[0].SourceUUID != purePeerUUID(2) || p.Active[0].TargetUUID != purePeerUUID(3) {
+		t.Fatal(p, e)
+	}
+	if _, e = s.db.Exec("UPDATE network_address_fences SET operation_id='forged' WHERE box_uuid=?", b.UUID); e != nil {
 		t.Fatal(e)
 	}
-	live, e := root.ReadCompleteNetworkAuditLedger(ctx, a.Layer, "bwbr0", "bw-s4b2")
-	if e != nil || len(live.Boxes) != 2 {
-		t.Fatalf("remaining audit %+v %v", live, e)
-	}
-	drops, e := root.ReadPeerRevokedSnapshot(ctx, a.Layer, "bwbr0", "bw-s4b2")
-	if e != nil || len(drops) != 2 {
-		t.Fatalf("historic drops %+v %v", drops, e)
-	}
-	active, e := root.ReadPeerGrantSnapshot(ctx, a.Layer, "bwbr0", "bw-s4b2", "")
-	if e != nil || len(active) != 1 || active[0].SourceUUID != s4b2RootDst || active[0].TargetUUID != s4b2RootThird {
-		t.Fatalf("unrelated grant %+v %v", active, e)
-	}
-	if _, e = s.db.Exec("UPDATE network_address_fences SET operation_id='forged' WHERE box_uuid=?", a.BoxUUID); e != nil {
+	if _, e = ro.ReadCompleteScopedNetworkAuditLedger(ctx, b.Project, purePeerBridge); !errors.Is(e, ErrResourceLocked) {
 		t.Fatal(e)
 	}
-	if _, e = root.ReadCompleteNetworkAuditLedger(ctx, a.Layer, "bwbr0", "bw-s4b2"); !errors.Is(e, ErrResourceLocked) {
-		t.Fatalf("forged release history accepted %v", e)
-	}
+
 }
 func TestB5DeleteRestartPartialCleanupUnknownFences(t *testing.T) {
 	ctx := context.Background()
@@ -292,78 +273,75 @@ func TestB5DeleteRestartPartialCleanupUnknownFences(t *testing.T) {
 
 func TestB5ReviewKnownTerminalDeleteAtomicPinnedTombstone(t *testing.T) {
 	ctx := context.Background()
-	s := newStore(t)
-	s4b2InsertAuditFixture(t, s)
-	a := b5DeleteAdmission(t, s, s4b2RootSrc, "a")
-	parent, e := s.Admit(ctx, a)
+	s, b, _ := n3ScopedOwnedFixture(t)
+	a := scopedDeleteAdmission(t, s, b)
+	parent := a4AdmitMode(t, s, a, true)
+	if e := s.Claim(ctx, parent.ID); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.AuthorizeCascadeFinal(ctx, parent.ID); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.NativeAck(ctx, parent.ID, "known-terminal-native-id"); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.Unknown(ctx, parent.ID, "VERIFYING", "TEST_LOST_FINAL"); e != nil {
+		t.Fatal(e)
+	}
+	old, e := s.RecoveryInspect(ctx, parent.ID)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = s.Claim(ctx, parent.ID); e != nil {
-		t.Fatal(e)
-	}
-	if e = s.AuthorizeCascadeFinal(ctx, parent.ID); e != nil {
-		t.Fatal(e)
-	}
-	if e = s.NativeAck(ctx, parent.ID, "known-terminal-native-id"); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = s.Recover(ctx); e != nil {
-		t.Fatal(e)
-	}
-	orig, e := s.RecoveryInspect(ctx, parent.ID)
+	ch, e := s.IssueRecoveryChallenge(ctx, old, "b5-reviewer", "DELETE_SUCCESS:unit-fixture")
 	if e != nil {
 		t.Fatal(e)
 	}
-	observed := "DELETE_SUCCESS:unit-fixture"
-	challenge, e := s.IssueRecoveryChallenge(ctx, orig, "b5-reviewer", observed)
+	if e = s.FinalizeReviewedUnknownDelete(ctx, old, "b5-reviewer", ch, b.UUID, "unit fixture independently verified", "DELETE_SUCCESS:unit-fixture", true); e == nil {
+		t.Fatal("legacy review bypass")
+	}
+	r, target := a4Request(t, s, parent.ID)
+	root := purePeerReadOnly(t, s)
+	orig, e := root.ReadRootScopedDeleteUnknownOriginal(ctx, parent.ID, b.Project, purePeerBridge)
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, test := range []struct {
-		who, uuid, proof string
-		ack              bool
-	}{
-		{"wrong-reviewer", a.BoxUUID, observed, true},
-		{"b5-reviewer", "other-uuid", observed, true},
-		{"b5-reviewer", a.BoxUUID, "DELETE_SUCCESS:changed", true},
-		{"b5-reviewer", a.BoxUUID, observed, false},
-	} {
-		if e = s.FinalizeReviewedUnknownDelete(ctx, orig, test.who, challenge, test.uuid, "unit fixture independently verified", test.proof, test.ack); e == nil {
-			t.Fatalf("unsafe review accepted %+v", test)
-		}
+	p := p1CompletedProof(t, target, "DELETE", orig.Binding, ScopedLifecycleOriginalSHA256(orig))
+	p.UUID = b.UUID
+	p.ScopedLifecycle.Record.UUID = b.UUID
+	bad := p
+	bad.ScopedLifecycle.OriginalSHA256 = strings.Repeat("d", 64)
+	if _, e = s.CommitScopedRecovery(ctx, r, target, bad); e == nil {
+		t.Fatal("wrong original proof")
 	}
-	if _, e = s.db.Exec("CREATE TRIGGER b5_inject_audit_failure BEFORE INSERT ON recovery_audit WHEN NEW.decision='DELETE_CONFIRMED' BEGIN SELECT RAISE(ABORT,'test audit failure'); END"); e != nil {
+	if _, e = s.db.Exec("CREATE TRIGGER b5_inject_audit_failure BEFORE INSERT ON recovery_audit WHEN NEW.decision='RECOVERY_SETTLED' BEGIN SELECT RAISE(ABORT,'test audit failure'); END"); e != nil {
 		t.Fatal(e)
 	}
-	if e = s.FinalizeReviewedUnknownDelete(ctx, orig, "b5-reviewer", challenge, a.BoxUUID, "unit fixture independently verified", observed, true); e == nil {
+	if _, e = s.CommitScopedRecovery(ctx, r, target, p); e == nil {
 		t.Fatal("audit failure committed")
 	}
-	r, e := s.Get(ctx, parent.ID)
-	if e != nil || r.State != "UNKNOWN" {
-		t.Fatalf("non-atomic settlement %+v %v", r, e)
-	}
+	p1AssertOriginal(t, s, parent.ID, "UNKNOWN", target.NativeID)
 	if _, e = s.OwnedBox(ctx, a.Layer, a.BoxUUID); e != nil {
-		t.Fatal("tombstone not rolled back", e)
+		t.Fatal(e)
 	}
 	if _, e = s.db.Exec("DROP TRIGGER b5_inject_audit_failure"); e != nil {
 		t.Fatal(e)
 	}
-	root := b5RootReader(t, s)
-	if _, e = root.ReadCompleteNetworkAuditLedger(ctx, a.Layer, "bwbr0", "bw-s4b2"); e != nil {
-		t.Fatal("fences not rolled back", e)
-	}
-	if e = s.FinalizeReviewedUnknownDelete(ctx, orig, "b5-reviewer", challenge, a.BoxUUID, "unit fixture independently verified", observed, true); e != nil {
-		t.Fatal(e)
-	}
+	a4SettleMode(t, s, r, target, p, true)
 	if _, e = s.OwnedBox(ctx, a.Layer, a.BoxUUID); !errors.Is(e, ErrNotFound) {
 		t.Fatal("no tombstone", e)
 	}
-	if ledger, e := root.ReadCompleteNetworkAuditLedger(ctx, a.Layer, "bwbr0", "bw-s4b2"); e != nil || len(ledger.Boxes) != 2 {
-		t.Fatalf("postreview history %+v %v", ledger, e)
-	}
 	replay, e := s.Replay(ctx, a)
 	if e != nil || !replay.Duplicate || replay.ID != parent.ID || replay.State != "SUCCEEDED" {
-		t.Fatalf("replay %+v %v", replay, e)
+		t.Fatal(replay, e)
 	}
+
+}
+
+func scopedDeleteAdmission(t *testing.T, s *Store, b OwnedBox) Admission {
+	a := b5DeleteAdmission(t, s, b.UUID, b.Name)
+	a.Layer = b.Project
+	a.SafeIntent, _ = json.Marshal(struct {
+		BoxID string `json:"box_id"`
+	}{b.UUID})
+	return a
 }

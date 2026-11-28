@@ -18,6 +18,14 @@ available. Missing metrics remain unknown; report sample size and failure
 cases. Preserve private evidence when needed and only sanitized summaries
 in Git. Never loosen the oracle or product gate to improve a score.
 
+For agent-agnostic capability compensation, follow the [evolution evaluation
+policy](../../docs/development/BDH_AGENT_AGNOSTIC_EVOLUTION.md#measure-capability-first-efficiency-second).
+Compare optional BDH assistance against ordinary routes with mandatory
+project constraints unchanged; record per-configuration gains, lower-end
+capability, non-regression of capable Agents and full overhead. Cross-Agent
+comparisons are additional evidence, not a requirement for every cycle or
+an Agent-specific routing policy. Do not infer equal tools from client names.
+
 A changed harness should add or update a relevant behavior case when
 useful and run cases plus targeted tests before CI. Mandatory product CI
 remains independent. No comparative Agent benchmark, external adapter

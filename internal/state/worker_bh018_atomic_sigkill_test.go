@@ -164,7 +164,7 @@ func TestBH018ActualSIGKILLBeforeAndAfterAtomicExecCommit(t *testing.T) {
 					t.Fatalf("uncommitted result was not recovered fail-closed: n=%d %v", n, err)
 				}
 				intent.Key = "bh018-sigkill-new-key-remains-locked"
-				if _, err := reopened.Admit(ctx, intent); !errors.Is(err, ErrResourceLocked) {
+				if _, err := reopened.AdmitScoped(ctx, intent); !errors.Is(err, ErrResourceLocked) {
 					t.Fatalf("crashed original released lock without evidence: %v", err)
 				}
 			} else {
@@ -184,7 +184,7 @@ func TestBH018ActualSIGKILLBeforeAndAfterAtomicExecCommit(t *testing.T) {
 					t.Fatalf("original key no longer idempotent: %+v %v", replay, err)
 				}
 				intent.Key = "bh018-sigkill-new-key-after-real-commit"
-				if _, err := reopened.Admit(ctx, intent); err != nil {
+				if _, err := reopened.AdmitScoped(ctx, intent); err != nil {
 					t.Fatalf("fully committed original kept false resource lock: %v", err)
 				}
 			}

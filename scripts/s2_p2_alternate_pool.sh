@@ -11,28 +11,8 @@ test "$project" = "user-$(id -u boxweave)"
 test "$socket" = /var/lib/incus/unix.socket.user
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-native-pool
-test "$(df -B1 --output=avail / | tail -n1 | tr -d ' ')" -gt 3221225472
-alt="$work/p2-alt-block"
-mkdir -m 0755 "$alt"
-truncate -s 12G "$alt/alternative-disk.img"
-loop="$(sudo losetup --find --show "$alt/alternative-disk.img")"
-test -n "$loop"
-sudo mkfs.ext4 -F -q -O quota,project "$loop"
-sudo mkdir -m 0755 "$alt/mounted"
-sudo mount -t ext4 -o nodev,nosuid,prjquota "$loop" "$alt/mounted"
-sudo tune2fs -l "$loop" | grep -E '^Filesystem features:' | grep -qw project
-findmnt -n -o OPTIONS --target "$alt/mounted" | grep -Eq '(^|,)prjquota(,|$)'
-test "$(stat -c '%d' "$alt/mounted")" != "$(stat -c '%d' "$work/mounted")"
-sudo mkdir -m 0755 "$alt/mounted/storage"
-pool=bw-s2-p2-alternate-pool
-sudo incus storage create "$pool" dir source="$alt/mounted/storage"
-test "$(sudo incus storage get "$pool" source)" = "$alt/mounted/storage"
-# Profile switch is scoped to ONLY this temporary restricted Project, and
-# occurs with verified empty inventory. No foreign Project is inspected.
-sudo incus profile device set default root pool="$pool" --project "$project"
-test "$(sudo incus profile device get default root pool --project "$project")" = "$pool"
-test -z "$(sudo incus list --all-projects --format csv -c n)"
-echo "S2_P2_ALTERNATE_MOUNTED_EXT4_QUOTA_PROFILE_SELECTED=PASS"
+. scripts/s2_p2_alternate_pool_setup.sh
+
 
 lab="$work/p2-alt-pool"
 mkdir -m 0700 "$lab"
@@ -134,6 +114,6 @@ sudo incus profile device set default root pool=bw-s2-native-pool --project "$pr
 test "$(sudo incus profile device get default root pool --project "$project")" = bw-s2-native-pool
 sudo incus storage delete "$pool"
 sudo umount "$alt/mounted"
-sudo losetup -d "$loop"
+sudo losetup -d "$alt_loop"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P2_ALTERNATE_ROOT_POOL_RESTORED_NO_RESIDUAL_STORAGE=PASS"

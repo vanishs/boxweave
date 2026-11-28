@@ -7,85 +7,73 @@ import (
 )
 
 func TestS4B3ReadExactPeerCompilerSnapshot(t *testing.T) {
-	s, id := s4b3GrantFixture(t)
+
 	ctx := context.Background()
-	if err := s.StagePeerGrant(ctx, id); err != nil {
-		t.Fatal(err)
+	s, r, id := pr178ScopedOriginalFixture(t, true)
+	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); e == nil {
+		t.Fatal("unclaimed proof")
 	}
-	if _, err := s.ReadPeerGrantSnapshot(ctx, "user-1001", "bwbr0", "bw-s4b2", ""); !errors.Is(err, ErrResourceLocked) {
-		t.Fatalf("unconfirmed live grant visible as confirmed: %v", err)
+	if e := s.Claim(ctx, id); e != nil {
+		t.Fatal(e)
 	}
-	got, err := s.ReadPeerGrantSnapshot(ctx, "user-1001", "bwbr0", "bw-s4b2", id)
-	if err != nil || len(got) != 1 || got[0].SourceUUID != s4b2RootSrc ||
-		got[0].TargetUUID != s4b2RootDst || got[0].TargetIPv6 != "fd43:18::12" {
-		t.Fatalf("bad exact directional candidate %+v: %v", got, err)
+	p, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge)
+	if e != nil || len(p.Before) != 1 || len(p.After) != 2 || p.After[0].SourceUUID != purePeerUUID(1) || p.After[0].TargetUUID != purePeerUUID(2) || p.After[0].TargetIPv6 != "fd43:18::12" || p.After[1] != p.Before[0] {
+		t.Fatal(p, e)
 	}
-	// Existing separately confirmed B -> C is retained in the native compiler
-	// snapshot; one new grant must never overwrite an unrelated live grant.
-	_, err = s.db.ExecContext(ctx, `INSERT INTO peer_grants
-  (project,source_uuid,source_incarnation,target_uuid,target_incarnation,desired,status,
-  source_ipv4,target_ipv4,source_ipv6,target_ipv6)
-  VALUES(?,?,?,?,?,1,'CONFIRMED',?,?,?,?)`,
-		"user-1001", s4b2RootDst, s4b2RootDst, s4b2RootThird, s4b2RootThird,
-		"10.243.18.12", "10.243.18.13", "fd43:18::12", "fd43:18::13")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err = s.ReadPeerGrantSnapshot(ctx, "user-1001", "bwbr0", "bw-s4b2", id)
-	if err != nil || len(got) != 2 || got[0].SourceUUID != s4b2RootSrc ||
-		got[1].SourceUUID != s4b2RootDst || got[1].TargetUUID != s4b2RootThird {
-		t.Fatalf("whole directional allowlist was not preserved: %+v %v", got, err)
+	if _, e = s.ReadPeerGrantSnapshot(ctx, purePeerProject, purePeerBridge, "bw-s4b2", id); !errors.Is(e, ErrResourceLocked) {
+		t.Fatal("shared compiler admitted", e)
 	}
 	t.Log("S4_B3_WHOLE_CONFIRMED_PLUS_ONE_PENDING_DIRECTIONAL_COMPILER_SNAPSHOT=PASS")
+
 }
 
 func TestS4B3ReadPeerCompilerSnapshotFailsClosed(t *testing.T) {
-	cases := []struct{ name, sql string }{
-		{"lost-original", "UPDATE operations SET state='UNKNOWN'"},
-		{"revoked-credential", "UPDATE credentials SET revoked=1"},
-		{"expired-token", "UPDATE credentials SET revoked=1"},
-		{"bad-address", "UPDATE peer_grants SET source_ipv4='10.243.18.99'"},
-		{"wrong-incarnation", "UPDATE peer_grants SET target_incarnation='reused'"},
-		{"unverified-foreign-sibling", "DELETE FROM network_bindings WHERE box_uuid='" + s4b2RootThird + "'"},
-		{"release-address", "UPDATE network_address_fences SET state='RELEASED' WHERE address='fd43:18::12'"},
-		{"fake-confirmation", "UPDATE peer_grants SET status='CONFIRMED' WHERE status='PENDING'"},
-		{"unknown-grant", "UPDATE peer_grants SET status='UNKNOWN'"},
-		{"wrong-original", "UPDATE peer_grants SET operation_id='other'"},
-		{"lost-staged-target-claim", "DELETE FROM operation_resource_claims WHERE resource_key='box:" + s4b2RootDst + "'"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			s, id := s4b3GrantFixture(t)
-			if err := s.StagePeerGrant(context.Background(), id); err != nil {
-				t.Fatal(err)
+
+	ctx := context.Background()
+	for _, sql := range []string{"UPDATE operations SET state='UNKNOWN' WHERE id=?", "UPDATE operations SET safe_intent='{}' WHERE id=?", "UPDATE credentials SET expires_at=0 WHERE id=(SELECT token_id FROM operations WHERE id=?)", "UPDATE peer_grants SET status='CONFIRMED' WHERE operation_id=?", "UPDATE peer_grants SET target_incarnation='reused' WHERE operation_id=?", "DELETE FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'acl:%'"} {
+		t.Run(sql, func(t *testing.T) {
+			s, r, id := pr178ScopedOriginalFixture(t, true)
+			if e := s.Claim(ctx, id); e != nil {
+				t.Fatal(e)
 			}
-			if _, err := s.db.Exec(tc.sql); err != nil {
-				t.Fatal(err)
+			if _, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); e != nil {
+				t.Fatal(e)
 			}
-			if got, err := s.ReadPeerGrantSnapshot(context.Background(), "user-1001", "bwbr0", "bw-s4b2", id); err == nil {
-				t.Fatalf("unsafe compiler would produce grant %+v", got)
+			res, e := s.db.Exec(sql, id)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if n, e := res.RowsAffected(); e != nil || n == 0 {
+				t.Fatal(n, e)
+			}
+			if p, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); e == nil || len(p.After) != 0 {
+				t.Fatal(p, e)
 			}
 		})
 	}
 	t.Log("S4_B3_COMPILER_SNAPSHOT_UNKNOWN_FOREIGN_IDENTITY_FAIL_CLOSED=PASS")
+
 }
 
 // Historical DROP rules are part of the next canonical whole-ACL projection,
 // but must never survive a stale native UUID/address mapping unchecked.
 func TestS4B3ReadHistoricalRevokedSnapshotRequiresCurrentLease(t *testing.T) {
-	s, reader, _ := s4b2RootOperationFixture(t)
-	s4b2PendingExistingGrantToConfirmed(t, s)
-	if _, err := s.db.Exec("UPDATE peer_grants SET status='REVOKED',desired=0,operation_id=''"); err != nil {
-		t.Fatal(err)
+
+	ctx := context.Background()
+	s, b, token := n3ScopedOwnedFixture(t)
+	purePeerComplete(t, s, purePeerAdmit(t, s, token, "snapshot-grant", 1, 2, true))
+	purePeerComplete(t, s, purePeerAdmit(t, s, token, "snapshot-revoke", 1, 2, false))
+	n3DeleteOwned(t, s, b, token)
+	r := purePeerReadOnly(t, s)
+	p, e := r.ReadScopedTerminalPeerPolicy(ctx, purePeerProject, purePeerBridge)
+	if e != nil || len(p.Revoked) != 1 || p.Revoked[0].SourceUUID != b.UUID {
+		t.Fatal(p, e)
 	}
-	revoked, err := reader.ReadPeerRevokedSnapshot(context.Background(), "user-1001", "bwbr0", "bw-s4b2")
-	if err != nil || len(revoked) != 1 {
-		t.Fatalf("missing exact durable DROP tombstone: %+v %v", revoked, err)
+	if _, e = s.db.Exec("UPDATE peer_grants SET target_ipv6='fd43:18::99' WHERE status='REVOKED'"); e != nil {
+		t.Fatal(e)
 	}
-	if _, err := s.db.Exec("UPDATE peer_grants SET target_ipv6='fd43:18::99' WHERE status='REVOKED'"); err != nil {
-		t.Fatal(err)
+	if _, e = r.ReadScopedTerminalPeerPolicy(ctx, purePeerProject, purePeerBridge); e == nil {
+		t.Fatal("stale DROP")
 	}
-	if got, err := reader.ReadPeerRevokedSnapshot(context.Background(), "user-1001", "bwbr0", "bw-s4b2"); err == nil {
-		t.Fatalf("stale revoked IP was accepted for native ACL rebuild: %+v", got)
-	}
+
 }

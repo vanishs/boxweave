@@ -107,12 +107,19 @@ func main() {
 	defer cancel()
 	s := connect(ctx, url, token)
 	defer s.Close()
-	const name = "bw-s2-mcp-quota-110i"
+	name := "bw-s2-mcp-quota-110i"
+	keyPrefix := "native-s2-mcp-quota-"
+	direct := os.Getenv("BW_S2_MCP_QUOTA_DIRECT_SCOPED") == "1"
+	if direct {
+		check(url == "http://127.0.0.1:18650/mcp" && (os.Args[1] == "create" || os.Args[1] == "cleanup"), "direct witness permits only installed MCP ownership lifecycle")
+		name = "bw-s2-quota-native-110h"
+		keyPrefix = "native-s2-direct-scoped-quota-"
+	}
 	switch os.Args[1] {
 	case "create":
 		create := call(ctx, s, "box_create", map[string]any{
 			"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
-			"start": true, "idempotency_key": "native-s2-mcp-quota-create-once-001",
+			"start": true, "idempotency_key": keyPrefix + "create-once-001",
 		})
 		op := wait(ctx, s, id(create))
 		uuid = field(op, "box_uuid")
@@ -121,6 +128,9 @@ func main() {
 		check(field(box, "native_state") == "Running" &&
 			field(box, "root_disk_size") == "2GiB", "incorrect native quota Box")
 		fmt.Println("S2_MCP_QUOTA_BOX_UUID=" + uuid)
+		if direct {
+			fmt.Println("P1B_DIRECT_QUOTA_CREATE_ID=" + id(create))
+		}
 	case "seed":
 		check(len(uuid) == 36, "missing quota box UUID")
 		seed := call(ctx, s, "box_exec", map[string]any{
@@ -222,16 +232,20 @@ func main() {
 	case "cleanup":
 		check(len(uuid) == 36, "missing quota box UUID")
 		stop := call(ctx, s, "box_stop", map[string]any{
-			"box_id": uuid, "idempotency_key": "native-s2-mcp-quota-stop-after-filler-001",
+			"box_id": uuid, "idempotency_key": keyPrefix + "stop-after-filler-001",
 		})
 		wait(ctx, s, id(stop))
 		del := call(ctx, s, "box_delete", map[string]any{
-			"box_id": uuid, "idempotency_key": "native-s2-mcp-quota-delete-after-stop-01",
+			"box_id": uuid, "idempotency_key": keyPrefix + "delete-after-stop-01",
 		})
 		wait(ctx, s, id(del))
 		boxes := call(ctx, s, "box_list", map[string]any{"limit": 20})
 		remaining, ok := boxes["boxes"].([]any)
 		check(ok && len(remaining) == 0, "quota test Box remained after deletion")
 		fmt.Println("S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS")
+		if direct {
+			fmt.Println("P1B_DIRECT_QUOTA_STOP_ID=" + id(stop))
+			fmt.Println("P1B_DIRECT_QUOTA_DELETE_ID=" + id(del))
+		}
 	}
 }

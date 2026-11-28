@@ -246,7 +246,7 @@ func scopedDrainWorker() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 16*time.Minute)
 	defer cancel()
 	n := native.Reader{Project: a.Project, Socket: a.Socket}
-	svc := control.Service{Store: db, Native: n, ScopedPeerFresh: true}
+	svc := control.Service{Store: db, Native: n}
 	receipt, e := svc.RunScopedDrainStep(ctx, q.Actor, q.Step, q.ExpectedLedger, false)
 	if receipt.ID != "" {
 		if ee := json.NewEncoder(os.Stdout).Encode(scopedDrainResult{true, &receipt}); ee != nil {

@@ -2,7 +2,35 @@
 
 This guide describes the implementation introduced by PR #177; RC13 does not contain it. D0–D5 passed exact-head CI and were merged on
 2026-11-24. Use the exact installed build's help and manifest. One binary,
-two local CLI entries, unchanged 23-tool MCP catalog. See [current status](../INDEX.md).
+two local CLI entries, unchanged 23-tool MCP catalog. See [current status](../STATUS.md).
+
+## PR #191 current Scoped candidate
+
+Schema 7 accepts only the current Scoped architecture. A verified historical
+installation is reported as `UNSUPPORTED_LEGACY`; mixed and incomplete
+evidence is not healthy. The compatibility `ready` field requires the exact
+current installed scope, runtime, active guard/lifecycle, schema, read-only
+ledger and local HTTP observation. It is still not authenticated MCP,
+packet or retirement proof. Root-only observations remain separate:
+a restricted observer can report SQLite-only scoped capacity and explicit
+coverage limits without claiming Root journal or kernel evidence.
+Foreign ledger rows are counted without exposing their identities.
+Maintenance retains historical artifact and pinned-observer evidence but
+does not certify current Scoped coverage from legacy/mixed state. Keep
+original receipts and use the matching reviewed lifecycle; no automatic
+migration, restart, deletion or replay.
+
+### Current reviewed recovery boundary
+
+For the Schema-7 candidate, local reviewed apply supports only
+`MCP_SETTLE_ORIGINAL_NO_REPLAY` on proved current Scoped originals
+(start/stop/update/Exec/peer/Forward). Scoped Create/Delete settlement
+uses the existing MCP route, not the local reviewed leaf. Historical
+bind/pin repair is not a local reviewed apply option. An unavailable,
+mixed, foreign or stale installation/ledger cannot authorize a plan.
+Original receipt links and historical read-only navigation remain
+available; they are not authority or a reason to replay. Existing Exec
+GC review is separate and requires exact stream and local authority.
 
 ## Diagnose without modifying the installation
 
@@ -70,8 +98,8 @@ scope, or the required local authority is unavailable, preserve the
 original claims and evidence. Do not use SQL edits, native replay,
 blanket unlock, policy resets, reinstall or unrelated Box restarts to
 force progress. A reviewed settlement is not a generic repair tool.
-Scoped fresh v2 does not support upgrade or rollback. PR #182 introduced full-only scoped retirement/resume after MCP cleanup, requiring the original fresh native preimage. The #188 candidate additionally reviews and drains exact normal owned dependencies through existing originals before restoration; see the manual installation guide. Older installations without the preimage must retain their original evidence.
-Legacy guided retirement/resume has its own exact review and audit flow. The current installer now emits phase labels and separates optional OAuth configuration from installed service health. Current full retirement consults a fixed read-only native preparation observation before approval and effects, without treating it as permission to delete. Use the matching installed binary/uninstaller and original archive; a STARTED audit is navigation to --resume-plan, not a new uninstall. See [install/uninstall incident closure](../history/development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md).
+Scoped fresh v2 does not support upgrade or rollback. PR #182 introduced full-only scoped retirement/resume after MCP cleanup, requiring the original fresh native preimage. The #191 candidate retains the #188 exact normal owned drain through existing originals before restoration, and separately reviewed offline retirement; see the manual installation guide. Older installations without the preimage must retain their original evidence.
+Historical Legacy guided retirement/resume applies only to its matching artifacts; it is not a current #191 recovery path. The current installer now emits phase labels and separates optional OAuth configuration from installed service health. Current full retirement consults a fixed read-only native preparation observation before approval and effects, without treating it as permission to delete. Use the matching installed binary/uninstaller and original archive; a STARTED audit is navigation to --resume-plan, not a new uninstall. See [install/uninstall incident closure](../history/development/V1_INSTALL_UNINSTALL_INCIDENT_CLOSURE_2026-11-24.md).
 
 See [the D4 execution contract](../history/development/V1_PR177_D4_REVIEWED_RECOVERY_2026-11-23.md)
 and [the D5 acceptance record](../history/development/V1_PR177_D5_DELIVERY_2026-11-24.md).

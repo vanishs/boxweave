@@ -1,0 +1,78 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "pr193-v4c-implement-20261125",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Exact scoped 8e819535, actual native final 8629478463bacb47afdbdffac259b63c, portable JS test 9a41aed46613730e09d7d6a2a34af5b7, integrated 114 tests/Eval 14/audit clear aff8dc4af24575e7d7ba7c773de653bb",
+      "observation": "Composed receipt/next claim and exact paged request output work in actual 75051-byte MCP transfer. JS template passed simulated connector tests; actual native trial still used manual glue. Expanded index surfaced five relevant queries and one extra generic file-status query. No matched cost or independent benefit proof.",
+      "outcome": "helped",
+      "reason": "Actual same candidate implementation observation with residual; not independent benefit"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "pr193-v4c-implement-20261125",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "Feedback fixture repair 03667f0ede3a32312a8df05ada108d51 and integrated regression aff8dc4af24575e7d7ba7c773de653bb",
+      "observation": "First real reopen revealed paired episode history missing in copied feedback fixture; copied canonical paired history in integration, all feedback and regression tests pass",
+      "outcome": "helped",
+      "reason": "Other verification candidates are outside this scoped transfer improvement; actual fixture fixed separately without weakening parser."
+    }
+  ],
+  "attempt_ref": "pr193-v4c-implement-20261125",
+  "authority": "Owner PR193 V4c continuation: bounded harness-only development in owned isolated Box; no parent, product/runtime, host, merge or release",
+  "boundary": "handoff",
+  "evidence": [
+    "Exact scoped 8e819535, actual native final 8629478463bacb47afdbdffac259b63c, portable JS test 9a41aed46613730e09d7d6a2a34af5b7, integrated 114 tests/Eval 14/audit clear aff8dc4af24575e7d7ba7c773de653bb",
+    "Scoped checkpoint 8e8195350f667cfbb02579e197abaae3f958bbab tree 6cce8cb0a1e73e61fc22ad1e9d4e66603aff1b92",
+    "Exact scoped 8e819535; targeted 20 Python tests/Eval 14/format 7 (8e704207b5e78626ec575377c2f4dcfc), isolated Node 3 tests with seven negative cases (9a41aed46613730e09d7d6a2a34af5b7), real RC14 75051-byte journal rev9 and no-clobber (8629478463bacb47afdbdffac259b63c, baf20b44d28addccb0d227c24223b1b9); all original outputs exit 0. Integrated regression after attachment required.",
+    "Feedback fixture repair 03667f0ede3a32312a8df05ada108d51 and integrated regression aff8dc4af24575e7d7ba7c773de653bb"
+  ],
+  "evolve_handoff": {
+    "items": [
+      {
+        "basis": "45cea792b822410157a7609c05c6865581ee22f1a3241b7ef84341c971ba2502",
+        "id": "BDH-L014",
+        "next_safe_action": "Reconcile selected episode; preserve pending work",
+        "revision": 30,
+        "status": "SELECTION_RECORDED"
+      }
+    ],
+    "status": "PENDING"
+  },
+  "feedback_protocol": 1,
+  "implementation_claim": {
+    "candidate_revision": 29,
+    "handoff_ref": null,
+    "implementation_ref": "Scoped checkpoint 8e8195350f667cfbb02579e197abaae3f958bbab tree 6cce8cb0a1e73e61fc22ad1e9d4e66603aff1b92",
+    "validation_evidence": "Exact scoped 8e819535; targeted 20 Python tests/Eval 14/format 7 (8e704207b5e78626ec575377c2f4dcfc), isolated Node 3 tests with seven negative cases (9a41aed46613730e09d7d6a2a34af5b7), real RC14 75051-byte journal rev9 and no-clobber (8629478463bacb47afdbdffac259b63c, baf20b44d28addccb0d227c24223b1b9); all original outputs exit 0. Integrated regression after attachment required."
+  },
+  "kind": "work",
+  "learning": {
+    "kind": "improved",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Independent review of exact scoped implementation and integrated fixture, then actual ordinary-task witness",
+  "objective": "Reduce actual remote transfer orchestration in the next selected episode",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "8e8195350f667cfbb02579e197abaae3f958bbab",
+    "version": null
+  },
+  "task_kind": "harness",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification"
+  ],
+  "work_ref": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33"
+}

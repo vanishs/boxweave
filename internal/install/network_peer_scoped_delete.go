@@ -19,6 +19,10 @@ type scopedDeleteNativeProof struct {
 }
 
 func nativeScopedCreateReceipt(id string) (scopedLifecycleRecord, error) {
+	return nativeScopedCompletedLifecycleReceipt(id, "CREATE")
+}
+
+func nativeScopedCompletedLifecycleReceipt(id, kind string) (scopedLifecycleRecord, error) {
 	var zero scopedLifecycleRecord
 	path, err := scopedLifecyclePath(id)
 	if err != nil {
@@ -33,10 +37,14 @@ func nativeScopedCreateReceipt(id string) (scopedLifecycleRecord, error) {
 	if err != nil {
 		return zero, err
 	}
-	if a.Kind != "CREATE" || a.OriginalID != id {
+	if (kind != "CREATE" && kind != "DELETE") || a.Kind != kind || a.OriginalID != id {
 		return zero, errors.New("wrong original Create receipt")
 	}
-	for _, status := range []string{"ACL_VERIFIED", "VERIFIED"} {
+	statuses := []string{"VERIFIED"}
+	if kind == "CREATE" {
+		statuses = []string{"ACL_VERIFIED", "VERIFIED"}
+	}
+	for _, status := range statuses {
 		r, err := scopedLifecycleRead(d, status)
 		a.Status = status
 		if err != nil || a != r {

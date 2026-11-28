@@ -72,7 +72,7 @@ def token(path):
 
 def status(client):
     s = client.host_status()
-    assert s["schema_version"] == 6 and s["ready"] and s["mcp_ready"], s
+    assert s["schema_version"] == 7 and s["ready"] and s["mcp_ready"], s
     return s
 
 

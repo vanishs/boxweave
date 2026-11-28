@@ -1,0 +1,47 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "20261125-gc-restricted-review",
+  "authority": "Owner authorized P1 development in isolated Box; no shared host changes, merge or release",
+  "evidence": [
+    "Exclusive patch 79c1dae56863b3ffb9e1d5ee9fc56d57 8202 bytes SHA256 f3ecd10d9eb2f50a8753c61bca312377ab0a338dc4eb2f599c8f43274ee8b358 verified readback; Box focused race/vet/build 8759047ad6c40cc8411cefe2750a5e49 exit0",
+    "Exact 5d513eb N2 45771368470 full S2 job 139744533253 PASS, retention 139744533150 FAIL at restricted worker Root-only Status after actual ENOSPC and GC removal/lost ACK PASS",
+    "Resume 772724ac2c8899c7ffacdafe0553940d exit0 clean exact head; original UNKNOWN lookup empty",
+    "Prior history reached 32-reference and 32-feedback limits; private boundary bd189bc1557c4f516dd77e078311226e exit2; linked new work without modifying prior history or promoting assets."
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [],
+  "next_safe_action": "Inspect exact installed Scoped GC review CI; retain prior ENOSPC, full S2 and physical spool evidence. Remaining actual native transport faults, physical quota and public WAN plus S2.5 capability gate remain open.",
+  "objective": "Installed Scoped GC root/restricted recovery review and remaining P1b witness",
+  "original_operations": [
+    "79c1dae56863b3ffb9e1d5ee9fc56d57",
+    "8759047ad6c40cc8411cefe2750a5e49"
+  ],
+  "related_work": [
+    "pr191/p1b-lifecycle-recovery",
+    "docs/development/CONSOLIDATION_P1B_LIFECYCLE_WORK_HISTORY/00000009.json"
+  ],
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "5d513eb52e4a96f4d30debd94eb45bf69ab37601",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "skill.task-resume",
+    "skill.continuous-learning",
+    "tool.bwdev"
+  ],
+  "work_ref": "pr191/p1b-gc-restricted-review"
+}

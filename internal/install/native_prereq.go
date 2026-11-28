@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"os/user"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -44,8 +43,6 @@ type NativePrereqReport struct {
 	QuotaMountPrecondition bool                `json:"selected_storage_quota_mount_precondition"`
 	Warnings               []string            `json:"warnings,omitempty"`
 }
-
-var safePrereqName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$`)
 
 func prereqRecord(r *NativePrereqReport, id string, ok bool, detail string) {
 	r.Checks = append(r.Checks, NativePrereqCheck{ID: id, OK: ok, Detail: detail})

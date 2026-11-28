@@ -1,0 +1,82 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-first",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "6d119c32d5954c9200112a6823259cb5; a613d026dc4e98e64cfb1d37720adb2e exit 0",
+      "observation": "Exclusive source transfer and readback avoided known inline limit",
+      "outcome": "helped",
+      "reason": "Existing L014 proactively reused"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-first",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "56475d13ccae7814f0c983025d85500a exit 1; 524b10f80cd8b8dbfe00636f9c11506f exit 0; 2deecfb4b7bf3282aeb69b0f73e024da exit 0; 28ff8187ca2a2654dd6ef487779b56c9 exit 0",
+      "observation": "Observed peer scope classification regression, corrected it and ran full source gates",
+      "outcome": "helped",
+      "reason": "Existing verification and exact-head CI guidance adequate"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-first",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "a1e73da0e600b3e8d22c0082fb66c4d5d0b66944; c66d586ee427b8c8f3f09f316b370c67",
+      "observation": "Reconciled exact head and original receipts before edits",
+      "outcome": "helped",
+      "reason": "Existing resume guidance adequate"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-first",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "28ff8187ca2a2654dd6ef487779b56c9 exit 0; L014 revision 11",
+      "observation": "Recorded actual reuse after source tests",
+      "outcome": "helped",
+      "reason": "No new implementation or promotion justified"
+    }
+  ],
+  "attempt_ref": "20261125-first",
+  "authority": "Owner authorized continued P1 development in existing isolated development Box, no host changes, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "6d119c32d5954c9200112a6823259cb5; a613d026dc4e98e64cfb1d37720adb2e exit 0",
+    "56475d13ccae7814f0c983025d85500a exit 1; 524b10f80cd8b8dbfe00636f9c11506f exit 0; 2deecfb4b7bf3282aeb69b0f73e024da exit 0; 28ff8187ca2a2654dd6ef487779b56c9 exit 0",
+    "a1e73da0e600b3e8d22c0082fb66c4d5d0b66944; c66d586ee427b8c8f3f09f316b370c67",
+    "28ff8187ca2a2654dd6ef487779b56c9 exit 0; L014 revision 11"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Publish verified source slice; convert real native ACK/WAL fixtures with read-only Scoped lifecycle proof; do not remove old paths prematurely",
+  "objective": "Convert common source MCP fixture to Scoped and retain exact replay and refusal witnesses",
+  "revision": 2,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "a1e73da0e600b3e8d22c0082fb66c4d5d0b66944",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "skill.task-resume",
+    "skill.continuous-learning"
+  ],
+  "work_ref": "pr191/p1b-source"
+}

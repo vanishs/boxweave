@@ -35,7 +35,7 @@ func TestS4CReadinessAdmissionFenceReplayRecovery(t *testing.T) {
 	}
 	raw, _ := json.Marshal(i)
 	a := Admission{Layer: "user-1001", ActorID: tok.ID, TokenID: tok.ID, Key: "readiness-original-key-0001", Action: ReadinessAction, BoxUUID: box, Incarnation: box, ResourceKey: "box:bw-ready", SafeIntent: raw, RequestID: "request-1"}
-	r, e := st.Admit(ctx, a)
+	r, e := st.AdmitScoped(ctx, a)
 	if e != nil || r.State != "OBSERVING" {
 		t.Fatalf("admit: %v %v", r, e)
 	}
@@ -43,20 +43,20 @@ func TestS4CReadinessAdmissionFenceReplayRecovery(t *testing.T) {
 	if e != nil || result.Ready || result.Running != "unknown" || result.ExecReady != "not_checked" {
 		t.Fatalf("initial: %+v %v", result, e)
 	}
-	dup, e := st.Admit(ctx, a)
+	dup, e := st.AdmitScoped(ctx, a)
 	if e != nil || !dup.Duplicate || dup.ID != r.ID {
 		t.Fatal("replay failed")
 	}
 	newWait := a
 	newWait.Key = "another-readiness-key-0002"
-	if _, e = st.Admit(ctx, newWait); !errors.Is(e, ErrResourceLocked) {
+	if _, e = st.AdmitScoped(ctx, newWait); !errors.Is(e, ErrResourceLocked) {
 		t.Fatal("parallel readiness accepted")
 	}
 	mutation := a
 	mutation.Action = "box_start"
 	mutation.Key = "independent-start-key-0001"
 	mutation.SafeIntent = []byte("{}")
-	m, e := st.Admit(ctx, mutation)
+	m, e := st.AdmitScoped(ctx, mutation)
 	if e != nil {
 		t.Fatalf("observation blocked start: %v", e)
 	}
@@ -70,7 +70,7 @@ func TestS4CReadinessAdmissionFenceReplayRecovery(t *testing.T) {
 		t.Fatal(e)
 	}
 	mutation.Key = "independent-start-key-0002"
-	if _, e = st.Admit(ctx, mutation); !errors.Is(e, ErrResourceLocked) {
+	if _, e = st.AdmitScoped(ctx, mutation); !errors.Is(e, ErrResourceLocked) {
 		t.Fatal("probe fence bypassed")
 	}
 	sample := NewReadinessSample(i)
@@ -87,11 +87,11 @@ func TestS4CReadinessAdmissionFenceReplayRecovery(t *testing.T) {
 	if e != nil || !proof.Ready || proof.ExecReady != "not_checked" {
 		t.Fatal(proof, e)
 	}
-	if _, e = st.Admit(ctx, mutation); e != nil {
+	if _, e = st.AdmitScoped(ctx, mutation); e != nil {
 		t.Fatal("terminal observation retained lock", e)
 	}
 	// Restart before any probe is safe; no fabricated native receipt.
-	pending, e := st.Admit(ctx, newWait)
+	pending, e := st.AdmitScoped(ctx, newWait)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -104,7 +104,7 @@ func TestS4CReadinessAdmissionFenceReplayRecovery(t *testing.T) {
 	}
 	// A restarted dispatch must retain an original UNKNOWN and a lock.
 	newWait.Key = "third-readiness-key-0003"
-	inFlight, e := st.Admit(ctx, newWait)
+	inFlight, e := st.AdmitScoped(ctx, newWait)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -121,7 +121,7 @@ func TestS4CReadinessAdmissionFenceReplayRecovery(t *testing.T) {
 	if e != nil || got.State != "UNKNOWN" || got.NativeOperationID != "native-probe-receipt" {
 		t.Fatal(got, e)
 	}
-	if _, e = st.Admit(ctx, Admission{Layer: a.Layer, ActorID: a.ActorID, TokenID: a.TokenID, Key: "new-start-after-unknown", Action: "box_start", SafeIntent: []byte("{}"), BoxUUID: box, Incarnation: box, ResourceKey: a.ResourceKey, RequestID: "new"}); !errors.Is(e, ErrResourceLocked) {
+	if _, e = st.AdmitScoped(ctx, Admission{Layer: a.Layer, ActorID: a.ActorID, TokenID: a.TokenID, Key: "new-start-after-unknown", Action: "box_start", SafeIntent: []byte("{}"), BoxUUID: box, Incarnation: box, ResourceKey: a.ResourceKey, RequestID: "new"}); !errors.Is(e, ErrResourceLocked) {
 		t.Fatal("lost probe fence")
 	}
 }

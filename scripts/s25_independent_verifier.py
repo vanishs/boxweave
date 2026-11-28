@@ -89,10 +89,13 @@ def inspect_l1():
     print("S25_V_L0_MCP_CREATED_L1_NATIVE_UUID_SQLITE_ACL=PASS")
     return manifest
 
+def inner_name():
+    return "bw-s25-mcp-l1" if os.environ.get("P1B_S25_SCOPED") == "1" else "bw-s25-mcp-l2"
+
 def inspect_l2():
     inspect_l1()
     data = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
-    require(data.get("name") == "bw-s25-mcp-l2" and data.get("uuid"),
+    require(data.get("name") == inner_name() and data.get("uuid"),
             "inner independent Agent checkpoint missing L2")
     innerproj = inner("sh", "-c", "printf user-; id -u boxweave")
     child_list = as_json(inner("incus", "list", "--project",
@@ -143,7 +146,7 @@ def inspect_l2():
         last_error=""
         while True:
             try:
-                inner("incus","exec","bw-s25-mcp-l2","--project",innerproj,
+                inner("incus","exec",inner_name(),"--project",innerproj,
                       "--","ping",family,"-c","1","-W","2",gateway)
                 break
             except (RuntimeError, subprocess.TimeoutExpired) as exc:
@@ -152,7 +155,7 @@ def inspect_l2():
                     # Safe, non-mutating guest network facts for the red
                     # artifact, without confusing L1 bridge with L2 route.
                     try:
-                        routes=inner("incus","exec","bw-s25-mcp-l2",
+                        routes=inner("incus","exec",inner_name(),
                                      "--project",innerproj,
                                      "--","ip",family,"route","show")
                     except Exception as route_exc:
@@ -180,7 +183,7 @@ def inspect_simwan6(inner_layer=False, cleaned=False):
     if inner_layer:
         data = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
         project = inner("sh", "-c", "printf user-; id -u boxweave")
-        name = "bw-s25-mcp-l2"
+        name = inner_name()
         instances = as_json(inner("incus", "list", "--project", project, "--format", "json"))
         cert_path = "/root/s25simwan6/simwan6.crt"
         log = inner("cat", "/root/s25simwan6/server.log")
@@ -362,7 +365,7 @@ def nested_cleaned():
             "inner original MCP delete receipt missing")
     innerproj = inner("sh","-c","printf user-; id -u boxweave")
     child_list = as_json(inner("incus","list","--project",innerproj,"--format","json"))
-    require(not any(x.get("name")=="bw-s25-mcp-l2" for x in child_list),
+    require(not any(x.get("name")==inner_name() for x in child_list),
             "inner MCP-deleted L2 still exists")
     code = ("import sqlite3,sys;"
             "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
@@ -372,7 +375,7 @@ def nested_cleaned():
     print("S25_V_INNER_ORIGINAL_MCP_L2_DELETE_NATIVE_ABSENCE=PASS")
 
 
-def verify_round2_offline_rollback():
+def verify_round2_offline_rollback(scoped=False):
     """Independent no-token post-mortem on exact installed rollback binary.
 
     Not a substitute for in-flight lost native ACK/SQLite kill injection:
@@ -388,8 +391,12 @@ def verify_round2_offline_rollback():
             "offline operator rollback did not restore exact originally accepted binary")
     status = as_json(cli("sudo", "/usr/local/bin/boxweave",
                          "install-status", "-project", project))
+    commit = os.environ["P1B_S25_EXACT_HEAD"] if scoped else os.environ.get("GITHUB_SHA")
+    require(scoped == (os.environ.get("P1B_S25_SCOPED")=="1"), "maintenance lane mismatch")
+    if scoped:
+        require(status.get("scoped_peer_mode")=="SCOPED_PEER_FRESH_V2", "Scoped mode drifted")
     require(status.get("binary_sha256") == expected_sha and
-            status.get("build_commit") == os.environ.get("GITHUB_SHA") and
+            status.get("build_commit") == commit and
             status.get("service_active") and
             status.get("restart_required") is False,
             "rollback installer status inconsistent with original candidate")
@@ -417,7 +424,10 @@ def verify_round2_offline_rollback():
         "assert d.execute('PRAGMA integrity_check').fetchone()==('ok',)"
     )
     cli("sudo", "python3", "-c", integrity, os.environ["BW_S25_OUTER_DB"])
-    print("S25_V_R2_ORIGINAL_OPS_EXACT_BINARY_SQLITE_NATIVE_ROLLBACK=PASS")
+    if scoped:
+        print("P1B_S25_V_SCOPED_ORIGINAL_OPS_EXACT_BINARY_SQLITE_NATIVE_MAINTENANCE=PASS")
+    else:
+        print("S25_V_R2_ORIGINAL_OPS_EXACT_BINARY_SQLITE_NATIVE_ROLLBACK=PASS")
 
 def verify_r12_lost_reply():
     m = as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
@@ -458,11 +468,17 @@ def verify_r12_foreign():
     require(data.get("state") == "VERIFIED_SETUP", "foreign fixture not verified")
     assert data["evidence"]["socket_scope"]["no_parent_socket_bind_mount"]
     assert data["evidence"]["socket_scope"]["foreign_project_denied_to_service"]
+    if os.environ.get("P1B_S25_SCOPED")=="1":
+        pin=data["evidence"]["acl_private_egress"]["scoped_pin"]
+        cp=as_json(inner("cat","/root/s25-inner-checkpoint.json"))
+        require(pin["uuid"]==cp["uuid"] and pin["original"]==cp["create_op"],
+                "foreign packet evidence not bound to original L2")
     require(data["evidence"]["acl_private_egress"]["private_ipv4_rejected"] and
             data["evidence"]["acl_private_egress"]["private_ipv6_ula_rejected"],
             "native parent private/ULA ACL egress not independently verified")
     output = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
-                 project, "--", "env", "BW_S25_R12_DISPOSABLE=1", "python3",
+                 project, "--", "env", "BW_S25_R12_DISPOSABLE=1",
+                 "P1B_S25_SCOPED="+os.environ.get("P1B_S25_SCOPED","0"), "python3",
                  "/root/s25_r12_foreign_l1.py", "verify")
     require("S25_V_R12_L1_FOREIGN_PROJECT_PACKET_AND_PARENT_SOCKET=PASS" in output,
             "independent foreign IPv4/IPv6 packet re-test did not PASS")
@@ -479,9 +495,10 @@ def verify_r12_foreign_clean():
                 project, "--", "incus", "list", "--project", "default",
                 "-f", "csv", "-c", "n")
     require(not names.strip(), "foreign native Guest leaked")
+    inner_project = inner("sh", "-c", "printf user-; id -u boxweave") if os.environ.get("P1B_S25_SCOPED")=="1" else "user-1001"
     owned_id = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
-                   project, "--", "incus", "config", "get", "bw-s25-mcp-l2",
-                   "volatile.uuid", "--project", "user-1001")
+                   project, "--", "incus", "config", "get", inner_name(),
+                   "volatile.uuid", "--project", inner_project)
     require(owned_id.strip() == data["evidence"]["owned_uuid"],
             "foreign fixture cleanup changed original nested UUID")
     print("S25_V_R12_L1_FOREIGN_NATIVE_UUID_CLEANUP=PASS")
@@ -496,6 +513,128 @@ def cleaned():
                 "agent-s25-cleanup")
     print("S25_V_EXACT_NATIVE_L0_CLEANUP_ORIGINAL_SQLITE=PASS")
 
+def verify_scoped_layers():
+    """No-token independent evidence for both reviewed installed controllers."""
+    require(os.environ.get("P1B_S25_SCOPED") == "1", "Scoped lane only")
+    m = inspect_l1()
+    inner_cp = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
+    outer_project = os.environ["BW_S25_PROJECT"]
+    inner_project = inner("sh", "-c", "printf user-; id -u boxweave")
+    expected = os.environ["BW_S25_BINARY_SHA256"]
+    image=os.environ["BW_S25_IMAGE_FINGERPRINT"]
+    require(inner("cat","/root/s25-image/fingerprint")==image, "inner image fingerprint drifted")
+    for runner,project in ((native,outer_project),(lambda *args:inner("incus",*args),inner_project)):
+        alias=as_json(runner("query","/1.0/images/aliases/boxweave-ubuntu-24.04?project="+project))
+        require(alias["target"]==image, "independent exact image identity mismatch")
+    print("P1B_S25_V_TWO_LAYER_IMAGE_IDENTITY=PASS")
+    commit = os.environ["P1B_S25_EXACT_HEAD"]
+    for runner, project, checkpoint, name, actor in (
+        (lambda *args: cli("sudo", *args), outer_project, m, "bw-s25-mcp-l1", "agent-outer-alpha"),
+        (inner, inner_project, inner_cp, inner_name(), "agent-inner-alpha"),
+    ):
+        status = as_json(runner("/usr/local/bin/boxweave", "install-status", "-project", project))
+        require(status.get("scoped_peer_mode") == "SCOPED_PEER_FRESH_V2" and
+                status.get("build_commit") == commit and status.get("binary_sha256") == expected and
+                status.get("native_project") == project and status.get("service_active") is True and
+                status.get("restart_required") is False, "independent Scoped installed identity")
+        for unit in ("boxweave.service", "boxweave-scoped-guard.service", "boxweave-scoped-lifecycle.service"):
+            require(runner("systemctl", "is-active", unit) == "active", "Scoped unit not active: " + unit)
+        require(runner("sha256sum", "/usr/local/bin/boxweave").split()[0] == expected,
+                "actual binary identity drifted")
+        diagnostic = as_json(runner("/usr/local/bin/boxweave", "doctor", "-project", project))
+        root_policy=diagnostic["diagnostic"]["root_policy"]
+        require(root_policy["state"]=="OBSERVED" and root_policy["kernel_guard"]=="OBSERVED",
+                "root guard not independently observed on "+name)
+        code = (
+            "import json,sqlite3,sys;"
+            "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+            "p,u,o,a=sys.argv[1:];"
+            "v=c.execute('SELECT layer,box_uuid,incarnation,state,agent_ref,native_operation_id,tracking_id FROM operations WHERE id=?',(o,)).fetchall();"
+            "assert len(v)==1 and v[0][:5]==(p,u,u,'SUCCEEDED',a) and v[0][5] and v[0][6];"
+            "r=c.execute('SELECT acl,state FROM network_bindings WHERE project=? AND box_uuid=?',(p,u)).fetchall();"
+            "assert len(r)==1 and r[0][1]=='PINNED' and r[0][0].startswith('bw-peer-') and r[0][0]!='bw-peer-quarantine';"
+            "print(json.dumps({'acl':r[0][0],'native_operation':v[0][5],'tracking_id':v[0][6]}))"
+        )
+        pin = as_json(runner("python3", "-c", code, project, checkpoint["uuid"], checkpoint["create_op"], actor))
+        obj = as_json(runner("incus", "query", "/1.0/instances/" + name + "?project=" + project))
+        require(obj["config"]["volatile.uuid"] == checkpoint["uuid"] and
+                obj["expanded_devices"]["eth0"]["security.acls"] == pin["acl"],
+                "native identity or per-incarnation ACL drifted")
+        acl = as_json(runner("incus", "query", "/1.0/network-acls/" + pin["acl"]))
+        require(acl.get("used_by") == ["/1.0/instances/" + name + "?project=" + project],
+                "Scoped ACL shared with unrelated resource")
+        print("P1B_S25_SCOPED_ORIGINAL", name, checkpoint["create_op"], pin["native_operation"], pin["tracking_id"], checkpoint["uuid"])
+    outer_socket = cli("sudo", "stat", "-c", "%d:%i", "/var/lib/incus/unix.socket.user")
+    inner_socket = inner("stat", "-c", "%d:%i", "/var/lib/incus/unix.socket.user")
+    require(outer_socket != inner_socket, "parent native socket unexpectedly inherited")
+    print("P1B_S25_SCOPED_TWO_LAYER_FIXED_LEDGER_ACL_GUARD=PASS")
+
+
+def verify_dual_scope():
+    require(os.environ.get("P1B_S25_SCOPED") == "1", "dual-scope installed lane only")
+    outer = inspect_l1()
+    nested = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
+    require(outer["name"] == nested["name"] == "bw-s25-mcp-l1", "same-name witness absent")
+    require(outer["uuid"] != nested["uuid"] and outer["create_op"] != nested["create_op"],
+            "independent original identity collapsed")
+    query = (
+        "import sqlite3,sys;"
+        "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+        "u,o=sys.argv[1:];"
+        "assert not c.execute('SELECT id FROM operations WHERE work_ref=? OR box_uuid=? OR id=?',"
+        "('lab/s25/dual-refused',u,o)).fetchall();"
+    )
+    cli("sudo","python3","-c",query,nested["uuid"],nested["create_op"])
+    inner("python3","-c",query,outer["uuid"],outer["create_op"])
+    verify_scoped_layers()
+    print("P1B_S25_SCOPED_SAME_NAME_DISTINCT_NATIVE_NO_CROSS_ADMISSION=PASS")
+
+
+def maintenance_snapshot():
+    """Read-only digest oracle, equally usable while MCP is stopped."""
+    require(os.environ.get("P1B_S25_SCOPED")=="1", "Scoped lane only")
+    project=os.environ["BW_S25_PROJECT"]
+    require(native("list","--all-projects","--format","csv","-c","n")=="",
+            "maintenance requires exact empty native inventory")
+    acl=as_json(native("network","acl","list","--format","json"))
+    require([a["name"] for a in acl]==["bw-peer-quarantine"], "unexpected ACL inventory after cleanup")
+    guard=cli("sudo","systemctl","show","boxweave-scoped-guard.service","-p","ActiveState","-p","ActiveEnterTimestampMonotonic")
+    helper=cli("sudo","systemctl","show","boxweave-scoped-lifecycle.service","-p","ActiveState","-p","MainPID","-p","ActiveEnterTimestampMonotonic")
+    require("ActiveState=active" in guard and "ActiveState=active" in helper, "guard/helper not active")
+    require(cli("sudo","sh","-c","test ! -e /var/lib/boxweave-installer-backup && test ! -L /var/lib/boxweave-installer-backup && echo absent")=="absent",
+            "unexpected legacy backup")
+    bridge="incusbr-"+project.removeprefix("user-")
+    table="bw_pg_"+hashlib.sha256((project+"\x00"+bridge).encode()).hexdigest()[:16]
+    nft=as_json(cli("sudo","nft","-j","list","table","bridge",table))
+    def without_counters(v):
+        if isinstance(v,dict):
+            return {k:without_counters(x) for k,x in v.items() if k not in ("packets","bytes")}
+        if isinstance(v,list):
+            return [without_counters(x) for x in v]
+        return v
+    # No auth tables or raw DB bytes are exported. A stable digest covers
+    # complete original effect/ownership rows, including event and lock history.
+    code=(
+        "import hashlib,json,sqlite3;"
+        "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+        "assert c.execute('PRAGMA integrity_check').fetchone()==('ok',);"
+        "assert not c.execute(\"SELECT id FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','OBSERVING','UNKNOWN')\").fetchall();"
+        "assert not c.execute(\"SELECT uuid FROM owned_boxes WHERE state!='DELETED'\").fetchall();"
+        "tables=('operations','operation_events','operation_resource_claims','owned_boxes','network_bindings','exec_outputs');"
+        "snapshot={t:c.execute('SELECT * FROM '+t+' ORDER BY rowid').fetchall() for t in tables};"
+        "print(hashlib.sha256(json.dumps(snapshot,sort_keys=True,default=lambda x:x.hex()).encode()).hexdigest())"
+    )
+    ledger=cli("sudo","python3","-c",code)
+    installed=cli("sudo","sha256sum","/usr/local/bin/boxweave").split()[0]
+    require(installed==os.environ["BW_S25_BINARY_SHA256"], "installed binary drifted")
+    files=cli("sudo","sha256sum","/var/lib/boxweave/install-manifest.json",
+              "/etc/systemd/system/boxweave.service",
+              "/etc/systemd/system/boxweave-scoped-guard.service",
+              "/etc/systemd/system/boxweave-scoped-lifecycle.service")
+    print(json.dumps({"installed":installed,"files":files,"ledger":ledger,
+                      "guard":guard,"helper":helper,"acl":acl,"kernel":without_counters(nft)},sort_keys=True))
+
+
 if __name__ == "__main__":
     require(os.environ.get("GITHUB_ACTIONS") == "true" and
             os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted",
@@ -505,6 +644,10 @@ if __name__ == "__main__":
         inspect_l1()
     elif sys.argv[1] == "l2":
         inspect_l2()
+    elif sys.argv[1] == "scoped-layers":
+        verify_scoped_layers()
+    elif sys.argv[1] == "dual-scope":
+        verify_dual_scope()
     elif sys.argv[1] == "wan6outer":
         inspect_simwan6(False)
     elif sys.argv[1] == "wan6outerclean":
@@ -523,6 +666,10 @@ if __name__ == "__main__":
         nested_cleaned()
     elif sys.argv[1] == "round2-postrollback":
         verify_round2_offline_rollback()
+    elif sys.argv[1] == "scoped-maintenance-snapshot":
+        maintenance_snapshot()
+    elif sys.argv[1] == "scoped-maintenance-readback":
+        verify_round2_offline_rollback(scoped=True)
     elif sys.argv[1] == "r12-lost-reply":
         verify_r12_lost_reply()
     elif sys.argv[1] == "r12-foreign":

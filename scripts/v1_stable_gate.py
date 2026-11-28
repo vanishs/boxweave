@@ -118,8 +118,21 @@ def verify_assets(directory, tag, source, root):
                 "manifest binary digest mismatch")
     require(data["install.sh"] == read_regular(root / "install.sh", MAX_JSON), "installer source mismatch")
     core = read_regular(root / "scripts/uninstall_core.py", MAX_JSON)
-    require(data["uninstall.sh"] == b"#!/bin/sh\nset -eu\nexec python3 - \"$@\" <<'PY_BOXWEAVE_UNINSTALL'\n"
-            + core + b"\nPY_BOXWEAVE_UNINSTALL\n", "uninstaller source mismatch")
+    expected_uninstaller = (
+        b'#!/bin/sh\n'
+        b'set -eu\n'
+        b"exec python3 -c 'import hashlib, sys\n"
+        b'source = sys.stdin.buffer.read()\n'
+        b'if not source.endswith(b"\\n"):\n'
+        b'    raise SystemExit("BoxWeave uninstaller: incomplete embedded core")\n'
+        b'source = source[:-1]\n'
+        b'__file__ = "<boxweave-uninstall>"\n'
+        b'_BOXWEAVE_EMBEDDED_CORE_SHA256 = hashlib.sha256(source).hexdigest()\n'
+        b'sys.argv[0] = "-"\n'
+        b'exec(compile(source, __file__, "exec"))\' "$@" <<\'PY_BOXWEAVE_UNINSTALL\'\n'
+        + core + b'\nPY_BOXWEAVE_UNINSTALL\n'
+    )
+    require(data["uninstall.sh"] == expected_uninstaller, "uninstaller source mismatch")
     go_mod = (root / "go.mod").read_text(encoding="utf-8")
     dep_patterns = {"go_toolchain": r"^go ([0-9]+\.[0-9]+\.[0-9]+)$",
                     "mcp_go_sdk": r"^[ \t]*github\.com/modelcontextprotocol/go-sdk (v[0-9.]+)$",

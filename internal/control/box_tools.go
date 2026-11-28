@@ -204,11 +204,15 @@ func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 	if err != nil {
 		return state.Receipt{}, err
 	}
-	return s.Store.Admit(ctx, state.Admission{
+	return s.admitNetwork(ctx, state.Admission{
 		Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID, Key: key, Action: action,
 		BoxUUID: boxUUID, Incarnation: incarnation, ResourceKey: resourceKey,
 		WorkRef: work, AgentRef: agent, SafeIntent: b, RequestID: requestID, CleanupDependencies: action == "box_delete",
 	})
+}
+
+func (s *Service) admitNetwork(ctx context.Context, a state.Admission) (state.Receipt, error) {
+	return s.Store.AdmitScoped(ctx, a)
 }
 
 func (s *Service) worker() state.Worker {
@@ -413,118 +417,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if in.Internet != nil {
 				internet = *in.Internet
 			}
-			if s.ScopedPeerFresh {
-				return s.admitScopedCreate(ctx, req, in, start, internet)
-			}
-			r, err := s.admitNative(ctx, req, "box_create", in.IdempotencyKey, "", "",
-				"box:"+in.Name, in.WorkRef, in.AgentRef, struct {
-					Name      string                 `json:"name"`
-					CPU       int                    `json:"cpu"`
-					MemoryMiB int64                  `json:"memory_mib"`
-					DiskGiB   int64                  `json:"disk_gib"`
-					Image     string                 `json:"image,omitempty"`
-					Start     bool                   `json:"start"`
-					Nesting   bool                   `json:"nesting"`
-					Internet  bool                   `json:"internet"`
-					Options   native.InstanceOptions `json:"instance_options"`
-				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, in.Image, start, in.Nesting, internet, in.InstanceOptions})
-			if err != nil {
-				return nil, state.Receipt{}, err
-			}
-			// Preserve the admitted caller intent for legacy replay; materialize
-			// the default only for an actually new native Create.
-			in.InstanceOptions = in.InstanceOptions.ForCreate()
-			var nativeID string
-			var reserved native.VerifiedStaticPeerBinding
-			effect := func(ctx context.Context) (string, error) {
-				id, e := s.Native.CreateWithPeerBinding(ctx, native.InstanceAction{
-					OperationID: r.ID, Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
-					Image: in.Image, Start: start, Nesting: in.Nesting, Internet: internet,
-					Options: in.InstanceOptions}, func(b native.VerifiedStaticPeerBinding) (bool, error) {
-					ok, err := s.Store.StageCreateBinding(ctx, r.ID, s.Native.Project, in.Name, state.VerifiedCreateBinding(b))
-					if err == nil && ok {
-						reserved = b
-					}
-					return ok, err
-				}, s.Store.ReadCreateAddressHolds)
-				nativeID = id
-				return id, preflightNative(e)
-			}
-			verify := func(ctx context.Context) error {
-				op, err := s.Native.ObserveUntilFinal(ctx, nativeID)
-				originalNativeOutcomeMissing := false
-				if api.StatusErrorCheck(err, http.StatusNotFound) {
-					// Incus may discard a short Create Operation immediately
-					// after finalization. Native 404 alone NEVER proves
-					// success/failure: independently query the native active
-					// Operation set twice, then verify exact postconditions.
-					if err := s.Native.OriginalOperationInactive(ctx, nativeID); err != nil {
-						return state.VerificationUncertain{Class: "NATIVE_CREATE_EXPIRED_OP_ACTIVE_OR_UNVERIFIED"}
-					}
-					originalNativeOutcomeMissing = true
-				} else if err != nil {
-					return state.VerificationUncertain{Class: "NATIVE_CREATE_FINAL_OP_UNVERIFIED"}
-				}
-				if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
-					if err := s.Native.ConfirmDeleteAbsence(ctx, in.Name); err == nil {
-						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_NO_INSTANCE"}
-					}
-				}
-				observed, err := s.observeOriginalCreateSettled(ctx, in.Name, r.ID, start, internet,
-					!originalNativeOutcomeMissing && op.StatusCode != api.Success)
-				if err != nil {
-					return err
-				}
-				if !exactCreateNativeShape(observed, in) {
-					return state.VerificationUncertain{Class: "NATIVE_CREATE_RESOURCE_SHAPE_UNVERIFIED"}
-				}
-				if originalNativeOutcomeMissing {
-					if err := s.Native.OriginalOperationInactive(ctx, nativeID); err != nil {
-						return state.VerificationUncertain{Class: "NATIVE_CREATE_EXPIRED_OP_REAPPEARED"}
-					}
-				} else if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
-					return state.VerificationUncertain{Class: "NATIVE_CREATE_FAILED_STATE_UNVERIFIED"}
-				}
-				// Only the exact reserved static tuple, independently observed twice,
-				// may be attached to the original Create UUID. Bounded read-only
-				// settle handles lease publication lag, never retries Create.
-				var proof native.VerifiedStaticPeerBinding
-				proved := false
-				deadline := time.Now().Add(8 * time.Second)
-				for time.Now().Before(deadline) && ctx.Err() == nil {
-					got, e := s.Native.ObserveOriginalCreateStaticPeerBinding(ctx, in.Name, observed.UUID, r.ID)
-					if e == nil && got == reserved {
-						proof = got
-						proved = true
-						break
-					}
-					select {
-					case <-ctx.Done():
-					case <-time.After(350 * time.Millisecond):
-					}
-				}
-				if !proved {
-					return state.VerificationUncertain{Class: "NATIVE_CREATE_STATIC_BINDING_UNVERIFIED"}
-				}
-				if (!originalNativeOutcomeMissing && op.StatusCode != api.Success) ||
-					(start && observed.NativeState == "Stopped") {
-					// Keep the exact native UUID claim for failed-start residue.
-					// It is NOT a successful Create and needs explicit cleanup.
-					if err := s.Store.RegisterCreatedBoxWithBinding(ctx, r.ID, s.Native.Project, in.Name, observed.UUID, state.VerifiedCreateBinding(proof)); err != nil {
-						return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
-					}
-					if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
-						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
-					}
-					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_GUEST_NOT_RUNNING_OWNED"}
-				}
-				if err := s.Store.FinalizeVerifiedCreateWithBinding(ctx, r.ID, s.Native.Project, in.Name, observed.UUID, state.VerifiedCreateBinding(proof)); err != nil {
-					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
-				}
-				return state.ErrVerifiedCreateCommitted
-			}
-			r, err = s.submitNative(r, effect, verify)
-			return &mcp.CallToolResult{}, r, err
+			return s.admitScopedCreate(ctx, req, in, start, internet)
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_list",
@@ -665,7 +558,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_delete",
-		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Scoped V2 cleans confirmed Peer directions automatically; Legacy Peer requires host-local PRS review/approval. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
+		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Confirmed Scoped Peer directions are cleaned automatically. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true)},
 		s.operateBoxDelete)
 
@@ -884,24 +777,20 @@ func (s *Service) operateBoxDelete(ctx context.Context, req *mcp.CallToolRequest
 		if err := s.Native.ConfirmDeleteAbsence(ctx, box.Name); err != nil {
 			return err
 		}
-		if s.ScopedPeerFresh {
-			receipt, e := install.NativeScopedLifecycleCall(ctx, r.ID, "DELETE")
-			if e != nil || receipt.Project != box.Project || receipt.Name != box.Name || receipt.UUID != box.UUID || receipt.NativeID != nativeID {
-				return state.VerificationUncertain{Class: "SCOPED_DELETE_ROOT_ACL_UNVERIFIED"}
-			}
-			if e = s.Store.FinalizeVerifiedScopedDelete(ctx, r.ID, box); e != nil {
-				return state.VerificationUncertain{Class: "SCOPED_DELETE_TOMBSTONE_UNVERIFIED"}
-			}
-			return state.ErrVerifiedDeleteCommitted
-		}
-		if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
-			return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
-		}
-		// The original Delete has already committed. The independent bounded
-		// retirement loop discovers this tombstone; never hold the Delete
-		// worker open for an optional root witness.
-		return state.ErrVerifiedDeleteCommitted
+		return s.finalizeScopedDelete(ctx, r.ID, box, nativeID)
 	}
 	r, err = s.submitNative(r, effect, verify)
 	return &mcp.CallToolResult{}, r, err
+}
+
+// finalizeScopedDelete verifies the original Root ACL receipt before tombstoning.
+func (s *Service) finalizeScopedDelete(ctx context.Context, originalID string, box state.OwnedBox, nativeID string) error {
+	receipt, e := install.NativeScopedLifecycleCall(ctx, originalID, "DELETE")
+	if e != nil || receipt.Project != box.Project || receipt.Name != box.Name || receipt.UUID != box.UUID || receipt.NativeID != nativeID {
+		return state.VerificationUncertain{Class: "SCOPED_DELETE_ROOT_ACL_UNVERIFIED"}
+	}
+	if e = s.Store.FinalizeVerifiedScopedDelete(ctx, originalID, box); e != nil {
+		return state.VerificationUncertain{Class: "SCOPED_DELETE_TOMBSTONE_UNVERIFIED"}
+	}
+	return state.ErrVerifiedDeleteCommitted
 }

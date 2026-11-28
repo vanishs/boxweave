@@ -11,7 +11,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -25,6 +24,7 @@ type recoverArgs struct {
 	DB, Socket, Project, ServiceUser, Action, Operation, Reviewer, Stream string
 	Challenge, ConfirmUUID, Reason, RecoveryKey                           string
 	Approved, Acknowledge                                                 bool
+	ScopedGCManifest                                                      *install.Manifest // private root-to-worker evidence; never a CLI argument
 }
 
 func recoveryPlan(a recoverArgs) install.Plan {
@@ -44,15 +44,26 @@ func recoverLocal(a recoverArgs) error {
 	if a.DB != filepath.Join(p.StateDir, "ledger.sqlite") || a.Operation == "" || a.Reviewer == "" {
 		return errors.New("exact installed SQLite path, operation and reviewer required")
 	}
-	if a.Action != "diagnose" && a.Action != "reconcile" && a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" &&
-		a.Action != "gc-inspect" && a.Action != "gc-challenge" && a.Action != "gc-release" &&
-		a.Action != "create-inspect" && a.Action != "create-challenge" && a.Action != "create-bind" &&
-		a.Action != "delete-inspect" && a.Action != "delete-challenge" && a.Action != "delete-confirm" {
-		return errors.New("recovery action must be diagnose/reconcile, inspect/challenge/release, create-*, delete-* or gc-*")
+	if !gcReviewAction(a.Action) {
+		return errors.New("scoped original requires the reviewed recovery route")
 	}
-	if _, err := install.Status(p); err != nil {
+	// main.run already holds the fixed maintenance lock across recoverLocal
+	// and its worker. Do not reacquire the same non-reentrant flock here.
+	// The local Root review still covers the protected fresh journal.
+	a.ScopedGCManifest = nil
+	if gcReviewAction(a.Action) {
+		if err := gcRecoveryFences(); err != nil {
+			return err
+		}
+	}
+	m, err := install.Status(p)
+	if err != nil {
 		return fmt.Errorf("installed identity unverified: %w", err)
 	}
+	if err := install.VerifyScopedGCReviewIdentity(p, m); err != nil {
+		return err
+	}
+	a.ScopedGCManifest = &m
 	uid, gid, err := install.ServiceIdentity(p)
 	if err != nil {
 		return err
@@ -145,99 +156,36 @@ func performRecovery(a recoverArgs) error {
 	if a.DB != filepath.Join(p.StateDir, "ledger.sqlite") || a.Operation == "" || a.Reviewer == "" {
 		return errors.New("invalid reviewed recovery target")
 	}
-	if _, err := install.Status(p); err != nil {
+	if !gcReviewAction(a.Action) || a.ScopedGCManifest == nil || a.RecoveryKey != "" {
+		return state.ErrInvalid
+	}
+	if err := gcRecoveryFences(); err != nil {
 		return err
 	}
-	store, err := state.Open(a.DB)
+	if err := install.VerifyScopedGCReviewIdentity(p, *a.ScopedGCManifest); err != nil {
+		return err
+	}
+	store, err := state.OpenExistingRecovery(a.DB)
 	if err != nil {
 		return err
 	}
 	defer store.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if a.Action == "diagnose" || a.Action == "reconcile" {
-		svc := recovery.Service{Store: store, Native: native.Reader{Socket: a.Socket, Project: a.Project}, Layer: a.Project, PeerWitness: recovery.ObserveCompletedPeer}
-		var result recovery.Result
-		if a.Action == "diagnose" {
-			if a.RecoveryKey != "" {
-				return state.ErrInvalid
-			}
-			result, err = svc.Inspect(ctx, a.Operation, a.Stream)
-		} else {
-			result, err = svc.Reconcile(ctx, state.RecoveryRequest{Layer: a.Project, LocalReviewer: a.Reviewer, OriginalID: a.Operation, Stream: a.Stream, Key: a.RecoveryKey})
-		}
-		if err != nil {
+	return performGCRecovery(ctx, store, a)
+}
+
+func gcReviewAction(action string) bool {
+	return action == "gc-inspect" || action == "gc-challenge" || action == "gc-release"
+}
+
+func gcRecoveryFences() error {
+	for _, check := range []func() error{install.CheckScopedDrainFence, install.CheckOfflineRetirementFence, install.CheckScopedRetirementFence} {
+		if err := check(); err != nil {
 			return err
 		}
-		return json.NewEncoder(os.Stdout).Encode(result)
 	}
-	if a.RecoveryKey != "" {
-		return state.ErrInvalid
-	}
-	if strings.HasPrefix(a.Action, "gc-") {
-		return performGCRecovery(ctx, store, a)
-	}
-	if strings.HasPrefix(a.Action, "create-") {
-		return performUnknownCreateBinding(ctx, store, a)
-	}
-	if strings.HasPrefix(a.Action, "delete-") {
-		return performDeleteRecovery(ctx, store, a)
-	}
-	r, err := store.RecoveryInspect(ctx, a.Operation)
-	if err != nil {
-		return err
-	}
-	if r.Project != a.Project {
-		return errors.New("UNKNOWN belongs to a foreign Project")
-	}
-	observed, err := (native.Reader{Socket: a.Socket, Project: a.Project}).ObserveOwnedBox(ctx, r.Name, r.BoxUUID)
-	if err != nil {
-		return fmt.Errorf("native re-observation refused: %w", err)
-	}
-	if r.Action == "box_delete" && a.Action != "inspect" {
-		cascade, err := store.IsDependentDelete(ctx, r.OperationID)
-		if err != nil {
-			return err
-		}
-		if cascade && observed.State != "PRESENT_UUID_CONFIRMED" {
-			return errors.New("dependent Delete absence requires separate delete reconciliation; generic release refused")
-		}
-	}
-	out := json.NewEncoder(os.Stdout)
-	switch a.Action {
-	case "inspect":
-		return out.Encode(struct {
-			Original state.RecoverySnapshot `json:"original"`
-			Native   native.BoxObservation  `json:"native_observation"`
-			Warning  string                 `json:"warning"`
-		}{r, observed, "UNKNOWN is not success or failure; never replay the original request"})
-	case "challenge":
-		if r.Released {
-			return errors.New("already reviewed and released")
-		}
-		challenge, err := store.IssueRecoveryChallenge(ctx, r, a.Reviewer, observed.Fingerprint)
-		if err != nil {
-			return err
-		}
-		return out.Encode(struct {
-			Operation        string `json:"operation_id"`
-			Challenge        string `json:"challenge"`
-			ExpiresInSeconds int    `json:"expires_in_seconds"`
-			Warning          string `json:"warning"`
-		}{r.OperationID, challenge, 300, "Native outcome may still be UNKNOWN; release never retries it"})
-	case "release":
-		if err := store.ReleaseRecoveryClaim(ctx, r, a.Reviewer, a.Challenge, a.ConfirmUUID,
-			a.Reason, observed.Fingerprint, a.Acknowledge); err != nil {
-			return err
-		}
-		return out.Encode(struct {
-			Operation     string `json:"operation_id"`
-			State         string `json:"original_state"`
-			ClaimReleased bool   `json:"claim_released"`
-			AutoRetry     bool   `json:"auto_retry"`
-		}{r.OperationID, "UNKNOWN", true, false})
-	}
-	return errors.New("unsupported recovery mode")
+	return nil
 }
 
 // performGCRecovery is reachable ONLY through the existing root-reviewed

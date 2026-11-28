@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"strings"
 )
 
 // DiagnosticOriginal is private observation data. Never serialize Target,
@@ -150,6 +149,11 @@ func (s *DiagnosticSnapshot) CheckCreatePinRepair(ctx context.Context, t Recover
 // CheckPlanRecoveryProof reuses writer predicates without executing any
 // finalizer, admission, challenge, or audit write, even on the copy.
 func (s *DiagnosticSnapshot) CheckPlanRecoveryProof(ctx context.Context, t RecoveryTarget, p RecoveryProof) error {
+	return s.CheckScopedPlanRecoveryProof(ctx, t, p)
+}
+
+func (s *DiagnosticSnapshot) CheckScopedPlanRecoveryProof(ctx context.Context, t RecoveryTarget, p RecoveryProof) error {
+
 	tx, e := s.store.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if e != nil {
 		return e
@@ -159,7 +163,7 @@ func (s *DiagnosticSnapshot) CheckPlanRecoveryProof(ctx context.Context, t Recov
 	if e != nil || current != t {
 		return ErrConflict
 	}
-	if e = requireNoIPv4Compaction(ctx, tx, t.Layer); e != nil {
+	if e = requireScopedRecoveryOriginal(current, p); e != nil {
 		return e
 	}
 	if p.Fingerprint == "" {
@@ -169,54 +173,40 @@ func (s *DiagnosticSnapshot) CheckPlanRecoveryProof(ctx context.Context, t Recov
 	case p.Kind == RecoveryRepairPin:
 		e = checkCreatePinRepairTx(ctx, tx, t, p)
 	case p.Kind == RecoverySettle && t.Action == "box_peer_set":
-		if t.ScopedPeer {
-			r := p.ScopedPeer
-			if t.State != "UNKNOWN" || t.Released || r.OriginalID != t.ID || r.Project != t.Layer || !r.RecoveryOnly || r.Status != "COMPLETE_VERIFIED" || r.VerifiedSteps != 4 || !scopedPeerSHA(r.ProofSHA256) || !scopedPeerSHA(r.PlanSHA256) || !scopedPeerSHA(r.FinalSHA256) {
-				return ErrResourceLocked
-			}
-			proof, err := readScopedPeerOriginalTx(ctx, tx, t.ID, r.Project, r.Bridge, "UNKNOWN")
-			if err != nil || ScopedPeerProofSHA256(proof) != r.ProofSHA256 {
-				return ErrResourceLocked
-			}
-		} else {
-			e = checkRecoveryPeerTx(ctx, tx, t, p)
+		r := p.ScopedPeer
+		if t.State != "UNKNOWN" || t.Released || r.OriginalID != t.ID || r.Project != t.Layer || !r.RecoveryOnly || r.Status != "COMPLETE_VERIFIED" || r.VerifiedSteps != 4 || !scopedPeerSHA(r.ProofSHA256) || !scopedPeerSHA(r.PlanSHA256) || !scopedPeerSHA(r.FinalSHA256) {
+			return ErrResourceLocked
 		}
-	case p.Kind == RecoverySettle || p.Kind == RecoveryBind:
+		proof, err := readScopedPeerOriginalTx(ctx, tx, t.ID, r.Project, r.Bridge, "UNKNOWN")
+		if err != nil || ScopedPeerProofSHA256(proof) != r.ProofSHA256 {
+			return ErrResourceLocked
+		}
+	case t.ScopedLifecycle && p.Kind == RecoverySettle:
+		e = checkScopedLifecycleRecoveryTx(ctx, tx, t, p)
+	case p.Kind == RecoverySettle:
 		parent, err := checkGenericRecoveryScopeTx(ctx, tx, t, "")
 		if err != nil {
 			return err
 		}
-		if p.Kind == RecoveryBind {
-			if t.Action != "box_create" || t.UUID != "" || t.Incarnation != "" || !validActivityBoxID(p.UUID) || p.Reason != "CREATE_MARKER_EXACT_IDENTITY" {
+		if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" || p.UUID != t.UUID || t.NativeID == "" || p.NativeID != t.NativeID || p.Reason != "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED" {
+			return ErrResourceLocked
+		}
+		switch t.Action {
+		case "port_forward_create", "port_forward_delete":
+			e = checkRecoveryForwardTx(ctx, tx, t, p, parent)
+		case "box_exec":
+			if p.Exit == nil {
 				return ErrResourceLocked
 			}
-		} else if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
-			e = checkRecoveryCreateTx(ctx, tx, t, p)
-		} else {
-			if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" || p.UUID != t.UUID || t.NativeID == "" || p.NativeID != t.NativeID || p.Reason != "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED" {
+		case "box_start", "box_stop", "box_update":
+			if t.LifecyclePinStatus != "PINNED" && t.LifecyclePinStatus != "LEGACY_UNPINNED" || p.LifecycleBinding != t.LifecycleBinding {
 				return ErrResourceLocked
 			}
-			switch t.Action {
-			case "port_forward_create", "port_forward_delete":
-				e = checkRecoveryForwardTx(ctx, tx, t, p, parent)
-			case "box_exec":
-				if p.Exit == nil {
-					return ErrResourceLocked
-				}
-			case "box_start", "box_stop", "box_update":
-				if t.LifecyclePinStatus != "PINNED" && t.LifecyclePinStatus != "LEGACY_UNPINNED" || p.LifecycleBinding != t.LifecycleBinding {
-					return ErrResourceLocked
-				}
-				if parent != "" {
-					e = recoveryClaimKeys(ctx, tx, t, []string{t.Resource, deleteParentKey(parent)})
-				}
-			case "box_delete":
-				if !strings.HasPrefix(p.Fingerprint, "DELETE_SUCCESS:") {
-					return ErrResourceLocked
-				}
-			default:
-				return ErrResourceLocked
+			if parent != "" {
+				e = recoveryClaimKeys(ctx, tx, t, []string{t.Resource, deleteParentKey(parent)})
 			}
+		default:
+			return ErrResourceLocked
 		}
 	default:
 		return ErrResourceLocked

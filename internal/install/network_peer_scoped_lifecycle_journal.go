@@ -17,12 +17,7 @@ import (
 
 var scopedLifecycleID = regexp.MustCompile("^[0-9a-f]{32}$")
 
-type scopedLifecycleRecord struct {
-	Schema                                                                                       int
-	Kind, Status, OriginalID, NativeID, HostSHA256, GuardSHA256, Project, Name, UUID, PlanSHA256 string
-	Binding                                                                                      state.VerifiedCreateBinding
-	Start, Internet, BootAutostart                                                               bool
-}
+type scopedLifecycleRecord = state.ScopedLifecycleRecord
 
 func scopedLifecycleValid(r scopedLifecycleRecord) bool {
 	acl, e := peerscope.ACLName(r.Project, r.Binding.Bridge, r.UUID)

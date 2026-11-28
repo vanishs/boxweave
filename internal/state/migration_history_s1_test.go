@@ -100,7 +100,7 @@ func TestS1ConcurrentSQLiteOpenAndOriginalOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	initial, err := first.Admit(context.Background(), Admission{
+	initial, err := first.AdmitScoped(context.Background(), Admission{
 		Layer: "L0", ActorID: tok.ID, TokenID: tok.ID, Key: "simultaneous-start-source-only",
 		Action: "A080-source-check-no-native-effect", SafeIntent: []byte(`{"action":"source-only"}`),
 		RequestID: "first",
@@ -179,7 +179,7 @@ func TestS1AbortedSQLiteMigrationTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	op, err := s.Admit(context.Background(), Admission{
+	op, err := s.AdmitScoped(context.Background(), Admission{
 		Layer: "L0", ActorID: tok.ID, TokenID: tok.ID, Key: "migration-crash-source-only",
 		Action: "A080-source-test", SafeIntent: []byte(`{"source":true}`), RequestID: "first",
 	})

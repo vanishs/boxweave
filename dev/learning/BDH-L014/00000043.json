@@ -1,0 +1,539 @@
+{
+  "asset": "dev/skills/box-development/SKILL.md",
+  "change_class": "L2",
+  "domains": [
+    "box-exec"
+  ],
+  "effort": "small",
+  "evidence": "dev/LEARNING_INBOX.md#first-bwdev-implementation-learning-pr-189: BDH-L005 historical observation",
+  "fingerprint": "300aa8370d3a03a93d6e7f999f66e8f3ffd99c0583ce1e9e4dda31de8fb8feb9",
+  "id": "BDH-L014",
+  "impact": "friction",
+  "implementation": {
+    "asset_sha256": "34924dcb97a409013745967da58aed045dd9a0c72385934a59c5bd3035cf6305",
+    "binding": {
+      "attempt_ref": "pr193-v4c01-implement-20261125",
+      "revision": 32,
+      "work_ref": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33"
+    },
+    "evidence_ref": "Exact scoped 960575b0: 24 targeted tests incl 10 association subcases and existing normal/pause, all exit 0 f62459eef4b5243e878efc5ce065ef11; Eval14 and format4 e3c3a487a293851c2224ae96b32a3691 exit 0; actual original tracking lookup and bounded journal listing 6d4f72a9c5e3d36c67cefbb437fa2f3b / 3b2dbbc46e54c5cb38a80e1479b74d66. No new real target dispatch; full integrated regression pending.",
+    "ref": "V4c-01 exact scoped 960575b0c6213a10f22a761e250209aae7e22f71 tree cd6b5f2556304a7970c1b9c84c39bcb368848d65",
+    "source": {
+      "base_commit": "9d07665dcfc5ae6345d6bfcd0d71de7b6510b51d",
+      "branch": null,
+      "commit": "960575b0c6213a10f22a761e250209aae7e22f71",
+      "worktree": "clean"
+    }
+  },
+  "kind": "learning",
+  "observation": "Large argv source transfer rejected at admission; verified exclusive file creation worked",
+  "observations": [
+    {
+      "attempt_ref": "u1-u4",
+      "evidence": "U2 refused admission; file apply f9e86facbe28dff3fba4aed216c6b4a5 and execution 65bda5634d3a24637d5be3d92eba49a5",
+      "observation": "Large inline patch admission refused twice; exclusive patch file then short execution succeeded",
+      "outcome": "recurred",
+      "work_ref": "boxweave/pr189-dual-loop-u2"
+    },
+    {
+      "attempt_ref": "p0-retrospective",
+      "evidence": "PR #191 P0 source audit: 150144e21aa562490c155df17b3b30b18c556598; file 349f208b9bc026fda9e2a278c96087ee; exec e21a1b75e580e6781cd2d8f773ab8b5b exit 0",
+      "observation": "P0 recorded an oversized Exec admission refusal and reused L014 exclusive file creation plus short generator Exec; original file and Exec receipts independently read, Exec exit 0",
+      "outcome": "helped",
+      "work_ref": "pr191"
+    },
+    {
+      "attempt_ref": "continuation-20261125",
+      "evidence": "PR #192 continuation: inline Exec returned invalid admission; exclusive file e28709b988f7a074876f6c86f0e16d97 SUCCEEDED; short Exec 890ca73f3bcb75e89eb42f7fe2f125df exit 0; regression 0797d13881364530f1e28620abfea7ec exit 0",
+      "observation": "A large inline source-edit Exec was refused at admission without an Operation receipt; reused L014 exclusive file creation and short execution, observed verified file result and exit-zero patch and regression.",
+      "outcome": "helped",
+      "work_ref": "boxweave/bdh-v06-pr191"
+    },
+    {
+      "attempt_ref": "boundary-audit-20261125",
+      "evidence": "PR #192 comment 7157253835; Box file creates d723098f4c4421d2af0b6396bc72e3c2, 262232686d8ff3a69204960b865a77d8, 36c880c8f63e0bb1c9763426a796015d; assembly 4cf4da5f7f5dfd960fb71cf5de738a63 exit 0; retained hashes rechecked 097dc4721454f8d775c835dfb6d65921 exit 0",
+      "observation": "Fresh ordinary transfer investigation reused verified exclusive file creation and short Exec, measured RC14 4096-byte argv and 64 KiB file limits, assembled and hash-verified 100 KiB from three parts, and refused missing parts, wrong hash and collisions. A resumable transfer helper remains a proposal, not an implemented capability.",
+      "outcome": "helped",
+      "work_ref": "boxweave/pr192-transfer-audit"
+    },
+    {
+      "attempt_ref": "resume-probe-20261125",
+      "evidence": "RC14 file operations 1c1527882ace4220eed366161bdadac3, 325e1d799645c0bbb035ffc47a8989a4, cd3392600a221353661ab89aa8464da2, a32f3c1a8e69706b83273e975c09d41d, 2a8cf657375d9cf87a75cd9e6087a974; assembly bbc96accba782c7b86bcad9043a5a15b and hash recheck 151099bc179d284e20cb9344eea7cb59 exit 0",
+      "observation": "Reused exclusive chunk creation and short Exec; verified prior chunks, refused wrong/missing chunks, recovered a deliberately short 300-byte fixture via a new path, and verified 102402-byte binary assembly plus exclusive publication. Actual SFTP interruption and durable crash recovery remain untested.",
+      "outcome": "helped",
+      "work_ref": "boxweave/pr192-transfer-resume"
+    },
+    {
+      "attempt_ref": "20261125-first",
+      "evidence": "P1a inline admission refused; file f28d6c41407c92c3577a43c4b928d8c7; verified 3478 bytes; Exec 27487bec36beb5c71213f07adb730edb exit 0",
+      "observation": "Exclusive source script creation and short Exec recovered the actual P1a admission refusal; compile checks passed.",
+      "outcome": "helped",
+      "work_ref": "pr191/p1a"
+    },
+    {
+      "attempt_ref": "20261125-first",
+      "evidence": "File 6d119c32d5954c9200112a6823259cb5, 6207 bytes exact readback; Exec a613d026dc4e98e64cfb1d37720adb2e exit 0",
+      "observation": "Known argv size limitation proactively handled by exclusive file create, verified digest and short gofmt/test Exec, without repeated inline rejection.",
+      "outcome": "helped",
+      "work_ref": "pr191/p1b-source"
+    },
+    {
+      "attempt_ref": "20261125-baseline",
+      "evidence": "File operations 7da5282027a13219934f80f3eb91e7fc and cc1ef4255df09131dcc93a037e948892; readbacks d74ea906f53deff08ce24bc3547e901e and 2138f22accb65f36d9b1b4ea68499139; assembly 9496e3878b0d140f63fd4f2c2456bf2b exit 0",
+      "observation": "Existing exclusive-file Skill enabled verified 81920-byte transfer; two manually prepared chunks, two explicit readbacks, and a bespoke assembly/negative-control program were needed. Missing, reordered and colliding files were refused. Residual planning and assembly effort is observed; new tool benefit not yet measured.",
+      "outcome": "helped",
+      "work_ref": "pr193/v0"
+    },
+    {
+      "attempt_ref": "20261125-v1a",
+      "evidence": "File operations 5a61a4180735998c89d2eac06765d508 and 95e5a0274ae33b7f4207ab740fbe1b5e; whole-file reads 05a204181e9462113860b70a62c5ea61 and 861150e51bb32435e305b55b137b19ef; Exec 31e4a569ed8a5dcc72e390f9970bdfef and d078a1f000172cb51b67c72d86411216 exit 0",
+      "observation": "Existing exclusive-file Skill enabled two source scripts (10648 and 7957 bytes) and short Exec; two Base64 payloads were manually constructed with explicit receipt/readback/Exec coordination. Residual manual preparation observed; new helper benefit unknown.",
+      "outcome": "helped",
+      "residual": {
+        "cost": {
+          "provenance": "Two separately constructed Base64 source payloads, file operations 5a61a4180735998c89d2eac06765d508 and 95e5a0274ae33b7f4207ab740fbe1b5e",
+          "unit": "manual-actions",
+          "value": 2
+        },
+        "environment": "RC14 L0 connector, isolated development Box",
+        "impact": "friction",
+        "signature": "manual-payload-construction",
+        "uncertainty": "Counts payload preparation only, not total orchestration, tokens or elapsed time; no independent comparison."
+      },
+      "work_ref": "pr193/v1"
+    },
+    {
+      "attempt_ref": "20261125-v1b-v2b",
+      "evidence": "Six exclusive source-script transfers ce15bee21e9e15f4a3a0ffec2f4c3436, 43276538c357c1a33fb6aa5e7a0c1cdb, 41f306f44ad79e2fde23682fc02eeac7, d37b14384ee0a15954e631e7a8215172, 888579d4b5dc6d14bc16dabf8d1bbf5e, 74e37b1088c5ca9eaecfd63cb09a0ce2; Box regression c81bdbab5592723ce82431638e49ca24 exit 0",
+      "observation": "Existing exclusive-file Skill enabled six manually prepared source-script payloads during V1b/V2 development, with separate terminal receipts and readbacks. The repeatable preparation cost remains; no new transfer helper or independent benefit established.",
+      "outcome": "helped",
+      "residual": {
+        "cost": {
+          "provenance": "Six distinct source script payload constructions and file operations ce15bee21e9e15f4a3a0ffec2f4c3436, 43276538c357c1a33fb6aa5e7a0c1cdb, 41f306f44ad79e2fde23682fc02eeac7, d37b14384ee0a15954e631e7a8215172, 888579d4b5dc6d14bc16dabf8d1bbf5e, 74e37b1088c5ca9eaecfd63cb09a0ce2",
+          "unit": "manual-actions",
+          "value": 6
+        },
+        "environment": "RC14 L0 connector, isolated development Box",
+        "impact": "friction",
+        "signature": "manual-payload-construction",
+        "uncertainty": "Counts payload preparation only; not tool-call total, elapsed time, tokens, or independent improvement."
+      },
+      "work_ref": "pr193/v2b"
+    },
+    {
+      "attempt_ref": "20261125-v2c",
+      "evidence": "Three manually prepared source payloads f4a0c38706367f5cc2973185154d9d6a, decb4bb2a546358cdd74c086eeb0f103, 55fb64e1fc5fcb6dc12ff0a46313e252; V2c targeted and full regression bdef17233c901802dacbc5ece9cb75a2 exit 0",
+      "observation": "Existing exclusive-create source transfer guidance enabled three more source scripts with manual Base64 construction and separate receipt/readback coordination. A bounded transfer planner is already selected; additional actual residual evidence does not create another episode.",
+      "outcome": "helped",
+      "residual": {
+        "cost": {
+          "provenance": "Three distinct payloads f4a0c38706367f5cc2973185154d9d6a, decb4bb2a546358cdd74c086eeb0f103, 55fb64e1fc5fcb6dc12ff0a46313e252",
+          "unit": "manual-actions",
+          "value": 3
+        },
+        "environment": "RC14 L0 connector, isolated development Box",
+        "impact": "friction",
+        "signature": "manual-payload-construction",
+        "uncertainty": "Only manual payload preparation, not total coordination or independent benefit."
+      },
+      "work_ref": "pr193/v2c"
+    },
+    {
+      "attempt_ref": "pr193-v3-implement-20261125",
+      "evidence": "Original old Skill source-script payloads f063ae40ca64b107bf00493ba57f081a and 0ee6edd3458889f7c3f7624cc555e7d1; new helper real transfer plan bdae6dbd04b359110032c1381176efc2 and final verification 7a94e21c7336b9839dbbc2ab24b00782 exit 0",
+      "observation": "Old exclusive-file Skill supported implementation scripts; new offline helper generated two payloads and manifest, preserved receipt states, assembled and independently verified 81920 bytes. Functional result only; journal evidence preparation added coordination and independent benefit is unknown.",
+      "outcome": "helped",
+      "work_ref": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0"
+    },
+    {
+      "attempt_ref": "pr193-v3-validate-20261125",
+      "evidence": "Actual RC14 transfer 7a94e21c7336b9839dbbc2ab24b00782 and exact-source validation 41da67515388ccb2cd8ae5c19f70523a exit 0; evidence file operations f6fe011ba4a0caa0f1887bdbe6d54fca, eb673f33a29c036f7af9d2aa79c214ad, 3bbd9bd0b122881878bb4b66e94e5f12, de3e08208c6e9d9c784ca579b06f2f95, 11cbc508f62478eed963fd87fb84a69b",
+      "observation": "Controlled 81920-byte helper transfer succeeded with zero hand-authored source payloads or assembly program, but five manually constructed evidence payloads and additional journal coordination were needed on this remote surface. 18 core and 34 setup/evidence calls in this instrumented run; independent comparable utility remains unknown.",
+      "outcome": "helped",
+      "residual": {
+        "cost": {
+          "provenance": "Five separately encoded actual receipt/readback evidence payloads for two parts, manifest and two final pages",
+          "unit": "manual-actions",
+          "value": 5
+        },
+        "environment": "RC14 L0 connector, remote Agent surface, controlled owned Box",
+        "impact": "friction",
+        "signature": "remote-receipt-journal-orchestration",
+        "uncertainty": "Not an independent matched trial; instrumentation and remote planner placement add calls. No total time/token or crash durability claim."
+      },
+      "work_ref": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0"
+    },
+    {
+      "attempt_ref": "pr193-v3c-reviewer-20261125",
+      "evidence": "https://github.com/vanishs/boxweave/pull/193#pullrequestreview-6056418511",
+      "observation": "Independent review found two P1 blockers: stale pre-dispatch intent may look READY after interruption; corrected source cannot re-enter an episode after failed review. Original probes fce5f680f7e89915a680183be361b24d and 336dd26981846931e863ae97f1300d5b. Preserve failure and rework within original scope.",
+      "outcome": "misled",
+      "residual": {
+        "cost": null,
+        "environment": "RC14 independent review of 0cdc497 and a464e6d",
+        "impact": "risk",
+        "signature": "predispatch-unknown-and-review-rework",
+        "uncertainty": "Independent synthetic counterexamples, not actual lost native acknowledgement or power-loss test."
+      },
+      "work_ref": "pr193/v3c-independent-review"
+    },
+    {
+      "attempt_ref": "pr193-v3c-repair-validate-20261125",
+      "evidence": "Actual RC14 journal recovery ab54a131f90fcfba715a11813f56e966, exact-source recheck 5a1daa18d52ab66085d30532b2d0e3ae, integrated regression 229e4bc879e7776daec05a8433bd145c exit 0; receipt preservation 946e25a5e81a8cb1acb8581aad53cf49, 42fa472b78d00b30bf6dad80c5344c0b, 9d13a8b5f153775b03569de816475e2c",
+      "observation": "Corrected helper and episode rework functionally validated. Canonical journal prevented repeated begin after actual part and assembly effects before receipt recording; three manually encoded receipt/readback payloads were still needed. Independent comparative benefit is unknown.",
+      "outcome": "helped",
+      "residual": {
+        "cost": {
+          "provenance": "Three actual separate receipt/readback payload file creates in evidence",
+          "unit": "manual-actions",
+          "value": 3
+        },
+        "environment": "RC14 isolated owned Box, controlled 4096-byte repair trial",
+        "impact": "friction",
+        "signature": "remote-receipt-journal-orchestration",
+        "uncertainty": "Different input size and instrumentation from V0/V3; no matched independent benefit or native power-loss proof."
+      },
+      "work_ref": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0"
+    },
+    {
+      "attempt_ref": "pr193-v3c-repair-implement-20261125",
+      "evidence": "Corrected implementation source file transfers b1d21cae9a9a7e47189aca33aa3d5e75 and 5bdfdeb76e0d0e2d47599ddf5d93010d; exact scoped format 0107ccaacd1c2a1e4c6eab7d8b6f2ec0 exit 0; actual implementation attach and integration 229e4bc879e7776daec05a8433bd145c exit 0",
+      "observation": "Implemented durable pre-dispatch journal and updated Skill on the rework attempt. Corrected exact descendant source and new attachment were accepted; controlled recovery worked. Source payload preparation remained manual during development, not evidence of independent benefit.",
+      "outcome": "helped",
+      "work_ref": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0"
+    },
+    {
+      "attempt_ref": "pr193-v3d-deliver-20261125",
+      "evidence": "Durable reviewed child 5a98abb1dff71f211f94387a21cdfb481a79d41a and fresh worktree exact scoped asset verification a665e453cbea16a9d17798c4e8158837 exit 0; 13 tests and audit clean; discovery comparison 9cd60ca19f304b02f7613a479acfa1bf exit 0; reviewer 6056705478 and CI 45603068284/45603068129 PASS",
+      "observation": "Reviewed corrected asset delivered in child PR. Fresh clean checkout matches scoped planner, Skill and test bytes and targeted tests pass; normal work planning exposes the new capability while old planning does not. This is originating-Agent delivery/discovery verification, not independent ordinary-task use or benefit.",
+      "outcome": "helped",
+      "work_ref": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0"
+    },
+    {
+      "attempt_ref": "20261125-v4a",
+      "evidence": "https://github.com/vanishs/boxweave/pull/193#issuecomment-7171335596",
+      "observation": "Old Skill actual two transfers passed bytes, collision and controlled recovery; 13 parts, 98 MCP calls incl 17 common, manual requests, two assemblies and original receipt mapping. No new planner used; comparison limited.",
+      "outcome": "helped",
+      "residual": {
+        "cost": {
+          "provenance": "A report: 32/49 case calls plus 17 common BoxWeave calls; excludes GitHub and tool discovery",
+          "unit": "tool-calls",
+          "value": 98
+        },
+        "environment": "RC14 Lane A, old 3494ae8, actual 75051 and 131019 byte transfers",
+        "impact": "friction",
+        "signature": "manual-chunk-and-receipt-orchestration",
+        "uncertainty": "16 KiB parts; common batch count not comparable primary metric; initial PR fetch exposed newer context. Controlled inter-call pause with retained receipt only."
+      },
+      "work_ref": "pr193/v4-lane-a"
+    },
+    {
+      "attempt_ref": "pr193-v4-b-2",
+      "evidence": "https://github.com/vanishs/boxweave/pull/193#issuecomment-7171771903",
+      "observation": "Actual later ordinary task used planner for both transfers; seven parts, both journals verified, durable recovery; 198-199 case MCP calls vs baseline 81, 18 receipt/evidence objects. Manual comparison uncertain, nonblind exposure. Second transfer ref identifies the continuity case; report covers both.",
+      "outcome": "uncertain",
+      "residual": {
+        "cost": {
+          "provenance": "B report: 89 confirmed + 109 case calls, upper bound 199; excludes shared setup and handoff",
+          "unit": "tool-calls",
+          "value": 198
+        },
+        "environment": "RC14 Lane B, f8d2462, actual 75051 and 131019 byte transfers",
+        "impact": "friction",
+        "signature": "remote-receipt-journal-orchestration",
+        "uncertainty": "32 KiB parts, overlapping manual categories, prior design exposure; no blind discovery, no time/token comparison, one read at call cap uncertain. Real functional use, overall utility unproven."
+      },
+      "work_ref": "pr193/remote-copy-b"
+    },
+    {
+      "attempt_ref": "pr193-v4c-implement-20261125",
+      "evidence": "Exact scoped 8e819535, actual native final 8629478463bacb47afdbdffac259b63c, portable JS test 9a41aed46613730e09d7d6a2a34af5b7, integrated 114 tests/Eval 14/audit clear aff8dc4af24575e7d7ba7c773de653bb",
+      "observation": "Composed receipt/next claim and exact paged request output work in actual 75051-byte MCP transfer. JS template passed simulated connector tests; actual native trial still used manual glue. Expanded index surfaced five relevant queries and one extra generic file-status query. No matched cost or independent benefit proof.",
+      "outcome": "helped",
+      "residual": {
+        "cost": null,
+        "environment": "RC14 actual CLI composition, JS simulated connector with isolated Node 22.16.0",
+        "impact": "friction",
+        "signature": "surface-template-portability-and-unmeasured-cost",
+        "uncertainty": "Actual full template use on ephemeral connector and matched utility pending; generic file-status recommendation broadened, exact missed query not reproduced; no native crash claim."
+      },
+      "work_ref": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33"
+    },
+    {
+      "attempt_ref": "pr193-v4c-review-20261125",
+      "evidence": "https://github.com/vanishs/boxweave/pull/193#pullrequestreview-6063951851",
+      "observation": "Independent V4c-01 P1: unrelated successful same-work Operation plus mismatched Tracking ID and matching part bytes allowed EVIDENCE_STAGED then next intent despite intended write not dispatched. Original counterexample b35c995580fb785d84f885e1c3c12f81.",
+      "outcome": "misled",
+      "residual": {
+        "cost": null,
+        "environment": "Exact V4c integrated f1d683bd, independent Node simulation and actual Python journal",
+        "impact": "blocker",
+        "signature": "remote-original-receipt-association",
+        "uncertainty": "Actual counterexample in isolated simulation; no native unsafe replay; RC14 operation_get lacks key/path. Must validate retained request-to-admission mapping and nested immutable tracking ID."
+      },
+      "work_ref": "pr193/v4c-independent-review"
+    },
+    {
+      "attempt_ref": "pr193-v4c01-validate-20261125",
+      "evidence": "Original integrated Operation d04cda8c558035c58da2e131a79419ec exit 0, complete stdout and stderr: 115 tests OK, Eval 14 PASS, audit OBSERVED []; exact four repaired files byte-equal to 960575b in 6816b88e13005160c31c5aea09a3a192 exit 0. Earlier scoped 24 targeted tests f62459eef4b5243e878efc5ce065ef11 exit 0. No new native write or independent benefit.",
+      "observation": "Integrated receipt-association regression and original historical replay passed; four repaired assets exactly match scoped checkpoint. This is originating validation only; utility remains uncertain.",
+      "outcome": "uncertain",
+      "residual": {
+        "cost": null,
+        "environment": "Owned RC14 Box, integrated Python and isolated Node regression; exact scoped correction",
+        "impact": "friction",
+        "signature": "surface-template-portability-and-unmeasured-cost",
+        "uncertainty": "No live full corrected caller template witness, no matched utility or independent approval; original receipt association requires trusted retained caller evidence."
+      },
+      "work_ref": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33"
+    },
+    {
+      "attempt_ref": "pr193-v4c-deliver-20261125",
+      "evidence": "Actual independent PASS https://github.com/vanishs/boxweave/pull/193#pullrequestreview-6064325816; 20+4 distinct tests ffe31e5c390415a848a0da248e9e6e27 / 446adb1a204aa9d4eb4e8979ab4fba86 exit 0, exact a77e49e CI 45692300435 / 45692300144 PASS; clean detached C checkout and four exact scoped files verified 63f54d977553a2bd73e760842ce5ae4f exit 0. No independent live transfer or utility outcome.",
+      "observation": "Independent bounded technical review and exact-head CI passed; corrected assets are durable in child PR and byte-matched in a fresh task checkout. Utility is not yet measured.",
+      "outcome": "uncertain",
+      "residual": {
+        "cost": null,
+        "environment": "Exact reviewed a77e49e in owned RC14 Box; independent real planner and simulated connector regression",
+        "impact": "friction",
+        "signature": "surface-template-portability-and-unmeasured-cost",
+        "uncertainty": "Full live corrected template and matched ordinary-task benefit pending. Short Operation ID fails closed; caller persistence and platform call budget remain limitations."
+      },
+      "work_ref": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33"
+    },
+    {
+      "attempt_ref": "pr193-v4d-a-witness-20261125",
+      "evidence": "https://github.com/vanishs/boxweave/pull/193#issuecomment-7173721512",
+      "observation": "Old skill functional PASS; 31/31/11 calls, manual orchestration, explicit short-key admission refusal corrected.",
+      "outcome": "helped",
+      "residual": {
+        "cost": {
+          "provenance": "Actual Lane A report; includes shared MCP setup and verification, excludes GitHub and schema lookups",
+          "unit": "tool-calls",
+          "value": 73
+        },
+        "environment": "RC14 lane A exact 3494ae8; actual 75051 and 131019 bytes, 32768-byte parts/pages",
+        "impact": "friction",
+        "signature": "manual-transfer-orchestration-and-key-discovery",
+        "uncertainty": "Manual block convention differs; exclusive destination create not crash-atomic. Prior context contamination, controlled call-boundary pause only."
+      },
+      "work_ref": "pr193-v4d-lane-a"
+    },
+    {
+      "attempt_ref": "pr193-v4d-b-witness-20261125",
+      "evidence": "https://github.com/vanishs/boxweave/pull/193#issuecomment-7176239025",
+      "observation": "Actual planner used both cases with VERIFIED_READBACK journals; 109/135/6 calls and platform cap; receipt and paging overhead.",
+      "outcome": "uncertain",
+      "residual": {
+        "cost": {
+          "provenance": "Actual Lane B report; includes shared MCP setup and verification, excludes GitHub and schema lookups",
+          "unit": "tool-calls",
+          "value": 250
+        },
+        "environment": "RC14 lane B exact f8d2462; actual 75051 and 131019 bytes, 32768-byte parts/pages",
+        "impact": "friction",
+        "signature": "remote-receipt-journal-orchestration",
+        "uncertainty": "Manual costs not comparable; real use but utility unproven. Prior context contamination, controlled call-boundary pause only."
+      },
+      "work_ref": "pr193-v4d-lane-b"
+    },
+    {
+      "attempt_ref": "pr193-v4d-c-witness-20261125",
+      "evidence": "https://github.com/vanishs/boxweave/pull/193#issuecomment-7176352859",
+      "observation": "Discovered planner and corrected template but chose manual fallback; 28/35/18 calls, functional PASS, neither candidate tool executed.",
+      "outcome": "uncertain",
+      "residual": {
+        "cost": {
+          "provenance": "Actual Lane C report; includes shared MCP setup and verification, excludes GitHub and schema lookups",
+          "unit": "tool-calls",
+          "value": 81
+        },
+        "environment": "RC14 lane C exact a77e49e; actual 75051 and 131019 bytes, 32768-byte parts/pages",
+        "impact": "friction",
+        "signature": "surface-template-portability-and-unmeasured-cost",
+        "uncertainty": "Ephemeral invocation and repeated code construction discouraged use; not proof of impossibility. No live candidate benefit. Prior context contamination, controlled call-boundary pause only."
+      },
+      "work_ref": "pr193-v4d-lane-c"
+    },
+    {
+      "attempt_ref": "pr193-v4e-runtime-adaptation-20261125",
+      "evidence": "https://github.com/vanishs/boxweave/blob/7ec616be5ba8eb0fe2ad5b246b656b190e37e001/docs/development/BDH_V07_V4E_ADAPTATION.md",
+      "observation": "Two live authorized read-only lookups matched immutable Git checkpoint across calls; four synthetic mismatch inputs refused. Adapter code was authored anew; no supported reusable loader or private caller-state binding established.",
+      "outcome": "uncertain",
+      "residual": {
+        "cost": null,
+        "environment": "Authorized RC14 remote connector with immutable Git evidence handoff; two distinct invocations",
+        "impact": "blocker",
+        "signature": "runtime-callable-and-private-state-binding-unavailable",
+        "uncertainty": "Actual read-to-Git persistence passed, but same executable loading and private automatic intent/receipt bridge unproven; no measured utility."
+      },
+      "work_ref": "pr193-v4e-runtime-adaptation"
+    },
+    {
+      "attempt_ref": "20261125-recovery",
+      "evidence": "a76e13bffeeaed6451e5a87f5bf0d368; f8fffa74621769ccb495b27eb90ff1e1 exit 0",
+      "observation": "Verified exclusive transfer and short Exec of 4684-byte script",
+      "outcome": "helped",
+      "work_ref": "pr191/p1b-lifecycle-recovery"
+    },
+    {
+      "attempt_ref": "20261125-wal-remediation",
+      "evidence": "Prior remediation checkpoint c3dcc9d; file operations 6c5e6a0ba28055e5cd5bb0f2cf642985, 53d7d8d047e436205dbab4698a99b60c, 6be63b25c977aa25f883155320a04df6, 862beb4bd14adc17c61a90bf9c6159f2 re-read SUCCEEDED; final gate c4ba7362c8b8ca4d01f85f7e0ca35aa4 exit 0",
+      "observation": "Prior WAL remediation reused exclusive source transfer after inline argv refusal, then verified all six final staged blobs against Git hashes; original receipts re-read during this handoff. No measured independent efficiency benefit.",
+      "outcome": "helped",
+      "work_ref": "pr191/p1b-lifecycle-recovery"
+    },
+    {
+      "attempt_ref": "20261125-s2-scoped-conversion",
+      "evidence": "Exclusive source operations 4bcdb8f6c39636276e144690fb58d9b2, 3324278edaefb63d8e58cb3c55ebce7d, 52737df7e4bf528d9686a7facaa759af, 61126a694ae3da471987489466f56618 SUCCEEDED; source gates 9ad964460b9c10e0023f7c8f57a1889f, 98c351a27e5ab5ae1ef895102a360500, f3f16cea5775493de16e593161769007, ce1585260f4c866b1c810351557c9b6b exit 0; Git mode mismatch 73e83f6cafac0be0950cebdd24a20172 exit 1, restored 0826793 and verified a9bc5792ed9fe598654ee0bdfc4b4c39 exit 0",
+      "observation": "Four exclusive source payloads used with original receipts, full readbacks and targeted tests. Verified blob content alone missed a shell executable mode mismatch; restored the exact prior mode in a separate non-force commit and subsequent publication includes mode checks. No independent efficiency comparison.",
+      "outcome": "helped",
+      "work_ref": "pr191/p1b-lifecycle-recovery"
+    },
+    {
+      "attempt_ref": "20261125-update-ack-durability",
+      "evidence": "Exclusive source transfer 28b0256e6bc55f28f0c43e43bb3f2af5 SUCCEEDED, exact 13198-byte readback SHA256 b43f5be823bb497582d02e78e0370ff866ee8ded65a10fa336aaf907389b5259; applied and verified 14 Python regressions in e080f6e1edafb5602aba54c62d11cf90, registered format PASS but dirty source inspect REVIEW_REQUIRED exit 1; format and targeted ACK race 5645ee62dd3aea52a56673b3d1561db8 exit 0",
+      "observation": "Reused exclusive source create, original receipt and verified readback for one bounded patch. Source checks passed; dirty-source registered inspect correctly did not certify the staged candidate. Bind exact staged bytes and file modes before publishing. No measured independent efficiency gain.",
+      "outcome": "helped",
+      "work_ref": "pr191/p1b-lifecycle-recovery"
+    }
+  ],
+  "opportunity_resolutions": [
+    {
+      "actor_ref": "pr193-v3c-reviewer-20261125",
+      "benefit_evidence": "https://github.com/vanishs/boxweave/pull/193#issuecomment-7171771903",
+      "episode_id": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0",
+      "outcome": "reopen",
+      "reason": "Import actual independent terminal review; original B ordinary task has uncertain utility and typed residual; functional success not benefit-confirmed.",
+      "resolved_revision": 26,
+      "review_ref": "https://github.com/vanishs/boxweave/pull/193#pullrequestreview-6063576130",
+      "task_revision": 17,
+      "task_sha256": "769b7b607fd38d8d0bc8484592240ed88da7d62c5e7ab8aa8dca39f11ae2824a"
+    },
+    {
+      "actor_ref": "pr193-v4d-independent-utility-review-20261125",
+      "benefit_evidence": "https://github.com/vanishs/boxweave/pull/193#issuecomment-7176352859",
+      "episode_id": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33",
+      "outcome": "reopen",
+      "reason": "Import actual independent terminal REOPEN: all six files verified, C discovered but did not use candidate, manual fallback costs not candidate benefit, real reuse friction and nonblind incomparable metrics. Keep candidate and safety gates.",
+      "resolved_revision": 37,
+      "review_ref": "https://github.com/vanishs/boxweave/pull/193#pullrequestreview-6065876762",
+      "task_revision": 17,
+      "task_sha256": "fe6cca147b665b68768527317bd286b71e5e94ff1e6accfe1edbede4f7f47f50"
+    }
+  ],
+  "opportunity_reviews": [
+    {
+      "asset_sha256": "49d4f41bc8391265ac3e6bfae8552eb16c242f3c898350eb5e4b666604756e8c",
+      "basis": "6e50dafa7a303e52a1b20546ee7a6880b58c6395b84a3129bb1972ac250e1ebc",
+      "covered_observation_count": 1,
+      "decision": "select",
+      "episode_id": "BDH-E-343f1501118ad8d8c3dfe6615c718dc0",
+      "evidence": [
+        "File operations 5a61a4180735998c89d2eac06765d508 and 95e5a0274ae33b7f4207ab740fbe1b5e; whole-file reads 05a204181e9462113860b70a62c5ea61 and 861150e51bb32435e305b55b137b19ef; Exec 31e4a569ed8a5dcc72e390f9970bdfef and d078a1f000172cb51b67c72d86411216 exit 0",
+        "Six exclusive source-script transfers ce15bee21e9e15f4a3a0ffec2f4c3436, 43276538c357c1a33fb6aa5e7a0c1cdb, 41f306f44ad79e2fde23682fc02eeac7, d37b14384ee0a15954e631e7a8215172, 888579d4b5dc6d14bc16dabf8d1bbf5e, 74e37b1088c5ca9eaecfd63cb09a0ce2; Box regression c81bdbab5592723ce82431638e49ca24 exit 0"
+      ],
+      "observation_count": 10,
+      "proposal": {
+        "acceptance": {
+          "benefit": "Separate ordinary-task Agent discovers/reuses asset and matched baseline compares manual steps and MCP calls; record no-benefit or remaining gap honestly.",
+          "deliver": "Persist exact tested source and linked work/attempt evidence in child PR; no parent change, merge or release.",
+          "implement": "Portable stdlib offline planner with bounded manifest, part lengths/digests, whole digest, distinct keys and safe assembly/recovery guidance. No network dispatch, unknown replay or overwrite.",
+          "review": "Separate Agent reviews exact implemented source, scope, manifest integrity, exclusive creation and UNKNOWN handling.",
+          "validate": "Targeted malformed/missing/reordered/collision and resume fixtures, complete BDH regression/Eval, actual bounded RC14 transfer and independent byte verification."
+        },
+        "assets": [
+          "dev/skills/box-development/SKILL.md",
+          "dev/transfer_plan.py",
+          "scripts/test_bwdev_transfer_plan.py",
+          "dev/README.md",
+          "dev/INDEX.md"
+        ],
+        "authority_ref": "Owner PR193 continuation: bounded harness-only development in owned isolated Box; no parent, runtime, host, merge or release",
+        "baseline": "V0 actual 81920-byte two-part transfer with 10 MCP calls and bespoke assembly; L014 rev13 and rev14 observed 2 and 6 manually constructed source payloads respectively.",
+        "expected_outcome": "Reduce manually authored payload/assembly steps on matched bounded tasks, preserve integrity and exclusive-create refusal; benefit unknown until separate witness.",
+        "max_attempts": 12,
+        "next_safe_action": "Claim implement on exact selected clean source; build bounded offline helper and Skill; retain manual fallback.",
+        "objective": "Reduce repeated manual source payload and assembly preparation using a portable deterministic transfer manifest/helper",
+        "risk": "standard",
+        "source_sha": "53f96af0b107e081f487217d6f2582ab51770f36"
+      },
+      "reason": "Repeated observed payload preparation and manual assembly justify a small offline planner rather than runtime transfer service; measured benefit remains unknown.",
+      "review_ref": "PR193 V0 baseline and L014 rev13/14; exact opportunity 6e50dafa7a303e52a1b20546ee7a6880b58c6395b84a3129bb1972ac250e1ebc",
+      "reviewed_revision": 14,
+      "trigger_ref": null,
+      "when": "Review after bounded implementation and independent matched ordinary-task evidence; reopen on failure or absent benefit"
+    },
+    {
+      "asset_sha256": "896ce1fcbff04749d6868d76c6f36694723d45af7f83eaf8df39817ce239f6da",
+      "basis": "48b6e13da7a5d53de3e7793352122e2151894f34f299f1e3214b7ef750cf0793",
+      "covered_observation_count": 10,
+      "decision": "select",
+      "episode_id": "BDH-E-95bcd576f35ed13260a24bbdee9cdd33",
+      "evidence": [
+        "Three manually prepared source payloads f4a0c38706367f5cc2973185154d9d6a, decb4bb2a546358cdd74c086eeb0f103, 55fb64e1fc5fcb6dc12ff0a46313e252; V2c targeted and full regression bdef17233c901802dacbc5ece9cb75a2 exit 0",
+        "Actual RC14 transfer 7a94e21c7336b9839dbbc2ab24b00782 and exact-source validation 41da67515388ccb2cd8ae5c19f70523a exit 0; evidence file operations f6fe011ba4a0caa0f1887bdbe6d54fca, eb673f33a29c036f7af9d2aa79c214ad, 3bbd9bd0b122881878bb4b66e94e5f12, de3e08208c6e9d9c784ca579b06f2f95, 11cbc508f62478eed963fd87fb84a69b",
+        "https://github.com/vanishs/boxweave/pull/193#pullrequestreview-6056418511",
+        "Actual RC14 journal recovery ab54a131f90fcfba715a11813f56e966, exact-source recheck 5a1daa18d52ab66085d30532b2d0e3ae, integrated regression 229e4bc879e7776daec05a8433bd145c exit 0; receipt preservation 946e25a5e81a8cb1acb8581aad53cf49, 42fa472b78d00b30bf6dad80c5344c0b, 9d13a8b5f153775b03569de816475e2c",
+        "https://github.com/vanishs/boxweave/pull/193#issuecomment-7171335596",
+        "https://github.com/vanishs/boxweave/pull/193#issuecomment-7171771903"
+      ],
+      "observation_count": 19,
+      "proposal": {
+        "acceptance": {
+          "benefit": "Separate ordinary-task witness, equal chunk sizes and comparable oracle/metrics; fewer manual constructions and total calls vs B, assess A tradeoff; reopen if uncertain or residual.",
+          "deliver": "Persist exact scoped implementation and evidence in child PR; no parent or product changes, merge/release/promotion.",
+          "implement": "Reuse canonical journal; explicit receipt and next action; separate immutable revisions, exact output, no auto dispatch/replay; bounded reusable caller template, relevant discovery metadata and tests.",
+          "review": "Separate Agent reviews exact source, safe partial commit windows, caller output/receipt checks and measured evidence.",
+          "validate": "Targeted receipt/claim crash windows, wrong action/key/page/digest, stale/concurrent claims, output pagination, original UNKNOWN and no-clobber; full BDH regression/Eval; real RC14 controlled transfer."
+        },
+        "assets": [
+          "dev/skills/box-development/SKILL.md",
+          "dev/transfer_plan.py",
+          "scripts/test_bwdev_transfer_plan.py",
+          "dev/README.md",
+          "dev/INDEX.md",
+          "dev/examples/TRANSFER_REMOTE_STEP.js",
+          "scripts/test_bwdev_transfer_remote.py"
+        ],
+        "authority_ref": "Owner PR193 V4c continuation: bounded harness-only development in owned isolated Box; no parent, product/runtime, host, merge or release",
+        "baseline": "V4 A 32/49 case calls with 16KiB parts; B 89-90/109 with 32KiB parts and 8/10 manual evidence objects. Functional PASS; nonblind and incomparable primary metric; overall benefit uncertain.",
+        "expected_outcome": "Fewer remote Exec and request retrieval round trips, reusable caller orchestration, unchanged durable intent/receipt and readback safety; no utility claim until matched independent witness.",
+        "max_attempts": 12,
+        "next_safe_action": "Claim implement on exact source and implement bounded record-to-next-claim composition, verified output and caller template; preserve manual fallback.",
+        "objective": "Reduce remote transfer journal orchestration while preserving exact durable dispatch and full byte verification",
+        "risk": "standard",
+        "source_sha": "7ba38035da2823122a717b801d319de60cdea7b3"
+      },
+      "reason": "Actual B residual and independent reopen warrant bounded composition and caller reuse, not a new product tool or duplicate candidate.",
+      "review_ref": "PR193 V4c selection following independent terminal review 6063576130 and actual feasibility 679e57eb1910e97a2d043f8dbe574aed",
+      "reviewed_revision": 27,
+      "trigger_ref": null,
+      "when": "After exact implementation review and matched ordinary task; reopen on absent or uncertain benefit"
+    }
+  ],
+  "reconsider": {
+    "observation_count": 0,
+    "reason": "Do not interrupt universal entry and continuity implementation",
+    "when": "Revisit when a later Box development task encounters admission refusal or needs patch transfer"
+  },
+  "review_ref": "U4 rediscovery d8e6361ceba51dde865195afb52aa34b; explicit bounded selection, not promotion",
+  "revision": 43,
+  "schema_version": 1,
+  "signals": [
+    "admission"
+  ],
+  "source": {
+    "base_commit": "a38ef26e047f64bb09490be35d9aa39048b320ac",
+    "branch": "feat/v1-bdh-bootstrap",
+    "commit": "df864c27ea08211a63d663e5eeecb167c1ab3ebf",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "task_kinds": [
+    "development",
+    "harness"
+  ],
+  "validation": "Review original admission response and verify bounded exclusive file transfer and command execution without replay",
+  "work_ref": "boxweave/pr189-bwdev-v01"
+}

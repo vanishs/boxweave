@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -40,26 +41,17 @@ func RecoveryWitnessDigest(t RecoveryTarget, p RecoveryProof) string {
 	h := sha256.Sum256(append([]byte("boxweave/recover-plan-witness/v1\n"), b...))
 	return hex.EncodeToString(h[:])
 }
+
+// Historical binding syntax remains readable for exact receipt lookup,
+// but no historical leaf can authorize a new reviewed reconciliation.
 func reviewedRecoveryLeaf(t RecoveryTarget, p RecoveryProof, mode string) string {
-	if t.Action == "box_peer_set" && t.ScopedPeer != (mode == "SCOPED_V2") {
+	if mode != "SCOPED_V2" || (t.Action == "box_peer_set" && !t.ScopedPeer) {
 		return ""
 	}
-	if mode == "SCOPED_V2" && (t.Action == "box_create" || t.Action == "box_delete") {
-		return ""
-	}
-	switch p.Kind {
-	case RecoverySettle:
+	if p.Kind == RecoverySettle {
 		switch t.Action {
-		case "box_start", "box_stop", "box_update", "box_exec", "box_create", "box_delete", "box_peer_set", "port_forward_create", "port_forward_delete":
+		case "box_start", "box_stop", "box_update", "box_exec", "box_peer_set", "port_forward_create", "port_forward_delete":
 			return "MCP_SETTLE_ORIGINAL_NO_REPLAY"
-		}
-	case RecoveryBind:
-		if mode == "LEGACY" && t.Action == "box_create" {
-			return "MCP_BIND_ORIGINAL_IDENTITY"
-		}
-	case RecoveryRepairPin:
-		if mode == "LEGACY" && t.Action == "box_create" {
-			return "MCP_REPAIR_ORIGINAL_PIN_LEDGER"
 		}
 	}
 	return ""
@@ -67,15 +59,15 @@ func reviewedRecoveryLeaf(t RecoveryTarget, p RecoveryProof, mode string) string
 func checkReviewedRecoveryTx(ctx context.Context, tx *sql.Tx, r RecoveryRequest, t RecoveryTarget, p RecoveryProof) error {
 	b := r.Review
 	if b == nil || !b.valid() || r.LocalReviewer == "" || time.Now().UnixNano() >= b.ExpiresNS || reviewedRecoveryLeaf(t, p, b.Mode) != b.Leaf || RecoveryWitnessDigest(t, p) != b.WitnessSHA256 {
-		return ErrConflict
+		return fmt.Errorf("reviewed recovery: transaction review or proof changed: %w", ErrConflict)
 	}
 	original, e := readDiagnosticOriginalTx(ctx, tx, r.Layer, r.OriginalID)
 	if e != nil || original.Target != t || original.Digest != b.OriginalSHA256 || t.Released || !original.CredentialActive && t.Action == "box_peer_set" {
-		return ErrConflict
+		return fmt.Errorf("reviewed recovery: transaction original changed: %w", ErrConflict)
 	}
 	l, e := readDiagnosticLedgerTx(ctx, tx, r.Layer, b.Mode, "incusbr-"+strings.TrimPrefix(r.Layer, "user-"))
-	if e != nil || l.ObservationDigest() != b.LedgerSHA256 {
-		return ErrConflict
+	if e != nil || l.ForeignRows != 0 || l.ObservationDigest() != b.LedgerSHA256 {
+		return fmt.Errorf("reviewed recovery: transaction ledger changed: %w", ErrConflict)
 	}
 	return ctx.Err()
 }

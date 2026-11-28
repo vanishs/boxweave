@@ -49,3 +49,5 @@ and `--operation-id ORIGINAL_ID` for each relevant operation. Capture records
 observed Git state, not the uncommitted changes themselves. Check exit 1
 means review required, not failed native operation. Always independently
 read original Operations and exact Box/remote state before continuing.
+
+For budget pressure, follow the [early checkpoint guidance](../skills/task-resume/SKILL.md#early-checkpoint-before-call-budget-pressure-candidate). In the existing notes/links record observed call count or estimate and scope, actual persistence location, any unsaved bytes, and next safe action. Do not invent remaining quota.

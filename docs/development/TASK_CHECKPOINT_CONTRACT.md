@@ -48,6 +48,7 @@ original_operations:
   - operation_id: "example-op-1"
     tracking_id: "example-track-1"
     verified_state: "UNKNOWN"
+    output_review: "PENDING"  # optional caller report; omitted is unreviewed
     evidence_ref: "private-evidence-record"
 do_not_repeat:
   - "Do not create a replacement Box before exact original postread"

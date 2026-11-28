@@ -36,6 +36,10 @@ test-bwdev:
 verify: lint test-race test-mcp-python test-uninstall test-stable-gate test-bwdev
 	$(PYTHON) -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'
 	$(PYTHON) -m unittest discover -s scripts -p 'test_pr177_installed_recovery.py' -q
+	$(PYTHON) scripts/test_pr191_n2_evidence_identity.py
+	$(PYTHON) scripts/test_pr191_s25_evidence_check.py
+	$(PYTHON) scripts/test_pr191_s2_witness_map.py
+	$(PYTHON) scripts/test_pr191_ci_apt_sources.py
 
 hooks:
 	sh scripts/install-hooks.sh

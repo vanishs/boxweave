@@ -1,6 +1,6 @@
 # Install BoxWeave
 
-Select an exact published release and verify its assets. See [current source and release status](../STATUS.md); source features are not automatically present in a release. RC13 uses Legacy; the newer scoped, Doctor/Recover and purge features require a build containing their merged PRs.
+Select an exact published release and verify its assets. See [current source and release status](../STATUS.md); source features are not automatically present in a release. RC13 is historical Legacy; RC14 is a published prerelease, not the schema-7 draft #191 candidate. Use the documentation and wrapper from the exact matching release or authorized candidate.
 
 ## 1. Prepare the Host
 
@@ -31,55 +31,61 @@ sudo incus profile show default --project "$PROJECT"
 
 Do not add this user to incus-admin or sudo, or use the privileged Incus socket. If the confined Project or private bridge is missing, resolve native multi-user setup before installation. Never adopt unrelated resources or reuse an unknown BoxWeave ledger.
 
-## 2. Download verified installer and select mode
+## 2. Download verified installer
 
-Choose a pinned published release from [Releases](https://github.com/vanishs/boxweave/releases). Set RELEASE to the exact published tag you have verified. RC13 is the legacy example; use RC14 only after its Release and assets exist.
+The consolidated current source supports one fresh Scoped installation
+contract, not Legacy installation, adoption, upgrade or rollback. Use an
+exact matching verified published Release when available, or an independently
+verified local candidate in an authorized test environment. Historical
+releases require their own matching wrapper and documentation.
 
-```sh
-RELEASE=v1.0.0-rc.13
-mkdir -p "$HOME/boxweave-install"
-cd "$HOME/boxweave-install"
-curl -fL "https://github.com/vanishs/boxweave/releases/download/$RELEASE/install.sh" -o install.sh
-curl -fL "https://github.com/vanishs/boxweave/releases/download/$RELEASE/SHA256SUMS" -o SHA256SUMS
-grep '  install.sh$' SHA256SUMS | sha256sum -c -
-sh install.sh --plan --version "$RELEASE" --project "$PROJECT"
-```
+Download the exact tag's install.sh and SHA256SUMS from
+[Releases](https://github.com/vanishs/boxweave/releases); verify the installer
+digest. Release checksums are not an independent signature. Do not pipe a
+remote script directly into a root shell.
 
-Review the script and the exact host/project/source/binary distribution plan. Legacy --plan is service-only; the guided fresh installer separately reviews native Project/Profile/ACL preparation before writes. With a matching current v1 source wrapper and verified candidate (not the immutable RC13 script), use a complete read-only Legacy preview first:
+## 3. Reviewed fresh installation
 
-```sh
-sudo sh install.sh --plan --guided-fresh-plan --local-binary "$CANDIDATE" --sha256 "$SHA256"
-```
-
-Set CANDIDATE to the exact verified binary path and SHA256 to its reviewed digest. The same native preparation and fixed-reader checks are repeated during --interactive; the preview is never approval. The release checksums are not an independent signature. Do not pipe a remote script directly into a root shell.
-
-On a fresh compatible host, run the guided installation from a trusted local terminal:
+On the approved fresh host, use a trusted local terminal. Set RELEASE to the
+verified matching tag, or CANDIDATE to the absolute verified local binary and
+SHA256 to its reviewed digest.
 
 ```sh
+sudo sh install.sh --plan --version "$RELEASE"
 sudo sh install.sh --interactive --version "$RELEASE"
 ```
 
-The guided installer derives the dedicated Project, default pool, private incusbr-UID bridge and exclusive bw-user-UID-acl. If your existing pool/network differs, specify the actual approved --pool, --network and --acl (new exclusive ACL) as supported by that installer. Review the native preparation plan and type the requested INSTALL confirmation only for that exact target. In current v1 source the guided Legacy installer checks the required root-owned ip, bridge, nft and conntrack executables before asking for approval and again before staging; missing Debian/Ubuntu packages are reported for local operator review. It never installs them automatically. An approval refusal is not a partial installation. Current v1 prints INSTALL_PHASE markers before staged mutations; on INSTALL_PHASE_UNVERIFIED preserve the original manifest/journals and inspect local install-status and Doctor rather than reinstalling. GUIDED_INSTALL_COMPLETE precedes optional OAuth setup: OAUTH_ORIGIN_MISSING or OAUTH_CONFIGURATION_DEFERRED is not installation failure; OAuth configuration errors (exit 2) mean the controller is installed; use the printed oauth-status and targeted continuation, not a fresh installation. H3A also verifies the installed artifact hash, scope and active service before GUIDED_INSTALL_COMPLETE; CONTROLLER_DOCTOR is a separate phase. Running-service Forward policy is only asserted from observed Doctor evidence, not the CLI environment. It prepares the confined native resources, installs/activates the service, verifies configuration and offers optional OAuth setup. It does not install Incus itself, create a tunnel, or certify packet isolation or disk quota enforcement.
-
-RC13 uses legacy Peer authorization. Some Peer work requires separate Host-local review and Root helper readiness; ordinary successful install does not prove Peer grant/revoke readiness. Inspect the original operation if approval or evidence is missing. Never treat a legacy repair as a scoped-v2 procedure.
-
-## 3. Scoped Peer v2: explicit fresh installation
-
-This mode is not in RC13. Use an exact published release containing #178 and #180, or an independently verified source candidate in an authorized test environment. The flag is --scoped-peer-fresh; its native scope is derived, not caller-selected. The matching wrapper supports a complete root-local read-only plan and an interactive approval. For a published release containing scoped mode, download and verify its installer as above and use:
-
-    sudo sh install.sh --plan --scoped-peer-fresh --version "$RELEASE"
-    sudo sh install.sh --interactive --scoped-peer-fresh --version "$RELEASE"
-
-For an independently reviewed local source candidate, set CANDIDATE to its absolute verified binary path and SHA256 to its reviewed digest:
+For a local candidate:
 
 ```sh
-sudo sh install.sh --plan --scoped-peer-fresh --local-binary "$CANDIDATE" --sha256 "$SHA256"
-sudo sh install.sh --interactive --scoped-peer-fresh --local-binary "$CANDIDATE" --sha256 "$SHA256"
+sudo sh install.sh --plan --local-binary "$CANDIDATE" --sha256 "$SHA256"
+sudo sh install.sh --interactive --local-binary "$CANDIDATE" --sha256 "$SHA256"
 ```
 
-The plan prints the actual native scope and scoped_fresh_review_sha256 without persisting installation state. The #188 candidate also displays the reviewed IPv4 prefix and nominal capacity before approval; this is not a physical or dual-stack allocation guarantee. The interactive path rechecks the native review before staging. The exact reviewed explicit --apply route requires the candidate's trusted local native-scoped-fresh-plan digest and matching host/binary identities. See the [scoped installation contract and acceptance](../history/development/V1_PR178_N2_FRESH_SCOPED_LIFECYCLE_2026-11-23.md) and [N5 limits](../history/development/V1_PR178_N5_DELIVERY_2026-11-23.md).
+The native scope is derived from the dedicated restricted identity and
+compatible existing Incus; arbitrary pool/network/ACL selection is refused.
+The retained scoped flag is an explicit compatibility spelling, not a
+second mode. Review the actual candidate, host, Project, native scope and
+capacity before approval. The root-local plan is read-only, never approval.
+Explicit apply also requires exact reviewed host and Scoped native digests
+and Project. Missing prerequisites, stale/declined or existing/mixed
+installation evidence must refuse.
 
-No legacy migration/adoption, upgrade, rollback or backup commit is supported for scoped mode. PR #182 implements a separate full-only retirement for fresh installations that recorded the original native preimage; use it only with an installed build and verified wrapper containing #182. Do not delete Root journals, guard/lifecycle units, the Incus guard drop-in or state to bypass a refusal. Any surviving scoped installation evidence blocks legacy maintenance, even if the journal is absent. Unlike legacy Peer, routine scoped Peer grants/revokes are authenticated MCP operations after reviewed setup, and new Boxes default to boot.autostart=true while explicit false is preserved. The 1,024 owned-Box bound is not a physical capacity guarantee. Retained identities, addresses, directional grant history and Root policy records have separate limits.
+Missing root readers (ip, bridge, nft and conntrack) require local operator
+review; the wrapper does not install those packages.
+
+Both install paths verify the installed Scoped manifest, candidate digest,
+identity, active service and restricted Doctor readiness. Interactive
+installation additionally offers optional OAuth continuation and preserves
+an existing password. OAuth deferral or a configuration error (exit 2)
+is separate from the already completed installation. Continue with the
+printed OAuth commands, not a reinstall. On INSTALL_PHASE_UNVERIFIED preserve the original
+files and journals; inspect install-status and Doctor, do not reinstall
+blindly. Configuration readiness is not packet, quota, remote authorization
+or release acceptance.
+
+Normal full retirement uses the matching verified uninstaller and original
+native preimage. Reviewed exceptional offline Scoped retirement has bounded candidate CI evidence; final exact-head and target-specific acceptance remain separate. Never substitute Legacy execution.
 
 ## 4. Verify installation
 
@@ -94,6 +100,23 @@ An active service and anonymous HTTP 401 establish listener/denial, not authenti
 
 ## Connect a remote OAuth client
 
+For temporary development and acceptance deployments, an operator-managed
+[Cloudflare Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+is a normal BoxWeave remote-access option, including an independently
+installed nested controller on an eligible, authorized target. The owner
+reports that the existing L0 uses this integration successfully. BoxWeave
+uses stateless Streamable HTTP with JSON responses (`Stateless: true`,
+`JSONResponse: true`); its ordinary tool workflow does not require SSE.
+The Quick Tunnel SSE limitation is therefore not by itself a BoxWeave
+compatibility blocker. Actual client compatibility, OAuth authorization,
+unauthenticated refusal and exact installed tool discovery must still be
+verified for each target. A random hostname is not authentication. Keep
+BoxWeave authentication and the loopback-only listener; never expose
+native administration sockets or share credentials. Quick Tunnels are
+temporary, with changing hostnames and no uptime guarantee. Use a stable
+operator-managed HTTPS endpoint for long-lived deployments where needed.
+A tunnel does not prove child guest internet access or recursive isolation.
+
 Skip for local-only Bearer clients. BoxWeave's MCP listener stays on loopback. Operate your own HTTPS reverse proxy or tunnel forwarding to http://127.0.0.1:18650; BoxWeave does not manage DNS, certificates or tunnels. Use a trusted operator terminal to inspect oauth-status first. Current candidates report PasswordConfigured independently of Enabled; do not reset a configured password just to fix an origin. The guided installer accepts one trailing slash on an otherwise valid HTTPS DNS origin, rejects userinfo, ports, paths, queries and fragments, and permits bounded correction or deferral without reinstalling. Direct oauth-set-origin still requires the canonical origin without a slash or /mcp. If no password is configured, use oauth-setup once (at least 16 characters):
 
 ```sh
@@ -107,18 +130,19 @@ sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-status
 
 Connect the OAuth-capable MCP client to the actual origin followed by /mcp. Confirm consent only for the intended client; credentials grant full management of owned resources. Verify authenticated host_status and box_list. For a changed tunnel origin update oauth-set-origin; stop the public proxy/tunnel and use oauth-disable when ending access. Do not expose passwords or tokens to chat, logs or source control. Use the [usage guide](USE_BOXWEAVE.md) to create the first Box.
 
-## Existing installations: legacy maintenance only
+## Existing installations
 
-Do not use the fresh installer on an existing controller. Obtain the exact target release's verified installer as above. The guided legacy upgrade requires a compatible verified installed ledger and a private backup review.
-
-```sh
-sudo sh install.sh --plan --upgrade --version "$RELEASE"
-sudo sh install.sh --upgrade --version "$RELEASE"
-```
-
-Review the displayed source, host, existing backup and target. Prior backup closure requires the displayed approval and is irreversible; the replacement backup is retained. Do not run concurrent maintenance or force incompatible schema upgrades. Use the exact installed rollback/install-commit help and [guided upgrade contract](../history/development/V1_GUIDED_UPGRADE_2026-11-21.md) for separately reviewed backup operations.
-
-For deliberate legacy retirement only, first settle owned Peer/Forward dependencies and outstanding originals. Obtain the matching release's self-contained uninstall.sh, verify its checksum and read the exact release's help. The source checkout wrapper requires scripts/uninstall_core.py. Guided --full reviews owned inventory and requires explicit REMOVE confirmation. This can remove owned resources and data; preserve necessary backups and original receipts first. Unresolved originals, foreign resources, unsupported schema, separately installed legacy Peer Root services or incomplete journals can block it. Use the original local review/recovery path for these rather than removing units or journals manually. Current source full retirement also checks exact native Project/Profile/ACL against the root preparation journal before approval and before effects. NATIVE_CONFIG_DRIFT or UNVERIFIED blocks it. Older installed builds lack this read-only helper; use the matching verified Release uninstaller, not the newer wrapper or a replacement binary. A prior STARTED audit directs you to the original exact archive and --resume-plan; never rerun --full. Do not use this legacy flow for scoped installs. See [retirement contract](../history/development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md).
+Do not use the fresh installer on any existing or incompletely retired
+controller. Preserve original manifests, receipts and journals. Historical
+Legacy installations require the exact matching historical artifact and
+[upgrade contract](../history/development/V1_GUIDED_UPGRADE_2026-11-21.md)
+or [retirement contract](../history/development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md);
+neither is a current Scoped upgrade or repair path.
+The current wrapper refuses non-Scoped plan/apply/full/resume actions
+before Host observation. An older interrupted retirement must keep its
+original evidence and use its exact matching historical artifact. Completed
+historical archive validation and separately reviewed purge remain supported;
+this is not permission to execute an older installation's retirement.
 
 If installation or maintenance fails, retain the original manifest, journal and evidence. Do not blindly reinstall, erase the ledger, weaken confinement or reset unrelated native resources.
 
@@ -150,7 +174,7 @@ The erasure plan lists only recognized, reviewed completed retirement archives, 
 
 For RC13, obtain the matching verified RC13 uninstaller for the original legacy retirement. Do not use the RC14 purge wrapper for that initial retirement. Clean up owned Boxes, Peer and Forward via MCP and let native retirement operations settle. A separately staged legacy Peer Root unit or its journals, if present, needs exact local original review; the current generic purge intentionally refuses these residuals rather than deleting an unverified root capability. Retain evidence if the original retirement refuses. Do not substitute the new reader on an old installed binary. Run the new purge only after verified full retirement. No automatic migration, arbitrary native cleanup, removal of Incus itself, dedicated OS account, images or external tunnel is performed. The next Scoped install requires its own fresh native preview and explicit approval; the existing bridge address range is preserved and foreign native projects or customized topology may block admission. The original RC13 Host may still use a /24 bridge rather than the /21 provisioned by a new Incus bootstrap.
 
-### #188 candidate: maintenance preview and exceptional offline retirement
+### Current #191 candidate: maintenance preview and exceptional offline retirement
 
 The unified observation-side preview is separate from executable approval.
 For the matching verified candidate wrapper and local installed scope:
@@ -165,17 +189,17 @@ authorizes erasure. Use the exact maintenance-recheck digest interface
 shown by the matching wrapper to check freshness. It is not a full-retirement
 approval. Normal Scoped retirement uses its own full plan and confirmation.
 
-An explicitly supported stopped Legacy installation with exact cold
-ledger/native provenance may offer the separate --offline-plan and
---offline-full routes. They archive and preserve the original UNKNOWN
-and claims without settling or replaying it. The executable leaf is
-limited to the verified supported originals; ambiguous historical Peer
-Root journals, unproved native state and partial Scoped installs remain
-blocked. Use --offline-resume-plan and --offline-resume only for supported
-post-native phases of the exact interrupted original. Do not substitute
-a newer candidate binary for the original installed artifact or bypass
-refusal by deleting evidence. After verified complete retirement, review
-purge separately. See [H5 delivery](../development/PR188_H5_DELIVERY.md).
+The historical stopped Legacy route is not the current Scoped contract.
+The #191 candidate has separate offline plan/full and original resume
+plan/resume actions for a stopped Scoped installation. Exact reviewed
+scope, original evidence, retained claims and native preimage are required;
+active, foreign, incomplete or unverified installations refuse. Normal
+full retirement and completed-data purge remain separate contracts.
+P2 verified empty, settled and exact-original offline lanes, including
+interrupted continuation; R1's exact N2 retained all 29 lanes. Do not
+substitute a historical procedure or treat these fixture results as
+authority for a particular Host. See [consolidation acceptance](../development/CONSOLIDATION_ACCEPTANCE.md)
+and [historical H5](../development/PR188_H5_DELIVERY.md).
 
 ### Nested lifecycle compatibility (candidate)
 

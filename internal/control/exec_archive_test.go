@@ -36,7 +36,7 @@ func TestExecArchiveSurvivesDeletedBoxAndExpiresOverRealMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 	boxID := "b2c122c0-a9f4-4a2f-a63e-3982247e359e"
-	rec, err := st.Admit(ctx, state.Admission{
+	rec, err := st.AdmitScoped(ctx, state.Admission{
 		Layer: "bw-test", ActorID: token.ActorID, TokenID: token.ID,
 		Key: "archive-output-live-mcp-001", RequestID: "archive-output-request",
 		Action: "box_exec", SafeIntent: []byte("{}"),

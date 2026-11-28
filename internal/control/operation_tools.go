@@ -149,12 +149,6 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		} else if result.State == "UNKNOWN" || result.Action == "operation_recover" {
 			diagnostic.NextAction = navigation.NextAction
 		}
-		if !s.ScopedPeerFresh && result.Action == "box_peer_set" && result.State == "ADMITTED" && matches {
-			diagnostic.StatusClass = "LOCAL_APPROVAL_REQUIRED"
-			diagnostic.NextAction = state.NextAction{Kind: "LOCAL_REVIEW_REQUIRED"}
-			navigation.NextAction = diagnostic.NextAction
-			navigation.Disposition = "LEGACY_PEER_LOCAL_APPROVAL_REQUIRED"
-		}
 		// A token that was valid when the HTTP request arrived may have
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never

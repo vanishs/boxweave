@@ -56,7 +56,16 @@ def validate(data):
     for op in data["original_operations"]:
         if not isinstance(op, dict) or not nonempty(op.get("operation_id")):
             raise HarnessError("Original operations require operation_id")
+        if "output_review" in op and op["output_review"] not in (
+                "PENDING", "CONSUMED", "NOT_REQUIRED"):
+            raise HarnessError("Invalid original Operation output_review")
     return data
+
+
+def pending_output(data):
+    """Caller-reported unresolved output; absent review is conservatively pending."""
+    return sorted({op["operation_id"] for op in data["original_operations"]
+                   if op.get("output_review") not in ("CONSUMED", "NOT_REQUIRED")})
 
 
 def read_checkpoint(path):
@@ -127,5 +136,6 @@ def run(args, root):
         "status": "REVIEW_REQUIRED" if issues else "STRUCTURE_AND_GIT_MATCH",
         "work_ref": data["work_ref"], "source": live, "issues": issues,
         "next_safe_action": data["next_safe_action"],
+        "pending_output": pending_output(data),
         "note": "Never authorizes replay, takeover, or acceptance; verify repository identity, remote state and evidence separately.",
     }, 1 if issues else 0

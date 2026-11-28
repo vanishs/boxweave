@@ -1,6 +1,9 @@
 #!/bin/sh
 # One-use GitHub-hosted S2.5 LAB. No shared Incus/production effects.
 set -eu
+# Current candidate runs only the reviewed Scoped witness; historical
+# Legacy lanes require their original pinned source. Refuse before effects.
+test "${P1B_S25_SCOPED:-0}" = 1
 test "$GITHUB_ACTIONS" = true
 test "$RUNNER_ENVIRONMENT" = github-hosted
 test "$(id -u)" != 0
@@ -17,9 +20,45 @@ proof="$RUNNER_TEMP/s25-evidence"
 mkdir -p "$proof"
 echo "S25_LAB_SOURCE_SHA=$(git rev-parse HEAD)"
 echo S25_LAB_DISPOSABLE_HOST=PASS
+case "${P1B_S25_SCOPED:-0}" in 0|1) ;; *) exit 88 ;; esac
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ test -z "${S5B1_MODE:-}${S3_FILE_INSTALLED_PHASE2:-}"
+ test ! -e /usr/local/bin/boxweave-s25-candidate
+ test "$(git rev-parse HEAD)" = "${P1B_S25_EXACT_HEAD:?}"
+ test ! -e /var/lib/boxweave
+ test ! -e /usr/local/bin/boxweave
+ # Same isolated runner prerequisite as N2; never applied to a shared Host.
+ sudo python3 - <<'P1B_S25_PARENT'
+import os,stat
+for name in ("/","/usr","/usr/local","/usr/local/bin"):
+    s=os.lstat(name)
+    assert stat.S_ISDIR(s.st_mode) and s.st_uid==0
+    if name in ("/usr/local","/usr/local/bin"):
+        os.chmod(name,stat.S_IMODE(s.st_mode)&~0o022)
+    assert not os.lstat(name).st_mode&0o022
+P1B_S25_PARENT
+ case "${GITHUB_REF:-}" in
+   refs/heads/release/*)
+     release_version="$(python3 scripts/pr191_s2_ci_gate.py --release-version)"
+     CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=$release_version -X main.commit=$(git rev-parse HEAD) -buildid=" -o "$work/staging/boxweave" ./cmd/boxweave
+     ;;
+   *) CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+     ;;
+ esac
+ sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
+ cp scripts/pr191_s25_scoped_setup.sh "$work/staging/pr191_s25_scoped_setup.sh"
+ cp install.sh "$work/staging/s25-install.sh"
+ cp install.sh "$work/private/s25-install.sh"
+ setup_helper_sha="$(sha256sum "$work/staging/pr191_s25_scoped_setup.sh" | cut -d' ' -f1)"
+ install_sha="$(sha256sum "$work/staging/s25-install.sh" | cut -d' ' -f1)"
+ candidate_sha="$(sha256sum "$work/staging/boxweave" | cut -d' ' -f1)"
+fi
 
-sudo apt-get update -qq
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 iproute2 nftables conntrack >/dev/null
+# CI package selection: unrelated optional repository is not needed.
+# Required repository signatures and exact package checks are unchanged.
+sudo env GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 scripts/pr191_ci_apt_sources.py
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg python3 iproute2 nftables conntrack dnsmasq-base >/dev/null
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL --max-time 35 https://pkgs.zabbly.com/key.asc -o "$work/staging/zabbly.asc"
 fp="$(gpg --show-keys --with-colons "$work/staging/zabbly.asc" | awk -F: '$1=="fpr"{print $10;exit}')"
@@ -34,18 +73,22 @@ Components: main
 Architectures: amd64
 Signed-By: /etc/apt/keyrings/s25-zabbly.asc
 S25_APT_SOURCE
-sudo apt-get update -qq
+sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 update -qq
 pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3;exit}')"
 test -n "$pkg"
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ sudo env P1B_S25_SCOPED=1 BW_S25_SETUP_LAYER=outer GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+   sh scripts/pr191_s25_scoped_setup.sh bootstrap /usr/local/bin/boxweave-s25-candidate "$candidate_sha" "$pkg" "$work/private"
+else
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
 sudo systemctl start incus.service
 sudo systemctl is-active --quiet incus.service
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 sudo incus admin init --auto --storage-backend=dir
+sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
+fi
 echo "S25_LAB_INCUS_APT=$pkg"
 echo S25_LAB_NATIVE_INCUS_7_6_INITIALIZED=PASS
-
-sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
 uid="$(id -u boxweave)"
 project="user-$uid"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus project list --format csv >/dev/null
@@ -55,11 +98,33 @@ if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONF
 fi
 echo S25_LAB_FOREIGN_NATIVE_PROJECT_DENIED=PASS
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ # Reuse the exact image already acquired by the authorized disposable L0.
+ # No new CONNECT hosts, parent socket, image server or production capability.
+ image_fingerprint="$(sudo incus query "/1.0/images/aliases/boxweave-ubuntu-24.04?project=$project" | python3 -c 'import json,sys;print(json.load(sys.stdin)["target"])')"
+ printf '%s\n' "$image_fingerprint" | grep -Ex '[0-9a-f]{64}' >/dev/null
+ test ! -e "$work/staging/s25-ubuntu.meta"
+ test ! -e "$work/staging/s25-ubuntu.meta.root"
+ # Incus 7.6 split-image export to explicit nonexistent file writes
+ # metadata and <file>.root. Refuse a different format rather than guessing.
+ sudo incus image export "$image_fingerprint" "$work/staging/s25-ubuntu.meta" --project "$project" --quiet
+ sudo test -s "$work/staging/s25-ubuntu.meta"
+ sudo test -s "$work/staging/s25-ubuntu.meta.root"
+ sudo chown "$(id -u):$(id -g)" "$work/staging/s25-ubuntu.meta" "$work/staging/s25-ubuntu.meta.root"
+ chmod 0600 "$work/staging/s25-ubuntu.meta" "$work/staging/s25-ubuntu.meta.root"
+ image_meta_sha="$(sha256sum "$work/staging/s25-ubuntu.meta" | cut -d' ' -f1)"
+ image_root_sha="$(sha256sum "$work/staging/s25-ubuntu.meta.root" | cut -d' ' -f1)"
+ test "$(cat "$work/staging/s25-ubuntu.meta" "$work/staging/s25-ubuntu.meta.root" | sha256sum | cut -d' ' -f1)" = "$image_fingerprint"
+ printf 'image_fingerprint=%s\nimage_metadata_sha256=%s\nimage_rootfs_sha256=%s\n' "$image_fingerprint" "$image_meta_sha" "$image_root_sha" > "$proof/image-identity.txt"
+ echo P1B_S25_OUTER_EXACT_IMAGE_EXPORTED=PASS
+fi
 
 net="incusbr-$uid"
 acl="bw-s25-standalone-owned"
 sudo incus network show "$net" >/dev/null
-if [ -n "${S5B1_MODE:-}" ]; then
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+  test "$(sha256sum "$work/staging/boxweave" | cut -d' ' -f1)" = "$candidate_sha"
+elif [ -n "${S5B1_MODE:-}" ]; then
   test "$(git rev-parse HEAD)" = a3e02b4750edcabb80427e3311a19614d82b0029
   CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-rc.10 -X main.commit=$(git rev-parse HEAD) -buildid=" -o "$work/staging/boxweave" ./cmd/boxweave
 else
@@ -70,14 +135,22 @@ cp scripts/s25_inner_setup.sh "$work/staging/s25_inner_setup.sh"
 cp scripts/s25_simwan6.py "$work/staging/s25_simwan6.py"
 chmod 0755 "$work/staging/boxweave" "$work/staging/s25-lab-agent"
 binary_sha="$(sha256sum "$work/staging/boxweave" | awk '{print $1}')"
+echo "S25_LAB_CANDIDATE_SHA256=$binary_sha"
 agent_sha="$(sha256sum "$work/staging/s25-lab-agent" | awk '{print $1}')"
 setup_sha="$(sha256sum "$work/staging/s25_inner_setup.sh" | awk '{print $1}')"
 simwan_sha="$(sha256sum "$work/staging/s25_simwan6.py" | awk '{print $1}')"
-sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
+if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
+ sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
+fi
 
 printf 'source_commit=%s\ncandidate_binary_sha256=%s\nagent_binary_sha256=%s\ninner_setup_sha256=%s\nincus_apt=%s\n' "$(git rev-parse HEAD)" "$binary_sha" "$agent_sha" "$setup_sha" "$pkg" > "$proof/identity.txt"
 printf 'simwan6_helper_sha256=%s\n' "$simwan_sha" >> "$proof/identity.txt"
 
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ sudo env P1B_S25_SCOPED=1 BW_S25_SETUP_LAYER=outer GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted BW_S25_INSTALL_SHA="$install_sha" \
+   sh scripts/pr191_s25_scoped_setup.sh install /usr/local/bin/boxweave-s25-candidate "$binary_sha" "$project" "$work/private"
+ printf 'scoped_helper_sha256=%s\ninstaller_sha256=%s\n' "$setup_helper_sha" "$install_sha" >> "$proof/identity.txt"
+else
 sudo /usr/local/bin/boxweave-s25-candidate native-prepare-plan -project "$project" -pool default -network "$net" -acl "$acl" > "$work/private/plan.json"
 sha="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["review_sha256"])' "$work/private/plan.json")"
 if sudo /usr/local/bin/boxweave-s25-candidate native-prepare-apply -project "$project" -pool default -network "$net" -acl "$acl" -native-prepare-sha256 0000000000000000000000000000000000000000000000000000000000000000 -approve-local >/dev/null 2>&1; then
@@ -93,11 +166,14 @@ S25_PREREQ_ASSERT
 echo S25_LAB_NATIVE_PREREQ_EIGHT_CHECKS=PASS
 
 sudo /usr/local/bin/boxweave-s25-candidate install-stage -project "$project" -source-binary /usr/local/bin/boxweave-s25-candidate -expect-sha256 "$binary_sha" -approve-stage > "$work/private/stage.json"
+fi
 for name in admin1 admin2 admin3 peer; do
  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create > "$work/private/$name.secret"
  chmod 0600 "$work/private/$name.secret"
 done
-sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local > "$work/private/activated.json"
+if [ "${P1B_S25_SCOPED:-0}" = 0 ]; then
+ sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local > "$work/private/activated.json"
+fi
 # Doctor is observation-only. Explicit token creation initializes the ledger;
 # activate the exact staged service before checking installed readiness.
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave doctor -project "$project" > "$proof/doctor.json" || {
@@ -378,6 +454,10 @@ sudo chown "$(id -u):$(id -g)" "$work/staging/s25_simwan6.crt"
 chmod 0644 "$work/staging/s25_simwan6.crt"
 echo S25_L0_SIMWAN6_TLS_NAMESPACE_READY=PASS
 
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ export P1B_S25_SCOPED=1 BW_S25_SCOPED_HELPER_SHA="$setup_helper_sha" BW_S25_INSTALL_SHA="$install_sha"
+ export BW_S25_IMAGE_FINGERPRINT="$image_fingerprint" BW_S25_IMAGE_META_SHA="$image_meta_sha" BW_S25_IMAGE_ROOT_SHA="$image_root_sha"
+fi
 export BW_S25_URL=http://127.0.0.1:18650/mcp
 export BW_S25_PROJECT="$project"
 export BW_S25_OUTER_DB=/var/lib/boxweave/ledger.sqlite
@@ -516,7 +596,9 @@ sudo ip -s link show s25s6host > "$proof/simwan6-l0-veth-packets.txt"
 sudo incus exec bw-s25-mcp-l1 --project "$project" -- ip -s link show s25s6host > "$proof/simwan6-l1-veth-packets.txt"
 sudo incus config show bw-s25-mcp-l1 --project "$project" --expanded > "$proof/simwan6-l0-native-nic.yaml"
 inner_uid="$(sudo incus exec bw-s25-mcp-l1 --project "$project" -- id -u boxweave)"
-sudo incus exec bw-s25-mcp-l1 --project "$project" -- incus config show bw-s25-mcp-l2 --project "user-$inner_uid" --expanded > "$proof/simwan6-l1-native-nic.yaml"
+inner_name=bw-s25-mcp-l2
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then inner_name=bw-s25-mcp-l1; fi
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- incus config show "$inner_name" --project "user-$inner_uid" --expanded > "$proof/simwan6-l1-native-nic.yaml"
 grep -q 'SIM_WAN6_REMOTE=' "$proof/simwan6-l0-upstream.log"
 grep -q 'SIM_WAN6_REMOTE=' "$proof/simwan6-l1-upstream.log"
 echo S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS
@@ -527,6 +609,24 @@ python3 scripts/s25_independent_verifier.py l2
 echo S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ # Nonsecret IDs are exchanged only between the two independent SDK clients.
+ # The nested invocation uses its own local test credential and loopback MCP.
+ inner_cp="$work/private/dual-inner-original.json"
+ sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-inner-checkpoint.json > "$inner_cp"
+ outer_uuid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["uuid"])' "$BW_S25_CHECKPOINT")"
+ outer_original="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["create_op"])' "$BW_S25_CHECKPOINT")"
+ inner_uuid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["uuid"])' "$inner_cp")"
+ inner_original="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["create_op"])' "$inner_cp")"
+ test "$outer_uuid" != "$inner_uuid"
+ test "$outer_original" != "$inner_original"
+ BW_S25_FOREIGN_UUID="$inner_uuid" BW_S25_FOREIGN_ORIGINAL="$inner_original" "$work/staging/s25-lab-agent" dual-scope
+ sudo incus exec bw-s25-mcp-l1 --project "$project" -- env P1B_S25_SCOPED=1 BW_S25_ALLOWED_NESTED=1 BW_S25_INNER=1 \
+   BW_S25_URL=http://127.0.0.1:18650/mcp BW_S25_ADMIN2_FILE=/root/s25-admin2.secret BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json \
+   BW_S25_FOREIGN_UUID="$outer_uuid" BW_S25_FOREIGN_ORIGINAL="$outer_original" /usr/local/bin/s25-lab-agent dual-scope
+ python3 scripts/s25_dual_auth.py "$project"
+ python3 scripts/s25_independent_verifier.py dual-scope
+fi
 # Additional P0 BH-009/BH-011/BH-015: cross-Project raw IPv4/IPv6
 # packets and parent native Unix-socket isolation. This test uses ONLY
 # a freshly created foreign guest in the disposable INNER L1 daemon.
@@ -535,12 +635,12 @@ foreign_probe_sha="$(sha256sum scripts/s25_r12_foreign_l1.py | awk '{print $1}')
 sudo incus file push scripts/s25_r12_foreign_l1.py bw-s25-mcp-l1/root/s25_r12_foreign_l1.py --project "$project"
 test "$(sudo incus exec bw-s25-mcp-l1 --project "$project" -- sha256sum /root/s25_r12_foreign_l1.py | awk '{print $1}')" = "$foreign_probe_sha"
 printf 'foreign_probe_sha256=%s\n' "$foreign_probe_sha" >> "$proof/identity.txt"
-sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 python3 /root/s25_r12_foreign_l1.py setup > "$proof/r12-foreign-inner-setup.txt"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 P1B_S25_SCOPED="${P1B_S25_SCOPED:-0}" python3 /root/s25_r12_foreign_l1.py setup > "$proof/r12-foreign-inner-setup.txt"
 grep -qx 'S25_R12_L1_FOREIGN_PROJECT_V4_V6_POSITIVE_AND_BIDIRECTIONAL_PACKET_DENIAL=PASS' "$proof/r12-foreign-inner-setup.txt"
 grep -qx 'S25_R12_L1_PARENT_SOCKET_AND_FOREIGN_PROJECT_AUTH_ISOLATION=PASS' "$proof/r12-foreign-inner-setup.txt"
 python3 scripts/s25_independent_verifier.py r12-foreign
 sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-r12-foreign-state.json > "$proof/r12-foreign-before-cleanup.json"
-sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 python3 /root/s25_r12_foreign_l1.py cleanup
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 P1B_S25_SCOPED="${P1B_S25_SCOPED:-0}" python3 /root/s25_r12_foreign_l1.py cleanup
 python3 scripts/s25_independent_verifier.py r12-foreign-clean
 sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-r12-foreign-state.json > "$proof/r12-foreign-after-cleanup.json"
 echo S25_R12_L1_FOREIGN_PACKET_AND_SOCKET_INDEPENDENT_V=PASS
@@ -554,6 +654,11 @@ python3 scripts/s25_independent_verifier.py l2clean
 python3 scripts/s25_independent_verifier.py clean
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 test -z "$(sudo incus list --project "$project" --format csv -c n)"
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ test -z "$(sudo incus list --all-projects --format csv -c n)"
+ echo P1B_S25_SCOPED_STARTUP_LIFECYCLE=PASS
+ echo P1B_S25_SCOPED_FOREIGN_PACKET=PASS
+fi
 # Round 2 independent operator rollback: run only *after* original SDK
 # cleanup. The upgrade canary uses identical source with only a distinct
 # build label; always verify actual install digest and preserve original
@@ -564,6 +669,66 @@ CGO_ENABLED=1 go build -trimpath \
   -o "$work/canary-readable/boxweave-r2-canary" ./cmd/boxweave
 canary_sha="$(sha256sum "$work/canary-readable/boxweave-r2-canary" | awk '{print $1}')"
 test "$canary_sha" != "$binary_sha"
+if [ "${P1B_S25_SCOPED:-0}" = 1 ]; then
+ # Scoped fresh-only has no successful Legacy upgrade/rollback. Keep
+ # wrong/correct-digest and no-backup negatives, offline operator access,
+ # and exact original receipt recovery; do not fake the old PASS markers.
+ export BW_S25_CANARY_SHA="$canary_sha"
+ ctl=boxweave.service
+ before_pid="$(sudo systemctl show "$ctl" -p MainPID --value)"
+ test "$before_pid" -gt 1
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$work/private/scoped-maint-before.json"
+ refused_scoped_maintenance() {
+   label="$1"; shift
+   if sudo /usr/local/bin/boxweave "$@" > "$work/private/scoped-$label.log" 2>&1; then
+     echo "P1B_S25_SCOPED_MAINTENANCE_ACCEPTED=$label" >&2; exit 95
+   fi
+   if ! grep -Fxq 'boxweave: scoped fresh only: legacy installation mutation unsupported' "$work/private/scoped-$label.log"; then
+     echo "P1B_S25_SCOPED_MAINTENANCE_UNEXPECTED_REFUSAL=$label" >&2
+     return 96
+   fi
+ }
+ refused_scoped_maintenance rollback rollback -project "$project" -approve-local
+ refused_scoped_maintenance wrong-digest upgrade -project "$project" -source-binary "$work/canary-readable/boxweave-r2-canary" -expect-sha256 "$(printf '%064d' 0)" -approve-local
+ refused_scoped_maintenance exact-digest upgrade -project "$project" -source-binary "$work/canary-readable/boxweave-r2-canary" -expect-sha256 "$canary_sha" -approve-local
+ test "$(sudo systemctl show "$ctl" -p MainPID --value)" = "$before_pid"
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$work/private/scoped-maint-active.json"
+ cmp "$work/private/scoped-maint-before.json" "$work/private/scoped-maint-active.json"
+ echo P1B_S25_SCOPED_ACTIVE_LEGACY_MAINTENANCE_REFUSED_NO_EFFECT=PASS
+ sudo systemctl stop "$ctl"
+ test "$(sudo systemctl is-active "$ctl")" = inactive
+ code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp || :)"
+ test "$code" = 000
+ refused_scoped_maintenance offline-rollback rollback -project "$project" -approve-local
+ refused_scoped_maintenance offline-upgrade upgrade -project "$project" -source-binary "$work/canary-readable/boxweave-r2-canary" -expect-sha256 "$canary_sha" -approve-local
+ test "$(sudo systemctl is-active "$ctl")" = inactive
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$work/private/scoped-maint-offline.json"
+ cmp "$work/private/scoped-maint-before.json" "$work/private/scoped-maint-offline.json"
+ echo P1B_S25_SCOPED_OFFLINE_LEGACY_MAINTENANCE_REFUSED_NO_EFFECT=PASS
+ sudo systemctl start "$ctl"
+ ready=no
+ for attempt in $(seq 1 40); do
+   after_pid="$(sudo systemctl show "$ctl" -p MainPID --value)"
+   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' || :)"
+   if [ "$after_pid" -gt 1 ] && [ "$after_pid" != "$before_pid" ] && [ "$code" = 401 ]; then ready=yes; break; fi
+   sleep 1
+ done
+ test "$ready" = yes
+ "$work/staging/s25-lab-agent" scoped-maintenance-readback
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-readback
+ python3 scripts/s25_independent_verifier.py scoped-maintenance-snapshot > "$proof/scoped-maintenance-final.json"
+ cmp "$work/private/scoped-maint-before.json" "$proof/scoped-maintenance-final.json"
+ sudo /usr/local/bin/boxweave install-status -project "$project" > "$proof/scoped-final-status.json"
+ cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
+ printf 'maintenance_original_binary_sha256=%s\nmaintenance_canary_binary_sha256=%s\n' "$binary_sha" "$canary_sha" > "$proof/scoped-maintenance-binaries.txt"
+ echo P1B_S25_SCOPED_MAINTENANCE_NO_EFFECT_ORIGINALS=PASS
+ echo P1B_S25_LEGACY_SUCCESSFUL_UPGRADE_ROLLBACK=OUT_OF_SCOPE_170
+ # Retained dual-Agent verifier completed, including scoped refusal,
+ # offline/readback and all preceding original lifecycle assertions.
+ echo S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS
+ echo S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET
+ exit 0
+fi
 test ! -e /var/lib/boxweave-installer-backup
 if sudo /usr/local/bin/boxweave rollback -project "$project" -approve-local > "$work/private/unbacked-rollback.json" 2>&1; then
  echo S25_R2_FAIL_UNBACKED_ROLLBACK_ACCEPTED >&2; exit 95

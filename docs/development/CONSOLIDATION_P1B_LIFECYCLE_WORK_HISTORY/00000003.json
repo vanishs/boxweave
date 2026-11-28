@@ -1,0 +1,97 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-recovery",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "a76e13bffeeaed6451e5a87f5bf0d368; f8fffa74621769ccb495b27eb90ff1e1 exit 0",
+      "observation": "Verified exclusive transfer and short Exec of 4684-byte script",
+      "outcome": "helped",
+      "reason": "Exact previous observation appended to reconciled inbox revision 40; original facts retained"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+      "observation": "Local source gates and independent installed failure distinguished",
+      "outcome": "helped",
+      "reason": "L012 prior stale-CI candidate not applicable to exact head failure"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+      "observation": "Reconciled original HEAD and prior CI before edits",
+      "outcome": "helped",
+      "reason": "Existing guidance adequate"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+      "observation": "Reviewed candidate and retained unresolved observation failure",
+      "outcome": "helped",
+      "reason": "Correct episode-history sibling copy restored safe read and observation; no asset change justified"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+      "observation": "Registered format clean binding passed; local feedback observe refused unsafe directory",
+      "outcome": "helped",
+      "reason": "Correct episode-history sibling copy restored safe read and observation; no asset change justified"
+    }
+  ],
+  "attempt_ref": "20261125-recovery",
+  "authority": "Owner authorized P1 development in isolated Box; no shared host changes, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "a76e13bffeeaed6451e5a87f5bf0d368; f8fffa74621769ccb495b27eb90ff1e1 exit 0",
+    "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+    "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+    "64e2136da624a0927c11580d9df46207 exit 0; exact episode history copied and L014 revision 40 appended"
+  ],
+  "evolve_handoff": {
+    "items": [],
+    "status": "NO_MATCHED_PENDING"
+  },
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Retain original evidence; completed Create native gate now passed, next verify Delete and first-ACK lanes",
+  "objective": "Scoped completed-journal lifecycle recovery and retired lineage",
+  "revision": 3,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "1c1ca42ebbb913f9c264c77aaeaf08cb0cf44db6",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "skill.task-resume",
+    "skill.continuous-learning",
+    "tool.bwdev"
+  ],
+  "work_ref": "pr191/p1b-lifecycle-recovery"
+}

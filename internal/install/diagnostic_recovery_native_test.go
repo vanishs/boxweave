@@ -21,8 +21,12 @@ func TestPR177D4InstalledCompletedOriginal(t *testing.T) {
 	defer cancel()
 	project := os.Getenv("D4_TEST_PROJECT")
 	mode := os.Getenv("D4_TEST_MODE")
-	if !state.SafeDiagnosticProject(project) || mode != "LEGACY" && mode != "SCOPED_V2" {
+	if !state.SafeDiagnosticProject(project) || mode != "LEGACY" && mode != "SCOPED_V2" && mode != "SCOPED_POWER" {
 		t.Fatal("invalid fixture scope")
+	}
+	if mode == "SCOPED_POWER" && (os.Getenv("GITHUB_ACTIONS") != "true" ||
+		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("D4_TEST_PHASE") != "stage") {
+		t.Fatal("dedicated hosted Scoped power fixture required")
 	}
 	if exec.Command("systemctl", "is-active", "--quiet", "boxweave.service").Run() == nil {
 		t.Fatal("competing controller active")
@@ -50,7 +54,7 @@ func TestPR177D4InstalledCompletedOriginal(t *testing.T) {
 				b = x
 			}
 		}
-		if a.UUID == "" || !a.OriginalProof || mode == "SCOPED_V2" && (b.UUID == "" || !b.OriginalProof) {
+		if a.UUID == "" || !a.OriginalProof || mode == "SCOPED_V2" && (b.UUID == "" || !b.OriginalProof) || mode == "SCOPED_POWER" && len(l.Boxes) != 1 {
 			t.Fatal("missing fixed owned fixtures")
 		}
 		_, tok, e := db.IssueToken(ctx, time.Hour)
@@ -74,7 +78,9 @@ func TestPR177D4InstalledCompletedOriginal(t *testing.T) {
 			adm.BoxUUID = a.UUID
 			adm.Incarnation = a.Incarnation
 			adm.SafeIntent = []byte(`{"box_id":"` + a.UUID + `"}`)
-			rec, e := db.Admit(ctx, adm)
+			// The installed Scoped power witness records the actual native
+			// ACK and deliberately omits only final business settlement.
+			rec, e := db.AdmitScoped(ctx, adm)
 			if e != nil || rec.Duplicate {
 				t.Fatal(rec, e)
 			}

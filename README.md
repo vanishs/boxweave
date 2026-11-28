@@ -40,7 +40,7 @@ Use operation_get to follow the original asynchronous operation and operation_ou
 - A management credential grants access to owned Boxes, including guest-root execution. Keep credentials private.
 - File tools support exclusive create, list and read; unsafe conditional replace/delete is refused. Use Git or guest commands for edits.
 - A native forward is not proof that an application is listening or externally reachable. Omitted host binds stay loopback.
-- Scoped Peer v2 requires an explicit fresh installation; migration, upgrade and rollback are unsupported. Full-only scoped retirement and separately reviewed completed-data purge are available in the newer source, subject to the installed release and original evidence. See [maintenance](docs/getting-started/MANUAL_INSTALL.md).
+- The draft #191 schema-7 source supports only fresh Scoped Peer v2 installation; product migration, upgrade and rollback are unsupported. Published older releases have their own exact contracts. Full-only scoped retirement and separately reviewed completed-data purge are available in the newer source, subject to the installed release and original evidence. See [maintenance](docs/getting-started/MANUAL_INSTALL.md).
 - Host configuration and evidence-bound local recovery remain operator responsibilities. BoxWeave is not a general host administration, cluster orchestration, backup or website publishing platform.
 
 ## Development

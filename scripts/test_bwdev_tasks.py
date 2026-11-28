@@ -46,6 +46,51 @@ class TaskTests(unittest.TestCase):
             self.invoke("transition", "a", "--expect", "4", "--to", "PENDING", "--note", "reopen")
         self.assertEqual(records.latest(self.directory)["revision"], 4)
 
+    def test_next_does_not_stop_at_local_blocker(self):
+        spec=json.loads(self.spec.read_text())
+        spec["tasks"].append({"id":"independent","acceptance":"separate required proof","depends_on":[]})
+        self.spec.write_text(json.dumps(spec))
+        self.invoke("init",str(self.spec))
+        self.invoke("transition","a","--expect","1","--to","BLOCKED","--note","specific unavailable dependency")
+        r=self.invoke("next")
+        self.assertEqual(r["continuation"]["decision"],"CONTINUE")
+        self.assertEqual(r["continuation"]["actionable"],[{"id":"independent","state":"PENDING","acceptance":"separate required proof"}])
+        self.assertEqual(r["continuation"]["blocked"],[{"id":"a","note":"specific unavailable dependency"}])
+        self.assertEqual(r["continuation"]["waiting"],[{"id":"b","on":["a"]}])
+        self.invoke("transition","independent","--expect","2","--to","WORKING","--note","started")
+        r=self.invoke("next")
+        self.assertEqual(r["continuation"]["decision"],"CONTINUE")
+        self.assertEqual(r["continuation"]["actionable"][0]["state"],"WORKING")
+        self.invoke("transition","independent","--expect","3","--to","RECORDED","--note","observed proof")
+        r=self.invoke("next")
+        self.assertEqual(r["continuation"]["decision"],"REVIEW_BLOCKERS")
+        self.assertFalse(r["continuation"]["actionable"])
+        self.assertEqual(r["revision"],4)
+        self.assertEqual(records.latest(self.directory)["revision"],4)
+
+    def test_next_refuses_stale_phase_history(self):
+        self.invoke("init",str(self.spec))
+        self.invoke("transition","a","--expect","1","--to","BLOCKED","--note","old phase blocker")
+        for action in ("next","status"):
+            with self.assertRaisesRegex(HarnessError,"work_ref"):
+                self.invoke(action,"--expect-work-ref","next-phase")
+            result=self.invoke(action,"--expect-work-ref","test")
+            self.assertEqual(result["continuation"]["decision"],"REVIEW_BLOCKERS")
+        with self.assertRaisesRegex(HarnessError,"work_ref"):
+            self.invoke("transition","a","--expect","2","--to","PENDING",
+                        "--note","wrong scope","--expect-work-ref","next-phase")
+        self.assertEqual(records.latest(self.directory)["revision"],2)
+
+    def test_next_all_recorded_requires_exit_review(self):
+        self.invoke("init",str(self.spec))
+        for i,(key,state) in enumerate((("a","WORKING"),("a","RECORDED"),("b","WORKING"),("b","RECORDED")),1):
+            self.invoke("transition",key,"--expect",str(i),"--to",state,"--note","fixture proof")
+        r=self.invoke("next")
+        self.assertEqual(r["continuation"]["decision"],"REVIEW_EXIT")
+        self.assertFalse(r["continuation"]["actionable"])
+        self.assertFalse(r["continuation"]["waiting"])
+        self.assertEqual(r["continuation"]["recorded_count"],2)
+
     def test_replan_retains_acceptance_and_revision(self):
         self.invoke("init", str(self.spec))
         spec = json.loads(self.spec.read_text())

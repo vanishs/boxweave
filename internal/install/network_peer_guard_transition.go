@@ -12,6 +12,16 @@ import (
 	"strings"
 )
 
+// NativePeerGuardPlan is a deterministic PURE nftables policy proposal.
+// Install/Replace must NOT be executed from MCP, a guest, or by any caller
+// that has not independently proven ownership and guarded boot/recovery.
+// An nftables accept in one bridge chain does not bypass another chain's
+// drop. The terminal drop is intentionally restricted to managed-to-managed
+// traffic so unrelated host/forward traffic is unaffected.
+type NativePeerGuardPlan struct {
+	Table, Install, Replace, ExpectedKernelJSON, DigestSHA256 string
+}
+
 // nativePeerGuardReplaceOutcome is an *ephemeral* effect witness, NEVER a
 // completed Peer original or a durable replacement for the protected root
 // journal. A lost process ACK may mean the nft batch committed; the caller

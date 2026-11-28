@@ -1,0 +1,27 @@
+{
+  "asset_feedback": [],
+  "attempt_ref": "resume-probe-20261125",
+  "authority": "Owned development Box and PR192 evidence only; no complete helper, parent edits, merge or release",
+  "evidence": [
+    "0771cf8cc67ed12e9a0da2e05d06ccc9"
+  ],
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": null,
+  "learning_links": [],
+  "next_safe_action": "Create isolated test fixture and verify bounded chunks",
+  "objective": "Investigate interruption and recovery reliability of bounded guest-file chunk transfer",
+  "revision": 1,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "ACTIVE",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave#192",
+    "source_sha": "abaa9726dd90048375337ea83f1be7260319db42",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [],
+  "work_ref": "boxweave/pr192-transfer-resume"
+}

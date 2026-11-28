@@ -68,31 +68,29 @@ func s4b2RootOperationFixture(t *testing.T) (*Store, *Store, string) {
 }
 
 func TestS4B2RootRevocationOriginalOnlyAndClaims(t *testing.T) {
+
 	ctx := context.Background()
-	s, reader, id := s4b2RootOperationFixture(t)
-	if _, err := reader.ReadRootPeerRevocation(ctx, id, "user-1001", "bwbr0", "bw-s4b2"); err == nil {
-		t.Fatal("unclaimed ADMITTED op reached root")
+	s, r, id := pr178ScopedOriginalFixture(t, false)
+	if _, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge); e == nil {
+		t.Fatal("unclaimed")
 	}
-	if err := s.Claim(ctx, id); err != nil {
-		t.Fatal(err)
+	if e := s.Claim(ctx, id); e != nil {
+		t.Fatal(e)
 	}
-	got, err := reader.ReadRootPeerRevocation(ctx, id, "user-1001", "bwbr0", "bw-s4b2")
-	if err != nil || got.OperationID != id || got.Intent.Allow || got.Intent.SourceUUID != s4b2RootSrc {
-		t.Fatalf("valid claimed original refused %+v %v", got, err)
+	p, e := r.ReadRootScopedPeerOriginal(ctx, id, purePeerProject, purePeerBridge)
+	if e != nil || p.OriginalID != id || p.Intent.Allow || p.Intent.SourceUUID != purePeerUUID(1) {
+		t.Fatal(p, e)
+	}
+	for _, x := range [][3]string{{"deadbeef", purePeerProject, purePeerBridge}, {id, "foreign", purePeerBridge}, {id, purePeerProject, "other"}} {
+		if _, e = r.ReadRootScopedPeerOriginal(ctx, x[0], x[1], x[2]); e == nil {
+			t.Fatal("foreign scope", x)
+		}
+	}
+	if _, e = r.ReadRootPeerRevocation(ctx, id, purePeerProject, purePeerBridge, "bw-s4b2"); e == nil {
+		t.Fatal("legacy scope")
 	}
 	t.Log("S4_B2_ROOT_DISPATCH_SQLITE_CLAIMED_ORIGINAL_ONLY=PASS")
-	if _, err := reader.ReadRootPeerRevocation(ctx, "deadbeef", "user-1001", "bwbr0", "bw-s4b2"); err == nil {
-		t.Fatal("short forged operation identifier accepted")
-	}
-	if _, err := reader.ReadRootPeerRevocation(ctx, id, "foreign", "bwbr0", "bw-s4b2"); err == nil {
-		t.Fatal("wrong project accepted")
-	}
-	if _, err := reader.ReadRootPeerRevocation(ctx, id, "user-1001", "other", "bw-s4b2"); err == nil {
-		t.Fatal("wrong bridge accepted")
-	}
-	if _, err := reader.ReadRootPeerRevocation(ctx, id, "user-1001", "bwbr0", "foreign"); err == nil {
-		t.Fatal("wrong ACL accepted")
-	}
+
 }
 
 func TestS4B2RootRevocationCannotBypassClaimsOrUNKNOWN(t *testing.T) {

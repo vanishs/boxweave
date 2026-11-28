@@ -1,0 +1,764 @@
+[
+  {
+    "old": [
+      "S2_NATIVE_SIMULATED_WAN_NAMESPACE_ROUTE_VERIFIED_TLS"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_SIMULATED_WAN_NAMESPACE_ROUTE_VERIFIED_TLS=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_MCP_DISCOVERY_23_OF_23"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_MCP_DISCOVERY_23_OF_23=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_MCP_ALL_23_CLOSED_INPUT_SCHEMAS"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_MCP_ALL_23_CLOSED_INPUT_SCHEMAS=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_REAL_OFFICIAL_SDK_13_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_REAL_OFFICIAL_SDK_13_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_REAL_AUTHENTICATED_HTTP_PRIVATE_ZERO_TTL_CACHE_CONTROL"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_REAL_AUTHENTICATED_HTTP_PRIVATE_ZERO_TTL_CACHE_CONTROL=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_INVALID_SCHEMA_CREATE_REFUSED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_INVALID_SCHEMA_CREATE_REFUSED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_QUEUED_UNDISPATCHED_CANCEL_NO_NATIVE_EFFECT"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_QUEUED_UNDISPATCHED_CANCEL_NO_NATIVE_EFFECT=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_CONCURRENT_HISTORY_PAGING_STABLE_NEW_ROWS_VISIBLE"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_CONCURRENT_HISTORY_PAGING_STABLE_NEW_ROWS_VISIBLE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_INDEXED_120_HISTORY_STATE_TIME_HMAC_SCOPE"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_INDEXED_120_HISTORY_STATE_TIME_HMAC_SCOPE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_NATIVE_TWELVE_INDEPENDENT_SDK_CREATE_SAME_KEY_ONE_RECEIPT"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_NATIVE_TWELVE_INDEPENDENT_SDK_CREATE_SAME_KEY_ONE_RECEIPT=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_SAME_KEY_CONFLICT_AND_DIFFERENT_KEY_DUPLICATE_DENIED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_SAME_KEY_CONFLICT_AND_DIFFERENT_KEY_DUPLICATE_DENIED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_CREATE_STOPPED_UUID"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_CREATE_STOPPED_UUID=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_SDK_META_FALLBACK_CONFLICT_AND_INDEXED_SEARCH"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_SDK_META_FALLBACK_CONFLICT_AND_INDEXED_SEARCH=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_BOX_LIST_UUID"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_BOX_LIST_UUID=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_CPU_MEMORY_UPDATE_PRESERVES_DISK"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_CPU_MEMORY_UPDATE_PRESERVES_DISK=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_DISK_SHRINK_DENIED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_DISK_SHRINK_DENIED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_RUNNING_NOT_CONFUSED_WITH_GUEST_READY"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_RUNNING_NOT_CONFUSED_WITH_GUEST_READY=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_PACKET_IPV4_IPV6_SAME_BRIDGE_DEFAULT_DENY"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_PACKET_IPV4_IPV6_SAME_BRIDGE_DEFAULT_DENY=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_NATIVE_GUEST_ORIGIN_READY_TRUE_ACTUAL_SOCKET_AND_MCP"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_NATIVE_GUEST_ORIGIN_READY_TRUE_ACTUAL_SOCKET_AND_MCP=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_NATIVE_GUEST_READY_RESTART_CLEARS_STALE_TRUE"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_P1_NATIVE_GUEST_READY_RESTART_CLEARS_STALE_TRUE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_EXEC_RECONNECT_EXIT_7_STDOUT_STDERR"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_EXEC_RECONNECT_EXIT_7_STDOUT_STDERR=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_CANCELLED_LONG_POLL_IS_READ_ONLY"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_CANCELLED_LONG_POLL_IS_READ_ONLY=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_EXEC_UNSUPPORTED_CANCEL_TRUTHFUL"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_EXEC_UNSUPPORTED_CANCEL_TRUTHFUL=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_DELETE_VERIFIED_AND_REPLAY"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_DELETE_VERIFIED_AND_REPLAY=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_ASYNC_PROGRESS_OPTIONAL_NO_FAKE_EVENTS"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "S2_NATIVE_ASYNC_PROGRESS_OPTIONAL_NO_FAKE_EVENTS=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE"
+    ],
+    "requires": {
+      "scoped-sdk-compat": [
+        "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P1_REAL_INSTALLED_OPERATION_LIST_INFLIGHT_REVOCATION_AND_EXPIRY_NO_LEAK"
+    ],
+    "requires": {
+      "scoped-auth-races": [
+        "S2_P1_REAL_INSTALLED_OPERATION_LIST_INFLIGHT_REVOCATION_AND_EXPIRY_NO_LEAK=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P2_STALLED_NATIVE_OUTPUT_CANCEL_NO_NATIVE_CHANGE"
+    ],
+    "requires": {
+      "scoped-auth-races": [
+        "S2_P2_STALLED_NATIVE_OUTPUT_CANCEL_NO_NATIVE_CHANGE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S4_A_NATIVE_UUID_PREATOMIC_INDEPENDENT_INCUS_CONFIRM"
+    ],
+    "requires": {
+      "scoped-overlap": [
+        "S4_A_NATIVE_UUID_PREATOMIC_INDEPENDENT_INCUS_CONFIRM=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED"
+    ],
+    "requires": {
+      "scoped-overlap": [
+        "S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S4_A_REAL_NATIVE_OVERLAP_ATOMIC_CREATE_DELETE_TOMBSTONE"
+    ],
+    "requires": {
+      "scoped-overlap": [
+        "S4_A_REAL_NATIVE_OVERLAP_ATOMIC_CREATE_DELETE_TOMBSTONE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S4_A_REAL_NATIVE_PREATOMIC_CONCURRENT_DELETE_FULL_LIFECYCLE"
+    ],
+    "requires": {
+      "scoped-overlap": [
+        "S4_A_REAL_NATIVE_PREATOMIC_CONCURRENT_DELETE_FULL_LIFECYCLE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_P2_GUEST_REAL_EXEC_READY_POSITIVE_CONTROL"
+    ],
+    "requires": {
+      "scoped-malformed-exec": [
+        "S2_P2_GUEST_REAL_EXEC_READY_POSITIVE_CONTROL=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY"
+    ],
+    "requires": {
+      "scoped-exec-retention": [
+        "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE"
+    ],
+    "requires": {
+      "scoped-physical-quota": [
+        "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_CRASH_DISPATCHED_ORIGINAL_RECEIPT"
+    ],
+    "requires": {
+      "scoped-exec-crash": [
+        "S2_NATIVE_CRASH_DISPATCHED_ORIGINAL_RECEIPT=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART"
+    ],
+    "requires": {
+      "scoped-exec-crash": [
+        "S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_PROCESS_KILL_UNKNOWN_REPLAY_DENIED"
+    ],
+    "requires": {
+      "scoped-exec-crash": [
+        "S2_NATIVE_PROCESS_KILL_UNKNOWN_REPLAY_DENIED=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_CRASH_ORIGINAL_GUEST_EFFECT_EXACTLY_ONCE"
+    ],
+    "requires": {
+      "scoped-exec-crash": [
+        "S2_NATIVE_CRASH_ORIGINAL_GUEST_EFFECT_EXACTLY_ONCE=PASS"
+      ]
+    }
+  },
+  {
+    "old": [
+      "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "P1B_SCOPED_S2_NATIVE_PROBE=PASS",
+        "P1B_SCOPED_S2_FIXED_LEDGER=PASS",
+        "P1B_SCOPED_S2_NATIVE_FOREIGN_UNCHANGED=PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED",
+      "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "P1B_SCOPED_INSTALLED_SCHEMA7_EXACT=PASS",
+        "P1B_SCOPED_SCHEMA_FIXED_INSTALLED_NO_EFFECT=PASS",
+        "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS",
+        "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS",
+        "P1B_SCOPED_SCHEMA_REFUSED=PASS foreign",
+        "P1B_SCOPED_SCHEMA_REFUSED=PASS corrupt",
+        "P1B_SCOPED_SCHEMA_REFUSED=PASS old",
+        "P1B_SCOPED_SCHEMA_REFUSED=PASS future",
+        "P1B_SCOPED_SCHEMA_REFUSED=PASS partial",
+        "P1B_SCOPED_SCHEMA_REFUSED=PASS ambiguous",
+        "P1B_SCOPED_SCHEMA_REFUSED=PASS versioned-foreign",
+        "P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS foreign",
+        "P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS corrupt",
+        "P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS old",
+        "P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS future",
+        "P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS partial",
+        "P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS ambiguous",
+        "P1B_SCOPED_STATUS_SCHEMA_REFUSED=PASS versioned-foreign"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_NATIVE_CREATE_ACK_LOSS_ORIGINAL_UNKNOWN",
+      "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST"
+    ],
+    "requires": {
+      "scoped-create-ack": [
+        "P1B_SCOPED_ACK_LOSS=PASS create",
+        "re:P1B_SCOPED_ACK_ORIGINAL_RETAINED [0-9a-f]{32} [0-9a-f]{32} [0-9a-f]{32}"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P1_SIMULATED_WAN_HTTPS_POSITIVE_TLS_BEFORE",
+      "S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST",
+      "S2_NATIVE_SIMULATED_WAN_SERVER_INDEPENDENT_ON_OFF_ON_TWO_HITS"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "P1B_SCOPED_RESERVED_WAN_TLS_ON_DENIED=PASS",
+        "P1B_SCOPED_RESERVED_WAN_TLS_OFF_ON_DENIED=PASS",
+        "P1B_SCOPED_RESERVED_WAN_INDEPENDENT_ZERO_HITS=PASS"
+      ],
+      "s25": [
+        "S25_SIMWAN6_OUTER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS",
+        "S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS",
+        "S25_V_SIMWAN6_OUTER_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL=PASS",
+        "S25_V_SIMWAN6_INNER_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL=PASS",
+        "S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P1_TWO_CONTROLLER_INDEPENDENT_NATIVE_AND_MCP_ISOLATION",
+      "S2_P1_TWO_CONTROLLER_CROSS_TOKEN_AUTH_DENIED"
+    ],
+    "requires": {
+      "s25": [
+        "P1B_S25_SCOPED_SAME_NAME_DISTINCT_NATIVE_NO_CROSS_ADMISSION=PASS",
+        "P1B_S25_SCOPED_CROSS_FIXTURE_TOKEN_AUTH_DENIED=PASS",
+        "P1B_S25_SCOPED_TWO_LAYER_FIXED_LEDGER_ACL_GUARD=PASS",
+        "P1B_S25_SCOPED_CROSS_ID_REFUSED=L0:PASS",
+        "P1B_S25_SCOPED_CROSS_ID_REFUSED=L1:PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P1_FOUR_REAL_PRIVATE_READ_TOKEN_RACES_NATIVE_POSTREAD_EMPTY"
+    ],
+    "requires": {
+      "scoped-auth-races": [
+        "S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_REVOKE_NO_LEAK=PASS",
+        "S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_EXPIRY_NO_LEAK=PASS",
+        "P1B_SCOPED_AUTH_FIXED_LEDGER_NATIVE_ABSENCE=PASS",
+        "S2_P1_PRIVATE_READ_REVOKED_AFTER_REAL_NATIVE_HTTP_200_HOST_STATUS=PASS",
+        "S2_P1_PRIVATE_READ_REVOKED_AFTER_REAL_NATIVE_HTTP_200_BOX_LIST=PASS",
+        "S2_P1_PRIVATE_READ_REVOKED_AFTER_REAL_NATIVE_HTTP_200_BOX_GET=PASS",
+        "S2_P1_PRIVATE_READ_REVOKED_AFTER_REAL_NATIVE_HTTP_200_OPERATION_OUTPUT_GET=PASS",
+        "S2_P1_PRIVATE_READ_EXPIRED_AFTER_REAL_NATIVE_HTTP_200_HOST_STATUS=PASS",
+        "S2_P1_PRIVATE_READ_EXPIRED_AFTER_REAL_NATIVE_HTTP_200_BOX_LIST=PASS",
+        "S2_P1_PRIVATE_READ_EXPIRED_AFTER_REAL_NATIVE_HTTP_200_BOX_GET=PASS",
+        "S2_P1_PRIVATE_READ_EXPIRED_AFTER_REAL_NATIVE_HTTP_200_OPERATION_OUTPUT_GET=PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P2_REAL_MALFORMED_EXEC_NATIVE_202_UNKNOWN_RESTART_CLEANUP"
+    ],
+    "requires": {
+      "scoped-malformed-exec": [
+        "S2_P2_REAL_INCUS_MALFORMED_FINAL_EXEC_RETURN_UNKNOWN_NO_RETRY=PASS",
+        "S2_P2_REAL_GUEST_MUTATION_EXACTLY_ONCE_AFTER_MALFORMED_RESPONSE=PASS",
+        "S2_P2_REAL_MALFORMED_EXEC_SAME_SQLITE_RESTART_NO_REDISPATCH=PASS",
+        "P1B_SCOPED_MALFORMED_EXEC_FIXED_LEDGER_RESTART_RETAINED_UNKNOWN=PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P2_ALTERNATE_POOL_LIVE_EXPANDED_ROOT_MATCHES_UUID_POOL_QUOTA"
+    ],
+    "requires": {
+      "scoped-altpool": [
+        "S2_P2_ALTERNATE_POOL_LIVE_EXPANDED_ROOT_MATCHES_UUID_POOL_QUOTA=PASS",
+        "P1B_SCOPED_ALTPOOL_FIXED_LEDGER_AND_NO_RESIDUAL_VOLUME=PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P0_NATIVE_202_COMBINED_WITH_SQLITE_COMMIT_FAULT_BOTH_PHASES",
+      "S2_P0_REAL_NATIVE_EFFECT_AFTER_ACTUAL_SQLITE_SYNC_KILL"
+    ],
+    "requires": {
+      "scoped-update-ack-wal-before": [
+        "S2_P0_REAL_NATIVE_SQLITE_CRASH_UNKNOWN_REPLAY_AND_CONCURRENT_READS=PASS",
+        "re:P1B_SCOPED_UPDATE_NATIVE_ACK_WAL_CUT=PASS before [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (?:DISPATCHING|VERIFYING)",
+        "re:P1B_SCOPED_UPDATE_NATIVE_ACK_WAL_RESTART_RETAINED=PASS before [0-9a-f]{32} [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ],
+      "scoped-update-ack-wal-after": [
+        "S2_P0_REAL_NATIVE_SQLITE_CRASH_UNKNOWN_REPLAY_AND_CONCURRENT_READS=PASS",
+        "re:P1B_SCOPED_UPDATE_NATIVE_ACK_WAL_CUT=PASS after [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} VERIFYING",
+        "re:P1B_SCOPED_UPDATE_NATIVE_ACK_WAL_RESTART_RETAINED=PASS after [0-9a-f]{32} [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_GC_APPROVED_SEVEN_DAY_COMPLETE_NATIVE_MCP_CYCLE"
+    ],
+    "requires": {
+      "scoped-exec-retention": [
+        "S2_GC_NATIVE_7D_TWO_STREAMS_DELETE_AUDIT_404_NO_REPLAY=PASS",
+        "S2_GC_PUBLIC_ORIGINAL_TWO_STREAMS_EXPIRED=PASS",
+        "S2_GC_REAL_NATIVE_DELETE_ACK_LOSS_REVIEW_REQUIRED_SIBLING_LOCKED=PASS",
+        "P1B_SCOPED_GC_INSTALLED_ROOT_RECOVER_CYCLE=PASS",
+        "S2_GC_PUBLIC_LOST_ACK_TTL_ELAPSED_NOT_PHYSICAL_EXPIRY=PASS",
+        "P1B_SCOPED_GC_FIXED_LEDGER_NATIVE_ABSENCE=PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P1_INSTALLED_RECEIVING_MIDDLEWARE_REDACTION_AND_TYPED_NEGATIVES"
+    ],
+    "requires": {
+      "scoped-s2-native": [
+        "P1B_SCOPED_S2_REDACTION=PASS",
+        "S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT=PASS",
+        "S2_P1_REAL_OFFICIAL_SDK_13_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_SQLITE_WAL_FSYNC_BEFORE_REAL_KILL_UNKNOWN_NO_REPLAY"
+    ],
+    "requires": {
+      "scoped-create-wal-before": [
+        "P1B_SCOPED_INSTALLED_WAL_CUT=PASS create-before",
+        "re:P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS create-before [0-9a-f]{32} [0-9]+",
+        "re:P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS create-before (?:VERIFYING|SUCCEEDED) [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ],
+      "scoped-delete-wal-before": [
+        "P1B_SCOPED_INSTALLED_WAL_CUT=PASS delete-before",
+        "re:P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS delete-before [0-9a-f]{32} [0-9]+",
+        "re:P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS delete-before (?:VERIFYING|SUCCEEDED) [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ],
+      "scoped-exec-wal-before": [
+        "P1B_SCOPED_INSTALLED_WAL_CUT=PASS exec-before",
+        "re:P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS exec-before [0-9a-f]{32} [0-9]+",
+        "re:P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS exec-before (?:VERIFYING|SUCCEEDED) [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        "re:P1B_SCOPED_EXEC_WAL_ATOMIC=PASS exec-before (?:SUCCEEDED|UNKNOWN) [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_SQLITE_WAL_FSYNC_AFTER_REAL_KILL_UNKNOWN_NO_REPLAY"
+    ],
+    "requires": {
+      "scoped-create-wal-after": [
+        "P1B_SCOPED_INSTALLED_WAL_CUT=PASS create-after",
+        "re:P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS create-after [0-9a-f]{32} [0-9]+",
+        "re:P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS create-after SUCCEEDED [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ],
+      "scoped-delete-wal-after": [
+        "P1B_SCOPED_INSTALLED_WAL_CUT=PASS delete-after",
+        "re:P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS delete-after [0-9a-f]{32} [0-9]+",
+        "re:P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS delete-after SUCCEEDED [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ],
+      "scoped-exec-wal-after": [
+        "P1B_SCOPED_INSTALLED_WAL_CUT=PASS exec-after",
+        "re:P1B_SCOPED_WAL_EXACT_CONTROLLER_CUT=PASS exec-after [0-9a-f]{32} [0-9]+",
+        "re:P1B_SCOPED_WAL_SQLITE_NATIVE_CROSSCHECK=PASS exec-after SUCCEEDED [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        "re:P1B_SCOPED_EXEC_WAL_ATOMIC=PASS exec-after SUCCEEDED [0-9a-f]{32} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P1_REAL_STOP_AND_DELETE_NATIVE_202_ACK_LOSS_NO_REPLAY"
+    ],
+    "requires": {
+      "scoped-stop-ack": [
+        "P1B_SCOPED_STOP_202_NATIVE_STOPPED_EXACT_UUID=PASS",
+        "P1B_SCOPED_STOP_ACK_FIXED_LEDGER_RESTART_RETAINED_UNKNOWN=PASS",
+        "S2_P1_NATIVE_STOP_LOST_ACK_RESTART_UNKNOWN_NO_REPLAY=PASS"
+      ],
+      "scoped-delete-ack": [
+        "P1B_SCOPED_ACK_LOSS=PASS delete",
+        "re:P1B_SCOPED_ACK_ORIGINAL_RETAINED [0-9a-f]{32} [0-9a-f]{32} [0-9a-f]{32}"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_NATIVE_STALE_ETAG_ORIGINAL_UNKNOWN_AND_LOCKED"
+    ],
+    "requires": {
+      "scoped-update-transport": [
+        "P1B_SCOPED_UPDATE_TRANSPORT=PASS etag"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  },
+  {
+    "old": [
+      "S2_P0_GENERAL_UNKNOWN_STAGED_ROOT_CLI_DUAL_CONFIRMATION",
+      "S2_P0_GENERAL_UNKNOWN_AUDIT_DURABLE",
+      "S2_P0_GENERAL_UNKNOWN_LOCAL_RELEASE_NO_RETRY"
+    ],
+    "requires": {
+      "scoped": [
+        "re:PR177_D4_INSTALLED_REVIEWED_RECOVERY_NO_REPLAY=PASS SCOPED_V2 [0-9]+",
+        "P1B_SCOPED_FINAL_COMMIT_NATIVE_RECOVERY=PASS",
+        "P1B_SCOPED_COMPLETED_PIN_REPAIR_NO_NATIVE_REPLAY=PASS"
+      ],
+      "scoped-update-transport": [
+        "re:P1B_SCOPED_LEGACY_UNKNOWN_RELEASE_REFUSED_ORIGINAL_RETAINED=PASS [a-f0-9]{32} [a-f0-9-]{36}"
+      ]
+    },
+    "disposition": "SCOPED_REPLACEMENT_REVIEW_REQUIRED"
+  }
+]

@@ -18,3 +18,16 @@ func TestRecoveryWorkerRestrictedGroups(t *testing.T) {
 		}
 	}
 }
+
+func TestScopedGCReviewActionBoundary(t *testing.T) {
+	for _, a := range []string{"gc-inspect", "gc-challenge", "gc-release"} {
+		if !gcReviewAction(a) {
+			t.Fatal(a)
+		}
+	}
+	for _, a := range []string{"inspect", "challenge", "release", "create-bind", "delete-confirm", "reconcile", "diagnose", "gc-other", ""} {
+		if gcReviewAction(a) {
+			t.Fatal("unexpected GC authorization", a)
+		}
+	}
+}

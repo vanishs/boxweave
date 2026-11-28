@@ -33,7 +33,7 @@ func TestB4ForwardAtomicAdmissionConfirmDeleteAndUnknownFence(t *testing.T) {
 		ResourceKey: "box:forward-a", ResourceKeys: []string{"box:" + aID, "listener:tcp:127.0.0.1:23001"},
 		SafeIntent: []byte("forward-create-001"), ForwardCreate: f,
 	}
-	created, err := s.Admit(ctx, a)
+	created, err := s.AdmitScoped(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestB4ForwardAtomicAdmissionConfirmDeleteAndUnknownFence(t *testing.T) {
 	if err != nil || claim.State != "PENDING" || claim.NativeDevice != "bwpf-"+created.ID[:16] || claim.OperationID != created.ID {
 		t.Fatalf("not atomic: %+v %v", claim, err)
 	}
-	same, err := s.Admit(ctx, a)
+	same, err := s.AdmitScoped(ctx, a)
 	if err != nil || !same.Duplicate || same.ID != created.ID {
 		t.Fatalf("replay failed: %+v %v", same, err)
 	}
@@ -51,7 +51,7 @@ func TestB4ForwardAtomicAdmissionConfirmDeleteAndUnknownFence(t *testing.T) {
 	collide.Incarnation = bID
 	collide.ResourceKey = "box:forward-b"
 	collide.ResourceKeys = []string{"box:" + bID, "listener:tcp:127.0.0.1:23001"}
-	if _, err := s.Admit(ctx, collide); !errors.Is(err, ErrResourceLocked) {
+	if _, err := s.AdmitScoped(ctx, collide); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("listener collision admitted %v", err)
 	}
 	if err := s.Claim(ctx, created.ID); err != nil {
@@ -84,7 +84,7 @@ func TestB4ForwardAtomicAdmissionConfirmDeleteAndUnknownFence(t *testing.T) {
 		ResourceKeys: []string{"box:" + aID, "listener:tcp:127.0.0.1:23001"},
 		SafeIntent:   []byte("forward-delete-003"), ForwardDeleteID: created.ID,
 	}
-	removed, err := s.Admit(ctx, del)
+	removed, err := s.AdmitScoped(ctx, del)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestB4ForwardAtomicAdmissionConfirmDeleteAndUnknownFence(t *testing.T) {
 	unknown.SafeIntent = []byte("forward-create-004")
 	unknown.ForwardCreate = &ForwardCreateAdmission{Protocol: "udp", HostBind: "127.0.0.1", HostPort: 23002, GuestPort: 9000}
 	unknown.ResourceKeys = []string{"box:" + aID, "listener:udp:127.0.0.1:23002"}
-	uncertain, err := s.Admit(ctx, unknown)
+	uncertain, err := s.AdmitScoped(ctx, unknown)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestB4ForwardAtomicAdmissionConfirmDeleteAndUnknownFence(t *testing.T) {
 	}
 	retry := unknown
 	retry.Key = "s4b4-forward-new-key-after-unknown-005"
-	if _, err = s.Admit(ctx, retry); !errors.Is(err, ErrResourceLocked) {
+	if _, err = s.AdmitScoped(ctx, retry); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("unknown was blindly released %v", err)
 	}
 }
@@ -151,7 +151,7 @@ func TestB4ForwardQueuedCancellationAndRestartRelease(t *testing.T) {
 		t.Helper()
 		a.Key = key
 		a.RequestID = key
-		r, e := s.Admit(ctx, a)
+		r, e := s.AdmitScoped(ctx, a)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -202,7 +202,7 @@ func TestB4ForwardQueuedCancellationAndRestartRelease(t *testing.T) {
 	del.RequestID = del.Key
 	del.ForwardCreate = nil
 	del.ForwardDeleteID = fourth.ID
-	d, err := s.Admit(ctx, del)
+	d, err := s.AdmitScoped(ctx, del)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestB4ForwardQueuedCancellationAndRestartRelease(t *testing.T) {
 	}
 	del.Key = "b4-delete-retry-fresh-06"
 	del.RequestID = del.Key
-	if _, err = s.Admit(ctx, del); err != nil {
+	if _, err = s.AdmitScoped(ctx, del); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -244,12 +244,12 @@ func TestForwardWildcardReservation(t *testing.T) {
 					ForwardCreate: &ForwardCreateAdmission{Protocol: proto, HostBind: bind, HostPort: 23051, GuestPort: 8080}}
 			}
 			first := makeAdmission("forward-a", a, pair[0], "tcp", "wildcard-original-001")
-			r, err := s.Admit(ctx, first)
+			r, err := s.AdmitScoped(ctx, first)
 			if err != nil {
 				t.Fatal(err)
 			}
 			second := makeAdmission("forward-b", b, pair[1], "tcp", "wildcard-conflicting-002")
-			if _, err = s.Admit(ctx, second); !errors.Is(err, ErrResourceLocked) {
+			if _, err = s.AdmitScoped(ctx, second); !errors.Is(err, ErrResourceLocked) {
 				t.Fatalf("overlapping pending reservation admitted: %v", err)
 			}
 			if err = s.Claim(ctx, r.ID); err != nil {
@@ -258,12 +258,12 @@ func TestForwardWildcardReservation(t *testing.T) {
 			if n, err := s.Recover(ctx); err != nil || n != 1 {
 				t.Fatalf("recover: %d %v", n, err)
 			}
-			if _, err = s.Admit(ctx, second); !errors.Is(err, ErrResourceLocked) {
+			if _, err = s.AdmitScoped(ctx, second); !errors.Is(err, ErrResourceLocked) {
 				t.Fatalf("overlapping UNKNOWN reservation admitted: %v", err)
 			}
 			// Independent protocol is not reserved by TCP, even with wildcard.
 			udp := makeAdmission("forward-b", b, pair[1], "udp", "wildcard-separate-udp-003")
-			if _, err = s.Admit(ctx, udp); err != nil {
+			if _, err = s.AdmitScoped(ctx, udp); err != nil {
 				t.Fatalf("unrelated UDP denied: %v", err)
 			}
 		})

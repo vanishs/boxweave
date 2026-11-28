@@ -1,0 +1,26 @@
+{
+  "asset": "dev/staged_batch.py",
+  "change_class": "L3",
+  "domains": [],
+  "effort": "unknown",
+  "evidence": "PR191 D30 7ea4c957747c50c8cd409a02a3e8fd25b3330afb; Box original bfe571c3ad0ca9173e8fb2f2ed7b6bd2",
+  "fingerprint": "9d649dc3093fb1ac60b7ed5ed65ff2fe7cff5c7bbf4128901572ca54bfeaab8f",
+  "id": "BDH-L015",
+  "impact": "unknown",
+  "kind": "learning",
+  "observation": "D24-D30 repeated manual staged verification and full-file export across five submissions; D30 exact export 284940 bytes versus append-delta 116751 bytes",
+  "observations": [],
+  "revision": 1,
+  "schema_version": 1,
+  "signals": [],
+  "source": {
+    "base_commit": null,
+    "branch": null,
+    "commit": "7ea4c957747c50c8cd409a02a3e8fd25b3330afb",
+    "worktree": "dirty"
+  },
+  "state": "CANDIDATE",
+  "task_kinds": [],
+  "validation": "Seven focused regressions, full bwdev suite and Eval; real D31 reuse with exact remote tree and nested call count; independent review before promotion",
+  "work_ref": "pr191/bdh-staged-batch"
+}

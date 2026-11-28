@@ -2,11 +2,9 @@ package state
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
 func verifiedPeerLineage(t *testing.T, s *Store) (string, string, int) {
@@ -21,171 +19,120 @@ func verifiedPeerLineage(t *testing.T, s *Store) (string, string, int) {
 	return pending, verified, desired
 }
 
-func admitPeerLineageOriginal(t *testing.T, s *Store, allow bool, key string) string {
-	t.Helper()
-	ctx := context.Background()
-	_, tok, err := s.IssueToken(ctx, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := json.Marshal(RootPeerRevokeSafeIntent{
-		Project: "user-1001", Bridge: "bwbr0", ACL: "bw-s4b2",
-		SourceUUID: s4b2RootSrc, SourceIncarnation: s4b2RootSrc,
-		TargetUUID: s4b2RootDst, TargetIncarnation: s4b2RootDst, Allow: allow,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec, err := s.Admit(ctx, Admission{
-		Layer: "user-1001", ActorID: tok.ID, TokenID: tok.ID,
-		Key: key, RequestID: key, Action: "box_peer_set",
-		SafeIntent: raw, BoxUUID: s4b2RootSrc, Incarnation: s4b2RootSrc,
-		ResourceKey:  "acl:default/bw-s4b2",
-		ResourceKeys: []string{"box:" + s4b2RootSrc, "box:" + s4b2RootDst},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return rec.ID
-}
-
 func TestPeerVerifiedGrantLinkIsAtomicAndNeverBackfilledOnUnknown(t *testing.T) {
 	ctx := context.Background()
-	s, id := s4b3GrantFixture(t)
-	if err := s.StagePeerGrant(ctx, id); err != nil {
-		t.Fatal(err)
+	s, _, _ := n3ScopedOwnedFixture(t)
+	tok := purePeerNewToken(t, s)
+	orig := purePeerAdmit(t, s, tok, "lineage-pending", 1, 2, true)
+	if e := s.StageAndClaimScopedPeerOriginal(ctx, orig.ID); e != nil {
+		t.Fatal(e)
 	}
-	if pending, verified, _ := verifiedPeerLineage(t, s); pending != id || verified != "" {
-		t.Fatalf("staging fabricated a verified grant: %s %s", pending, verified)
+	if pending, verified, _ := verifiedPeerLineage(t, s); pending != orig.ID || verified != "" {
+		t.Fatal(pending, verified)
 	}
-	if err := s.FinalizeRootPeerGrant(ctx, id); !errors.Is(err, ErrState) {
-		t.Fatalf("pre-kernel confirmation was accepted: %v", err)
+	proof := purePeerReceipt(t, s, orig)
+	bad := proof
+	bad.ProofSHA256 = strings.Repeat("f", 64)
+	if e := s.FinalizeScopedPeerOriginal(ctx, bad); e == nil {
+		t.Fatal("forged receipt accepted")
 	}
-	if _, verified, _ := verifiedPeerLineage(t, s); verified != "" {
-		t.Fatal("unverified grant wrote a permanent original")
+	if e := s.Unknown(ctx, orig.ID, "DISPATCHING", "SIMULATED_ROOT_UNKNOWN"); e != nil {
+		t.Fatal(e)
 	}
-	if err := s.Claim(ctx, id); err != nil {
-		t.Fatal(err)
+	if e := s.FinalizeScopedPeerOriginal(ctx, proof); e == nil {
+		t.Fatal("dispatch receipt settled UNKNOWN")
 	}
-	if err := s.Unknown(ctx, id, "DISPATCHING", "SIMULATED_ROOT_UNKNOWN"); err != nil {
-		t.Fatal(err)
-	}
-	if _, verified, _ := verifiedPeerLineage(t, s); verified != "" {
-		t.Fatal("Root UNKNOWN was reported as verified")
-	}
-	if err := s.FinalizeRootPeerGrant(ctx, id); !errors.Is(err, ErrState) {
-		t.Fatalf("Root UNKNOWN bypassed verified settlement: %v", err)
-	}
-	if pending, verified, _ := verifiedPeerLineage(t, s); pending != id || verified != "" {
-		t.Fatalf("Root UNKNOWN lost pending original or invented proof: %s %s", pending, verified)
+	if pending, verified, _ := verifiedPeerLineage(t, s); pending != orig.ID || verified != "" {
+		t.Fatal(pending, verified)
 	}
 }
-
 func TestPeerGrantRevokeRegrantVerifiedOriginalNeverAliasesPreviousOriginal(t *testing.T) {
 	ctx := context.Background()
-	s, first := s4b3GrantFixture(t)
-	if err := s.StagePeerGrant(ctx, first); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Claim(ctx, first); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AckSynchronousACL(ctx, first); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.FinalizeRootPeerGrant(ctx, first); err != nil {
-		t.Fatal(err)
-	}
-	if pending, verified, desired := verifiedPeerLineage(t, s); pending != "" || verified != first || desired != 1 {
-		t.Fatalf("confirmed grant lost verified original: pending=%q verified=%q desired=%d", pending, verified, desired)
-	}
-	revoke := admitPeerLineageOriginal(t, s, false, "lineage-revoke-0001")
-	if err := s.StageRootPeerRevocation(ctx, revoke); err != nil {
-		t.Fatal(err)
-	}
-	if pending, verified, desired := verifiedPeerLineage(t, s); pending != revoke || verified != first || desired != 0 {
-		t.Fatalf("staged revoke overwrote last verified grant: pending=%s verified=%s desired=%d", pending, verified, desired)
-	}
-	if err := s.Claim(ctx, revoke); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AckSynchronousACL(ctx, revoke); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.FinalizeRootPeerRevocation(ctx, revoke); err != nil {
-		t.Fatal(err)
-	}
-	if pending, verified, desired := verifiedPeerLineage(t, s); pending != revoke || verified != revoke || desired != 0 {
-		t.Fatalf("revoke did not link its own verified original: pending=%s verified=%s desired=%d", pending, verified, desired)
-	}
-	regrant := admitPeerLineageOriginal(t, s, true, "lineage-regrant-0002")
-	if err := s.StagePeerGrant(ctx, regrant); err != nil {
-		t.Fatal(err)
-	}
-	if pending, verified, desired := verifiedPeerLineage(t, s); pending != regrant || verified != revoke || desired != 1 {
-		t.Fatalf("staged regrant incorrectly changed verified provenance: pending=%s verified=%s desired=%d", pending, verified, desired)
-	}
-	if err := s.Claim(ctx, regrant); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AckSynchronousACL(ctx, regrant); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.FinalizeRootPeerGrant(ctx, regrant); err != nil {
-		t.Fatal(err)
-	}
-	if pending, verified, desired := verifiedPeerLineage(t, s); pending != "" || verified != regrant || desired != 1 {
-		t.Fatalf("regrant did not persist exact terminal original: pending=%s verified=%s desired=%d", pending, verified, desired)
+	s, _, _ := n3ScopedOwnedFixture(t)
+	tok := purePeerNewToken(t, s)
+	prev := ""
+	for _, tc := range []struct {
+		key     string
+		allow   bool
+		desired int
+	}{{"grant", true, 1}, {"revoke", false, 0}, {"regrant", true, 1}} {
+		orig := purePeerAdmit(t, s, tok, "lineage-"+tc.key, 1, 2, tc.allow)
+		if orig.ID == prev {
+			t.Fatal("reused original")
+		}
+		if e := s.StageAndClaimScopedPeerOriginal(ctx, orig.ID); e != nil {
+			t.Fatal(e)
+		}
+		if pending, verified, desired := verifiedPeerLineage(t, s); pending != orig.ID || verified != prev || desired != tc.desired {
+			t.Fatal(tc.key, pending, verified, desired, prev)
+		}
+		if e := s.FinalizeScopedPeerOriginal(ctx, purePeerReceipt(t, s, orig)); e != nil {
+			t.Fatal(e)
+		}
+		wantPending := ""
+		if !tc.allow {
+			wantPending = orig.ID
+		}
+		if pending, verified, desired := verifiedPeerLineage(t, s); pending != wantPending || verified != orig.ID || desired != tc.desired {
+			t.Fatal(tc.key, pending, verified, desired)
+		}
+		prev = orig.ID
 	}
 }
-
 func TestPeerCompletedUnknownGrantReconciliationRetainsOriginalWithoutReplay(t *testing.T) {
-	s, _, id := s4b3UnknownGrantRecoveryFixture(t)
-	ctx := context.Background()
-	sha := strings.Repeat("c", 64)
-	proof := RootPeerResult{Status: "RECONCILE_VERIFIED", PlanSHA256: sha,
-		ProbedScopes: 4, MutationComplete: true, KernelVerified: true,
-		VerifiedNICs: 3, PostNativeDigestSHA256: strings.Repeat("d", 64)}
-	if _, verified, _ := verifiedPeerLineage(t, s); verified != "" {
-		t.Fatal("Root UNKNOWN already had verified provenance")
-	}
-	if err := (Worker{Store: s}).ReconcileCompletedUnknownRootPeer(id, sha,
-		func(context.Context, string, string) (RootPeerResult, error) { return proof, nil }); err != nil {
-		t.Fatal(err)
-	}
-	if pending, verified, desired := verifiedPeerLineage(t, s); pending != "" || verified != id || desired != 1 {
-		t.Fatalf("read-only reconciliation lost exact original: pending=%s verified=%s desired=%d", pending, verified, desired)
-	}
-	if rec, err := s.Get(ctx, id); err != nil || rec.State != "SUCCEEDED" {
-		t.Fatalf("settlement failed: %+v %v", rec, err)
-	}
+	scopedUnknownPeerLineage(t, true)
 }
-
 func TestPeerCompletedUnknownRevocationReconciliationRetainsOriginal(t *testing.T) {
+	scopedUnknownPeerLineage(t, false)
+}
+func scopedUnknownPeerLineage(t *testing.T, allow bool) {
+	t.Helper()
 	ctx := context.Background()
-	s, _, id := s4b2RootOperationFixture(t)
-	s4b2PendingExistingGrantToConfirmed(t, s)
-	if err := s.StageRootPeerRevocation(ctx, id); err != nil {
-		t.Fatal(err)
+	s, _, _ := n3ScopedOwnedFixture(t)
+	tok := purePeerNewToken(t, s)
+	prev := ""
+	if !allow {
+		grant := purePeerAdmit(t, s, tok, "lineage-before-revoke", 1, 2, true)
+		purePeerComplete(t, s, grant)
+		prev = grant.ID
 	}
-	if err := s.Claim(ctx, id); err != nil {
-		t.Fatal(err)
+	orig := purePeerAdmit(t, s, tok, "lineage-lost-ack", 1, 2, allow)
+	r := purePeerReadOnly(t, s)
+	calls := 0
+	var first ScopedPeerRootReceipt
+	w := Worker{Store: s}
+	callback := func(_ context.Context, id string) (ScopedPeerRootReceipt, error) {
+		calls++
+		if id != orig.ID {
+			t.Fatal("wrong original", id)
+		}
+		first = scopedTestReceipt(t, r, id, false)
+		return first, errors.New("synthetic lost ACK")
 	}
-	if err := s.Unknown(ctx, id, "DISPATCHING", "SIMULATED_ACK_LOSS"); err != nil {
-		t.Fatal(err)
+	if e := w.ExecuteScopedPeerOriginal(orig.ID, callback); e == nil || calls != 1 {
+		t.Fatal(e, calls)
 	}
-	if _, verified, _ := verifiedPeerLineage(t, s); verified != "" {
-		t.Fatal("Root UNKNOWN revoke had false verified original")
+	if pending, verified, _ := verifiedPeerLineage(t, s); pending != orig.ID || verified != prev {
+		t.Fatal(pending, verified, prev)
 	}
-	sha := strings.Repeat("a", 64)
-	proof := RootPeerResult{Status: "RECONCILE_VERIFIED", PlanSHA256: sha,
-		ProbedScopes: 4, DeletedScopes: 2, MutationComplete: true,
-		KernelVerified: true, VerifiedNICs: 3, PostNativeDigestSHA256: strings.Repeat("b", 64)}
-	if err := (Worker{Store: s}).ReconcileCompletedUnknownRootPeer(id, sha,
-		func(context.Context, string, string) (RootPeerResult, error) { return proof, nil }); err != nil {
-		t.Fatal(err)
+	proof := scopedTestReceipt(t, r, orig.ID, true)
+	if proof.ProofSHA256 != first.ProofSHA256 {
+		t.Fatal("recovery changed staged digest")
 	}
-	if pending, verified, desired := verifiedPeerLineage(t, s); pending != id || verified != id || desired != 0 {
-		t.Fatalf("recovered revoke misattributed provenance: pending=%s verified=%s desired=%d", pending, verified, desired)
+	if e := s.FinalizeScopedPeerOriginal(ctx, proof); e != nil {
+		t.Fatal(e)
+	}
+	wantPending, wantDesired := "", 1
+	if !allow {
+		wantPending, wantDesired = orig.ID, 0
+	}
+	if pending, verified, desired := verifiedPeerLineage(t, s); pending != wantPending || verified != orig.ID || desired != wantDesired {
+		t.Fatal(pending, verified, desired)
+	}
+	if rec, e := s.Get(ctx, orig.ID); e != nil || rec.State != "SUCCEEDED" || rec.NativeOperationID != "" {
+		t.Fatal(rec, e)
+	}
+	if e := w.ExecuteScopedPeerOriginal(orig.ID, callback); e == nil || calls != 1 {
+		t.Fatal("replayed", e, calls)
 	}
 }

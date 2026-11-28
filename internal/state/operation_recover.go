@@ -20,7 +20,7 @@ type RecoveryTarget struct {
 	ForwardReady                                                           bool
 	Peer                                                                   RecoveryPeerClaim
 	PeerReady                                                              bool
-	ScopedPeer                                                             bool
+	ScopedPeer, ScopedLifecycle                                            bool
 	LifecycleBinding                                                       VerifiedCreateBinding
 	LifecyclePinStatus                                                     string
 }
@@ -45,6 +45,16 @@ func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id str
 	}
 	if t.Action == "box_create" {
 		t.CreatePinRequired = requiresVerifiedCreateBinding(t.SafeIntent)
+		var hdr struct{ Schema int }
+		if json.Unmarshal([]byte(t.SafeIntent), &hdr) == nil && hdr.Schema == 2 {
+			t.ScopedLifecycle = true
+		}
+	}
+	if t.Action == "box_delete" && t.OwnedState == "OWNED" {
+		e = q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM operations WHERE layer=? AND box_uuid=? AND incarnation=? AND action='box_create' AND json_valid(safe_intent) AND json_extract(safe_intent,'$.schema')=2)`, t.Layer, t.UUID, t.Incarnation).Scan(&t.ScopedLifecycle)
+		if e != nil {
+			return t, e
+		}
 	}
 	if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
 		var in struct {
@@ -106,6 +116,7 @@ type RecoveryProof struct {
 	Forward                                   ForwardClaim
 	Peer                                      RootPeerResult
 	ScopedPeer                                ScopedPeerRootReceipt
+	ScopedLifecycle                           ScopedLifecycleRecoveryProof
 	CreateBinding                             VerifiedCreateBinding
 	LifecycleBinding                          VerifiedCreateBinding
 }
@@ -232,6 +243,13 @@ func validRecoveryDetail(d, reason string) bool {
 // An interrupted observation before commit has no effect; after commit the
 // same key returns exactly the durable result, even if the original changed.
 func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t RecoveryTarget, p RecoveryProof) (RecoveryRecord, error) {
+	return s.CommitScopedRecovery(ctx, r, t, p)
+}
+
+// CommitScopedRecovery uses the trusted installation mode for generic
+// originals as well, without changing the original or replay intent.
+func (s *Store) CommitScopedRecovery(ctx context.Context, r RecoveryRequest, t RecoveryTarget, p RecoveryProof) (RecoveryRecord, error) {
+
 	a, e := recoveryAdmission(r)
 	if e != nil {
 		return RecoveryRecord{}, e
@@ -249,15 +267,15 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	} else if !errors.Is(err, ErrNotFound) {
 		return RecoveryRecord{}, err
 	}
-	if e = requireNoIPv4Compaction(ctx, tx, r.Layer); e != nil {
-		return RecoveryRecord{}, e
-	}
 	nowTarget, e := readRecoveryTarget(ctx, tx, r.Layer, r.OriginalID)
 	if e != nil {
 		return RecoveryRecord{}, e
 	}
 	if nowTarget != t {
 		return RecoveryRecord{}, ErrConflict
+	}
+	if e = requireScopedRecoveryOriginal(nowTarget, p); e != nil {
+		return RecoveryRecord{}, e
 	}
 	if r.Review != nil {
 		if e = checkReviewedRecoveryTx(ctx, tx, r, t, p); e != nil {
@@ -275,7 +293,15 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	now := time.Now().UnixNano()
 	outcome := p.Kind
 	success := false
-	if p.Kind == RecoveryRepairPin {
+	if t.ScopedLifecycle && p.Kind == RecoverySettle {
+		if r.Stream != "" || r.Review != nil {
+			return RecoveryRecord{}, ErrResourceLocked
+		}
+		if e = finishScopedLifecycleRecoveryTx(ctx, tx, t, p); e != nil {
+			return RecoveryRecord{}, e
+		}
+		outcome, success = "SETTLED", true
+	} else if p.Kind == RecoveryRepairPin {
 		if r.Stream != "" || t.Action != "box_create" || t.State != "SUCCEEDED" {
 			return RecoveryRecord{}, ErrResourceLocked
 		}
@@ -287,83 +313,56 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 		if r.Stream != "" {
 			return RecoveryRecord{}, ErrResourceLocked
 		}
-		if t.ScopedPeer {
-			if p.Reason != "SCOPED_PEER_COMPLETED_NO_REPLAY" || t.State != "UNKNOWN" || t.Released || p.ScopedPeer.OriginalID != t.ID || p.ScopedPeer.Project != t.Layer || !p.ScopedPeer.RecoveryOnly || p.Fingerprint == "" {
-				return RecoveryRecord{}, ErrResourceLocked
-			}
-			e = finalizeScopedPeerOriginalTx(ctx, tx, p.ScopedPeer)
-		} else {
-			e = finishRecoveryPeerTx(ctx, tx, t, p)
+		if p.Reason != "SCOPED_PEER_COMPLETED_NO_REPLAY" || t.State != "UNKNOWN" || t.Released || p.ScopedPeer.OriginalID != t.ID || p.ScopedPeer.Project != t.Layer || !p.ScopedPeer.RecoveryOnly || p.Fingerprint == "" {
+			return RecoveryRecord{}, ErrResourceLocked
 		}
+		e = finalizeScopedPeerOriginalTx(ctx, tx, p.ScopedPeer)
 		if e != nil {
 			return RecoveryRecord{}, e
 		}
 		outcome, success = "SETTLED", true
-	} else if p.Kind == RecoverySettle || p.Kind == RecoveryBind {
+	} else if p.Kind == RecoverySettle {
 		parent, e := checkGenericRecoveryScopeTx(ctx, tx, t, r.Stream)
 		if e != nil {
 			return RecoveryRecord{}, e
 		}
-		if p.Kind == RecoveryBind {
-			if t.Action != "box_create" || t.UUID != "" || t.Incarnation != "" || p.UUID == "" || p.Fingerprint == "" || p.Reason != "CREATE_MARKER_EXACT_IDENTITY" {
-				return RecoveryRecord{}, ErrInvalid
-			}
-			if e = bindUnknownCreateTx(ctx, tx, t.ID, t.Layer, t.Name, t.UpdatedAt, p.UUID, "EXACT_NATIVE_UUID_BOUND_RECOVERY_NO_REPLAY"); e != nil {
-				return RecoveryRecord{}, e
-			}
-			outcome = "IDENTITY_BOUND"
-		} else if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
-			if !validCreateRecoveryReason(t, p) || p.NativeID != t.NativeID || p.Fingerprint == "" {
-				return RecoveryRecord{}, ErrInvalid
-			}
-			if e = finishRecoveryCreateTx(ctx, tx, t, p); e != nil {
-				return RecoveryRecord{}, e
-			}
-			outcome = "SETTLED"
-		} else {
-			if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" || p.UUID != t.UUID || t.NativeID == "" || p.NativeID != t.NativeID || p.Fingerprint == "" || p.Reason != "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED" {
-				return RecoveryRecord{}, ErrInvalid
-			}
-			box := OwnedBox{UUID: t.UUID, Project: t.Layer, Name: t.Name, Incarnation: t.Incarnation, State: "OWNED"}
-			switch t.Action {
-			case "box_delete":
-				if !strings.HasPrefix(p.Fingerprint, "DELETE_SUCCESS:") {
-					return RecoveryRecord{}, ErrInvalid
-				}
-				e = finishVerifiedDeleteTx(ctx, tx, t.ID, box, "UNKNOWN", "RECOVERY_DELETE_TERMINAL_NO_REPLAY")
-			case "port_forward_create", "port_forward_delete":
-				e = finishRecoveryForwardTx(ctx, tx, t, p, parent)
-			case "box_exec":
-				if p.Exit == nil {
-					return RecoveryRecord{}, ErrInvalid
-				}
-				e = finishVerifiedExecTx(ctx, tx, t.ID, box, t.NativeID, p.StdoutPath, p.StderrPath, *p.Exit, "UNKNOWN", "RECOVERY_EXEC_TERMINAL_NO_REPLAY")
-			case "box_start", "box_stop", "box_update":
-				if (t.LifecyclePinStatus != "PINNED" && t.LifecyclePinStatus != "LEGACY_UNPINNED") || p.LifecycleBinding != t.LifecycleBinding {
-					return RecoveryRecord{}, ErrResourceLocked
-				}
-				if parent != "" {
-					if e = recoveryClaimKeys(ctx, tx, t, []string{t.Resource, deleteParentKey(parent)}); e != nil {
-						return RecoveryRecord{}, e
-					}
-				}
-				var res sql.Result
-				res, e = tx.ExecContext(ctx, `UPDATE operations SET state='SUCCEEDED',error_class='',updated_at=? WHERE id=? AND state='UNKNOWN' AND updated_at=?`, now, t.ID, t.UpdatedAt)
-				if e == nil {
-					n, x := res.RowsAffected()
-					if x != nil || n != 1 {
-						return RecoveryRecord{}, ErrConflict
-					}
-					_, e = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES(?,?,'SUCCEEDED','RECOVERY_NATIVE_TERMINAL_NO_REPLAY')", t.ID, now)
-				}
-			default:
-				return RecoveryRecord{}, ErrInvalid
-			}
-			if e != nil {
-				return RecoveryRecord{}, e
-			}
-			outcome = "SETTLED"
+		if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" || p.UUID != t.UUID || t.NativeID == "" || p.NativeID != t.NativeID || p.Fingerprint == "" || p.Reason != "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED" {
+			return RecoveryRecord{}, ErrInvalid
 		}
+		box := OwnedBox{UUID: t.UUID, Project: t.Layer, Name: t.Name, Incarnation: t.Incarnation, State: "OWNED"}
+		switch t.Action {
+		case "port_forward_create", "port_forward_delete":
+			e = finishRecoveryForwardTx(ctx, tx, t, p, parent)
+		case "box_exec":
+			if p.Exit == nil {
+				return RecoveryRecord{}, ErrInvalid
+			}
+			e = finishVerifiedExecTx(ctx, tx, t.ID, box, t.NativeID, p.StdoutPath, p.StderrPath, *p.Exit, "UNKNOWN", "RECOVERY_EXEC_TERMINAL_NO_REPLAY")
+		case "box_start", "box_stop", "box_update":
+			if (t.LifecyclePinStatus != "PINNED" && t.LifecyclePinStatus != "LEGACY_UNPINNED") || p.LifecycleBinding != t.LifecycleBinding {
+				return RecoveryRecord{}, ErrResourceLocked
+			}
+			if parent != "" {
+				if e = recoveryClaimKeys(ctx, tx, t, []string{t.Resource, deleteParentKey(parent)}); e != nil {
+					return RecoveryRecord{}, e
+				}
+			}
+			var res sql.Result
+			res, e = tx.ExecContext(ctx, `UPDATE operations SET state='SUCCEEDED',error_class='',updated_at=? WHERE id=? AND state='UNKNOWN' AND updated_at=?`, now, t.ID, t.UpdatedAt)
+			if e == nil {
+				n, x := res.RowsAffected()
+				if x != nil || n != 1 {
+					return RecoveryRecord{}, ErrConflict
+				}
+				_, e = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES(?,?,'SUCCEEDED','RECOVERY_NATIVE_TERMINAL_NO_REPLAY')", t.ID, now)
+			}
+		default:
+			return RecoveryRecord{}, ErrInvalid
+		}
+		if e != nil {
+			return RecoveryRecord{}, e
+		}
+		outcome = "SETTLED"
 		success = true
 	} else if p.Kind != RecoveryApproval && p.Kind != RecoveryBlocked && p.Kind != RecoveryNotNeeded {
 		return RecoveryRecord{}, ErrInvalid
@@ -409,6 +408,21 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 		return RecoveryRecord{}, e
 	}
 	return RecoveryRecord{Receipt: Receipt{ID: id, TrackingID: tracking, State: phase, Action: a.Action, BoxUUID: uuid, Incarnation: inc, WorkRef: a.WorkRef, AgentRef: a.AgentRef, ErrorClass: errClass, CreatedAt: now, UpdatedAt: now, NextAction: nextAction(phase, a.Action, id)}, OriginalID: t.ID, Disposition: outcome, Reason: p.Reason}, nil
+}
+
+// One predicate shared by plan and writer. Old/forged originals may be
+// diagnosed, never bound or settled via a legacy path.
+func requireScopedRecoveryOriginal(t RecoveryTarget, p RecoveryProof) error {
+	if p.Kind == RecoveryBind {
+		return ErrResourceLocked
+	}
+	if p.Kind == RecoveryRepairPin || p.Kind == RecoverySettle {
+		if (t.Action == "box_create" || t.Action == "box_delete") && !t.ScopedLifecycle ||
+			t.Action == "box_peer_set" && !t.ScopedPeer {
+			return ErrResourceLocked
+		}
+	}
+	return nil
 }
 
 // Shared read-only preconditions for the existing writer and D3 plan.

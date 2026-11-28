@@ -13,7 +13,7 @@ import (
 
 func d3Fixture() (Report, Issue, state.DiagnosticOriginal, recovery.PlanWitness) {
 	r := NewReport("user-1001")
-	r.Installation = install.DiagnosticInstallation{Mode: "LEGACY", IdentitySHA256: strings.Repeat("a", 64)}
+	r.Installation = install.DiagnosticInstallation{Mode: "SCOPED_V2", IdentitySHA256: strings.Repeat("a", 64)}
 	id := strings.Repeat("b", 32)
 	box := "12345678-1234-4abc-8def-123456789abc"
 	r.AddRoutedIssue("operations", "UNRESOLVED_OPERATION", id+"/opaque", "UNVERIFIED", "HOST_REVIEW_REQUIRED")
@@ -103,4 +103,29 @@ func TestPR177D3ReviewDigestAndRefusals(t *testing.T) {
 		t.Fatal(q)
 	}
 	t.Log("D3_REVIEW_DIGEST_SCOPE_REVISION_EXPIRY_AND_UNSUPPORTED_PASS")
+}
+
+func TestP3R3LegacyPlanAndUnsupportedLeafRefused(t *testing.T) {
+	r, i, o, w := d3Fixture()
+	now := time.Now()
+	for _, mode := range []string{"LEGACY", "UNSUPPORTED_LEGACY", "UNVERIFIED", "CONFLICT"} {
+		r.Installation.Mode = mode
+		p := NewRecoverPlan(r, i.ID, 0, now)
+		if p.SetOriginal(o) || p.CanRepair || p.ApplyAvailable || p.Inspect == nil || p.Inspect.Arguments.OperationID != o.Target.ID {
+			t.Fatal("historical route became executable or lost original navigation", p)
+		}
+	}
+	r.Installation.Mode = "SCOPED_V2"
+	for _, kind := range []string{state.RecoveryBind, state.RecoveryRepairPin} {
+		p := NewRecoverPlan(r, i.ID, 0, now)
+		if !p.SetOriginal(o) {
+			t.Fatal(p)
+		}
+		x := w
+		x.Kind = kind
+		p.SetWitness(x)
+		if p.CanRepair || p.ApplyAvailable || p.ReviewSHA256 != "" {
+			t.Fatal("retired leaf accepted", p)
+		}
+	}
 }

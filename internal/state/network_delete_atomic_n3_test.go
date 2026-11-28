@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +17,19 @@ func TestN3ModernDeleteAtomicRecoveryFenceFault(t *testing.T) {
 	if e != nil || dt.State != "UNKNOWN" {
 		t.Fatal(dt, e)
 	}
-	proof := RecoveryProof{Kind: RecoverySettle, Reason: "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED", NativeID: dt.NativeID, UUID: dt.UUID, Fingerprint: "DELETE_SUCCESS:real-independent-native-verified"}
+	tx, e := s.db.BeginTx(ctx, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	original, e := readScopedDeleteOriginalTxPhase(ctx, tx, dr.ID, dt.Layer, pin.Bridge, "UNKNOWN")
+	tx.Rollback()
+	if e != nil {
+		t.Fatal(e)
+	}
+	proof := p1CompletedProof(t, dt, "DELETE", pin, ScopedLifecycleOriginalSHA256(original))
+	proof.UUID = dt.UUID
+	proof.ScopedLifecycle.Record.UUID = dt.UUID
+
 	if _, e = s.db.Exec("DELETE FROM network_bindings WHERE box_uuid=?", dt.UUID); e != nil {
 		t.Fatal(e)
 	}
@@ -78,8 +91,13 @@ func TestN3ModernDeleteAtomicRecoveryFenceFault(t *testing.T) {
 			t.Fatal(table, n, e)
 		}
 	}
-	history, e := s.ReadIPv4RetirementCandidate(ctx, a.Layer, dr.ID)
-	if e != nil || history.CreateOperationID != createID {
+	ro, e := OpenNetworkAuditReadOnly(strings.TrimSuffix(s.ExecArchiveDir(), ".exec-archive"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer ro.Close()
+	history, e := ro.ReadScopedRetirementLedger(ctx, a.Layer, pin.Bridge)
+	if e != nil || len(history.Retired) != 1 || history.Retired[0].DeleteID != dr.ID {
 		t.Fatal(history, e)
 	}
 }

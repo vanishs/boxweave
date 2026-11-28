@@ -1,0 +1,319 @@
+{
+  "asset_feedback": [
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-recovery",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "a76e13bffeeaed6451e5a87f5bf0d368; f8fffa74621769ccb495b27eb90ff1e1 exit 0",
+      "observation": "Verified exclusive transfer and short Exec of 4684-byte script",
+      "outcome": "helped",
+      "reason": "Exact previous observation appended to reconciled inbox revision 40; original facts retained"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+      "observation": "Local source gates and independent installed failure distinguished",
+      "outcome": "helped",
+      "reason": "L012 prior stale-CI candidate not applicable to exact head failure"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+      "observation": "Reconciled original HEAD and prior CI before edits",
+      "outcome": "helped",
+      "reason": "Existing guidance adequate"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+      "observation": "Reviewed candidate and retained unresolved observation failure",
+      "outcome": "helped",
+      "reason": "Correct episode-history sibling copy restored safe read and observation; no asset change justified"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-recovery",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+      "observation": "Registered format clean binding passed; local feedback observe refused unsafe directory",
+      "outcome": "helped",
+      "reason": "Correct episode-history sibling copy restored safe read and observation; no asset change justified"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "correction_ref": "Work revision 4 feedback review: skill.verification related BDH-L012 revision 3 NO_NEW_REVIEW_SIGNAL; exact-head WAL failure and success verified, not stale/superseded CI confusion",
+      "decision": "not-applicable",
+      "evidence": "N2 45757512001 jobs 139699502455, 139699502522, 139699502525, 139699502572 SUCCESS; after-sync cold and live SUCCEEDED",
+      "observation": "Four independent WAL jobs passed, while other N2 gates remained pending",
+      "outcome": "helped",
+      "reason": "BDH-L012 concerns stale or overlapping CI confusion; these exact-head WAL observations do not exhibit that gap"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Box Exec 560c51f5104594ab014787b8e21ea3d8 exit 0 clean c3dcc9d; original pr191 UNKNOWN list empty",
+      "observation": "Reconciled actual clean checkout and original operation states before work",
+      "outcome": "helped",
+      "reason": "Existing guidance adequate"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Original file receipts re-read; copied canonical episode history; local L014 observation Exec d4dce9b492042829ba16b591e917d201 exit 0",
+      "observation": "Reused and reviewed existing L014 rather than inventing a new candidate",
+      "outcome": "helped",
+      "reason": "No independent efficiency uplift or promotion established"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Box Exec 2ae0aec1c449df030877f50eed5690f2 exit 0; recovery-fixture LOCAL_RECORD_MATCH at clean c3dcc9d",
+      "observation": "Registered recovery-fixture check and inspect passed on exact clean source",
+      "outcome": "helped",
+      "reason": "Reused existing deterministic check; no new tool needed"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-wal-remediation",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Prior remediation checkpoint c3dcc9d; file operations 6c5e6a0ba28055e5cd5bb0f2cf642985, 53d7d8d047e436205dbab4698a99b60c, 6be63b25c977aa25f883155320a04df6, 862beb4bd14adc17c61a90bf9c6159f2 re-read SUCCEEDED; final gate c4ba7362c8b8ca4d01f85f7e0ca35aa4 exit 0",
+      "observation": "Prior WAL remediation reused exclusive source transfer after inline argv refusal, then verified all six final staged blobs against Git hashes; original receipts re-read during this handoff. No measured independent efficiency benefit.",
+      "outcome": "helped",
+      "reason": "Explicit new-source boundary: prior actual remediation, original receipts re-read; no new asset or promotion"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-s2-scoped-conversion",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Exclusive source operations 4bcdb8f6c39636276e144690fb58d9b2, 3324278edaefb63d8e58cb3c55ebce7d, 52737df7e4bf528d9686a7facaa759af, 61126a694ae3da471987489466f56618 SUCCEEDED; source gates 9ad964460b9c10e0023f7c8f57a1889f, 98c351a27e5ab5ae1ef895102a360500, f3f16cea5775493de16e593161769007, ce1585260f4c866b1c810351557c9b6b exit 0; Git mode mismatch 73e83f6cafac0be0950cebdd24a20172 exit 1, restored 0826793 and verified a9bc5792ed9fe598654ee0bdfc4b4c39 exit 0",
+      "observation": "Four exclusive source payloads used with original receipts, full readbacks and targeted tests. Verified blob content alone missed a shell executable mode mismatch; restored the exact prior mode in a separate non-force commit and subsequent publication includes mode checks. No independent efficiency comparison.",
+      "outcome": "helped",
+      "reason": "Actual reuse and verified source transfer; mode issue repaired; no new benefit claim"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-s2-scoped-conversion",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "Parent 6140fe6 five workflows SUCCESS; 36678d7 old SDK native CI 45762727953 job 139716258759 PASS; 0826793 old SDK job 139716444607 PASS; 4e72199 N2 45763098828 current SDK pending",
+      "observation": "Exact previous and current CI kept distinct, actual old SDK PASS and pending current SDK/Exec WAL",
+      "outcome": "helped",
+      "reason": "BDH-L012 stale-CI confusion not observed; superseded cancellation explicitly distinguished"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-s2-scoped-conversion",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Box fast-forward 9363fbb63566e2835d39395ba9b47923 exit 0; bounded pr191 UNKNOWN lookup empty at task start",
+      "observation": "Checked exact source/dirty work, reconciled after safe mode correction",
+      "outcome": "helped",
+      "reason": "Existing resume guidance adequate"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-s2-scoped-conversion",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 observation revision 42 c8a63e4bf879c96459b6406e78375c90 exit 0; no promotion; file mode correction recorded",
+      "observation": "Preserved original L014 observation and mode mismatch evidence",
+      "outcome": "helped",
+      "reason": "No authorized new asset selected or efficacy established"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-s2-scoped-conversion",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 observation revision 42 c8a63e4bf879c96459b6406e78375c90 exit 0; no promotion; file mode correction recorded",
+      "observation": "Existing history writer used; source tests use manual fallback because no matching installed SDK/WAL registered check",
+      "outcome": "helped",
+      "reason": "No fabricated registered verification result"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-update-ack-durability",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Exclusive source transfer 28b0256e6bc55f28f0c43e43bb3f2af5 SUCCEEDED, exact 13198-byte readback SHA256 b43f5be823bb497582d02e78e0370ff866ee8ded65a10fa336aaf907389b5259; applied and verified 14 Python regressions in e080f6e1edafb5602aba54c62d11cf90, registered format PASS but dirty source inspect REVIEW_REQUIRED exit 1; format and targeted ACK race 5645ee62dd3aea52a56673b3d1561db8 exit 0",
+      "observation": "Reused exclusive source create, original receipt and verified readback for one bounded patch. Source checks passed; dirty-source registered inspect correctly did not certify the staged candidate. Bind exact staged bytes and file modes before publishing. No measured independent efficiency gain.",
+      "outcome": "helped",
+      "reason": "Actual reuse of bounded exclusive source transfer"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-update-ack-durability",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "Exact 0842da7 five workflows success, N2 45764023332 14/14 PASS; Exec WAL before job 139720482571 and after 139720482786 actual native markers; SDK job 139720482913 PASS",
+      "observation": "Exact CI and private source regression distinguished; no stale head ambiguity",
+      "outcome": "helped",
+      "reason": "BDH-L012 stale-CI confusion not observed"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-update-ack-durability",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Box resume 680b2ccc69bc1662fa4b17741f975743 exit 0 clean exact HEAD; UNKNOWN lookup tracking 2039d82d0a3d198e91425eead791ec12 empty",
+      "observation": "Verified actual clean Box and exact source before editing",
+      "outcome": "helped",
+      "reason": "Existing resume guidance sufficient"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-update-ack-durability",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 observation revision43 ace6da94845e1525786c3c7a8fb1166d exit0; no independent efficiency claim",
+      "observation": "Reused previous candidate and recorded actual observation",
+      "outcome": "helped",
+      "reason": "No new asset or promotion justified"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-update-ack-durability",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "New ACK durability tests private Python 14/14, YAML47, staged diff; e080f6e1edafb5602aba54c62d11cf90 exit1 only inspect dirty-source REVIEW_REQUIRED, format result PASS; targeted Go race and format 5645ee62dd3aea52a56673b3d1561db8 exit0",
+      "observation": "Registered format PASS, dirty inspect REVIEW_REQUIRED as designed; targeted fault tests used manual fallback",
+      "outcome": "helped",
+      "reason": "No matching registered installed Update ACK check; no fabricated binding"
+    },
+    {
+      "asset": "skill.box-development",
+      "attempt_ref": "20261125-full-installed-s2",
+      "candidate": "BDH-L014",
+      "decision": "linked",
+      "evidence": "Exclusive patch receipts c5e85ef5d170fde6c619950e0cdc944a (18559 bytes SHA256 c3eeca4db39821ab0db4c4c123d091334d313c2aec839bb1467d185e0db3cdcb) and 34d6f35297890ab7e93ae60d62c77f28 (7313 bytes SHA256 cafff8d75744e780cebba834a9da8ef2ee59b40cbd3cca677d6ee687ed280238) SUCCEEDED, original readback verified; build 3b127bfe005e7132575cbf5fc2b7fb1b, private regressions b982bf0ed0fd95172525037427682ba3 and final bound stage b34118644e481ccb0cc459d1a006b58e exit0",
+      "observation": "Reused existing bounded guest source transfer and exact staged mode/hash checks for complete original S2 probe integration; two source transfers, build and 18 targeted tests passed. Manual fallback for installed candidate-specific check, no independent measured efficiency gain.",
+      "outcome": "helped",
+      "reason": "Actual bounded source transfer reuse"
+    },
+    {
+      "asset": "skill.verification",
+      "attempt_ref": "20261125-full-installed-s2",
+      "candidate": null,
+      "decision": "not-applicable",
+      "evidence": "Exact 0b0b0fb five workflows SUCCESS; N2 45765608697 Update retained native job 139725666461 original 85edb5640c687e22d6864e840807d2ff native 8c8043e4-1449-449c-96ea-488bc451b3e6; no native ID job 139725666760 original ade777451dc447e3d225f0722ec55581; actual markers twice identical",
+      "observation": "Exact previous candidate CI verified; new full native CI pending",
+      "outcome": "helped",
+      "reason": "No stale-CI confusion observed"
+    },
+    {
+      "asset": "skill.task-resume",
+      "attempt_ref": "20261125-full-installed-s2",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Box resume 3d46a13e5db1d08d94467fe869cf82a0 exit0 exact clean parent, UNKNOWN lookup 37068d834594e8511edeb14960047fe2 empty",
+      "observation": "Read original worktree and unresolved Operations before editing",
+      "outcome": "helped",
+      "reason": "Existing resume guidance sufficient"
+    },
+    {
+      "asset": "skill.continuous-learning",
+      "attempt_ref": "20261125-full-installed-s2",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "L014 observation revision44 59627692af788f93fc48d5fd1d33482e exit0; no promotion",
+      "observation": "Recorded actual reuse; no new BDH asset",
+      "outcome": "helped",
+      "reason": "No independent utility proof or new authorized improvement"
+    },
+    {
+      "asset": "tool.bwdev",
+      "attempt_ref": "20261125-full-installed-s2",
+      "candidate": null,
+      "decision": "no-change",
+      "evidence": "Exact shared SDK and seed build 3b127bfe005e7132575cbf5fc2b7fb1b exit0, 18 private Python tests, gofmt/YAML47/format1310 b982bf0ed0fd95172525037427682ba3 exit0; bound fixture stage b34118644e481ccb0cc459d1a006b58e exit0",
+      "observation": "Targeted source checks with no matching registered native check",
+      "outcome": "helped",
+      "reason": "Manual fallback, exact source verification"
+    }
+  ],
+  "attempt_ref": "20261125-full-installed-s2",
+  "authority": "Owner authorized P1 development in isolated Box; no shared host changes, merge or release",
+  "boundary": "progress",
+  "evidence": [
+    "a76e13bffeeaed6451e5a87f5bf0d368; f8fffa74621769ccb495b27eb90ff1e1 exit 0",
+    "591ff87801d81af10f227e0c9ac89bb9 and 16dcb725db78cac51d2076bb81397bc6 exit 0; CI 45749927198 job 139674970526 FAIL",
+    "e78915796322b88bf2e52de3f7a6be9e exit 2; observe Record directory missing or unsafe; L014 implementation changed/missing finding",
+    "64e2136da624a0927c11580d9df46207 exit 0; exact episode history copied and L014 revision 40 appended",
+    "Prior remediation checkpoint c3dcc9d; file operations 6c5e6a0ba28055e5cd5bb0f2cf642985, 53d7d8d047e436205dbab4698a99b60c, 6be63b25c977aa25f883155320a04df6, 862beb4bd14adc17c61a90bf9c6159f2 re-read SUCCEEDED; final gate c4ba7362c8b8ca4d01f85f7e0ca35aa4 exit 0",
+    "N2 45757512001 jobs 139699502455, 139699502522, 139699502525, 139699502572 SUCCESS; after-sync cold and live SUCCEEDED",
+    "Box Exec 2ae0aec1c449df030877f50eed5690f2 exit 0; recovery-fixture LOCAL_RECORD_MATCH at clean c3dcc9d",
+    "Box Exec 560c51f5104594ab014787b8e21ea3d8 exit 0 clean c3dcc9d; original pr191 UNKNOWN list empty",
+    "Original file receipts re-read; copied canonical episode history; local L014 observation Exec d4dce9b492042829ba16b591e917d201 exit 0",
+    "Work revision 4 feedback review: skill.verification related BDH-L012 revision 3 NO_NEW_REVIEW_SIGNAL; exact-head WAL failure and success verified, not stale/superseded CI confusion",
+    "Exclusive source operations 4bcdb8f6c39636276e144690fb58d9b2, 3324278edaefb63d8e58cb3c55ebce7d, 52737df7e4bf528d9686a7facaa759af, 61126a694ae3da471987489466f56618 SUCCEEDED; source gates 9ad964460b9c10e0023f7c8f57a1889f, 98c351a27e5ab5ae1ef895102a360500, f3f16cea5775493de16e593161769007, ce1585260f4c866b1c810351557c9b6b exit 0; Git mode mismatch 73e83f6cafac0be0950cebdd24a20172 exit 1, restored 0826793 and verified a9bc5792ed9fe598654ee0bdfc4b4c39 exit 0",
+    "Parent 6140fe6 five workflows SUCCESS; 36678d7 old SDK native CI 45762727953 job 139716258759 PASS; 0826793 old SDK job 139716444607 PASS; 4e72199 N2 45763098828 current SDK pending",
+    "Box fast-forward 9363fbb63566e2835d39395ba9b47923 exit 0; bounded pr191 UNKNOWN lookup empty at task start",
+    "Go old/current independent SDK builds b1dbd46c7a66733d4aedd31ec2bf85ae and 98c351a27e5ab5ae1ef895102a360500 exit 0; original shared body comparison 6bd4f9c588086ec8b5eb72c680b00999 exit 0",
+    "L014 observation revision 42 c8a63e4bf879c96459b6406e78375c90 exit 0; no promotion; file mode correction recorded",
+    "Exclusive source transfer 28b0256e6bc55f28f0c43e43bb3f2af5 SUCCEEDED, exact 13198-byte readback SHA256 b43f5be823bb497582d02e78e0370ff866ee8ded65a10fa336aaf907389b5259; applied and verified 14 Python regressions in e080f6e1edafb5602aba54c62d11cf90, registered format PASS but dirty source inspect REVIEW_REQUIRED exit 1; format and targeted ACK race 5645ee62dd3aea52a56673b3d1561db8 exit 0",
+    "Exact 0842da7 five workflows success, N2 45764023332 14/14 PASS; Exec WAL before job 139720482571 and after 139720482786 actual native markers; SDK job 139720482913 PASS",
+    "Box resume 680b2ccc69bc1662fa4b17741f975743 exit 0 clean exact HEAD; UNKNOWN lookup tracking 2039d82d0a3d198e91425eead791ec12 empty",
+    "New ACK durability tests private Python 14/14, YAML47, staged diff; e080f6e1edafb5602aba54c62d11cf90 exit1 only inspect dirty-source REVIEW_REQUIRED, format result PASS; targeted Go race and format 5645ee62dd3aea52a56673b3d1561db8 exit0",
+    "L014 observation revision43 ace6da94845e1525786c3c7a8fb1166d exit0; no independent efficiency claim",
+    "Exclusive patch receipts c5e85ef5d170fde6c619950e0cdc944a (18559 bytes SHA256 c3eeca4db39821ab0db4c4c123d091334d313c2aec839bb1467d185e0db3cdcb) and 34d6f35297890ab7e93ae60d62c77f28 (7313 bytes SHA256 cafff8d75744e780cebba834a9da8ef2ee59b40cbd3cca677d6ee687ed280238) SUCCEEDED, original readback verified; build 3b127bfe005e7132575cbf5fc2b7fb1b, private regressions b982bf0ed0fd95172525037427682ba3 and final bound stage b34118644e481ccb0cc459d1a006b58e exit0",
+    "Exact 0b0b0fb five workflows SUCCESS; N2 45765608697 Update retained native job 139725666461 original 85edb5640c687e22d6864e840807d2ff native 8c8043e4-1449-449c-96ea-488bc451b3e6; no native ID job 139725666760 original ade777451dc447e3d225f0722ec55581; actual markers twice identical",
+    "Box resume 3d46a13e5db1d08d94467fe869cf82a0 exit0 exact clean parent, UNKNOWN lookup 37068d834594e8511edeb14960047fe2 empty",
+    "Exact shared SDK and seed build 3b127bfe005e7132575cbf5fc2b7fb1b exit0, 18 private Python tests, gofmt/YAML47/format1310 b982bf0ed0fd95172525037427682ba3 exit0; bound fixture stage b34118644e481ccb0cc459d1a006b58e exit0",
+    "L014 observation revision44 59627692af788f93fc48d5fd1d33482e exit0; no promotion"
+  ],
+  "evolve_handoff": {
+    "items": [],
+    "status": "NO_MATCHED_PENDING"
+  },
+  "feedback_protocol": 1,
+  "kind": "work",
+  "learning": {
+    "kind": "reuse",
+    "ref": "BDH-L014"
+  },
+  "learning_links": [
+    "BDH-L014"
+  ],
+  "next_safe_action": "Inspect full installed S2 probe lane; continue remaining native fault/quota/GC and S2.5, and separate shared ledger queries from legacy retirement paths without removing unproved witnesses.",
+  "objective": "Scoped completed-journal lifecycle recovery and retired lineage",
+  "revision": 8,
+  "risk": "standard",
+  "schema_version": 1,
+  "state": "HANDOFF",
+  "target": {
+    "kind": "repository",
+    "ref": "vanishs/boxweave",
+    "source_sha": "0b0b0fb6267e8892ab4adee6fd083fbd2a0c8ceb",
+    "version": null
+  },
+  "task_kind": "development",
+  "used_assets": [
+    "skill.box-development",
+    "skill.verification",
+    "skill.task-resume",
+    "skill.continuous-learning",
+    "tool.bwdev"
+  ],
+  "work_ref": "pr191/p1b-lifecycle-recovery"
+}

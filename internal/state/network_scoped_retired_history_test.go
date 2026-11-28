@@ -10,7 +10,8 @@ import (
 	"github.com/vanishs/boxweave/internal/peerscope"
 )
 
-func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
+func n3ScopedOwnedFixture(t *testing.T) (*Store, OwnedBox, string) {
+	t.Helper()
 	ctx := context.Background()
 	s := newStore(t)
 	_, tok, e := s.IssueToken(ctx, time.Hour)
@@ -26,7 +27,7 @@ func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
 		intent := ScopedCreateIntent{Schema: 2, Project: project, Bridge: bridge, Name: name, CPU: 1, MemoryMiB: 256, DiskGiB: 2, Options: json.RawMessage("{}")}
 		raw, _ := json.Marshal(intent)
 		a := Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-create-history-" + name, RequestID: name, Action: "box_create", ResourceKey: "box:" + name, SafeIntent: raw}
-		rec, e := s.Admit(ctx, a)
+		rec, e := s.AdmitScoped(ctx, a)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -55,10 +56,16 @@ func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
 			}
 		}
 	}
+	return s, box, tok.ID
+}
+func n3DeleteOwned(t *testing.T, s *Store, box OwnedBox, tokenID string) Receipt {
+	t.Helper()
+	ctx := context.Background()
+	const project = "user-1001"
 	raw, _ := json.Marshal(struct {
 		BoxID string `json:"box_id"`
 	}{box.UUID})
-	del, e := s.Admit(ctx, Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: "n3-history-delete-one", RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
+	del, e := s.AdmitScoped(ctx, Admission{Layer: project, ActorID: tokenID, TokenID: tokenID, Key: "n3-history-delete-" + box.Name, RequestID: "delete", Action: "box_delete", CleanupDependencies: true, ResourceKey: "box:" + box.Name, BoxUUID: box.UUID, Incarnation: box.Incarnation, SafeIntent: raw})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -71,7 +78,12 @@ func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
 	if e = s.FinalizeVerifiedScopedDelete(ctx, del.ID, box); e != nil {
 		t.Fatal(e)
 	}
-	return s, box, del
+	return del
+}
+func n3RetiredFixture(t *testing.T) (*Store, OwnedBox, Receipt) {
+	t.Helper()
+	s, box, token := n3ScopedOwnedFixture(t)
+	return s, box, n3DeleteOwned(t, s, box, token)
 }
 func TestPR178N3ScopedRetiredHistory(t *testing.T) {
 	ctx := context.Background()

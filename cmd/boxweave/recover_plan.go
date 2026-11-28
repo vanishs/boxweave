@@ -85,10 +85,10 @@ func planWitness(ctx context.Context, a doctorArgs, q planWorkerRequest) (recove
 	if st := doctorNativeActive(ctx, r); !st.Ready {
 		return out, state.ErrResourceLocked
 	}
-	svc := recovery.Service{ReadStore: snap, Native: r, Layer: q.Project, PeerWitness: recovery.ObserveCompletedPeer}
-	if q.Mode == "SCOPED_V2" {
-		svc.ScopedPeerWitness = install.NativeScopedPeerRecoverCall
+	if q.Mode != "SCOPED_V2" {
+		return out, state.ErrInvalid
 	}
+	svc := recovery.Service{ReadStore: snap, Native: r, Layer: q.Project, ScopedPeerWitness: install.NativeScopedPeerRecoverCall, ScopedLifecycleWitness: install.NativeScopedLifecycleRecoverCall}
 	w, e := svc.InspectPlan(ctx, orig.Target)
 	if e != nil {
 		return out, e
@@ -132,7 +132,7 @@ func recoverPlanWorker() error {
 	}
 	a := doctorArgs{DB: "/var/lib/boxweave/ledger.sqlite", Socket: "/var/lib/incus/unix.socket.user", Project: "user-" + strconv.Itoa(os.Geteuid()), ServiceUser: "boxweave"}
 	uid, _, e := install.ServiceIdentity(doctorInstallPlan(a))
-	if e != nil || uid != os.Geteuid() || q.Project != a.Project || q.Mode != "SCOPED_V2" && q.Mode != "LEGACY" {
+	if e != nil || uid != os.Geteuid() || q.Project != a.Project || q.Mode != "SCOPED_V2" {
 		return state.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 18*time.Second)
@@ -219,13 +219,13 @@ func collectRecoverPlan(ctx context.Context, a doctorArgs, id string) diagnostic
 			p.Block("FRESH_LEDGER_UNAVAILABLE")
 		} else {
 			o, e := snap.ReadOriginal(ctx, a.Project, p.OriginalID)
-			l, le := snap.ReadLedger(ctx, a.Project, report.Installation.Mode, "incusbr-"+strings.TrimPrefix(a.Project, "user-"))
+			l, le := snap.ReadLedger(ctx, a.Project, doctorLedgerMode(report.Installation), "incusbr-"+strings.TrimPrefix(a.Project, "user-"))
 			current := diagnostic.NewReport(a.Project)
 			if le == nil {
 				current.ClassifyLedger(l)
 			}
 			fresh, ok := diagnostic.FindIssue(current, id)
-			if e != nil || le != nil || !ok || p.Issue == nil || fresh != *p.Issue {
+			if e != nil || le != nil || l.ForeignRows != 0 || !ok || p.Issue == nil || fresh != *p.Issue {
 				p.Block("ISSUE_OR_ORIGINAL_CHANGED_OR_UNPROVED")
 			} else if p.SetOriginal(o) {
 				p.LedgerSHA256 = l.ObservationDigest()
@@ -260,7 +260,7 @@ func collectRecoverPlan(ctx context.Context, a doctorArgs, id string) diagnostic
 								updated.ClassifyLedger(ledger)
 							}
 							issue, ok := diagnostic.FindIssue(updated, id)
-							same = ne == nil && le == nil && ok && issue == *p.Issue && newest.Digest == o.Digest && ledger.ObservationDigest() == l.ObservationDigest()
+							same = ne == nil && le == nil && ledger.ForeignRows == 0 && ok && issue == *p.Issue && newest.Digest == o.Digest && ledger.ObservationDigest() == l.ObservationDigest()
 							if again.Close() != nil {
 								same = false
 							}

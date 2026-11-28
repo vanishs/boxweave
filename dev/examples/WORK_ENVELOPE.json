@@ -1,6 +1,7 @@
 {
   "kind": "work",
   "schema_version": 1,
+  "feedback_protocol": 1,
   "work_ref": "example/support",
   "attempt_ref": "first",
   "task_kind": "operations",
@@ -11,6 +12,8 @@
   "state": "ACTIVE",
   "next_safe_action": "Ask for observed version and read relevant installation contract",
   "evidence": [],
-  "used_assets": ["knowledge.maintenance"],
+  "used_assets": [],
+  "asset_feedback": [],
+  "learning_links": [],
   "learning": null
 }

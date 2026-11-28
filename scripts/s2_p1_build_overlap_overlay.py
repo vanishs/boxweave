@@ -10,36 +10,7 @@ import os
 from pathlib import Path
 import sys
 
-if len(sys.argv) != 3:
-    raise SystemExit("usage: s2_p1_build_overlap_overlay.py <lifecycle.go> <lab>")
-source = Path(sys.argv[1]).resolve(strict=True)
-lab = Path(sys.argv[2]).resolve(strict=True)
-if not (
-    os.environ.get("GITHUB_ACTIONS") == "true"
-    and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
-    and os.geteuid() != 0
-    and str(lab).startswith("/tmp/bw-v1-s2-ghci.")
-    and lab.name == "p1-native-overlap"
-    and source.parts[-3:] == ("internal", "state", "lifecycle.go")
-    and lab.is_dir()
-):
-    raise SystemExit("refusing overlay outside single-use GitHub-hosted acceptance")
-
-original = source.read_bytes()
-before = original.decode("utf-8")
-function = "func (s *Store) FinalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string) error {"
-assert before.count(function) == 1, "atomic Create finalizer must be exactly one"
-prefix, body = before.split(function)
-needle = "\ttx, err := s.db.BeginTx(ctx, nil)"
-assert body.count(needle) >= 1, "atomic Create transaction anchor changed"
-imports = '\t"errors"\n\t"fmt"'
-assert before.count(imports) == 1, "lifecycle import layout changed; fail closed"
-extra = '\t"encoding/json"\n\t"errors"\n\t"fmt"\n\t"os"\n\t"path/filepath"'
-
-# Pause before opening the transaction so independently handled HTTP reads
-# and denied Deletes can run on the Store's single connection. The caller
-# already verified native UUID, original marker, shape and finality.
-hook = '''
+HOOK = '''
 	// TEST-ONLY GO OVERLAY: never in committed or release lifecycle.go.
 	if os.Getenv("GITHUB_ACTIONS") == "true" &&
 		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" &&
@@ -81,16 +52,62 @@ hook = '''
 		}
 	}
 '''
-modified = (prefix + function + body.replace(needle, hook + needle, 1)).replace(imports, extra)
-assert modified.count("TEST-ONLY GO OVERLAY") == 1
-overlay_file = lab / "lifecycle.test-overlay.go"
-json_file = lab / "go-overlay.json"
-overlay_file.write_text(modified, encoding="utf-8")
-json_file.write_text(
-    json.dumps({"Replace": {str(source): str(overlay_file)}}, sort_keys=True),
-    encoding="utf-8",
-)
-assert source.read_bytes() == original, "original lifecycle unexpectedly changed"
-print("S4_A_OVERLAY_SOURCE_UNMODIFIED_SHA256=" + hashlib.sha256(original).hexdigest())
-print("S4_A_OVERLAY_TEST_ONLY_LIFECYCLE_SHA256=" + hashlib.sha256(modified.encode()).hexdigest())
-print("S4_A_OVERLAY_PREATOMIC_EXACT_SINGLE_INSERTION=PASS")
+
+
+def render_overlay(original, scoped):
+    before = original.decode("utf-8")
+    function = ("func (s *Store) finalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string, binding *VerifiedCreateBinding, scoped bool) error {"
+                if scoped else "func (s *Store) FinalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string) error {")
+    assert before.count(function) == 1, "atomic Create finalizer must be exactly one"
+    prefix, body = before.split(function)
+    needle = "\ttx, err := s.db.BeginTx(ctx, nil)"
+    assert body.count(needle) >= 1, "atomic Create transaction anchor changed"
+    imports = '\t"errors"\n\t"fmt"'
+    assert before.count(imports) == 1, "lifecycle import layout changed; fail closed"
+    extra = '\t"encoding/json"\n\t"errors"\n\t"fmt"\n\t"os"\n\t"path/filepath"'
+
+    # Pause before opening the transaction so independently handled HTTP reads
+    # and denied Deletes can run on the Store's single connection. The caller
+    # already verified native UUID, original marker, shape and finality.
+    hook = HOOK
+    if scoped:
+        # Match only the reviewed Scoped path, not the legacy caller of the shared finalizer.
+        hook = hook.replace('if os.Getenv("GITHUB_ACTIONS")', 'if scoped && binding != nil && os.Getenv("GITHUB_ACTIONS")', 1)
+        assert 'if scoped && binding != nil' in hook
+    modified = (prefix + function + body.replace(needle, hook + needle, 1)).replace(imports, extra)
+    assert modified.count("TEST-ONLY GO OVERLAY") == 1
+    return modified
+
+
+def main():
+    if len(sys.argv) != 3:
+        raise SystemExit("usage: s2_p1_build_overlap_overlay.py <lifecycle.go> <lab>")
+    source = Path(sys.argv[1]).resolve(strict=True)
+    lab = Path(sys.argv[2]).resolve(strict=True)
+    if not (
+        os.environ.get("GITHUB_ACTIONS") == "true"
+        and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+        and os.geteuid() != 0
+        and str(lab).startswith("/tmp/bw-v1-s2-ghci.")
+        and lab.name == "p1-native-overlap"
+        and source.parts[-3:] == ("internal", "state", "lifecycle.go")
+        and lab.is_dir()
+    ):
+        raise SystemExit("refusing overlay outside single-use GitHub-hosted acceptance")
+    original = source.read_bytes()
+    modified = render_overlay(original, os.environ.get('BW_S2_OVERLAP_SCOPED') == '1')
+    overlay_file = lab / "lifecycle.test-overlay.go"
+    json_file = lab / "go-overlay.json"
+    overlay_file.write_text(modified, encoding="utf-8")
+    json_file.write_text(
+        json.dumps({"Replace": {str(source): str(overlay_file)}}, sort_keys=True),
+        encoding="utf-8",
+    )
+    assert source.read_bytes() == original, "original lifecycle unexpectedly changed"
+    print("S4_A_OVERLAY_SOURCE_UNMODIFIED_SHA256=" + hashlib.sha256(original).hexdigest())
+    print("S4_A_OVERLAY_TEST_ONLY_LIFECYCLE_SHA256=" + hashlib.sha256(modified.encode()).hexdigest())
+    print("S4_A_OVERLAY_PREATOMIC_EXACT_SINGLE_INSERTION=PASS")
+
+
+if __name__ == '__main__':
+    main()

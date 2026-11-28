@@ -41,13 +41,11 @@ type ObservationStore interface {
 type Service struct {
 	ReadStore ObservationStore
 
-	Store  *state.Store
-	Native Observer
-	Layer  string
-	// PeerWitness is the installed, root-authenticated read-only PRS RPC.
-	// No plan, approval assertion or root request parameters come from MCP.
-	PeerWitness       func(context.Context, string) (state.RootPeerResult, error)
-	ScopedPeerWitness func(context.Context, string) (state.ScopedPeerRootReceipt, error)
+	Store                  *state.Store
+	Native                 Observer
+	Layer                  string
+	ScopedPeerWitness      func(context.Context, string) (state.ScopedPeerRootReceipt, error)
+	ScopedLifecycleWitness func(context.Context, string) (state.ScopedLifecycleRecoveryProof, error)
 }
 
 func (s Service) reader() ObservationStore {
@@ -88,7 +86,7 @@ type Result struct {
 // legacy RELEASED audit row. Preserve the row as history but report the
 // retained protection and require explicit review; never infer settlement.
 func protectedNetworkRecovery(t state.RecoveryTarget) bool {
-	return t.DependentDelete || (t.Action == "box_create" && (t.CreatePinStaged || t.CreatePinRequired)) || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete"
+	return t.ScopedLifecycle || t.DependentDelete || (t.Action == "box_create" && (t.CreatePinStaged || t.CreatePinRequired)) || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete"
 }
 func base(t state.RecoveryTarget, stream string) View {
 	v := View{OriginalID: t.ID, OriginalAction: t.Action, OriginalState: t.State, BoxID: t.UUID, Incarnation: t.Incarnation, OriginalNativeID: t.NativeID, ClaimProtection: "NOT_UNKNOWN", NativeObservation: "NOT_CHECKED", EvidenceSource: "SQLITE_DURABLE", GCStream: stream}
@@ -177,7 +175,7 @@ func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result
 	if ctx.Err() != nil {
 		return Result{}, ctx.Err()
 	}
-	record, e := s.Store.CommitRecovery(ctx, r, t, p)
+	record, e := s.commitRecovery(ctx, r, t, p)
 	if e != nil {
 		return Result{}, e
 	}
@@ -203,15 +201,23 @@ func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result
 	latest.Disposition, latest.Reason = record.Disposition, record.Reason
 	return Result{View: latest, Recovery: &record}, nil
 }
+func (s Service) commitRecovery(ctx context.Context, r state.RecoveryRequest, t state.RecoveryTarget, p state.RecoveryProof) (state.RecoveryRecord, error) {
+	return s.Store.CommitScopedRecovery(ctx, r, t, p)
+}
+
+func finishRecoveryObservation(v View, kind, reason string) (View, state.RecoveryProof) {
+	v.Disposition, v.Reason = kind, reason
+	if kind == state.RecoverySettle || kind == state.RecoveryBind {
+		v.Disposition = "SAFE_RECOVER"
+		v.ProposedAction = kind
+	}
+	return v, state.RecoveryProof{Kind: kind, Reason: reason}
+}
+
 func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream string) (View, state.RecoveryProof) {
 	v := base(t, stream)
 	finish := func(kind, reason string) (View, state.RecoveryProof) {
-		v.Disposition, v.Reason = kind, reason
-		if kind == state.RecoverySettle || kind == state.RecoveryBind {
-			v.Disposition = "SAFE_RECOVER"
-			v.ProposedAction = kind
-		}
-		return v, state.RecoveryProof{Kind: kind, Reason: reason}
+		return finishRecoveryObservation(v, kind, reason)
 	}
 	if stream != "" {
 		if t.Action != "box_exec" {
@@ -233,6 +239,12 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	if t.Action == "operation_recover" {
 		return finish(state.RecoveryBlocked, "RECOVERY_OF_RECOVERY_UNSUPPORTED")
 	}
+	// A fresh-only controller cannot adopt a Legacy original, even if
+	// an exact native name or successful old receipt remains observable.
+	if (t.Action == "box_create" || t.Action == "box_delete") && !t.ScopedLifecycle ||
+		t.Action == "box_peer_set" && !t.ScopedPeer {
+		return finish(state.RecoveryBlocked, "SCOPED_ORIGINAL_REQUIRED")
+	}
 	if t.Action == "box_create" && t.State == "SUCCEEDED" && t.CreatePinRequired && t.CreatePinStaged && t.OwnedState == "OWNED" {
 		return s.observeCreatePinRepair(ctx, t, v)
 	}
@@ -250,35 +262,11 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 		}
 		return finish(state.RecoveryNotNeeded, "ORIGINAL_ALREADY_REVIEWED_RELEASED")
 	}
+	if t.ScopedLifecycle {
+		return s.observeScopedLifecycle(ctx, t, v)
+	}
 	if t.Action == "box_peer_set" {
-		if t.ScopedPeer {
-			if s.ScopedPeerWitness == nil {
-				return finish(state.RecoveryBlocked, "SCOPED_PEER_ROOT_PROOF_REQUIRED")
-			}
-			proof, e := s.ScopedPeerWitness(ctx, t.ID)
-			if e != nil || !proof.RecoveryOnly || proof.OriginalID != t.ID || proof.Project != t.Layer || proof.Status != "COMPLETE_VERIFIED" || proof.VerifiedSteps != 4 {
-				return finish(state.RecoveryBlocked, "SCOPED_PEER_ROOT_PROOF_REQUIRED")
-			}
-			v.NativeObservation = "ROOT_COMPLETED_KERNEL_VERIFIED"
-			v.EvidenceSource = "SQLITE_AND_ROOT_JOURNAL"
-			view, p := finish(state.RecoverySettle, "SCOPED_PEER_COMPLETED_NO_REPLAY")
-			p.UUID, p.ScopedPeer = t.UUID, proof
-			p.Fingerprint = fingerprint(t.ID, proof.ProofSHA256, proof.PlanSHA256, proof.FinalSHA256)
-			return view, p
-		}
-		if !t.PeerReady || s.PeerWitness == nil {
-			return finish(state.RecoveryBlocked, "PEER_ROOT_COMPLETED_PROOF_REQUIRED")
-		}
-		proof, e := s.PeerWitness(ctx, t.ID)
-		if e != nil || !state.ValidCompletedPeerProof(proof) {
-			return finish(state.RecoveryBlocked, "PEER_ROOT_COMPLETED_PROOF_REQUIRED")
-		}
-		v.NativeObservation = "ROOT_COMPLETED_KERNEL_VERIFIED"
-		v.EvidenceSource = "SQLITE_AND_ROOT_JOURNAL"
-		view, p := finish(state.RecoverySettle, "ROOT_COMPLETED_POSTSTATE_VERIFIED")
-		p.UUID, p.NativeID, p.Peer = t.UUID, t.NativeID, proof
-		p.Fingerprint = fingerprint(t.ID, t.UUID, proof.PlanSHA256, proof.PostNativeDigestSHA256)
-		return view, p
+		return s.observeScopedPeer(ctx, t, v)
 	}
 	if t.DependentDelete && (s.reader() == nil || s.reader().CheckDependentDeleteRecovery(ctx, t) != nil) {
 		return finish(state.RecoveryBlocked, "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED")
@@ -332,47 +320,11 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	if t.Name == "" || t.Resource != "box:"+t.Name {
 		return finish(state.RecoveryBlocked, "EXACT_ORIGINAL_OWNERSHIP_UNPROVED")
 	}
-	if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
-		if t.CreatePinStaged {
-			return s.observeStagedCreate(ctx, t, v)
-		}
-		if t.CreatePinRequired {
-			return finish(state.RecoveryBlocked, "CREATE_STATIC_RESERVATION_MISSING")
-		}
-		box, obs, e := ObserveCreate(ctx, s.Native, t.Name, t.ID)
-		if e != nil || box.Project != s.Layer {
-			return finish(state.RecoveryBlocked, "CREATE_MARKER_IDENTITY_UNPROVED")
-		}
-		v.ObservedNativeUUID = box.UUID
-		v.NativeObservation = obs.State
-		v.EvidenceSource = "SQLITE_AND_NATIVE"
-		view, p := finish(state.RecoveryBind, "CREATE_MARKER_EXACT_IDENTITY")
-		p.UUID, p.Fingerprint = box.UUID, obs.Fingerprint
-		return view, p
-	}
+
 	if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" {
 		return finish(state.RecoveryBlocked, "EXACT_ORIGINAL_OWNERSHIP_UNPROVED")
 	}
-	if t.Action == "box_delete" {
-		obs, e := s.Native.ObserveUnknownDelete(ctx, t.Name, t.UUID, t.NativeID)
-		if e != nil {
-			return finish(state.RecoveryBlocked, "DELETE_NATIVE_OBSERVATION_UNVERIFIED")
-		}
-		v.NativeObservation = obs.Class
-		v.EvidenceSource = "SQLITE_AND_NATIVE"
-		if obs.NativeID != t.NativeID || obs.Box.Project != t.Layer || obs.Box.ExpectedUUID != t.UUID || obs.Box.Name != t.Name {
-			return finish(state.RecoveryBlocked, "DELETE_IDENTITY_UNPROVED")
-		}
-		if obs.Class != "ORIGINAL_TERMINAL_DELETE_VERIFIED" || obs.Box.State != "ABSENT_UNCERTAIN" {
-			if t.DependentDelete {
-				return finish(state.RecoveryBlocked, "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED")
-			}
-			return finish(state.RecoveryApproval, "DELETE_TERMINAL_ABSENCE_NOT_PROVED")
-		}
-		view, p := finish(state.RecoverySettle, "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED")
-		p.UUID, p.NativeID, p.Fingerprint = t.UUID, t.NativeID, obs.Fingerprint
-		return view, p
-	}
+
 	box, etag, e := s.Native.GetExactBox(ctx, t.Name, t.UUID)
 	if e != nil || box.UUID != t.UUID || box.Project != s.Layer {
 		return finish(state.RecoveryBlocked, "EXACT_NATIVE_UUID_UNVERIFIED")

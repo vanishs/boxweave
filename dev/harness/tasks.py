@@ -64,6 +64,27 @@ def ready(data):
             and all(rows[d]["state"] == "RECORDED" for d in row["depends_on"])]
 
 
+def continuation(data):
+    """Cheap phase-wide navigation from existing caller-recorded task history."""
+    rows = validate(data)
+    pending = ready(data)
+    runnable = [row for row in rows.values() if row["state"] == "WORKING"]
+    runnable += [rows[key] for key in pending]
+    blocked = [{"id": row["id"], "note": row["note"]} for row in rows.values()
+               if row["state"] == "BLOCKED"]
+    waiting = [{"id": row["id"],
+                "on": [key for key in row["depends_on"] if rows[key]["state"] != "RECORDED"]}
+               for row in rows.values() if row["state"] == "PENDING" and row["id"] not in pending]
+    return {
+        "decision": "CONTINUE" if runnable else ("REVIEW_BLOCKERS" if blocked or waiting else "REVIEW_EXIT"),
+        "actionable": [{key: row[key] for key in ("id", "state", "acceptance")} for row in runnable],
+        "blocked": blocked,
+        "waiting": waiting,
+        "recorded_count": sum(row["state"] == "RECORDED" for row in rows.values()),
+        "note": "Caller-recorded task graph only; review original Operations, evidence and full phase scope. No stop, acceptance or authority granted.",
+    }
+
+
 def register(parser):
     sub = parser.add_subparsers(dest="action", required=True)
     init = sub.add_parser("init", help="Create local task history from a JSON spec")
@@ -73,13 +94,17 @@ def register(parser):
     replan.add_argument("directory")
     replan.add_argument("spec")
     replan.add_argument("--expect", type=int, required=True)
+    replan.add_argument("--expect-work-ref", help="Require the active phase/work identity")
     replan.add_argument("--note", required=True)
     for action in ("status", "next"):
-        sub.add_parser(action).add_argument("directory")
+        query = sub.add_parser(action)
+        query.add_argument("directory")
+        query.add_argument("--expect-work-ref", help="Require the active phase/work identity")
     update = sub.add_parser("transition", help="Publish a new local revision")
     update.add_argument("directory")
     update.add_argument("task_id")
     update.add_argument("--expect", type=int, required=True)
+    update.add_argument("--expect-work-ref", help="Require the active phase/work identity")
     update.add_argument("--to", choices=sorted(STATES), required=True)
     update.add_argument("--note", required=True)
     update.add_argument("--checkpoint", help="Reference to a saved checkpoint")
@@ -89,6 +114,8 @@ def run(args, root):
     directory = Path(args.directory)
     if args.action == "init":
         spec = read_json(args.spec)
+        if isinstance(spec, dict) and "improvement" in spec:
+            raise HarnessError("Materialize a selected episode through learn episode")
         if not isinstance(spec, dict) or not isinstance(spec.get("tasks"), list):
             raise HarnessError("Expected task specification object")
         for row in spec["tasks"]:
@@ -104,7 +131,12 @@ def run(args, root):
         data = latest(directory)
         if data.get("kind") != "task" or data.get("schema_version") != 1:
             raise HarnessError("Unsupported task record kind/version")
+        expected_ref = getattr(args, "expect_work_ref", None)
+        if expected_ref is not None and data.get("work_ref") != expected_ref:
+            raise HarnessError("Task history work_ref differs from active scope; reconcile phase history")
         rows = validate(data)
+        if "improvement" in data:
+            raise HarnessError("Use learn episode to inspect or advance selected improvement histories")
         if args.action == "replan":
             if args.expect != data["revision"] or not nonempty(args.note):
                 raise HarnessError("Revision conflict or missing replan reason")
@@ -154,7 +186,9 @@ def run(args, root):
     eligible = ready(data)
     return {
         "status": "OBSERVED", "revision": data["revision"], "work_ref": data["work_ref"],
+        "objective": data["objective"],
         "ready": eligible, "tasks": data["tasks"] if args.action != "next" else [],
+        "continuation": continuation(data),
         "source": data.get("source"), "current_source": observe(root),
         "note": "RECORDED is a task note, not verified evidence or acceptance. Local revisions only; persist and reconcile through Git/PR.",
     }, 0

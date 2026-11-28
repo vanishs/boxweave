@@ -8,13 +8,27 @@ Start every BoxWeave task with the [canonical BDH bootstrap](../../dev/BOOTSTRAP
 
 ## One-pass development phases and durable Agent handoff
 
-For the new v1 implementation, **begin with** [the single phased implementation plan](../process/IMPLEMENTATION_PLAN.md), [one common execution protocol](PHASE_EXECUTION_PROTOCOL.md), **only** the [current S1–S5 card](../history/development/phases/README.md) and the [current append-only action/decision-log checkpoint](EXECUTION_LOG.md#current-checkpoint). This workflow supplies detailed testing/review procedures **when the current phase reaches them**; it is not a second competing roadmap. Each major phase performs its own scoped research, implementation, positive/negative tests, independent/native acceptance, correction loop, original test rerun, and log/commit/handoff **in one pass**.
+Start with the active task plan and its current ledger. For #191 use the
+[consolidation plan](CONSOLIDATION_PLAN.md) and
+[live ledger](CONSOLIDATION_PROGRESS.md); the original
+[S1–S5 cards](../history/development/phases/README.md) are historical evidence,
+not a parallel execution queue. For other tasks use their applicable plan
+and [common protocol](PHASE_EXECUTION_PROTOCOL.md). Complete the authorized
+stage in one pass, including verification and correction; internal
+checkpoints are not user handoffs.
 
-If a subtask remains unresolved, document the original error, native/Tracking/UUID identity, attempts, permission/decision needs and next safe probe. Continue independent work rather than abandon the whole phase; **mandatory safety/release conditions still block their own acceptance/publication**. Update docs whenever code, native facts or context constraints demand it; log cross-phase changes and use narrow links rather than loading the entire archive. The final S5 must reaccept **all 20** tools and every installed local CLI leaf on the exact tested candidate, even if a previous SDK-only or early-stage probe succeeded.
+If a subtask remains unresolved, document the original error, native/Tracking/UUID identity, attempts, permission/decision needs and next safe probe. Continue independent work rather than abandon the whole phase; **mandatory safety/release conditions still block their own acceptance/publication**. Update docs whenever code, native facts or context constraints demand it; log cross-phase changes and use narrow links rather than loading the entire archive. The final S5 must reaccept **all 23 approved** tools and every installed local CLI leaf on the exact tested candidate, even if a previous SDK-only or early-stage probe succeeded.
 
 ## Commit / PR gates (required at every stage)
 
-Before committing, run `make hooks` (once per clone) and `make verify`; inspect the exact **staged** blob with `.githooks/pre-commit`, ensure tracked YAML parses without duplicate keys and every Go file passes `gofmt`. PRs must run the stable `quality-gate` status on the exact head SHA, plus phase-specific native independent proof. A green check alone does not enforce merging: [quality policy](../process/QUALITY_GATES.md) and [active-ruleset blocker #117](https://github.com/vanishs/boxweave/issues/117). A red/unverified check or mandatory phase gap forbids promotion, irrespective of the user's tool permissions; no bypass/force-push.
+Install hooks once per clone. Before every local commit, review the
+exact staged blob, pass the applicable staged format/YAML gate and focused
+tests for changed behavior; never commit unverified Go. Before publishing a
+coherent mixed/source candidate, run full applicable local verification
+(normally `make verify`); docs-only uses the existing quality policy.
+Required exact-head `quality-gate`, independent native gates and final review
+remain mandatory. A local slice is not CI acceptance. No bypass/force-push.
+See [quality policy](../process/QUALITY_GATES.md).
 
 ## Start-of-task checklist
 
@@ -35,6 +49,80 @@ Before committing, run `make hooks` (once per clone) and `make verify`; inspect 
 - Favor focused dependencies; explain license, provenance, transitive dependencies and security risk for additions. Pin required/observed dependency versions in the install ledger; perform automatic managed-dependency reconciliation in **explicit local** install/upgrade workflows, with a separate authorization gate for shared Incus/foreign services. Treat CI workflow, installer, privileges, permissions and deployment scripts as high-review areas.
 - Use generic names and example domains in public docs. Escape untrusted text in console and log output; avoid recording private IPs or real service names.
 - Maintain user-visible documentation and machine-readable MCP schemas in English. Reply to the requester in their explicitly requested language or this conversation's language by default.
+
+## Fast development, strict acceptance
+
+Default to the existing authorized Box, worktree, local Git objects, toolchain,
+caches and verified fixture. Observe identity, ownership, dirty/staged work and
+original Operations at resume and meaningful changes, not before every edit.
+Reuse immutable context. Consult GitHub for changed or missing facts; fetch
+only when a required revision is absent or remote reconciliation is due.
+A cached ref is not proof of the live remote head.
+
+Group related inspection, edits and focused tests into bounded local operations.
+Avoid another Exec against a known busy resource while the original is pending;
+do independent reads or work on a genuinely independent authorized resource.
+Review and commit coherent, locally verified slices inside the Box. Accumulate
+compatible commits; run affected/adjacent regression on the combined exact
+candidate. Publish at a meaningful CI boundary: a native result needed for a
+decision, coherent stage, high-risk change needing independent evidence,
+durable handoff/backup requirement, or final acceptance. Do not submit every
+small edit or create a fresh Box/worktree for every checkpoint. No fixed batch size.
+
+Reuse populated labs for suitable iterative tests; use a clean independent
+fixture for fresh install, schema/absence, isolation, reproducibility or other
+gates whose oracle requires it. Preserve required native and exact-head CI.
+Cache hits, earlier SHA results and reused labs are not independent clean
+acceptance. Invalidate affected evidence on relevant change; reconcile drift
+or conflicting ownership. Never bypass admission, replay UNKNOWN, reset dirty
+work, or weaken a test.
+
+Local commits are not independent backup. Record local branch, base, HEAD/tree,
+original receipts, evidence and next action outside the Box; ensure actual bytes
+are durably stored when required. Prefer normal fast-forward publication of
+local commits. If only the authorized GitHub tree API works, a recorded
+aggregate commit may represent their exact final tree; retain local commits
+and mapping, verify remote tree and expected parent before advancing the ref.
+Do not pretend local commit IDs were published.
+
+## Outcome-first adaptive stages
+
+For a multi-stage task, define a finite remaining exit ledger in the
+active plan and at most three user-facing instructions per stage.
+Investigate decisive dependencies early, then implement against actual
+exit outcomes. At each boundary compare the remaining acceptance and
+critical path, invalidate affected evidence and adjust the next stage.
+Do not mistake commits, new tests, refactoring or record counts for
+completion. Preserve the approved product and mandatory safety gates.
+
+When blocked, classify the affected exit condition and resolve it or
+advance only necessary independent work. Defer optional improvements;
+do not manufacture work to avoid reporting a blocker. Repeated
+non-converging slices require replanning rather than another slice.
+Where replacing an architecture, disposition each retained behavior
+and remove obsolete live code/test consumers after equivalent evidence
+or as a reversible, independently verified cutover candidate. Retain
+historical evidence. Do not add compatibility merely for old tests.
+Use ordinary deletion-capable Git or reviewed exact-tree publication
+when a source export helper cannot represent a removal.
+
+Use the existing phase-wide task history and
+[continuation projection](../../dev/skills/task-resume/SKILL.md#phase-wide-continuation-candidate)
+at each meaningful boundary; select the next action from the whole
+requested stage, not a newly narrowed slice. REVIEW_BLOCKERS and
+REVIEW_EXIT require review, not automatic handoff.
+Use the [Finish Gate](../../dev/skills/task-resume/SKILL.md#finish-gate-candidate)
+before ending the authorized task. A checkpoint, report, local commit,
+pending CI, test failure or estimated budget pressure is not a stop reason
+while safe required work remains executable. Reuse the existing record,
+not another status document. Only completion, a genuine blocker after
+independent ready work, an observed platform boundary, or explicit owner
+stop ends the pass. Do not claim a quota from an estimate.
+
+One current ledger owns stage status; update it in place, link historical
+proof and next 1-3 actions. No repeated full-history prompts or separate
+progress registries. Ordinary work reuses BDH; a nonblocking BDH idea
+is a deferred candidate, not a new prerequisite.
 
 ## Development environment and Box lifecycle
 

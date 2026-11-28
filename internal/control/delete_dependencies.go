@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/vanishs/boxweave/internal/install"
 	"github.com/vanishs/boxweave/internal/native"
 	"github.com/vanishs/boxweave/internal/state"
 )
@@ -120,9 +121,9 @@ func (s *Service) executeDependentDeleteWithWitness(ctx context.Context, origina
 				return state.ErrVerifiedForwardCommitted
 			})
 		case "box_peer_set":
-			// The existing exact digest/root review is mandatory. The new child
-			// appears in operation_list/activity under the parent's work_ref;
-			// no ACL PUT or privileged auto-approval is issued here.
+			if e := s.worker().ExecuteScopedPeerOriginal(id, install.NativeScopedPeerCall); e != nil {
+				return uncertain()
+			}
 		case "box_stop":
 			var nativeID string
 			s.worker().Execute(id, func(c context.Context) (string, error) {

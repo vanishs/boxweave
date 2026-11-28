@@ -69,8 +69,8 @@ func TestActivityOAuthRefreshRotationRevokedGrantAndForeignLayer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec, err := st.Admit(ctx, state.Admission{
-		Layer: "test", ActorID: token.ActorID, TokenID: token.ID,
+	rec, err := st.AdmitScoped(ctx, state.Admission{
+		Layer: testScopedProject, ActorID: token.ActorID, TokenID: token.ID,
 		Key: "activity-oauth-p1-original-20261119", RequestID: "oauth-p1",
 		Action: "box_exec", SafeIntent: []byte("{}"),
 		ResourceKey: "box:owned", BoxUUID: "bcfe32e0-3acf-4f21-8a66-332a84d741a4",
@@ -86,7 +86,7 @@ func TestActivityOAuthRefreshRotationRevokedGrantAndForeignLayer(t *testing.T) {
 	if err := st.Unknown(ctx, rec.ID, "DISPATCHING", "UNVERIFIED_NATIVE_REPLY"); err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := st.Admit(ctx, state.Admission{
+	foreign, err := st.AdmitScoped(ctx, state.Admission{
 		Layer: "other-project", ActorID: token.ActorID, TokenID: token.ID,
 		Key: "activity-oauth-foreign-layer-20261119", RequestID: "oauth-foreign",
 		Action: "box_exec", SafeIntent: []byte("{}"), ResourceKey: "box:foreign",
@@ -166,8 +166,8 @@ func TestActivityOAuthConcurrentReadersRevokedGrantNoPostRevokeLeak(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec, err := st.Admit(ctx, state.Admission{
-		Layer: "test", ActorID: tok.ActorID, TokenID: tok.ID,
+	rec, err := st.AdmitScoped(ctx, state.Admission{
+		Layer: testScopedProject, ActorID: tok.ActorID, TokenID: tok.ID,
 		Key: "activity-p1-concurrent-oauth-20261119", RequestID: "p1-auth-race",
 		Action: "box_exec", SafeIntent: []byte("{}"), ResourceKey: "box:auth-race",
 		WorkRef: "p1/auth-race",
