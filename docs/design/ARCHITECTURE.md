@@ -18,7 +18,7 @@ Authenticated localhost Streamable HTTP MCP (operator tunnel optional)
      +--> agentless guest Exec and guest file APIs
 ```
 
-A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. Root/`incus-admin` Unix socket clients are privileged, but a non-root user **only in `incus`** has native per-user Project confinement. Prefer a dedicated `incus`-only BoxWeave runtime, with local-admin-provisioned `restricted.*` capabilities and actual denial tests. `UseProject` alone is not authorization; The current #191 candidate uses only Scoped Peer v2 and bounded Root-local helpers. Historical Legacy artifacts require their matching version; no current Legacy fallback. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
+A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. Root/`incus-admin` Unix socket clients are privileged, but a non-root user **only in `incus`** has native per-user Project confinement. Prefer a dedicated `incus`-only BoxWeave runtime, with local-admin-provisioned `restricted.*` capabilities and actual denial tests. `UseProject` alone is not authorization. Current v1 Schema 7 uses only Scoped Peer v2, independent UUID-derived ACLs per Box and bounded Root-local helpers. Historical Legacy artifacts require their matching version; no current Legacy fallback. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
 
 ## Human, Agent and source-code perspectives
 
@@ -28,7 +28,7 @@ The existing v1 source places these boundaries in `cmd/boxweave` (single CLI/ser
 
 ## Readiness split
 
-`native.service_ready` and `mcp_ready` allow installing a healthy service before preparing the first Box. `native.ready` and full CLI `doctor` are stronger native-write admission gates requiring prepared restricted Project/Profile, pool, NIC and exclusive ACL. Neither gate requires a preloaded Guest image, proves packet-level isolation, or verifies Incus disk quotas. See [RC.3 decision](../history/decisions/V1_RC3_INCUS_NATIVE_INSTALL_AND_IMAGE_POLICY_2026-11-13.md).
+`native.service_ready` and `mcp_ready` allow installing a healthy service before preparing the first Box. `native.ready` and full CLI `doctor` are stronger native-write admission gates requiring prepared restricted Project/Profile, pool, NIC and the verified Scoped quarantine/guard and independent per-Box ACL contract. Neither gate requires a preloaded Guest image, proves packet-level isolation, or verifies Incus disk quotas. See [RC.3 decision](../history/decisions/V1_RC3_INCUS_NATIVE_INSTALL_AND_IMAGE_POLICY_2026-11-13.md).
 
 ## SDK-first boundary
 

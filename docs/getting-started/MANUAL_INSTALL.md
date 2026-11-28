@@ -34,7 +34,9 @@ Do not add this user to incus-admin or sudo, or use the privileged Incus socket.
 ## 2. Download verified installer
 
 The consolidated current source supports one fresh Scoped installation
-contract, not Legacy installation, adoption, upgrade or rollback. Use an
+contract with Schema 7 and an independent ACL per Box. Shared-ACL
+execution, Legacy installation, adoption, upgrade and rollback are
+unsupported. Use an
 exact matching verified published Release when available, or an independently
 verified local candidate in an authorized test environment. Historical
 releases require their own matching wrapper and documentation.
