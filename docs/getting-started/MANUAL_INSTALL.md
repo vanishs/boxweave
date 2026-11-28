@@ -100,6 +100,23 @@ An active service and anonymous HTTP 401 establish listener/denial, not authenti
 
 ## Connect a remote OAuth client
 
+For temporary development and acceptance deployments, an operator-managed
+[Cloudflare Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+is a normal BoxWeave remote-access option, including an independently
+installed nested controller on an eligible, authorized target. The owner
+reports that the existing L0 uses this integration successfully. BoxWeave
+uses stateless Streamable HTTP with JSON responses (`Stateless: true`,
+`JSONResponse: true`); its ordinary tool workflow does not require SSE.
+The Quick Tunnel SSE limitation is therefore not by itself a BoxWeave
+compatibility blocker. Actual client compatibility, OAuth authorization,
+unauthenticated refusal and exact installed tool discovery must still be
+verified for each target. A random hostname is not authentication. Keep
+BoxWeave authentication and the loopback-only listener; never expose
+native administration sockets or share credentials. Quick Tunnels are
+temporary, with changing hostnames and no uptime guarantee. Use a stable
+operator-managed HTTPS endpoint for long-lived deployments where needed.
+A tunnel does not prove child guest internet access or recursive isolation.
+
 Skip for local-only Bearer clients. BoxWeave's MCP listener stays on loopback. Operate your own HTTPS reverse proxy or tunnel forwarding to http://127.0.0.1:18650; BoxWeave does not manage DNS, certificates or tunnels. Use a trusted operator terminal to inspect oauth-status first. Current candidates report PasswordConfigured independently of Enabled; do not reset a configured password just to fix an origin. The guided installer accepts one trailing slash on an otherwise valid HTTPS DNS origin, rejects userinfo, ports, paths, queries and fragments, and permits bounded correction or deferral without reinstalling. Direct oauth-set-origin still requires the canonical origin without a slash or /mcp. If no password is configured, use oauth-setup once (at least 16 characters):
 
 ```sh
