@@ -1,0 +1,99 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"time"
+
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/pkg/sftp"
+)
+
+func must(e error) { if e != nil { log.Fatal(e) } }
+func check(ok bool, msg string) { if !ok { log.Fatal(msg) } }
+
+type budgetReader struct {
+	r io.Reader
+	left int
+}
+func (r *budgetReader) Read(p []byte) (int, error) {
+	if r.left == 0 { return 0, errors.New("fixture wire budget exhausted") }
+	if len(p) > r.left { p = p[:r.left] }
+	n,e:=r.r.Read(p)
+	r.left-=n
+	return n,e
+}
+
+func main() {
+	log.SetFlags(0)
+	check(len(os.Args)==3,"usage: lifecycle-probe SOURCE_UUID DEST_UUID")
+	const src="fs-r0-fixture"
+	const dst="fs-r0-dest"
+	d,e:=incus.ConnectIncusUnix("",nil);must(e)
+	d=d.UseProject("default")
+	srv,_,e:=d.GetServer();must(e)
+	check(srv.Environment.ServerVersion=="7.7"||srv.Environment.ServerVersion=="7.7.0","wrong daemon")
+	verify:=func(name,uuid,state string) {
+		i,_,e:=d.GetInstance(name);must(e)
+		check(i.Config["volatile.uuid"]==uuid&&i.Status==state,"fixture identity/state mismatch")
+	}
+	verify(src,os.Args[1],"Stopped")
+	verify(dst,os.Args[2],"Stopped")
+	// Open a read-only fixture handle in a stopped container, then observe start.
+	c,e:=d.GetInstanceFileSFTP(src);must(e)
+	f,e:=c.Open("/tmp/bw-native-fs-r0-cross/source.bin");must(e)
+	ctx,cancel:=context.WithTimeout(context.Background(),45*time.Second);defer cancel()
+	op,e:=d.UpdateInstanceState(src,api.InstanceStatePut{Action:"start"},"");must(e)
+	fmt.Println("start_native_operation",op.Get().ID)
+	done:=make(chan error,1)
+	go func(){done<-op.WaitContext(ctx)}()
+	select {
+	case e=<-done:
+		fmt.Printf("start_completed_while_handle_open=%v\n",e)
+		must(e)
+	case <-time.After(2*time.Second):
+		fmt.Println("start still pending with handle open at 2s; closing handle")
+		_ = f.Close();_ = c.Close()
+		must(<-done)
+		f=nil
+	}
+	if f!=nil {
+		// Do not issue more I/O using a pre-transition handle.
+		fmt.Printf("old_handle_close=%v client_close=%v\n",f.Close(),c.Close())
+	}
+	verify(src,os.Args[1],"Running")
+	fresh,e:=d.GetInstanceFileSFTP(src);must(e)
+	p,e:=fresh.Open("/tmp/bw-native-fs-r0-cross/source.bin");must(e)
+	var b [32]byte;n,e:=p.ReadAt(b[:],0);must(e);check(n==len(b),"fresh running read short")
+	must(p.Close());must(fresh.Close())
+	ctx2,cancel2:=context.WithTimeout(context.Background(),45*time.Second);defer cancel2()
+	stop,e:=d.UpdateInstanceState(src,api.InstanceStatePut{Action:"stop",Timeout:30},"");must(e)
+	fmt.Println("stop_native_operation",stop.Get().ID)
+	must(stop.WaitContext(ctx2))
+	verify(src,os.Args[1],"Stopped")
+	fmt.Println("PASS lifecycle with pre-existing read handle observed; serialize/revalidate in product, do not reuse handles")
+	// Bounded directory experiment in a separate stopped fixture.
+	const path="/tmp/bw-native-fs-r0-list"
+	x,e:=d.GetInstanceFileSFTP(dst);must(e)
+	must(x.Mkdir(path))
+	for i:=0;i<1024;i++ {
+		p:=fmt.Sprintf("%s/fixture-entry-%04d-abcdefghijklmnopqrstuvwxyz-0123456789",path,i)
+		f,e:=x.OpenFile(p,os.O_WRONLY|os.O_CREATE|os.O_EXCL);must(e);must(f.Close())
+	}
+	entries,e:=x.ReadDir(path);must(e);check(len(entries)==1024,"full list mismatch")
+	must(x.Close())
+	conn,e:=d.GetInstanceFileSFTPConn(dst);must(e);defer conn.Close()
+	const limit=32<<10
+	reader:=&budgetReader{r:conn,left:limit}
+	bounded,e:=sftp.NewClientPipe(reader,conn);must(e);defer bounded.Close()
+	entries,e=bounded.ReadDir(path)
+	check(e!=nil&&reader.left==0,"expected bounded enumeration refusal")
+	fmt.Printf("PASS full_list=1024 bounded_list_returned=%d wire_read=%d error=%v; discard partial entries\n",len(entries),limit-reader.left,e)
+	verify(dst,os.Args[2],"Stopped")
+	fmt.Println("SCOPE no hostile race, rootfs unmount, crash durability or full process RSS proof")
+}
